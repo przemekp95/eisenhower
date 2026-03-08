@@ -6,6 +6,23 @@ import { quadrantToTaskState, resolveSuggestedQuadrant } from './components/matr
 
 jest.mock('./services/api');
 
+const mockShouldDisableMotion = jest.fn(() => true);
+const mockGsapContext = jest.fn();
+const mockGsapFrom = jest.fn();
+const mockGsapTo = jest.fn();
+const mockGsapRevert = jest.fn();
+
+jest.mock('./lib/motion', () => ({
+  shouldDisableMotion: () => mockShouldDisableMotion(),
+}));
+jest.mock('gsap', () => ({
+  gsap: {
+    context: (...args: unknown[]) => mockGsapContext(...args),
+    from: (...args: unknown[]) => mockGsapFrom(...args),
+    to: (...args: unknown[]) => mockGsapTo(...args),
+  },
+}));
+
 const classifyTask = jest.mocked(api.classifyTask);
 
 function renderMatrix() {
@@ -26,6 +43,17 @@ function renderMatrix() {
 }
 
 describe('Matrix', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockShouldDisableMotion.mockReturnValue(true);
+    mockGsapContext.mockImplementation((callback: () => void) => {
+      callback();
+      return { revert: mockGsapRevert };
+    });
+    mockGsapFrom.mockImplementation(() => undefined);
+    mockGsapTo.mockImplementation(() => undefined);
+  });
+
   it('renders quadrants and tasks', () => {
     renderMatrix();
 
@@ -192,5 +220,19 @@ describe('Matrix', () => {
       },
       timestamp: new Date().toISOString(),
     })).toBe(3);
+  });
+
+  it('initializes and cleans up matrix motion when enabled', async () => {
+    mockShouldDisableMotion.mockReturnValue(false);
+
+    const { unmount } = renderMatrix();
+
+    await waitFor(() => expect(mockGsapContext).toHaveBeenCalledTimes(1));
+    expect(mockGsapFrom).toHaveBeenCalledTimes(2);
+    expect(mockGsapTo).toHaveBeenCalledTimes(1);
+
+    unmount();
+
+    expect(mockGsapRevert).toHaveBeenCalledTimes(1);
   });
 });
