@@ -12,8 +12,12 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('@react-three') || id.includes('three')) {
+          if (id.includes('pixi.js')) {
             return 'scene';
+          }
+
+          if (id.includes('gsap') || id.includes('lenis')) {
+            return 'motion';
           }
 
           if (id.includes('src/components/ai')) {

@@ -31,7 +31,7 @@ export default function AIManagement({ onModelUpdated }: Props) {
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          className="rounded-full bg-emerald-500 px-4 py-2 font-semibold text-slate-950"
+          className="rounded-full bg-emerald-500 px-4 py-2 font-semibold text-slate-950 transition-all hover:-translate-y-0.5 hover:bg-emerald-400 hover:shadow-lg hover:shadow-emerald-500/20"
           onClick={async () => {
             await addTrainingExample('review roadmap', 2);
             setMessage('Example added');
@@ -42,7 +42,7 @@ export default function AIManagement({ onModelUpdated }: Props) {
         </button>
         <button
           type="button"
-          className="rounded-full bg-cyan-500 px-4 py-2 font-semibold text-slate-950"
+          className="rounded-full bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition-all hover:-translate-y-0.5 hover:bg-cyan-400 hover:shadow-lg hover:shadow-cyan-500/20"
           onClick={async () => {
             await learnFromFeedback('urgent task', 1, 0);
             setMessage('Feedback learned');
@@ -53,7 +53,7 @@ export default function AIManagement({ onModelUpdated }: Props) {
         </button>
         <button
           type="button"
-          className="rounded-full bg-violet-500 px-4 py-2 font-semibold text-white"
+          className="rounded-full bg-violet-500 px-4 py-2 font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-violet-400 hover:shadow-lg hover:shadow-violet-500/20"
           onClick={async () => {
             await retrainModel(false);
             setMessage('Retraining completed');
@@ -64,7 +64,7 @@ export default function AIManagement({ onModelUpdated }: Props) {
         </button>
         <button
           type="button"
-          className="rounded-full bg-white/10 px-4 py-2 font-semibold text-white"
+          className="rounded-full bg-white/10 px-4 py-2 font-semibold text-white transition-all hover:bg-white/15 hover:text-white"
           onClick={() => {
             void refreshExamples();
           }}

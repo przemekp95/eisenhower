@@ -1,8 +1,9 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { DragDropContext, Draggable, Droppable, DropResult } from '@hello-pangea/dnd';
 import { classifyTask, LangChainAnalysis } from '../services/api';
 import { Task, TaskInput } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
+import { shouldDisableMotion } from '../lib/motion';
 import { quadrantToTaskState, resolveSuggestedQuadrant } from './matrixUtils';
 
 const LazyAITools = lazy(() => import('./AITools'));
@@ -18,6 +19,7 @@ interface Props {
 
 export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDeleteTask }: Props) {
   const { t } = useLanguage();
+  const matrixRef = useRef<HTMLDivElement | null>(null);
   const [newTask, setNewTask] = useState<TaskInput>({
     title: '',
     description: '',
@@ -92,14 +94,81 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
     await onUpdateTask(result.draggableId, nextState);
   };
 
+  useEffect(() => {
+    const root = matrixRef.current;
+
+    if (!root || shouldDisableMotion()) {
+      return;
+    }
+
+    let cleanup = () => {};
+    let cancelled = false;
+
+    void (async () => {
+      const { gsap } = await import('gsap');
+
+      if (cancelled) {
+        return;
+      }
+
+      const ctx = gsap.context(() => {
+        gsap.from('[data-matrix-form]', {
+          y: 24,
+          autoAlpha: 0,
+          duration: 0.78,
+          ease: 'power3.out',
+          delay: 0.2,
+        });
+
+        gsap.from('[data-matrix-section]', {
+          y: 42,
+          autoAlpha: 0,
+          scale: 0.985,
+          duration: 0.82,
+          ease: 'power3.out',
+          stagger: 0.08,
+          delay: 0.32,
+        });
+
+        gsap.to('[data-matrix-float]', {
+          y: -8,
+          duration: 3.2,
+          ease: 'sine.inOut',
+          repeat: -1,
+          yoyo: true,
+          stagger: {
+            each: 0.18,
+            from: 'center',
+          },
+        });
+      }, root);
+
+      cleanup = () => {
+        ctx.revert();
+      };
+    })();
+
+    return () => {
+      cancelled = true;
+      cleanup();
+    };
+  }, []);
+
   return (
-    <div className="relative overflow-hidden rounded-4xl border border-white/10 bg-slate-900/80 p-6 shadow-2xl">
+    <div
+      ref={matrixRef}
+      className="relative overflow-hidden rounded-4xl border border-white/10 bg-slate-900/80 p-6 shadow-2xl"
+    >
       <Suspense fallback={<div className="absolute inset-0 bg-linear-to-br from-teal-500/20 to-cyan-500/10" />}>
         <LazyMatrixScene />
       </Suspense>
 
       <div className="relative z-10 space-y-6">
-        <form onSubmit={handleSubmit} className="grid gap-3 rounded-3xl border border-white/10 bg-black/25 p-4 md:grid-cols-2">
+        <form
+          data-matrix-form
+          onSubmit={handleSubmit}
+          className="grid gap-3 rounded-3xl border border-white/10 bg-black/25 p-4 md:grid-cols-2"
+        >
           <input
             value={newTask.title}
             onChange={(event) => setNewTask((current) => ({ ...current, title: event.target.value }))}
@@ -112,24 +181,81 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
             className="rounded-full border border-white/10 bg-white/10 px-4 py-3 text-white placeholder:text-white/50"
             placeholder={t('form.description')}
           />
-          <label className="flex items-center gap-2 text-sm text-white">
+          <label
+            className={`flex cursor-pointer items-center justify-between rounded-2xl border px-4 py-3 transition-all ${
+              newTask.urgent
+                ? 'border-rose-300/35 bg-rose-500/12 shadow-lg shadow-rose-950/30 hover:border-rose-200/50 hover:bg-rose-500/18'
+                : 'border-white/10 bg-white/5 hover:border-white/15 hover:bg-white/10'
+            }`}
+          >
             <input
               type="checkbox"
               checked={newTask.urgent}
               onChange={(event) => setNewTask((current) => ({ ...current, urgent: event.target.checked }))}
+              className="sr-only"
             />
-            {t('form.urgent')}
+            <div className="flex items-center gap-3">
+              <span
+                className={`size-2.5 rounded-full transition-all ${
+                  newTask.urgent
+                    ? 'pulse-dot bg-rose-300 text-rose-300 shadow-lg shadow-rose-300/70'
+                    : 'bg-white/30'
+                }`}
+              />
+              <p className="text-sm font-semibold text-white">{t('form.urgent')}</p>
+            </div>
+            <span
+              className={`relative inline-flex h-7 w-12 items-center rounded-full px-1 transition-all ${
+                newTask.urgent ? 'bg-rose-300/85' : 'bg-white/10'
+              }`}
+            >
+              <span
+                className={`size-5 rounded-full bg-white shadow-lg transition-transform ${
+                  newTask.urgent ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </span>
           </label>
-          <label className="flex items-center gap-2 text-sm text-white">
+          <label
+            className={`flex cursor-pointer items-center justify-between rounded-2xl border px-4 py-3 transition-all ${
+              newTask.important
+                ? 'border-cyan-300/35 bg-cyan-500/12 shadow-lg shadow-cyan-950/30 hover:border-cyan-200/50 hover:bg-cyan-500/18'
+                : 'border-white/10 bg-white/5 hover:border-white/15 hover:bg-white/10'
+            }`}
+          >
             <input
               type="checkbox"
               checked={newTask.important}
               onChange={(event) => setNewTask((current) => ({ ...current, important: event.target.checked }))}
+              className="sr-only"
             />
-            {t('form.important')}
+            <div className="flex items-center gap-3">
+              <span
+                className={`size-2.5 rounded-full transition-all ${
+                  newTask.important
+                    ? 'pulse-dot bg-cyan-300 text-cyan-300 shadow-lg shadow-cyan-300/70'
+                    : 'bg-white/30'
+                }`}
+              />
+              <p className="text-sm font-semibold text-white">{t('form.important')}</p>
+            </div>
+            <span
+              className={`relative inline-flex h-7 w-12 items-center rounded-full px-1 transition-all ${
+                newTask.important ? 'bg-cyan-300/85' : 'bg-white/10'
+              }`}
+            >
+              <span
+                className={`size-5 rounded-full bg-white shadow-lg transition-transform ${
+                  newTask.important ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </span>
           </label>
           <div className="flex flex-wrap gap-2 md:col-span-2">
-            <button type="submit" className="rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950">
+            <button
+              type="submit"
+              className="rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 transition-all hover:-translate-y-0.5 hover:bg-emerald-300 hover:shadow-lg hover:shadow-emerald-500/20"
+            >
               {t('form.submit')}
             </button>
             <button
@@ -137,7 +263,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
               onClick={() => {
                 void handleSuggest();
               }}
-              className="rounded-full bg-white/10 px-4 py-2 text-sm text-white"
+              className="rounded-full bg-white/10 px-4 py-2 text-sm text-white transition-all hover:bg-white/15 hover:text-white"
             >
               {aiLoading ? t('ai.suggesting') : t('ai.suggest')}
             </button>
@@ -145,7 +271,9 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
               type="button"
               onClick={() => setShowAiTools(true)}
               disabled={!newTask.title.trim()}
-              className="rounded-full bg-white/10 px-4 py-2 text-sm text-white disabled:opacity-40"
+              className={`rounded-full bg-white/10 px-4 py-2 text-sm text-white transition-all hover:bg-white/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10 ${
+                newTask.title.trim() ? 'pulse-ai' : ''
+              }`}
             >
               {t('ai.tools')}
             </button>
@@ -159,13 +287,17 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
               <Droppable key={quadrant.key} droppableId={quadrant.key}>
                 {(provided) => (
                   <section
+                    data-matrix-section
                     ref={provided.innerRef}
                     {...provided.droppableProps}
                     className="min-h-56 rounded-3xl border border-white/10 bg-white/5 p-4"
                   >
                     <div className="mb-3 flex items-center justify-between">
                       <h3 className="text-lg font-semibold text-white">{quadrant.label}</h3>
-                      <span className="text-xs uppercase tracking-[0.2em] text-white/50">
+                      <span
+                        data-matrix-float
+                        className="text-xs uppercase tracking-[0.2em] text-white/50"
+                      >
                         {tasks.filter(quadrant.filter).length}
                       </span>
                     </div>
@@ -177,7 +309,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
                               ref={dragProvided.innerRef}
                               {...dragProvided.draggableProps}
                               {...dragProvided.dragHandleProps}
-                              className="rounded-[1.25rem] border border-white/10 bg-slate-950/70 p-4 text-white"
+                              className="cursor-grab rounded-[1.25rem] border border-white/10 bg-slate-950/70 p-4 text-white transition-all hover:border-white/15 hover:bg-slate-950/80 active:cursor-grabbing"
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div>
@@ -189,7 +321,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
                                   onClick={() => {
                                     void onDeleteTask(task._id);
                                   }}
-                                  className="rounded-full bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-100"
+                                  className="rounded-full bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-100 transition-all hover:bg-red-500/30 hover:text-white"
                                 >
                                   {t('task.delete')}
                                 </button>
@@ -201,7 +333,11 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
                                   onClick={() => {
                                     void onUpdateTask(task._id, { urgent: !task.urgent });
                                   }}
-                                  className={`rounded-full px-3 py-1 text-xs ${task.urgent ? 'bg-rose-400 text-slate-950' : 'bg-white/10 text-white'}`}
+                                  className={`rounded-full px-3 py-1 text-xs transition-all hover:-translate-y-0.5 ${
+                                    task.urgent
+                                      ? 'bg-rose-400 text-slate-950 hover:bg-rose-300'
+                                      : 'bg-white/10 text-white hover:bg-white/15'
+                                  }`}
                                 >
                                   {t('form.urgent')}: {task.urgent ? 'on' : 'off'}
                                 </button>
@@ -211,7 +347,11 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
                                   onClick={() => {
                                     void onUpdateTask(task._id, { important: !task.important });
                                   }}
-                                  className={`rounded-full px-3 py-1 text-xs ${task.important ? 'bg-cyan-300 text-slate-950' : 'bg-white/10 text-white'}`}
+                                  className={`rounded-full px-3 py-1 text-xs transition-all hover:-translate-y-0.5 ${
+                                    task.important
+                                      ? 'bg-cyan-300 text-slate-950 hover:bg-cyan-200'
+                                      : 'bg-white/10 text-white hover:bg-white/15'
+                                  }`}
                                 >
                                   {t('form.important')}: {task.important ? 'on' : 'off'}
                                 </button>

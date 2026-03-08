@@ -48,7 +48,7 @@ export default function BatchAnalysis({ onBatchComplete }: Props) {
         type="button"
         onClick={submit}
         disabled={loading}
-        className="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950"
+        className="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 transition-all hover:-translate-y-0.5 hover:bg-amber-400 hover:shadow-lg hover:shadow-amber-500/20 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:bg-amber-500"
       >
         {loading ? 'Analyzing batch...' : 'Analyze batch'}
       </button>

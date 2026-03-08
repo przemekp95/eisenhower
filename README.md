@@ -1,4 +1,4 @@
-# Eisenhower
+# Eisenhower Matrix
 
 Monorepo for the Eisenhower Matrix application with a React web client, a Node/Express API, a FastAPI AI service, and an Expo mobile client.
 

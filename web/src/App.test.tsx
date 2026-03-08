@@ -4,11 +4,46 @@ import * as api from './services/api';
 
 jest.mock('./services/api');
 
+const mockShouldDisableMotion = jest.fn(() => true);
+const mockGsapContext = jest.fn();
+const mockGsapTimeline = jest.fn();
+const mockGsapFrom = jest.fn();
+const mockGsapTo = jest.fn();
+const mockGsapRevert = jest.fn();
+
+jest.mock('./hooks/useSmoothScroll', () => jest.fn());
+jest.mock('./lib/motion', () => ({
+  shouldDisableMotion: () => mockShouldDisableMotion(),
+}));
+jest.mock('gsap', () => ({
+  gsap: {
+    context: (...args: unknown[]) => mockGsapContext(...args),
+    timeline: (...args: unknown[]) => mockGsapTimeline(...args),
+    from: (...args: unknown[]) => mockGsapFrom(...args),
+    to: (...args: unknown[]) => mockGsapTo(...args),
+  },
+}));
+
 const mockedApi = jest.mocked(api);
 
 describe('App', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockShouldDisableMotion.mockReturnValue(true);
+    mockGsapRevert.mockReset();
+    mockGsapContext.mockImplementation((callback: () => void) => {
+      callback();
+      return { revert: mockGsapRevert };
+    });
+    mockGsapTimeline.mockImplementation(() => {
+      const chain = {
+        from: jest.fn().mockReturnThis(),
+      };
+
+      return chain;
+    });
+    mockGsapFrom.mockImplementation(() => undefined);
+    mockGsapTo.mockImplementation(() => undefined);
     mockedApi.getTasks.mockResolvedValue([
       { _id: '1', title: 'Existing task', description: 'desc', urgent: true, important: false },
     ]);
@@ -88,5 +123,19 @@ describe('App', () => {
     fireEvent.click(screen.getByText(/Dodaj zadanie/i));
 
     await waitFor(() => expect(screen.getByText('Save failed')).toBeInTheDocument());
+  });
+
+  it('initializes and cleans up hero motion when enabled', async () => {
+    mockShouldDisableMotion.mockReturnValue(false);
+
+    const { unmount } = render(<App />);
+
+    await waitFor(() => expect(mockGsapContext).toHaveBeenCalledTimes(2));
+    expect(mockGsapTimeline).toHaveBeenCalledTimes(1);
+    expect(mockGsapTo).toHaveBeenCalledTimes(1);
+
+    unmount();
+
+    expect(mockGsapRevert).toHaveBeenCalledTimes(2);
   });
 });
