@@ -1,0 +1,9 @@
+scan:
+  skip-dirs:
+    - "**/node_modules"
+    - "**/coverage"
+    - "**/dist"
+    - "**/.expo"
+    - "**/.venv"
+    - "**/venv"
+    - "**/__pycache__"

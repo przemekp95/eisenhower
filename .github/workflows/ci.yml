@@ -29,16 +29,18 @@ jobs:
         run: |
           mkdir -p "$HOME/.cache/trivy"
           docker run --rm \
+            -w /workdir \
             -v "$PWD:/workdir" \
             -v "$HOME/.cache/trivy:/root/.cache/" \
             aquasec/trivy:0.63.0 fs \
+            --config /workdir/trivy.yaml \
             --format sarif \
             --output /workdir/trivy-results.sarif \
             /workdir || true
 
       - name: Upload SARIF
         if: ${{ always() && hashFiles('trivy-results.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
 
