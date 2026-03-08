@@ -19,7 +19,8 @@ htmlcov/
 
 # IDE and tooling
 .idea/
-.vscode/
+.vscode/*
+!.vscode/settings.json
 
 # Web
 web/dist/
