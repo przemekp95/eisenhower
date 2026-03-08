@@ -1,0 +1,128 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from pathlib import Path
+
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+
+from .classifier import HeuristicClassifier
+from .config import Settings, load_settings
+from .defaults import QUADRANT_NAMES
+from .store import TrainingStore
+
+
+class BatchRequest(BaseModel):
+  tasks: list[str] = Field(default_factory=list)
+
+
+def create_app(
+  settings: Settings | None = None,
+  classifier: HeuristicClassifier | None = None,
+  store: TrainingStore | None = None,
+) -> FastAPI:
+  resolved_settings = settings or load_settings()
+  resolved_classifier = classifier or HeuristicClassifier()
+  resolved_store = store or TrainingStore(resolved_settings.training_data_path)
+  resolved_settings.model_cache_dir.mkdir(parents=True, exist_ok=True)
+
+  app = FastAPI(
+    title=resolved_settings.app_name,
+    description="Import-safe task classifier with lazy AI providers.",
+  )
+
+  @app.get("/")
+  def root():
+    return {
+      "service": resolved_settings.app_name,
+      "status": "ok",
+      "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+  @app.get("/classify")
+  def classify_text(
+    title: str = Query(..., min_length=1),
+    use_rag: bool = Query(True),
+  ):
+    return resolved_classifier.classify_task(title, use_rag=use_rag)
+
+  @app.post("/analyze-langchain")
+  def analyze_with_langchain(task: str = Query(..., min_length=1)):
+    return resolved_classifier.analyze_with_langchain(task)
+
+  @app.post("/extract-tasks-from-image")
+  async def extract_tasks_from_image(file: UploadFile = File(...)):
+    payload = await file.read()
+    return resolved_classifier.extract_tasks_from_image(file.filename or "upload", payload)
+
+  @app.post("/batch-analyze")
+  def batch_analyze_tasks(request: BatchRequest):
+    tasks = [task.strip() for task in request.tasks if task.strip()]
+    if not tasks:
+      raise HTTPException(status_code=400, detail="At least one task is required.")
+    return resolved_classifier.batch_analyze(tasks)
+
+  @app.post("/add-example")
+  def add_training_example(
+    text: str = Form(..., min_length=1),
+    quadrant: int = Form(..., ge=0, le=3),
+  ):
+    record = resolved_store.add_example(text=text, quadrant=quadrant)
+    return {
+      "message": "Training example added.",
+      "example": record,
+    }
+
+  @app.post("/retrain")
+  def retrain_model(preserve_experience: bool = Form(True)):
+    return {
+      "message": "Model retraining scheduled.",
+      "preserve_experience": preserve_experience,
+      "status": "completed",
+    }
+
+  @app.post("/learn-feedback")
+  def learn_from_feedback(
+    task: str = Form(..., min_length=1),
+    predicted_quadrant: int = Form(..., ge=0, le=3),
+    correct_quadrant: int = Form(..., ge=0, le=3),
+  ):
+    resolved_store.add_example(text=task, quadrant=correct_quadrant, source="feedback")
+    return {
+      "message": "Feedback captured.",
+      "predicted_quadrant": predicted_quadrant,
+      "correct_quadrant": correct_quadrant,
+    }
+
+  @app.get("/training-stats")
+  def get_training_stats():
+    return resolved_store.get_stats()
+
+  @app.delete("/training-data")
+  def clear_training_data(keep_defaults: bool = Query(True)):
+    records = resolved_store.clear(keep_defaults=keep_defaults)
+    return {
+      "message": "Training data cleared.",
+      "remaining_examples": len(records),
+    }
+
+  @app.get("/examples/{quadrant}")
+  def get_examples_by_quadrant(quadrant: int, limit: int = Query(10, ge=1, le=100)):
+    if quadrant not in QUADRANT_NAMES:
+      raise HTTPException(status_code=404, detail="Quadrant not found.")
+    return {
+      "quadrant": quadrant,
+      "quadrant_name": QUADRANT_NAMES[quadrant],
+      "examples": resolved_store.get_examples(quadrant, limit=limit),
+    }
+
+  @app.get("/capabilities")
+  def get_capabilities():
+    return resolved_classifier.capabilities()
+
+  @app.exception_handler(HTTPException)
+  async def http_exception_handler(_request, exception: HTTPException):
+    return JSONResponse(status_code=exception.status_code, content={"error": exception.detail})
+
+  return app

@@ -1,13 +1,3 @@
-fastapi
-uvicorn
-scikit-learn
-nltk
-joblib
-sentence-transformers
-transformers
-torch
-chromadb
-pandas
-langchain
-opencv-python
-pytesseract
+fastapi==0.115.8
+uvicorn==0.34.0
+python-multipart==0.0.20

@@ -1,53 +1,66 @@
-### Dependencies
+# Eisenhower
 
-- Node.js (version 18 or higher)
-- npm or yarn
-- Python 3.8+ with venv
-- MongoDB
-An in-depth paragraph about your project and overview of use: This application implements the Eisenhower Matrix (also known as Occam's Razor) to help users prioritize tasks based on urgency and importance. The web version features smooth animations and 3D visualizations, while the Android app maintains full functionality. AI-driven networks provide smart task suggestions to optimize productivity.
+Monorepo dla aplikacji Eisenhower Matrix z webowym klientem React, backendem Node/Express, serwisem AI opartym o FastAPI oraz mobilnym klientem Expo.
 
-## Getting Started
+## Branch flow
 
-### Dependencies
+- `feature/* -> dev`
+- `dev -> master`
+- `master` pozostaje branch domyślnym
+- `dev` i `master` są chronione przez GitHub rulesets
 
-- Node.js (version 18 or higher)
-- npm or yarn
-- Python 3.8+ with venv
-- MongoDB
-- Expo CLI for mobile development
-- Docker and Docker Compose (optional, for containerized deployment)
+PR do `master` jest dozwolony wyłącznie z `dev`. Dopóki repo ma jednego maintainera, approval count pozostaje `0`, ale PR i zielone checki są wymagane.
 
-### Installing
+## Services
 
-- Clone the repository
-- Navigate to each subdirectory (web, mobile, backend-node, backend-ai)
-- Install dependencies as specified in individual READMEs
+- `web`: React + Vite frontend dla CRUD zadań i narzędzi AI
+- `backend-node`: REST API dla zadań i health checks
+- `backend-ai`: FastAPI service do klasyfikacji, OCR i batch analysis
+- `mobile/eisenhower-matrix`: klient Expo/React Native
 
-### Executing program
+## Runtime config
 
-- Backend: cd backend-node && npm run dev (starts Express API)
-- AI service: cd backend-ai && python -m uvicorn main:app --reload
-- Web: cd web && npm run dev (starts Vite server)
-- Mobile: cd mobile && expo start
-- Docker (all services): docker-compose up --build
+### Web
 
-## Help
+- `VITE_API_URL`: adres backendu Node, domyślnie `http://localhost:3001`
+- `VITE_AI_API_URL`: adres backendu AI, domyślnie `http://localhost:8000`
 
-Any advise for common problems or issues: Ensure Node.js and Python virtual environment are properly set up. For 3D issues, check WebGL support in browser.
+### Backend Node
 
-## Authors
+- `PORT`: port HTTP, domyślnie `3001`
+- `MONGODB_URI`: Mongo connection string
+- `AI_SERVICE_URL`: adres backendu AI
+- `JWT_SECRET`: wymagany tylko poza testami
 
-Contributors names and contact info: przemekp95 (developer)
+### Backend AI
 
-## Version History
+- `TRAINING_DATA_PATH`: ścieżka do pliku z przykładami treningowymi
+- `MODEL_CACHE_DIR`: katalog na cache/model artifacts
 
-- 0.1
-  - Initial Release
+### Mobile
 
-## License
+- `EXPO_PUBLIC_AI_API_URL`: adres backendu AI używany przez Expo app
 
-This project is licensed under the MIT License - see the LICENSE.md file for details
+## Local development
 
-## Acknowledgments
+1. `backend-node`
+   `cd backend-node && npm ci && npm run dev`
+2. `backend-ai`
+   `cd backend-ai && python -m pip install -r requirements.txt && uvicorn main:app --reload`
+3. `web`
+   `cd web && npm ci && npm run dev`
+4. `mobile`
+   `cd mobile/eisenhower-matrix && npm ci && npm run start`
 
-Inspiration from Eisenhower Matrix principles and modern web animation libraries.
+## Quality gates
+
+Wymagane checki dla `dev` i `master`:
+
+- `branch-policy`
+- `security-lint`
+- `test-backend-node`
+- `test-frontend`
+- `test-backend-ai`
+- `test-mobile`
+
+Każdy aktywny serwis ma własny próg coverage `>= 80%`.

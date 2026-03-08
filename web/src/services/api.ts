@@ -1,5 +1,22 @@
-// API service for connecting to AI backend
-const AI_BACKEND_URL = 'http://localhost:8000';
+import { runtimeConfig } from '../config';
+import { Task, TaskInput } from '../types';
+
+async function readJson<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    const contentType = response.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+      const payload = await response.json();
+      throw new Error(payload.error ?? 'Request failed');
+    }
+    throw new Error('Request failed');
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return response.json() as Promise<T>;
+}
 
 export interface ClassificationResult {
   task: string;
@@ -10,19 +27,15 @@ export interface ClassificationResult {
   timestamp: string;
   method: string;
   confidence?: number;
-  rag_influence?: string;
-  similar_examples_used?: number;
-  top_similar_examples?: any[];
 }
 
 export interface LangChainAnalysis {
   task: string;
   langchain_analysis: {
-    quadrant: number;
+    quadrant: number | null;
     reasoning: string;
     confidence: number;
     method: string;
-    error?: string;
   };
   rag_classification: {
     quadrant: number;
@@ -68,21 +81,22 @@ export interface BatchAnalysisResult {
   batch_results: Array<{
     task: string;
     analyses: {
-      rag: any;
-      langchain: any;
+      rag: {
+        quadrant: number;
+        confidence: number;
+        quadrant_name: string;
+      };
+      langchain: {
+        quadrant: number;
+        confidence: number;
+        reasoning: string;
+      };
     };
   }>;
   summary: {
-    methods: { [key: string]: any };
+    methods: Record<string, { quadrant_distribution: Record<string, number> }>;
     total_tasks: number;
   };
-  timestamp: string;
-}
-
-export interface TrainingExample {
-  text: string;
-  quadrant: number;
-  added_by: string;
   timestamp: string;
 }
 
@@ -95,142 +109,118 @@ export interface TrainingStats {
   last_updated: string;
 }
 
-// Basic classification using RAG
-export const classifyTask = async (title: string): Promise<ClassificationResult> => {
-  const response = await fetch(`${AI_BACKEND_URL}/classify?title=${encodeURIComponent(title)}&use_rag=true`);
-  if (!response.ok) {
-    throw new Error('Failed to classify task');
-  }
-  return response.json();
-};
+export async function getTasks(): Promise<Task[]> {
+  const response = await fetch(`${runtimeConfig.apiUrl}/tasks`);
+  return readJson<Task[]>(response);
+}
 
-// Advanced LangChain analysis
-export const analyzeWithLangChain = async (task: string): Promise<LangChainAnalysis> => {
-  const response = await fetch(`${AI_BACKEND_URL}/analyze-langchain?task=${encodeURIComponent(task)}`, {
+export async function createTask(task: TaskInput): Promise<Task> {
+  const response = await fetch(`${runtimeConfig.apiUrl}/tasks`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(task),
   });
-  if (!response.ok) {
-    throw new Error('Failed to analyze with LangChain');
-  }
-  return response.json();
-};
+  return readJson<Task>(response);
+}
 
-// OCR extraction from images
-export const extractTasksFromImage = async (file: File): Promise<OCRResult> => {
+export async function updateTask(id: string, patch: Partial<TaskInput>): Promise<Task> {
+  const response = await fetch(`${runtimeConfig.apiUrl}/tasks/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  return readJson<Task>(response);
+}
+
+export async function deleteTask(id: string): Promise<void> {
+  const response = await fetch(`${runtimeConfig.apiUrl}/tasks/${id}`, {
+    method: 'DELETE',
+  });
+  await readJson<void>(response);
+}
+
+export async function classifyTask(title: string): Promise<ClassificationResult> {
+  const response = await fetch(
+    `${runtimeConfig.aiApiUrl}/classify?title=${encodeURIComponent(title)}&use_rag=true`
+  );
+  return readJson<ClassificationResult>(response);
+}
+
+export async function analyzeWithLangChain(task: string): Promise<LangChainAnalysis> {
+  const response = await fetch(
+    `${runtimeConfig.aiApiUrl}/analyze-langchain?task=${encodeURIComponent(task)}`,
+    { method: 'POST' }
+  );
+  return readJson<LangChainAnalysis>(response);
+}
+
+export async function extractTasksFromImage(file: File): Promise<OCRResult> {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(`${AI_BACKEND_URL}/extract-tasks-from-image`, {
+  const response = await fetch(`${runtimeConfig.aiApiUrl}/extract-tasks-from-image`, {
     method: 'POST',
     body: formData,
   });
 
-  if (!response.ok) {
-    throw new Error('Failed to extract tasks from image');
-  }
-  return response.json();
-};
+  return readJson<OCRResult>(response);
+}
 
-// Batch analysis of multiple tasks
-export const batchAnalyzeTasks = async (tasks: string[]): Promise<BatchAnalysisResult> => {
-  const response = await fetch(`${AI_BACKEND_URL}/batch-analyze`, {
+export async function batchAnalyzeTasks(tasks: string[]): Promise<BatchAnalysisResult> {
+  const response = await fetch(`${runtimeConfig.aiApiUrl}/batch-analyze`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ tasks }),
   });
+  return readJson<BatchAnalysisResult>(response);
+}
 
-  if (!response.ok) {
-    throw new Error('Failed to batch analyze tasks');
-  }
-  return response.json();
-};
-
-// Add training example
-export const addTrainingExample = async (text: string, quadrant: number): Promise<any> => {
-  const response = await fetch(`${AI_BACKEND_URL}/add-example`, {
+export async function addTrainingExample(text: string, quadrant: number): Promise<void> {
+  const response = await fetch(`${runtimeConfig.aiApiUrl}/add-example`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({
-      text,
-      quadrant: quadrant.toString(),
-    }),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ text, quadrant: quadrant.toString() }),
   });
+  await readJson<void>(response);
+}
 
-  if (!response.ok) {
-    throw new Error('Failed to add training example');
-  }
-  return response.json();
-};
-
-// Retrain model
-export const retrainModel = async (preserveExperience = true): Promise<any> => {
-  const response = await fetch(`${AI_BACKEND_URL}/retrain`, {
+export async function retrainModel(preserveExperience = true): Promise<{ preserve_experience: boolean }> {
+  const response = await fetch(`${runtimeConfig.aiApiUrl}/retrain`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({
-      preserve_experience: preserveExperience.toString(),
-    }),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ preserve_experience: preserveExperience.toString() }),
   });
+  return readJson<{ preserve_experience: boolean }>(response);
+}
 
-  if (!response.ok) {
-    throw new Error('Failed to retrain model');
-  }
-  return response.json();
-};
-
-// Learn from user feedback
-export const learnFromFeedback = async (
+export async function learnFromFeedback(
   task: string,
   predictedQuadrant: number,
   correctQuadrant: number
-): Promise<any> => {
-  const response = await fetch(`${AI_BACKEND_URL}/learn-feedback`, {
+): Promise<void> {
+  const response = await fetch(`${runtimeConfig.aiApiUrl}/learn-feedback`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       task,
       predicted_quadrant: predictedQuadrant.toString(),
       correct_quadrant: correctQuadrant.toString(),
     }),
   });
+  await readJson<void>(response);
+}
 
-  if (!response.ok) {
-    throw new Error('Failed to learn from feedback');
-  }
-  return response.json();
-};
+export async function getTrainingStats(): Promise<TrainingStats> {
+  const response = await fetch(`${runtimeConfig.aiApiUrl}/training-stats`);
+  return readJson<TrainingStats>(response);
+}
 
-// Get training stats
-export const getTrainingStats = async (): Promise<TrainingStats> => {
-  const response = await fetch(`${AI_BACKEND_URL}/training-stats`);
-  if (!response.ok) {
-    throw new Error('Failed to get training stats');
-  }
-  return response.json();
-};
+export async function getExamplesByQuadrant(quadrant: number, limit = 10) {
+  const response = await fetch(`${runtimeConfig.aiApiUrl}/examples/${quadrant}?limit=${limit}`);
+  return readJson<{ examples: Array<{ text: string; quadrant: number }> }>(response);
+}
 
-// Get examples by quadrant
-export const getExamplesByQuadrant = async (quadrant: number, limit = 10): Promise<any> => {
-  const response = await fetch(`${AI_BACKEND_URL}/examples/${quadrant}?limit=${limit}`);
-  if (!response.ok) {
-    throw new Error('Failed to get examples');
-  }
-  return response.json();
-};
-
-// Get AI capabilities
-export const getCapabilities = async (): Promise<any> => {
-  const response = await fetch(`${AI_BACKEND_URL}/capabilities`);
-  if (!response.ok) {
-    throw new Error('Failed to get capabilities');
-  }
-  return response.json();
-};
+export async function getCapabilities() {
+  const response = await fetch(`${runtimeConfig.aiApiUrl}/capabilities`);
+  return readJson<Record<string, unknown>>(response);
+}

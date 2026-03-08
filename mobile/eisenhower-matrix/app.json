@@ -1,0 +1,9 @@
+{
+  "expo": {
+    "name": "Eisenhower Matrix",
+    "slug": "eisenhower-matrix",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "platforms": ["ios", "android"]
+  }
+}

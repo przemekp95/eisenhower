@@ -1,282 +1,249 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Sphere } from '@react-three/drei';
-import { MeshStandardMaterial } from 'three';
-import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import { classifyTask } from '../services/api';
-import AITools from './AITools';
-import { LangChainAnalysis } from '../services/api';
+import { lazy, Suspense, useMemo, useState } from 'react';
+import { DragDropContext, Draggable, Droppable, DropResult } from '@hello-pangea/dnd';
+import { classifyTask, LangChainAnalysis } from '../services/api';
+import { Task, TaskInput } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
+import { quadrantToTaskState, resolveSuggestedQuadrant } from './matrixUtils';
 
-interface Task {
-  _id: string;
-  title: string;
-  description: string;
-  urgent: boolean;
-  important: boolean;
-}
+const LazyAITools = lazy(() => import('./AITools'));
+const LazyMatrixScene = lazy(() => import('./MatrixScene'));
 
-interface MatrixProps {
+interface Props {
   tasks: Task[];
-  onAddTask: (task: Omit<Task, '_id'>) => void;
-  onUpdateTask: (id: string, updated: Partial<Task>) => void;
-  onDeleteTask: (id: string) => void;
+  loading: boolean;
+  onAddTask: (task: TaskInput) => Promise<void>;
+  onUpdateTask: (id: string, patch: Partial<TaskInput>) => Promise<void>;
+  onDeleteTask: (id: string) => Promise<void>;
 }
 
-function Matrix({ tasks, onAddTask, onUpdateTask, onDeleteTask }: MatrixProps) {
+export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDeleteTask }: Props) {
   const { t } = useLanguage();
-  const [newTask, setNewTask] = useState({ title: '', description: '', urgent: false, important: false });
-  const [showAITools, setShowAITools] = useState(false);
-  const [latestAnalysis, setLatestAnalysis] = useState<LangChainAnalysis | null>(null);
-
-  const quadrants = [
-    { key: 'do', label: t('matrix.do'), filter: (t: Task) => t.urgent && t.important, color: 'bg-red-500' },
-    { key: 'decide', label: t('matrix.schedule'), filter: (t: Task) => t.urgent && !t.important, color: 'bg-yellow-500' },
-    { key: 'delegate', label: t('matrix.delegate'), filter: (t: Task) => !t.urgent && t.important, color: 'bg-blue-500' },
-    { key: 'delete', label: t('matrix.delete'), filter: (t: Task) => !t.urgent && !t.important, color: 'bg-green-500' },
-  ];
-
+  const [newTask, setNewTask] = useState<TaskInput>({
+    title: '',
+    description: '',
+    urgent: false,
+    important: false,
+  });
+  const [showAiTools, setShowAiTools] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
-  const handleAnalysisComplete = (analysis: LangChainAnalysis) => {
-    setLatestAnalysis(analysis);
-    // Optional: Auto-fill the task form with AI's suggested quadrant
-    const suggestedQuadrant = analysis.langchain_analysis.quadrant || analysis.rag_classification.quadrant;
-    const quadrantToBool = (quad: number) => ({
-      urgent: quad === 0 || quad === 1,
-      important: quad === 0 || quad === 2
-    });
+  const quadrants = useMemo(
+    () => [
+      { key: 'do', label: t('matrix.do'), filter: (task: Task) => task.urgent && task.important },
+      { key: 'schedule', label: t('matrix.schedule'), filter: (task: Task) => task.urgent && !task.important },
+      { key: 'delegate', label: t('matrix.delegate'), filter: (task: Task) => !task.urgent && task.important },
+      { key: 'delete', label: t('matrix.delete'), filter: (task: Task) => !task.urgent && !task.important },
+    ],
+    [t]
+  );
 
-    if (suggestedQuadrant >= 0) {
-      const boolState = quadrantToBool(suggestedQuadrant);
-      setNewTask(prev => ({ ...prev, ...boolState }));
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!newTask.title.trim()) {
+      return;
     }
+
+    await onAddTask({
+      ...newTask,
+      title: newTask.title.trim(),
+      description: newTask.description.trim(),
+    });
+    setNewTask({ title: '', description: '', urgent: false, important: false });
   };
 
-  const predictQuadrant = async (title: string) => {
-    if (!title.trim()) return;
+  const handleSuggest = async () => {
+    if (!newTask.title.trim()) {
+      return;
+    }
 
     setAiLoading(true);
+    setAiError(null);
     try {
-      const result = await classifyTask(title);
-      setNewTask({
-        ...newTask,
-        urgent: result.urgent,
-        important: result.important
-      });
-    } catch (error) {
-      console.error('Failed to fetch AI prediction:', error);
-      // Enhanced fallback with Polish keywords
-      const lowerTitle = title.toLowerCase();
-      const urgentWords = ['urgent', 'pilny', 'pilne', 'teraz', 'today', 'dzisiaj', 'natychmiast', 'asap', 'deadline', 'termin', 'krytyczny', 'gorący', 'pilnego', 'teraz'];
-      const importantWords = ['important', 'ważny', 'ważne', 'projekt', 'kluczowy', 'strategiczny', 'biznes', 'firma', 'główny', 'znaczenie', 'decydujący'];
-
-      const hasUrgency = urgentWords.some(word => lowerTitle.includes(word));
-      const hasImportance = importantWords.some(word => lowerTitle.includes(word));
-
-      setNewTask({
-        ...newTask,
-        urgent: hasUrgency,
-        important: hasImportance
-      });
+      const prediction = await classifyTask(newTask.title);
+      setNewTask((current) => ({
+        ...current,
+        urgent: prediction.urgent,
+        important: prediction.important,
+      }));
+    } catch (issue) {
+      setAiError(issue instanceof Error ? issue.message : 'Suggestion failed');
     } finally {
       setAiLoading(false);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onAddTask(newTask);
-    setNewTask({ title: '', description: '', urgent: false, important: false });
+  const handleAnalysisComplete = (analysis: LangChainAnalysis) => {
+    const suggestedQuadrant = resolveSuggestedQuadrant(analysis);
+    setNewTask((current) => ({
+      ...current,
+      ...quadrantToTaskState(suggestedQuadrant),
+    }));
   };
 
-  const onDragEnd = (result: DropResult) => {
-    const { source, destination } = result;
-
-    if (!destination) return;
-
-    if (source.droppableId === destination.droppableId) return; // Same quadrant
-
-    const taskId = result.draggableId;
-    const sourceQuadrant = source.droppableId;
-    const destQuadrant = destination.droppableId;
-
-    // Map quadrants to urgent/important states
-    const quadrantToState = {
-      'do': { urgent: true, important: true },
-      'decide': { urgent: true, important: false },
-      'delegate': { urgent: false, important: true },
-      'delete': { urgent: false, important: false }
-    };
-
-    const newState = quadrantToState[destQuadrant as keyof typeof quadrantToState];
-    if (newState) {
-      onUpdateTask(taskId, newState);
+  const onDragEnd = async (result: DropResult) => {
+    if (!result.destination || result.destination.droppableId === result.source.droppableId) {
+      return;
     }
+
+    const nextState = quadrantToTaskState(
+      ['do', 'schedule', 'delegate', 'delete'].indexOf(result.destination.droppableId)
+    );
+    await onUpdateTask(result.draggableId, nextState);
   };
 
   return (
-    <DragDropContext onDragEnd={onDragEnd}>
-    <div className="relative max-w-6xl mx-auto">
-      {/* 3D Background */}
-      {typeof window !== 'undefined' && window.ResizeObserver ? (
-        <div className="absolute inset-0 z-0">
-          <Canvas camera={{ position: [0, 0, 5] }}>
-            <OrbitControls enableZoom={false} enablePan={false} autoRotate />
-            <ambientLight intensity={0.5} />
-            <pointLight position={[10, 10, 10]} />
-          <Sphere args={[1, 64, 64]} position={[1, 1, 0]}>
-            {/* @ts-ignore */}
-            <meshStandardMaterial attach="material" color="blue" />
-          </Sphere>
-          </Canvas>
-        </div>
-      ) : (
-        <div className="absolute inset-0 z-0 bg-gradient-to-br from-blue-400 to-purple-500"></div>
-      )}
+    <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-slate-900/80 p-6 shadow-2xl">
+      <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-teal-500/20 to-cyan-500/10" />}>
+        <LazyMatrixScene />
+      </Suspense>
 
-      {/* Matrix Grid */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, delay: 0.2 }}
-        className="relative z-10 grid grid-cols-2 grid-rows-2 gap-4 bg-white/20 backdrop-blur-sm rounded-lg p-4"
-        style={{ width: '800px', height: '600px', transformStyle: 'preserve-3d' }}
-      >
-        {quadrants.map((quad, index) => (
-          <motion.div
-            key={quad.key}
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: index * 0.1 }}
-            className={`${quad.color}/20 backdrop-blur-sm rounded-lg p-4 flex flex-col`}
-          >
-            <h3 className="text-xl font-semibold mb-4">{quad.label}</h3>
-            <Droppable droppableId={quad.key}>
-              {(provided) => (
-                <div
-                  ref={provided.innerRef}
-                  {...provided.droppableProps}
-                  className="flex-1 min-h-0"
-                >
-                  {tasks.filter(quad.filter).map((task, taskIndex) => (
-                    <Draggable key={task._id} draggableId={task._id} index={taskIndex}>
-                      {(provided, snapshot) => (
-                      <div
-          className="bg-white/50 rounded p-2 mb-2 shadow-sm cursor-move"
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        {...provided.dragHandleProps}
-                        style={
-                          snapshot.isDragging
-                            ? {
-                                zIndex: 9999,
-                                opacity: 0.9,
-                                transform: provided.draggableProps.style?.transform,
-                                transition: 'none'
-                              }
-                            : {}
-                        }
-                      >
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <h4 className="font-medium">{task.title}</h4>
-                              <p className="text-sm text-gray-600">{task.description}</p>
-                            </div>
-                            <button
-                              onClick={() => onDeleteTask(task._id)}
-                              className="ml-2 text-red-600 hover:text-red-800 opacity-50 hover:opacity-100"
+      <div className="relative z-10 space-y-6">
+        <form onSubmit={handleSubmit} className="grid gap-3 rounded-[1.5rem] border border-white/10 bg-black/25 p-4 md:grid-cols-2">
+          <input
+            value={newTask.title}
+            onChange={(event) => setNewTask((current) => ({ ...current, title: event.target.value }))}
+            className="rounded-full border border-white/10 bg-white/10 px-4 py-3 text-white placeholder:text-white/50"
+            placeholder={t('form.title')}
+          />
+          <input
+            value={newTask.description}
+            onChange={(event) => setNewTask((current) => ({ ...current, description: event.target.value }))}
+            className="rounded-full border border-white/10 bg-white/10 px-4 py-3 text-white placeholder:text-white/50"
+            placeholder={t('form.description')}
+          />
+          <label className="flex items-center gap-2 text-sm text-white">
+            <input
+              type="checkbox"
+              checked={newTask.urgent}
+              onChange={(event) => setNewTask((current) => ({ ...current, urgent: event.target.checked }))}
+            />
+            {t('form.urgent')}
+          </label>
+          <label className="flex items-center gap-2 text-sm text-white">
+            <input
+              type="checkbox"
+              checked={newTask.important}
+              onChange={(event) => setNewTask((current) => ({ ...current, important: event.target.checked }))}
+            />
+            {t('form.important')}
+          </label>
+          <div className="flex flex-wrap gap-2 md:col-span-2">
+            <button type="submit" className="rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950">
+              {t('form.submit')}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void handleSuggest();
+              }}
+              className="rounded-full bg-white/10 px-4 py-2 text-sm text-white"
+            >
+              {aiLoading ? t('ai.suggesting') : t('ai.suggest')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAiTools(true)}
+              disabled={!newTask.title.trim()}
+              className="rounded-full bg-white/10 px-4 py-2 text-sm text-white disabled:opacity-40"
+            >
+              {t('ai.tools')}
+            </button>
+          </div>
+          {aiError ? <p className="md:col-span-2 text-sm text-red-200">{aiError}</p> : null}
+        </form>
+
+        <DragDropContext onDragEnd={(result) => void onDragEnd(result)}>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {quadrants.map((quadrant) => (
+              <Droppable key={quadrant.key} droppableId={quadrant.key}>
+                {(provided) => (
+                  <section
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className="min-h-56 rounded-[1.5rem] border border-white/10 bg-white/5 p-4"
+                  >
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-white">{quadrant.label}</h3>
+                      <span className="text-xs uppercase tracking-[0.2em] text-white/50">
+                        {tasks.filter(quadrant.filter).length}
+                      </span>
+                    </div>
+                    <div className="space-y-3">
+                      {tasks.filter(quadrant.filter).map((task, index) => (
+                        <Draggable key={task._id} draggableId={task._id} index={index}>
+                          {(dragProvided) => (
+                            <article
+                              ref={dragProvided.innerRef}
+                              {...dragProvided.draggableProps}
+                              {...dragProvided.dragHandleProps}
+                              className="rounded-[1.25rem] border border-white/10 bg-slate-950/70 p-4 text-white"
                             >
-                              ✕
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </motion.div>
-        ))}
-      </motion.div>
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <h4 className="font-semibold">{task.title}</h4>
+                                  <p className="mt-1 text-sm text-white/70">{task.description}</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void onDeleteTask(task._id);
+                                  }}
+                                  className="rounded-full bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-100"
+                                >
+                                  {t('task.delete')}
+                                </button>
+                              </div>
+                              <div className="mt-4 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  aria-label={`toggle urgent ${task.title}`}
+                                  onClick={() => {
+                                    void onUpdateTask(task._id, { urgent: !task.urgent });
+                                  }}
+                                  className={`rounded-full px-3 py-1 text-xs ${task.urgent ? 'bg-rose-400 text-slate-950' : 'bg-white/10 text-white'}`}
+                                >
+                                  {t('form.urgent')}: {task.urgent ? 'on' : 'off'}
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label={`toggle important ${task.title}`}
+                                  onClick={() => {
+                                    void onUpdateTask(task._id, { important: !task.important });
+                                  }}
+                                  className={`rounded-full px-3 py-1 text-xs ${task.important ? 'bg-cyan-300 text-slate-950' : 'bg-white/10 text-white'}`}
+                                >
+                                  {t('form.important')}: {task.important ? 'on' : 'off'}
+                                </button>
+                              </div>
+                            </article>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                      {!loading && tasks.filter(quadrant.filter).length === 0 ? (
+                        <p className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-white/45">
+                          {t('task.empty')}
+                        </p>
+                      ) : null}
+                    </div>
+                  </section>
+                )}
+              </Droppable>
+            ))}
+          </div>
+        </DragDropContext>
+      </div>
 
-      {/* Add Task Form */}
-      <motion.form
-        initial={{ opacity: 0, y: 50 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.4 }}
-        onSubmit={handleSubmit}
-        className="relative z-10 mt-8 bg-white/10 backdrop-blur-sm rounded-lg p-6 max-w-md mx-auto"
-      >
-        <h3 className="text-xl font-semibold text-white mb-4">{t('form.addTask')}</h3>
-        <input
-          type="text"
-          placeholder={t('form.title')}
-          value={newTask.title}
-          onChange={e => setNewTask({...newTask, title: e.target.value})}
-          className="w-full p-2 mb-2 rounded border border-white/50 bg-white/20 text-white placeholder:text-white/70"
-          required
-        />
-        <textarea
-          placeholder={t('form.description')}
-          value={newTask.description}
-          onChange={e => setNewTask({...newTask, description: e.target.value})}
-          className="w-full p-2 mb-2 rounded border border-white/50 bg-white/20 text-white placeholder:text-white/70"
-        />
-        <label className="flex items-center mb-2 text-white">
-          <input
-            type="checkbox"
-            checked={newTask.urgent}
-            onChange={e => setNewTask({...newTask, urgent: e.target.checked})}
-            className="mr-2"
+      {showAiTools ? (
+        <Suspense fallback={<div className="fixed inset-0 grid place-items-center bg-black/70 text-white">{t('ai.loading')}</div>}>
+          <LazyAITools
+            taskTitle={newTask.title}
+            onClose={() => setShowAiTools(false)}
+            onAnalysisComplete={handleAnalysisComplete}
           />
-          {t('form.urgent')}
-        </label>
-        <label className="flex items-center mb-4 text-white">
-          <input
-            type="checkbox"
-            checked={newTask.important}
-            onChange={e => setNewTask({...newTask, important: e.target.checked})}
-            className="mr-2"
-          />
-          {t('form.important')}
-        </label>
-        <div className="flex gap-2 mb-2">
-          <button
-            type="button"
-            onClick={() => predictQuadrant(newTask.title)}
-            disabled={aiLoading}
-            className="flex-1 bg-purple-500 text-white py-2 rounded hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {aiLoading ? t('ai.suggesting') : t('ai.suggest')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowAITools(true)}
-            className="bg-gradient-to-r from-blue-600 to-teal-600 text-white py-2 px-4 rounded hover:from-blue-700 hover:to-teal-700"
-          >
-            {t('ai.tools')}
-          </button>
-        </div>
-        <button type="submit" className="w-full bg-white text-blue-600 py-2 rounded hover:bg-gray-100">
-          {t('form.submit')}
-        </button>
-      </motion.form>
-
-      {/* AI Tools Modal */}
-      {showAITools && (
-        <AITools
-          taskTitle={newTask.title}
-          onClose={() => setShowAITools(false)}
-          onAnalysisComplete={handleAnalysisComplete}
-        />
-      )}
+        </Suspense>
+      ) : null}
     </div>
-    </DragDropContext>
   );
 }
-
-export default Matrix;
