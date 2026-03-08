@@ -13,6 +13,9 @@ jobs:
   docker-release:
     name: docker-release
     runs-on: ubuntu-latest
+    env:
+      DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+      DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
     strategy:
       fail-fast: false
       matrix:
@@ -36,20 +39,31 @@ jobs:
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Check Docker Hub configuration
+        id: docker-hub
+        shell: bash
+        run: |
+          if [ -n "$DOCKER_HUB_USERNAME" ] && [ -n "$DOCKER_HUB_TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Docker Hub credentials are not configured. Building without push."
+          fi
+
       - name: Login to Docker Hub
-        if: ${{ secrets.DOCKER_HUB_USERNAME != '' && secrets.DOCKER_HUB_TOKEN != '' }}
+        if: ${{ steps.docker-hub.outputs.enabled == 'true' }}
         uses: docker/login-action@v4
         with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+          username: ${{ env.DOCKER_HUB_USERNAME }}
+          password: ${{ env.DOCKER_HUB_TOKEN }}
 
       - name: Build image
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          push: ${{ secrets.DOCKER_HUB_USERNAME != '' && secrets.DOCKER_HUB_TOKEN != '' }}
-          tags: ${{ secrets.DOCKER_HUB_USERNAME != '' && format('{0}/{1}:latest', secrets.DOCKER_HUB_USERNAME, matrix.tag) || format('local/{0}:latest', matrix.tag) }}
+          push: ${{ steps.docker-hub.outputs.enabled == 'true' }}
+          tags: ${{ steps.docker-hub.outputs.enabled == 'true' && format('{0}/{1}:latest', env.DOCKER_HUB_USERNAME, matrix.tag) || format('local/{0}:latest', matrix.tag) }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -57,28 +71,60 @@ jobs:
     name: deploy
     runs-on: ubuntu-latest
     needs: docker-release
-    if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_REGION != '' && secrets.ECS_CLUSTER != '' && secrets.ECS_SERVICE != '' }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+      ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
+    outputs:
+      enabled: ${{ steps.aws-config.outputs.enabled }}
     steps:
+      - name: Check deployment configuration
+        id: aws-config
+        shell: bash
+        run: |
+          if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ] && [ -n "$AWS_REGION" ] && [ -n "$ECS_CLUSTER" ] && [ -n "$ECS_SERVICE" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "AWS deployment secrets are not configured. Skipping deployment."
+          fi
+
       - name: Configure AWS credentials
+        if: ${{ steps.aws-config.outputs.enabled == 'true' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Force ECS deployment
-        run: aws ecs update-service --cluster "${{ secrets.ECS_CLUSTER }}" --service "${{ secrets.ECS_SERVICE }}" --force-new-deployment
+        if: ${{ steps.aws-config.outputs.enabled == 'true' }}
+        run: aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" --force-new-deployment
 
   performance-test:
     name: performance-test
     runs-on: ubuntu-latest
     needs: deploy
-    if: ${{ always() && hashFiles('tests/performance/k6-script.js') != '' }}
+    if: ${{ needs.deploy.outputs.enabled == 'true' }}
     continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check k6 script
+        id: k6-script
+        shell: bash
+        run: |
+          if [ -f tests/performance/k6-script.js ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "tests/performance/k6-script.js is missing. Skipping performance test."
+          fi
+
       - name: Run k6
+        if: ${{ steps.k6-script.outputs.exists == 'true' }}
         working-directory: tests/performance
         run: docker run --rm -v "$(pwd):/scripts" -i grafana/k6 run --out json=results.json /scripts/k6-script.js
