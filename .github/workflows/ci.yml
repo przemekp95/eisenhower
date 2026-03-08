@@ -35,7 +35,7 @@ jobs:
           exit-code: "0"
 
       - name: Upload SARIF
-        if: always()
+        if: ${{ always() && hashFiles('trivy-results.sarif') != '' }}
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-results.sarif
@@ -125,11 +125,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-cov
+          pip install pytest pytest-cov httpx
 
       - name: Run tests with coverage
         working-directory: backend-ai
-        run: pytest
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend-ai
+        run: python -m pytest
 
   test-mobile:
     name: test-mobile
