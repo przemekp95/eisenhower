@@ -1,0 +1,24 @@
+name: Branch Policy
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - master
+
+jobs:
+  branch-policy:
+    name: branch-policy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate branch flow
+        run: |
+          echo "Base branch: ${{ github.base_ref }}"
+          echo "Head branch: ${{ github.head_ref }}"
+
+          if [ "${{ github.base_ref }}" = "master" ] && [ "${{ github.head_ref }}" != "dev" ]; then
+            echo "Only the dev branch can open a PR into master."
+            exit 1
+          fi
+
+          echo "Branch policy satisfied."

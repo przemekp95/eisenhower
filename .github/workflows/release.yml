@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - master
+
+env:
+  NODE_VERSION: "20"
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  docker-release:
+    name: docker-release
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend-ai
+            context: ./backend-ai
+            dockerfile: ./backend-ai/Dockerfile
+            tag: eisenhower-ai
+          - name: backend-node
+            context: ./backend-node
+            dockerfile: ./backend-node/Dockerfile
+            tag: eisenhower-api
+          - name: web
+            context: ./web
+            dockerfile: ./web/Dockerfile
+            tag: eisenhower-web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        if: ${{ secrets.DOCKER_HUB_USERNAME != '' && secrets.DOCKER_HUB_TOKEN != '' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Build image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: ${{ secrets.DOCKER_HUB_USERNAME != '' && secrets.DOCKER_HUB_TOKEN != '' }}
+          tags: ${{ secrets.DOCKER_HUB_USERNAME != '' && format('{0}/{1}:latest', secrets.DOCKER_HUB_USERNAME, matrix.tag) || format('local/{0}:latest', matrix.tag) }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: deploy
+    runs-on: ubuntu-latest
+    needs: docker-release
+    if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_REGION != '' && secrets.ECS_CLUSTER != '' && secrets.ECS_SERVICE != '' }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Force ECS deployment
+        run: aws ecs update-service --cluster "${{ secrets.ECS_CLUSTER }}" --service "${{ secrets.ECS_SERVICE }}" --force-new-deployment
+
+  performance-test:
+    name: performance-test
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: ${{ always() && hashFiles('tests/performance/k6-script.js') != '' }}
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run k6
+        working-directory: tests/performance
+        run: docker run --rm -v "$(pwd):/scripts" -i grafana/k6 run --out json=results.json /scripts/k6-script.js
