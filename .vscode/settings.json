@@ -1,0 +1,29 @@
+{
+    "trivy.secretScanning": true,
+    "trivy.useConfigFile": true,
+    "trivy.onlyUseConfigFile": true,
+    "trivy.configFilePath": "trivy.yaml",
+    "trivy.ignoreFilesInGitIgnore": true,
+    "trivy.skipDirList": [
+        ".build",
+        ".dart_tool",
+        ".egg-info",
+        ".egg",
+        ".git",
+        ".hg",
+        ".svn",
+        ".venv",
+        ".whl",
+        "bin",
+        "build",
+        "coverage",
+        "deps",
+        "dist",
+        "node_modules",
+        "obj",
+        "pods",
+        "target",
+        "vendor",
+        "venv"
+    ]
+}

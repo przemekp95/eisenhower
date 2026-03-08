@@ -12,10 +12,16 @@ RUN npm run build
 # Production stage
 FROM nginx:alpine AS production
 
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl && \
+    mkdir -p /var/cache/nginx /tmp/nginx && \
+    chown -R nginx:nginx /var/cache/nginx /tmp/nginx /usr/share/nginx/html
 
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY --from=build /app/dist /usr/share/nginx/html
+
+RUN chown -R nginx:nginx /etc/nginx/nginx.conf /usr/share/nginx/html
+
+USER nginx
 
 EXPOSE 3000
 
@@ -28,11 +34,14 @@ CMD ["nginx", "-g", "daemon off;"]
 FROM node:20-alpine AS development
 
 WORKDIR /app
+RUN chown node:node /app
 
-COPY package.json package-lock.json ./
+USER node
+
+COPY --chown=node:node package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-COPY . .
+COPY --chown=node:node . .
 
 EXPOSE 5173
 
