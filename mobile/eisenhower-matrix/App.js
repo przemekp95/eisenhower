@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   FlatList,
   Pressable,
-  SafeAreaView,
   StyleSheet,
   Switch,
   Text,
@@ -10,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import LanguageSwitcher from './src/components/LanguageSwitcher';
 import { translations } from './src/i18n/translations';
 import { suggestTaskQuadrant } from './src/services/ai';

@@ -68,7 +68,7 @@ export function createTasksRouter() {
 
     try {
       const task = await TaskModel.findByIdAndUpdate(req.params.id, req.body, {
-        new: true,
+        returnDocument: 'after',
         runValidators: true,
       });
 

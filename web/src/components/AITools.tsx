@@ -34,7 +34,7 @@ export default function AITools({ taskTitle, onClose, onAnalysisComplete }: Prop
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
-      <div className="w-full max-w-4xl rounded-[2rem] border border-white/10 bg-slate-900 p-6 text-white shadow-2xl">
+      <div className="w-full max-w-4xl rounded-4xl border border-white/10 bg-slate-900 p-6 text-white shadow-2xl">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold">AI tools</h2>
