@@ -5,7 +5,7 @@ const LanguageSwitcher: React.FC = () => {
   const { language, setLanguage } = useLanguage();
 
   return (
-    <div className="relative inline-flex rounded-full bg-white/10 p-1 backdrop-blur-sm">
+    <div className="relative inline-flex rounded-full bg-white/10 p-1 backdrop-blur-xs">
       <button
         onClick={() => setLanguage('en')}
         className={`px-4 py-2 rounded-full font-medium transition-all ${

@@ -93,13 +93,13 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
   };
 
   return (
-    <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-slate-900/80 p-6 shadow-2xl">
-      <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-teal-500/20 to-cyan-500/10" />}>
+    <div className="relative overflow-hidden rounded-4xl border border-white/10 bg-slate-900/80 p-6 shadow-2xl">
+      <Suspense fallback={<div className="absolute inset-0 bg-linear-to-br from-teal-500/20 to-cyan-500/10" />}>
         <LazyMatrixScene />
       </Suspense>
 
       <div className="relative z-10 space-y-6">
-        <form onSubmit={handleSubmit} className="grid gap-3 rounded-[1.5rem] border border-white/10 bg-black/25 p-4 md:grid-cols-2">
+        <form onSubmit={handleSubmit} className="grid gap-3 rounded-3xl border border-white/10 bg-black/25 p-4 md:grid-cols-2">
           <input
             value={newTask.title}
             onChange={(event) => setNewTask((current) => ({ ...current, title: event.target.value }))}
@@ -161,7 +161,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
                   <section
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className="min-h-56 rounded-[1.5rem] border border-white/10 bg-white/5 p-4"
+                    className="min-h-56 rounded-3xl border border-white/10 bg-white/5 p-4"
                   >
                     <div className="mb-3 flex items-center justify-between">
                       <h3 className="text-lg font-semibold text-white">{quadrant.label}</h3>
