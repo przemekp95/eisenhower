@@ -1,16 +1,9 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import App from './App';
-import * as storage from './src/services/storage';
 import * as ai from './src/services/ai';
 import * as media from './src/services/media';
-
-jest.mock('./src/services/storage', () => ({
-  loadLanguage: jest.fn(),
-  loadTasks: jest.fn(),
-  saveLanguage: jest.fn(),
-  saveTasks: jest.fn(),
-}));
 
 jest.mock('./src/services/ai', () => ({
   suggestTaskQuadrant: jest.fn(),
@@ -20,15 +13,23 @@ jest.mock('./src/services/media', () => ({
   scanTasksFromImage: jest.fn(),
 }));
 
+const LANGUAGE_KEY = 'eisenhower-mobile/language';
+const TASKS_KEY = 'eisenhower-mobile/tasks';
+
 describe('Mobile App', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
-    storage.loadLanguage.mockResolvedValue('pl');
-    storage.loadTasks.mockResolvedValue([
+
+    await AsyncStorage.clear();
+    await AsyncStorage.setItem(LANGUAGE_KEY, 'pl');
+    await AsyncStorage.setItem(
+      TASKS_KEY,
+      JSON.stringify([
       { id: '1', title: 'Seed task', description: 'desc', urgent: true, important: false },
-    ]);
-    storage.saveTasks.mockResolvedValue(undefined);
-    storage.saveLanguage.mockResolvedValue(undefined);
+      ])
+    );
+    AsyncStorage.setItem.mockClear();
+
     ai.suggestTaskQuadrant.mockResolvedValue({ urgent: true, important: true });
     media.scanTasksFromImage.mockResolvedValue([]);
   });
@@ -62,17 +63,23 @@ describe('Mobile App', () => {
     fireEvent.press(getByTestId('toggle-urgent-1'));
     fireEvent.press(getByText('EN'));
 
-    await waitFor(() => expect(storage.saveLanguage).toHaveBeenCalledWith('en'));
     await waitFor(() => expect(ai.suggestTaskQuadrant).toHaveBeenCalledWith('Pilny termin'));
     await waitFor(() =>
-      expect(storage.saveTasks).toHaveBeenCalledWith([
-        { id: '1', title: 'Seed task', description: 'desc', urgent: false, important: false },
-      ])
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith(LANGUAGE_KEY, 'en')
+    );
+    await waitFor(() =>
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+        TASKS_KEY,
+        JSON.stringify([
+          { id: '1', title: 'Seed task', description: 'desc', urgent: false, important: false },
+        ])
+      )
     );
   });
 
   it('scans tasks into an empty list', async () => {
-    storage.loadTasks.mockResolvedValue([]);
+    await AsyncStorage.setItem(TASKS_KEY, JSON.stringify([]));
+    AsyncStorage.setItem.mockClear();
     media.scanTasksFromImage.mockResolvedValue([
       { id: 'scan-1', title: 'Scanned task', description: '', urgent: false, important: true },
     ]);
@@ -92,12 +99,12 @@ describe('Mobile App', () => {
     fireEvent.press(getByTestId('add-task-button'));
     fireEvent.press(getByTestId('suggest-task-button'));
 
-    expect(storage.saveTasks).not.toHaveBeenCalled();
+    expect(AsyncStorage.setItem).not.toHaveBeenCalled();
     expect(ai.suggestTaskQuadrant).not.toHaveBeenCalled();
   });
 
   it('falls back to sample data when bootstrap fails', async () => {
-    storage.loadLanguage.mockRejectedValue(new Error('storage down'));
+    AsyncStorage.getItem.mockRejectedValueOnce(new Error('storage down'));
 
     const { getByText } = render(<App />);
 
