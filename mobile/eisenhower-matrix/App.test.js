@@ -34,15 +34,15 @@ describe('Mobile App', () => {
   });
 
   it('loads stored state', async () => {
-    const { findByText } = render(<App />);
+    const { getByText } = render(<App />);
 
-    expect(await findByText('Seed task')).toBeTruthy();
+    await waitFor(() => expect(getByText('Seed task')).toBeTruthy());
   });
 
   it('adds and deletes tasks', async () => {
-    const { findByText, getByPlaceholderText, getByTestId, queryByText } = render(<App />);
+    const { getByText, getByPlaceholderText, getByTestId, queryByText } = render(<App />);
 
-    expect(await findByText('Seed task')).toBeTruthy();
+    await waitFor(() => expect(getByText('Seed task')).toBeTruthy());
 
     fireEvent.changeText(getByPlaceholderText('Tytuł zadania'), 'Nowe zadanie');
     fireEvent.press(getByTestId('add-task-button'));
@@ -54,9 +54,9 @@ describe('Mobile App', () => {
   });
 
   it('requests AI suggestions, toggles task flags and changes language', async () => {
-    const { findByText, getByPlaceholderText, getByTestId, getByText } = render(<App />);
+    const { getByPlaceholderText, getByTestId, getByText } = render(<App />);
 
-    expect(await findByText('Seed task')).toBeTruthy();
+    await waitFor(() => expect(getByText('Seed task')).toBeTruthy());
     fireEvent.changeText(getByPlaceholderText('Tytuł zadania'), 'Pilny termin');
     fireEvent.press(getByTestId('suggest-task-button'));
     fireEvent.press(getByTestId('toggle-urgent-1'));
@@ -77,18 +77,18 @@ describe('Mobile App', () => {
       { id: 'scan-1', title: 'Scanned task', description: '', urgent: false, important: true },
     ]);
 
-    const { findByText, getByTestId } = render(<App />);
+    const { getByText, getByTestId } = render(<App />);
 
-    expect(await findByText('Brak zadań.')).toBeTruthy();
+    await waitFor(() => expect(getByText('Brak zadań.')).toBeTruthy());
     fireEvent.press(getByTestId('scan-task-button'));
 
-    expect(await findByText('Scanned task')).toBeTruthy();
+    await waitFor(() => expect(getByText('Scanned task')).toBeTruthy());
   });
 
   it('ignores blank add and suggest actions', async () => {
-    const { findByText, getByTestId } = render(<App />);
+    const { getByText, getByTestId } = render(<App />);
 
-    expect(await findByText('Seed task')).toBeTruthy();
+    await waitFor(() => expect(getByText('Seed task')).toBeTruthy());
     fireEvent.press(getByTestId('add-task-button'));
     fireEvent.press(getByTestId('suggest-task-button'));
 
@@ -99,8 +99,8 @@ describe('Mobile App', () => {
   it('falls back to sample data when bootstrap fails', async () => {
     storage.loadLanguage.mockRejectedValue(new Error('storage down'));
 
-    const { findByText } = render(<App />);
+    const { getByText } = render(<App />);
 
-    expect(await findByText('Pilny raport dla klienta')).toBeTruthy();
+    await waitFor(() => expect(getByText('Pilny raport dla klienta')).toBeTruthy());
   });
 });
