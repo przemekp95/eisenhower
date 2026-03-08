@@ -40,7 +40,11 @@ export default function AITools({ taskTitle, onClose, onAnalysisComplete }: Prop
             <h2 className="text-xl font-semibold">AI tools</h2>
             <p className="text-sm text-white/60">Lazy-loaded diagnostics and helper flows.</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-full bg-white/10 px-4 py-2 text-sm">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full bg-white/10 px-4 py-2 text-sm transition-all hover:bg-white/15 hover:text-white"
+          >
             Close
           </button>
         </div>
@@ -50,8 +54,10 @@ export default function AITools({ taskTitle, onClose, onAnalysisComplete }: Prop
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`rounded-full px-4 py-2 text-sm ${
-                activeTab === tab.id ? 'bg-white text-slate-950' : 'bg-white/10 text-white'
+              className={`rounded-full px-4 py-2 text-sm transition-all ${
+                activeTab === tab.id
+                  ? 'bg-white text-slate-950 hover:bg-white/90'
+                  : 'bg-white/10 text-white hover:bg-white/15 hover:text-white'
               }`}
             >
               {tab.label}

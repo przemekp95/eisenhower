@@ -44,7 +44,7 @@ export default function ImageUpload({ onTasksExtracted }: Props) {
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white"
+        className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-white/15 hover:text-white"
       >
         {loading ? 'Extracting tasks...' : 'Upload image'}
       </button>

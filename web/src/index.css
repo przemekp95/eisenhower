@@ -24,11 +24,85 @@
   font-family: "Segoe UI", sans-serif;
 }
 
+.pulse-dot {
+  position: relative;
+  isolation: isolate;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pulse-dot::after {
+    content: '';
+    position: absolute;
+    inset: -0.35rem;
+    border-radius: 9999px;
+    background: currentColor;
+    opacity: 0;
+    z-index: -1;
+    animation: pulse-ring 2.8s ease-out infinite;
+  }
+
+  .pulse-ai {
+    animation: pulse-ai-glow 3.2s ease-out infinite;
+  }
+
+  @keyframes pulse-ring {
+    0% {
+      transform: scale(0.65);
+      opacity: 0;
+    }
+
+    20% {
+      opacity: 0.24;
+    }
+
+    70%,
+    100% {
+      transform: scale(2);
+      opacity: 0;
+    }
+  }
+
+  @keyframes pulse-ai-glow {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgba(103, 232, 249, 0), 0 0 0 rgba(34, 211, 238, 0);
+      transform: translateY(0);
+    }
+
+    18% {
+      box-shadow: 0 0 0 0 rgba(103, 232, 249, 0.32), 0 0 0 rgba(34, 211, 238, 0.12);
+      transform: translateY(0);
+    }
+
+    58% {
+      box-shadow: 0 0 0 12px rgba(103, 232, 249, 0), 0 0 22px rgba(34, 211, 238, 0.18);
+      transform: translateY(-1px);
+    }
+  }
+}
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
   background: #020617;
+}
+
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-stopped {
+  overflow: clip;
+}
+
+.lenis.lenis-smooth iframe {
+  pointer-events: none;
 }
 
 #root {

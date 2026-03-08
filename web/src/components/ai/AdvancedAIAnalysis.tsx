@@ -36,7 +36,7 @@ export default function AdvancedAIAnalysis({ taskTitle, onAnalysisComplete }: Pr
         type="button"
         onClick={runAnalysis}
         disabled={loading || !taskTitle.trim()}
-        className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-slate-900"
       >
         {loading ? 'Running analysis...' : 'Run advanced analysis'}
       </button>

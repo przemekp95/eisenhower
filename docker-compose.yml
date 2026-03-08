@@ -1,4 +1,4 @@
-version: '3.8'
+name: eisenhower
 
 services:
   # AI Service - Python FastAPI for task classification

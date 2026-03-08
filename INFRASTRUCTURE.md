@@ -1,8 +1,8 @@
-# Eisenhower Infrastructure
+# Eisenhower Matrix Infrastructure
 
 Last updated: 2026-03-08
 
-This document describes the current infrastructure and delivery model of the Eisenhower monorepo. It favors the state that is implemented in the repository today over aspirational architecture.
+This document describes the current infrastructure and delivery model of the Eisenhower Matrix monorepo. It favors the state that is implemented in the repository today over aspirational architecture.
 
 ## System Overview
 
@@ -190,11 +190,3 @@ sequenceDiagram
 
 - The optional C++ classifier path is documented separately in `backend-ai/README_CPP.md` and `backend-ai/HYBRID_README.md`.
 - If the runtime contract changes, update this document together with the relevant service README or configuration file.
-      Compliance
-        GDPR compliance
-        Data retention
-```
-
----
-
-*Dokumentacja infrastruktury - wersja 1.1 (2025-01-12) - Rozszerzona o wizualizacje graficzne*
