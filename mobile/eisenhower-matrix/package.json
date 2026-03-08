@@ -19,7 +19,7 @@
   },
   "devDependencies": {
     "@testing-library/react-native": "^13.0.1",
-    "babel-preset-expo": "^12.0.7",
+    "babel-preset-expo": "^55.0.10",
     "jest": "^30.2.0",
     "jest-expo": "^52.0.4",
     "react-test-renderer": "18.3.1"
