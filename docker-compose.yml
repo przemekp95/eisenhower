@@ -49,7 +49,7 @@ services:
       - "5173:5173"  # Vite dev server
     environment:
       - VITE_API_URL=http://localhost:3001
-      - VITE_AI_URL=http://localhost:8000
+      - VITE_AI_API_URL=http://localhost:8000
     depends_on:
       - api-service
       - ai-service

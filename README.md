@@ -1,60 +1,56 @@
 # Eisenhower
 
-Monorepo dla aplikacji Eisenhower Matrix z webowym klientem React, backendem Node/Express, serwisem AI opartym o FastAPI oraz mobilnym klientem Expo.
+Monorepo for the Eisenhower Matrix application with a React web client, a Node/Express API, a FastAPI AI service, and an Expo mobile client.
 
-## Branch flow
+## Branch Flow
 
 - `feature/* -> dev`
 - `dev -> master`
-- `master` pozostaje branch domyślnym
-- `dev` i `master` są chronione przez GitHub rulesets
+- `master` remains the default branch
+- `dev` and `master` are protected with GitHub rulesets
 
-PR do `master` jest dozwolony wyłącznie z `dev`. Dopóki repo ma jednego maintainera, approval count pozostaje `0`, ale PR i zielone checki są wymagane.
+Pull requests into `master` are allowed only from `dev`. While the repository has a single maintainer, the required approval count remains `0`, but pull requests and passing checks are mandatory.
 
 ## Services
 
-- `web`: React + Vite frontend dla CRUD zadań i narzędzi AI
-- `backend-node`: REST API dla zadań i health checks
-- `backend-ai`: FastAPI service do klasyfikacji, OCR i batch analysis
-- `mobile/eisenhower-matrix`: klient Expo/React Native
+- `web`: React + Vite frontend for task CRUD and AI tools
+- `backend-node`: REST API for tasks and health checks
+- `backend-ai`: FastAPI service for classification, OCR, and batch analysis
+- `mobile/eisenhower-matrix`: Expo / React Native client
 
-## Runtime config
+## Runtime Configuration
 
 ### Web
 
-- `VITE_API_URL`: adres backendu Node, domyślnie `http://localhost:3001`
-- `VITE_AI_API_URL`: adres backendu AI, domyślnie `http://localhost:8000`
+- `VITE_API_URL`: Node API base URL, default `http://localhost:3001`
+- `VITE_AI_API_URL`: AI service base URL, default `http://localhost:8000`
 
 ### Backend Node
 
-- `PORT`: port HTTP, domyślnie `3001`
-- `MONGODB_URI`: Mongo connection string
-- `AI_SERVICE_URL`: adres backendu AI
-- `JWT_SECRET`: wymagany tylko poza testami
+- `PORT`: HTTP port, default `3001`
+- `MONGODB_URI`: MongoDB connection string
+- `AI_SERVICE_URL`: AI backend base URL
+- `JWT_SECRET`: required outside test environments
 
 ### Backend AI
 
-- `TRAINING_DATA_PATH`: ścieżka do pliku z przykładami treningowymi
-- `MODEL_CACHE_DIR`: katalog na cache/model artifacts
+- `TRAINING_DATA_PATH`: path to the training examples file
+- `MODEL_CACHE_DIR`: directory used for model and cache artifacts
 
 ### Mobile
 
-- `EXPO_PUBLIC_AI_API_URL`: adres backendu AI używany przez Expo app
+- `EXPO_PUBLIC_AI_API_URL`: AI backend URL used by the Expo application
 
-## Local development
+## Local Development
 
-1. `backend-node`
-   `cd backend-node && npm ci && npm run dev`
-2. `backend-ai`
-   `cd backend-ai && python -m pip install -r requirements.txt && uvicorn main:app --reload`
-3. `web`
-   `cd web && npm ci && npm run dev`
-4. `mobile`
-   `cd mobile/eisenhower-matrix && npm ci && npm run start`
+1. `backend-node`: `cd backend-node && npm ci && npm run dev`
+2. `backend-ai`: `cd backend-ai && python3 -m pip install -r requirements.txt && python3 -m uvicorn main:app --reload`
+3. `web`: `cd web && npm ci && npm run dev`
+4. `mobile`: `cd mobile/eisenhower-matrix && npm ci && npm run start`
 
-## Quality gates
+## Quality Gates
 
-Wymagane checki dla `dev` i `master`:
+Required checks for both `dev` and `master`:
 
 - `branch-policy`
 - `security-lint`
@@ -63,4 +59,4 @@ Wymagane checki dla `dev` i `master`:
 - `test-backend-ai`
 - `test-mobile`
 
-Każdy aktywny serwis ma własny próg coverage `>= 80%`.
+Each active service enforces its own coverage threshold of `>= 80%`.
