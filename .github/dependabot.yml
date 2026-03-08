@@ -5,42 +5,103 @@ updates:
     schedule:
       interval: "weekly"
     target-branch: "dev"
+    open-pull-requests-limit: 2
     labels:
       - "dependencies"
       - "github-actions"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
 
   - package-ecosystem: "npm"
     directory: "/backend-node"
     schedule:
       interval: "weekly"
     target-branch: "dev"
+    open-pull-requests-limit: 3
     labels:
       - "dependencies"
       - "backend-node"
+    groups:
+      backend-node-dev:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+        patterns:
+          - "*"
+      backend-node-runtime:
+        dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
+        patterns:
+          - "*"
 
   - package-ecosystem: "npm"
     directory: "/web"
     schedule:
       interval: "weekly"
     target-branch: "dev"
+    open-pull-requests-limit: 3
     labels:
       - "dependencies"
       - "web"
+    groups:
+      web-dev:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+        patterns:
+          - "*"
+      web-runtime:
+        dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
+        patterns:
+          - "*"
 
   - package-ecosystem: "npm"
     directory: "/mobile/eisenhower-matrix"
     schedule:
       interval: "weekly"
     target-branch: "dev"
+    open-pull-requests-limit: 2
     labels:
       - "dependencies"
       - "mobile"
+    groups:
+      mobile-dev:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+        patterns:
+          - "*"
+      mobile-runtime:
+        dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
+        patterns:
+          - "*"
 
   - package-ecosystem: "pip"
     directory: "/backend-ai"
     schedule:
       interval: "weekly"
     target-branch: "dev"
+    open-pull-requests-limit: 2
     labels:
       - "dependencies"
       - "backend-ai"
+    groups:
+      backend-ai-python:
+        update-types:
+          - "minor"
+          - "patch"
+        patterns:
+          - "*"
