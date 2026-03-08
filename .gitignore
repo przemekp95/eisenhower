@@ -1,0 +1,49 @@
+node_modules/
+dist/
+coverage/
+.DS_Store
+.env
+.env.*
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.py[cod]
+*.log
+*.sqlite
+*.db
+
+# IDE and tooling
+.idea/
+.vscode/
+
+# Web
+web/dist/
+web/coverage/
+web/.vite/
+
+# Backend Node
+backend-node/dist/
+backend-node/coverage/
+
+# Backend AI
+backend-ai/.pytest_cache/
+backend-ai/training_data.json
+backend-ai/quadrant_model.pkl
+backend-ai/chroma_db/
+backend-ai/data/runtime/
+
+# Mobile / Expo
+mobile/eisenhower-matrix/node_modules/
+mobile/eisenhower-matrix/coverage/
+mobile/eisenhower-matrix/.expo/
+mobile/eisenhower-matrix/.expo-shared/
+mobile/eisenhower-matrix/.jest/
+
+# Infrastructure
+docker-entrypoint-initdb.d/
+ssl/

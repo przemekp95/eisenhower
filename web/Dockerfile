@@ -1,65 +1,42 @@
-# Multi-stage build for React frontend
-
 # Build stage
-FROM node:18-alpine as build
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
 
-# Install all dependencies (including dev for build)
-RUN npm ci && npm cache clean --force && rm -rf ~/.npm
-
-# Copy source code
 COPY . .
+RUN npm run build
 
-# Build the application
-RUN npm run build && npm prune --production && rm -rf ~/.npm
+# Production stage
+FROM nginx:alpine AS production
 
-# Production stage - serve with nginx
-FROM nginx:alpine as production
+RUN apk add --no-cache curl
 
-# Copy custom nginx config
 COPY nginx.conf /etc/nginx/nginx.conf
-
-# Copy built application from build stage
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nextjs -u 1001
-
-# Expose port
 EXPOSE 3000
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
+  CMD curl -f http://localhost:3000/ || exit 1
 
-# Start nginx
 CMD ["nginx", "-g", "daemon off;"]
 
-# Development stage (optional)
-FROM node:18-alpine as development
+# Development stage
+FROM node:20-alpine AS development
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
 
-# Install all dependencies including dev
-RUN npm install
-
-# Copy source code
 COPY . .
 
-# Expose development port
 EXPOSE 5173
 
-# Health check for dev
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:5173/ || exit 1
+  CMD wget -q -O - http://localhost:5173/ >/dev/null || exit 1
 
-# Start development server
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
