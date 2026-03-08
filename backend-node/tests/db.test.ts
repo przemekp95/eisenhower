@@ -29,6 +29,17 @@ describe('database helpers', () => {
     await connectToDatabase(mongoUri);
   });
 
+  it('does nothing when disconnect is called without an active connection', async () => {
+    const disconnectSpy = jest.spyOn(mongoose, 'disconnect');
+
+    await disconnectFromDatabase();
+    await disconnectFromDatabase();
+
+    expect(disconnectSpy).toHaveBeenCalledTimes(1);
+
+    await connectToDatabase(mongoUri);
+  });
+
   it('reuses active connection for the same uri', async () => {
     const connectSpy = jest.spyOn(mongoose, 'connect');
     const disconnectSpy = jest.spyOn(mongoose, 'disconnect');
@@ -38,5 +49,18 @@ describe('database helpers', () => {
 
     expect(connectSpy).not.toHaveBeenCalled();
     expect(disconnectSpy).not.toHaveBeenCalled();
+  });
+
+  it('reconnects when switching to a different uri while already connected', async () => {
+    const disconnectSpy = jest.spyOn(mongoose, 'disconnect');
+    const connectSpy = jest.spyOn(mongoose, 'connect');
+    const differentUri = `${mongoUri}different-db`;
+
+    await connectToDatabase(differentUri);
+
+    expect(disconnectSpy).toHaveBeenCalledTimes(1);
+    expect(connectSpy).toHaveBeenCalledWith(differentUri);
+
+    await connectToDatabase(mongoUri);
   });
 });

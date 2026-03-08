@@ -4,6 +4,7 @@ import LanguageSwitcher from './components/LanguageSwitcher';
 import useSmoothScroll from './hooks/useSmoothScroll';
 import { LanguageProvider, useLanguage } from './i18n/LanguageContext';
 import { shouldDisableMotion } from './lib/motion';
+import { replaceTaskById, restoreReadyState } from './lib/uiState';
 import { createTask, deleteTask, getTasks, updateTask } from './services/api';
 import { Task, TaskInput } from './types';
 
@@ -200,9 +201,7 @@ function AppContent() {
         ctx.revert();
       };
     })().catch(() => {
-      if (!cancelled) {
-        setAppIntroState('ready');
-      }
+      restoreReadyState(cancelled, () => setAppIntroState('ready'));
     });
 
     return () => {
@@ -224,7 +223,7 @@ function AppContent() {
   const handleUpdateTask = async (id: string, patch: Partial<TaskInput>) => {
     try {
       const updated = await updateTask(id, patch);
-      setTasks((current) => current.map((task) => (task._id === id ? updated : task)));
+      setTasks((current) => replaceTaskById(current, id, updated));
       setError(null);
     } catch (issue) {
       setError(issue instanceof Error ? issue.message : t('status.saveError'));

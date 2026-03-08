@@ -72,4 +72,18 @@ describe('useSmoothScroll', () => {
     expect(window.cancelAnimationFrame).toHaveBeenCalled();
     expect(mockLenisDestroy).toHaveBeenCalledTimes(1);
   });
+
+  it('abandons lenis setup when the hook unmounts before the module resolves', async () => {
+    mockShouldDisableMotion.mockReturnValue(false);
+
+    const { unmount } = render(<HookHarness />);
+    unmount();
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockLenisConstructor).not.toHaveBeenCalled();
+    expect(window.requestAnimationFrame).not.toHaveBeenCalled();
+  });
 });

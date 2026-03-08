@@ -37,3 +37,13 @@ def test_classifier_extracts_tasks_from_utf8_payload():
 
   assert result["ocr"]["raw_tasks_detected"] == 2
   assert len(result["classified_tasks"]) == 2
+
+
+def test_classifier_falls_back_to_filename_when_ocr_payload_is_invalid():
+  classifier = HeuristicClassifier()
+
+  result = classifier.extract_tasks_from_image("urgent-outage.png", b"\xff\xfe\xfd")
+
+  assert result["ocr"]["extracted_text"] == ""
+  assert result["ocr"]["raw_tasks_detected"] == 1
+  assert result["classified_tasks"][0]["text"] == "urgent outage"

@@ -26,6 +26,7 @@ htmlcov/
 web/dist/
 web/coverage/
 web/.vite/
+web/output/playwright/
 
 # Backend Node
 backend-node/dist/

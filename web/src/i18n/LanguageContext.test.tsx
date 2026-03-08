@@ -7,6 +7,11 @@ function ReadLanguage() {
   return <span>{language}</span>;
 }
 
+function ReadMissingTranslation() {
+  const { t } = useLanguage();
+  return <span>{t('missing.translation.key' as never)}</span>;
+}
+
 describe('LanguageContext', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -25,6 +30,26 @@ describe('LanguageContext', () => {
     await waitFor(() => expect(screen.getByText('en')).toBeInTheDocument());
     fireEvent.click(screen.getByText('Polski'));
     expect(localStorage.getItem('eisenhower-language')).toBe('pl');
+  });
+
+  it('falls back to polish for invalid saved values, switches to english, and falls back for missing keys', async () => {
+    localStorage.setItem('eisenhower-language', 'de');
+
+    render(
+      <LanguageProvider>
+        <ReadLanguage />
+        <ReadMissingTranslation />
+        <LanguageSwitcher />
+      </LanguageProvider>
+    );
+
+    await waitFor(() => expect(screen.getByText('pl')).toBeInTheDocument());
+    expect(screen.getByText('missing.translation.key')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('English'));
+
+    await waitFor(() => expect(screen.getByText('en')).toBeInTheDocument());
+    expect(localStorage.getItem('eisenhower-language')).toBe('en');
   });
 
   it('throws when used without a provider', () => {

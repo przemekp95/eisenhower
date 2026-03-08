@@ -66,11 +66,16 @@ describe('api service', () => {
     await addTrainingExample('task', 1);
     await learnFromFeedback('task', 1, 2);
     await retrainModel(false);
+    await retrainModel();
     await getTrainingStats();
+    await getExamplesByQuadrant(0);
     await getExamplesByQuadrant(0, 5);
     await getCapabilities();
 
     expect((global.fetch as jest.Mock).mock.calls[0][0]).toContain(runtimeConfig.aiApiUrl);
+    expect((global.fetch as jest.Mock).mock.calls[6][1].body.toString()).toContain('preserve_experience=false');
+    expect((global.fetch as jest.Mock).mock.calls[7][1].body.toString()).toContain('preserve_experience=true');
+    expect((global.fetch as jest.Mock).mock.calls[9][0]).toContain('/examples/0?limit=10');
   });
 
   it('throws JSON errors when requests fail', async () => {
@@ -83,6 +88,19 @@ describe('api service', () => {
 
     await expect(createTask({ title: '', description: '', urgent: false, important: false })).rejects.toThrow(
       'Validation failed'
+    );
+  });
+
+  it('falls back to a generic JSON error when the payload has no message', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 400,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({}),
+    });
+
+    await expect(createTask({ title: '', description: '', urgent: false, important: false })).rejects.toThrow(
+      'Request failed'
     );
   });
 

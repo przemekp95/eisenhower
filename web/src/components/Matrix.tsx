@@ -4,6 +4,7 @@ import { classifyTask, LangChainAnalysis } from '../services/api';
 import { Task, TaskInput } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
 import { shouldDisableMotion } from '../lib/motion';
+import { restoreReadyState } from '../lib/uiState';
 import { quadrantToTaskState, resolveSuggestedQuadrant } from './matrixUtils';
 
 const LazyAITools = lazy(() => import('./AITools'));
@@ -166,9 +167,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
         ctx.revert();
       };
     })().catch(() => {
-      if (!cancelled) {
-        setMatrixIntroState('ready');
-      }
+      restoreReadyState(cancelled, () => setMatrixIntroState('ready'));
     });
 
     return () => {

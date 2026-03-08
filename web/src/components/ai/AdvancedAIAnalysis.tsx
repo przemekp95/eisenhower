@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { applyAdvancedAnalysisResult, runAdvancedTaskAnalysis } from '../../lib/uiState';
 import { analyzeWithLangChain, LangChainAnalysis } from '../../services/api';
 
 interface Props {
@@ -12,17 +13,15 @@ export default function AdvancedAIAnalysis({ taskTitle, onAnalysisComplete }: Pr
   const [loading, setLoading] = useState(false);
 
   const runAnalysis = async () => {
-    if (!taskTitle.trim()) {
-      return;
-    }
-
     setLoading(true);
     setError(null);
 
     try {
-      const result = await analyzeWithLangChain(taskTitle);
-      setAnalysis(result);
-      onAnalysisComplete(result);
+      const result = await runAdvancedTaskAnalysis(taskTitle, analyzeWithLangChain);
+      applyAdvancedAnalysisResult(result, (analysis) => {
+        setAnalysis(analysis);
+        onAnalysisComplete(analysis);
+      });
     } catch (issue) {
       setError(issue instanceof Error ? issue.message : 'Analysis failed');
     } finally {

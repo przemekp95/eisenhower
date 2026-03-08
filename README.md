@@ -48,6 +48,20 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 3. `web`: `cd web && npm ci && npm run dev`
 4. `mobile`: `cd mobile/eisenhower-matrix && npm ci && npm run start`
 
+## Frontend E2E
+
+- Install browsers once: `cd web && npm run test:e2e:install`
+- Run the smoke suite: `cd web && npm run test:e2e`
+
+The Playwright suite starts an isolated Vite frontend plus a real Node API backed by an ephemeral `mongodb-memory-server` instance, so it does not depend on a manually running MongoDB container.
+
+## Frontend Integration
+
+- Install dependencies in both packages: `cd backend-node && npm ci` and `cd web && npm ci`
+- Run the suite: `cd web && npm run test:integration`
+
+The integration suite renders the React app in JSDOM, but talks to a real Express API backed by `mongodb-memory-server`, so CRUD is exercised without mocking `./services/api` or `fetch`.
+
 ## Quality Gates
 
 Required checks for both `dev` and `master`:
@@ -56,6 +70,8 @@ Required checks for both `dev` and `master`:
 - `security-lint`
 - `test-backend-node`
 - `test-frontend`
+- `test-frontend-integration`
+- `test-frontend-e2e`
 - `test-backend-ai`
 - `test-mobile`
 

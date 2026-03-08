@@ -81,6 +81,15 @@ describe('task routes', () => {
     expect(response.body.error).toBe('Task not found');
   });
 
+  it('rejects invalid payloads on update', async () => {
+    const id = new mongoose.Types.ObjectId().toString();
+    const response = await request(app).put(`/tasks/${id}`).send({ title: '' });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('Validation failed');
+    expect(response.body.details).toContain('Invalid value');
+  });
+
   it('rejects malformed ids', async () => {
     const response = await request(app).delete('/tasks/not-an-id');
 
