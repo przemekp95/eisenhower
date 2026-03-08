@@ -8,6 +8,7 @@ jest.mock('./services/api');
 
 const mockShouldDisableMotion = jest.fn(() => true);
 const mockGsapContext = jest.fn();
+const mockGsapTimeline = jest.fn();
 const mockGsapFrom = jest.fn();
 const mockGsapTo = jest.fn();
 const mockGsapRevert = jest.fn();
@@ -18,6 +19,7 @@ jest.mock('./lib/motion', () => ({
 jest.mock('gsap', () => ({
   gsap: {
     context: (...args: unknown[]) => mockGsapContext(...args),
+    timeline: (...args: unknown[]) => mockGsapTimeline(...args),
     from: (...args: unknown[]) => mockGsapFrom(...args),
     to: (...args: unknown[]) => mockGsapTo(...args),
   },
@@ -49,6 +51,14 @@ describe('Matrix', () => {
     mockGsapContext.mockImplementation((callback: () => void) => {
       callback();
       return { revert: mockGsapRevert };
+    });
+    mockGsapTimeline.mockImplementation((config?: { onComplete?: () => void }) => {
+      const chain = {
+        to: jest.fn().mockReturnThis(),
+      };
+
+      config?.onComplete?.();
+      return chain;
     });
     mockGsapFrom.mockImplementation(() => undefined);
     mockGsapTo.mockImplementation(() => undefined);
@@ -228,8 +238,8 @@ describe('Matrix', () => {
     const { unmount } = renderMatrix();
 
     await waitFor(() => expect(mockGsapContext).toHaveBeenCalledTimes(1));
-    expect(mockGsapFrom).toHaveBeenCalledTimes(2);
-    expect(mockGsapTo).toHaveBeenCalledTimes(1);
+    expect(mockGsapTimeline).toHaveBeenCalledTimes(1);
+    expect(mockGsapTo).toHaveBeenCalledTimes(2);
 
     unmount();
 

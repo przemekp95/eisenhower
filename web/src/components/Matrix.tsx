@@ -20,6 +20,9 @@ interface Props {
 export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDeleteTask }: Props) {
   const { t } = useLanguage();
   const matrixRef = useRef<HTMLDivElement | null>(null);
+  const [matrixIntroState, setMatrixIntroState] = useState<'pending' | 'ready'>(() =>
+    shouldDisableMotion() ? 'ready' : 'pending'
+  );
   const [newTask, setNewTask] = useState<TaskInput>({
     title: '',
     description: '',
@@ -112,23 +115,30 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
       }
 
       const ctx = gsap.context(() => {
-        gsap.from('[data-matrix-form]', {
-          y: 24,
-          autoAlpha: 0,
-          duration: 0.78,
-          ease: 'power3.out',
-          delay: 0.2,
+        const intro = gsap.timeline({
+          defaults: {
+            ease: 'power3.out',
+          },
+          onComplete: () => {
+            if (!cancelled) {
+              setMatrixIntroState('ready');
+            }
+          },
         });
 
-        gsap.from('[data-matrix-section]', {
-          y: 42,
-          autoAlpha: 0,
-          scale: 0.985,
-          duration: 0.82,
-          ease: 'power3.out',
-          stagger: 0.08,
-          delay: 0.32,
-        });
+        intro
+          .to('[data-matrix-form]', {
+            y: 0,
+            autoAlpha: 1,
+            duration: 0.78,
+          }, 0.2)
+          .to('[data-matrix-section]', {
+            y: 0,
+            autoAlpha: 1,
+            scale: 1,
+            duration: 0.82,
+            stagger: 0.08,
+          }, 0.32);
 
         gsap.to('[data-matrix-float]', {
           y: -8,
@@ -141,12 +151,25 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
             from: 'center',
           },
         });
+
+        gsap.to('[data-matrix-beam]', {
+          xPercent: 10,
+          opacity: 0.28,
+          duration: 4.8,
+          ease: 'sine.inOut',
+          repeat: -1,
+          yoyo: true,
+        });
       }, root);
 
       cleanup = () => {
         ctx.revert();
       };
-    })();
+    })().catch(() => {
+      if (!cancelled) {
+        setMatrixIntroState('ready');
+      }
+    });
 
     return () => {
       cancelled = true;
@@ -157,8 +180,20 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
   return (
     <div
       ref={matrixRef}
-      className="relative overflow-hidden rounded-4xl border border-white/10 bg-slate-900/80 p-6 shadow-2xl"
+      data-matrix-intro={matrixIntroState}
+      className="matrix-shell relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-slate-900/[0.82] p-6 shadow-[0_30px_100px_rgba(2,6,23,0.62)] backdrop-blur-xl"
     >
+      <div aria-hidden="true" className="matrix-noise" />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(52,211,153,0.12),transparent_24%),radial-gradient(circle_at_82%_22%,rgba(103,232,249,0.14),transparent_26%),linear-gradient(180deg,rgba(15,23,42,0),rgba(2,6,23,0.64))]"
+      />
+      <div
+        data-matrix-beam
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-10 top-14 h-px bg-gradient-to-r from-transparent via-cyan-200/[0.65] to-transparent opacity-[0.12]"
+      />
+
       <Suspense fallback={<div className="absolute inset-0 bg-linear-to-br from-teal-500/20 to-cyan-500/10" />}>
         <LazyMatrixScene />
       </Suspense>
@@ -167,18 +202,26 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
         <form
           data-matrix-form
           onSubmit={handleSubmit}
-          className="grid gap-3 rounded-3xl border border-white/10 bg-black/25 p-4 md:grid-cols-2"
+          className="relative grid gap-3 overflow-hidden rounded-[2rem] border border-white/10 bg-black/[0.28] p-4 backdrop-blur md:grid-cols-2"
         >
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0))]"
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -left-12 top-10 h-28 w-28 rounded-full bg-emerald-300/10 blur-3xl"
+          />
           <input
             value={newTask.title}
             onChange={(event) => setNewTask((current) => ({ ...current, title: event.target.value }))}
-            className="rounded-full border border-white/10 bg-white/10 px-4 py-3 text-white placeholder:text-white/50"
+            className="rounded-full border border-white/10 bg-white/10 px-4 py-3 text-white transition-all placeholder:text-white/50 focus:border-emerald-200/40 focus:bg-white/[0.12] focus:outline-hidden"
             placeholder={t('form.title')}
           />
           <input
             value={newTask.description}
             onChange={(event) => setNewTask((current) => ({ ...current, description: event.target.value }))}
-            className="rounded-full border border-white/10 bg-white/10 px-4 py-3 text-white placeholder:text-white/50"
+            className="rounded-full border border-white/10 bg-white/10 px-4 py-3 text-white transition-all placeholder:text-white/50 focus:border-cyan-200/40 focus:bg-white/[0.12] focus:outline-hidden"
             placeholder={t('form.description')}
           />
           <label
@@ -290,13 +333,17 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
                     data-matrix-section
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className="min-h-56 rounded-3xl border border-white/10 bg-white/5 p-4"
+                    className="group relative min-h-56 overflow-hidden rounded-[1.9rem] border border-white/10 bg-white/[0.06] p-4 transition-all duration-300 hover:-translate-y-1 hover:border-white/[0.14] hover:bg-white/[0.07]"
                   >
+                    <div
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-x-4 top-0 h-20 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0))] opacity-70 transition-opacity duration-300 group-hover:opacity-100"
+                    />
                     <div className="mb-3 flex items-center justify-between">
                       <h3 className="text-lg font-semibold text-white">{quadrant.label}</h3>
                       <span
                         data-matrix-float
-                        className="text-xs uppercase tracking-[0.2em] text-white/50"
+                        className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] uppercase tracking-[0.2em] text-white/50"
                       >
                         {tasks.filter(quadrant.filter).length}
                       </span>
@@ -309,8 +356,12 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
                               ref={dragProvided.innerRef}
                               {...dragProvided.draggableProps}
                               {...dragProvided.dragHandleProps}
-                              className="cursor-grab rounded-[1.25rem] border border-white/10 bg-slate-950/70 p-4 text-white transition-all hover:border-white/15 hover:bg-slate-950/80 active:cursor-grabbing"
+                              className="relative cursor-grab overflow-hidden rounded-[1.4rem] border border-white/10 bg-slate-950/[0.72] p-4 text-white transition-all hover:border-white/[0.16] hover:bg-slate-950/[0.82] hover:shadow-[0_20px_50px_rgba(2,6,23,0.45)] active:cursor-grabbing"
                             >
+                              <div
+                                aria-hidden="true"
+                                className="pointer-events-none absolute inset-x-0 top-0 h-14 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0))]"
+                              />
                               <div className="flex items-start justify-between gap-3">
                                 <div>
                                   <h4 className="font-semibold">{task.title}</h4>

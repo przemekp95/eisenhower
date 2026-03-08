@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 import * as api from './services/api';
 
@@ -27,6 +27,10 @@ jest.mock('gsap', () => ({
 const mockedApi = jest.mocked(api);
 
 describe('App', () => {
+  const originalRequestAnimationFrame = window.requestAnimationFrame;
+  const originalCancelAnimationFrame = window.cancelAnimationFrame;
+  const originalScrollY = window.scrollY;
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockShouldDisableMotion.mockReturnValue(true);
@@ -35,11 +39,13 @@ describe('App', () => {
       callback();
       return { revert: mockGsapRevert };
     });
-    mockGsapTimeline.mockImplementation(() => {
+    mockGsapTimeline.mockImplementation((config?: { onComplete?: () => void }) => {
       const chain = {
         from: jest.fn().mockReturnThis(),
+        to: jest.fn().mockReturnThis(),
       };
 
+      config?.onComplete?.();
       return chain;
     });
     mockGsapFrom.mockImplementation(() => undefined);
@@ -64,6 +70,15 @@ describe('App', () => {
       quadrant_name: 'Schedule',
       timestamp: new Date().toISOString(),
       method: 'heuristic',
+    });
+  });
+
+  afterEach(() => {
+    window.requestAnimationFrame = originalRequestAnimationFrame;
+    window.cancelAnimationFrame = originalCancelAnimationFrame;
+    Object.defineProperty(window, 'scrollY', {
+      configurable: true,
+      value: originalScrollY,
     });
   });
 
@@ -131,11 +146,46 @@ describe('App', () => {
     const { unmount } = render(<App />);
 
     await waitFor(() => expect(mockGsapContext).toHaveBeenCalledTimes(2));
-    expect(mockGsapTimeline).toHaveBeenCalledTimes(1);
-    expect(mockGsapTo).toHaveBeenCalledTimes(1);
+    expect(mockGsapTimeline).toHaveBeenCalledTimes(2);
+    expect(mockGsapTo).toHaveBeenCalledTimes(5);
 
     unmount();
 
     expect(mockGsapRevert).toHaveBeenCalledTimes(2);
+  });
+
+  it('animates hero parallax on scroll without queueing duplicate frames', async () => {
+    mockShouldDisableMotion.mockReturnValue(false);
+
+    let frameCallback: FrameRequestCallback | undefined;
+    window.requestAnimationFrame = jest.fn((callback: FrameRequestCallback) => {
+      frameCallback = callback;
+      return 1;
+    });
+    window.cancelAnimationFrame = jest.fn();
+
+    render(<App />);
+
+    await waitFor(() => expect(mockGsapContext).toHaveBeenCalledTimes(2));
+
+    Object.defineProperty(window, 'scrollY', {
+      configurable: true,
+      value: 210,
+    });
+
+    fireEvent.scroll(window);
+    fireEvent.scroll(window);
+
+    expect(window.requestAnimationFrame).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      frameCallback?.(16);
+    });
+
+    expect(mockGsapTo).toHaveBeenCalledTimes(9);
+
+    fireEvent.scroll(window);
+
+    expect(window.requestAnimationFrame).toHaveBeenCalledTimes(2);
   });
 });
