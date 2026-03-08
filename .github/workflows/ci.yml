@@ -26,13 +26,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Trivy scan
-        uses: aquasecurity/trivy-action@0.31.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          format: sarif
-          output: trivy-results.sarif
-          exit-code: "0"
+        run: |
+          mkdir -p "$HOME/.cache/trivy"
+          docker run --rm \
+            -v "$PWD:/workdir" \
+            -v "$HOME/.cache/trivy:/root/.cache/" \
+            aquasec/trivy:0.63.0 fs \
+            --format sarif \
+            --output /workdir/trivy-results.sarif \
+            /workdir || true
 
       - name: Upload SARIF
         if: ${{ always() && hashFiles('trivy-results.sarif') != '' }}
