@@ -59,7 +59,7 @@ function AppContent() {
   };
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(13,148,136,0.35),_rgba(15,23,42,1)_60%)] px-4 py-8 text-white">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(13,148,136,0.35),rgba(15,23,42,1)_60%)] px-4 py-8 text-white">
       <div className="mx-auto max-w-6xl">
         <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
