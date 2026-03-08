@@ -17,18 +17,24 @@ const LANGUAGE_KEY = 'eisenhower-mobile/language';
 const TASKS_KEY = 'eisenhower-mobile/tasks';
 
 describe('Mobile App', () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     jest.clearAllMocks();
 
-    await AsyncStorage.clear();
-    await AsyncStorage.setItem(LANGUAGE_KEY, 'pl');
-    await AsyncStorage.setItem(
-      TASKS_KEY,
-      JSON.stringify([
+    AsyncStorage.getItem.mockImplementation(async (key) => {
+      if (key === LANGUAGE_KEY) {
+        return 'pl';
+      }
+
+      if (key === TASKS_KEY) {
+        return JSON.stringify([
       { id: '1', title: 'Seed task', description: 'desc', urgent: true, important: false },
-      ])
-    );
-    AsyncStorage.setItem.mockClear();
+        ]);
+      }
+
+      return null;
+    });
+    AsyncStorage.setItem.mockResolvedValue(undefined);
+    AsyncStorage.clear.mockResolvedValue(undefined);
 
     ai.suggestTaskQuadrant.mockResolvedValue({ urgent: true, important: true });
     media.scanTasksFromImage.mockResolvedValue([]);
@@ -78,8 +84,17 @@ describe('Mobile App', () => {
   });
 
   it('scans tasks into an empty list', async () => {
-    await AsyncStorage.setItem(TASKS_KEY, JSON.stringify([]));
-    AsyncStorage.setItem.mockClear();
+    AsyncStorage.getItem.mockImplementation(async (key) => {
+      if (key === LANGUAGE_KEY) {
+        return 'pl';
+      }
+
+      if (key === TASKS_KEY) {
+        return JSON.stringify([]);
+      }
+
+      return null;
+    });
     media.scanTasksFromImage.mockResolvedValue([
       { id: 'scan-1', title: 'Scanned task', description: '', urgent: false, important: true },
     ]);
