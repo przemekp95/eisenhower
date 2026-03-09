@@ -92,6 +92,7 @@ Pushes to `master` run `release.yml`, which can deploy to Mikrus over SSH when s
 - `MIKRUS_APP_DIR`: optional deploy directory override
 
 Default deploy directory is `/home/<MIKRUS_USER>/apps/demo-fortis`, except `root` which defaults to `/root/apps/demo-fortis`.
+The example Mikrus env uses `WEB_PORT=8080` to avoid common `3000` collisions on shared hosts. If your target already listens on any configured host port, update `WEB_PORT`, `API_PORT`, `AI_PORT`, and matching URLs in `MIKRUS_ENV_FILE` before redeploying.
 Reference files:
 
 - `deploy/mikrus/docker-compose.yml`

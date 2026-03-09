@@ -113,6 +113,62 @@ fi
 
 cd "$APP_DIR"
 
+compose_project="eisenhower"
+
+read_env_value() {
+  local name="$1"
+  local default_value="$2"
+  local value
+
+  value="$(grep -E "^${name}=" .env 2>/dev/null | tail -n 1 | cut -d= -f2- | tr -d '\r')"
+  if [[ -n "$value" ]]; then
+    printf '%s\n' "$value"
+  else
+    printf '%s\n' "$default_value"
+  fi
+}
+
+check_host_port() {
+  local service_name="$1"
+  local env_name="$2"
+  local port="$3"
+  local docker_publishers
+  local foreign_publishers
+  local listeners
+  local foreign_listeners
+
+  docker_publishers="$(docker ps --format '{{.ID}}\t{{.Names}}\t{{.Label "com.docker.compose.project"}}\t{{.Ports}}' --filter "publish=$port" || true)"
+  foreign_publishers="$(printf '%s\n' "$docker_publishers" | awk -F '\t' -v project="$compose_project" 'NF && $3 != project { print }')"
+
+  if [[ -n "$foreign_publishers" ]]; then
+    echo "Host port $port required by $service_name is already published by another container:"
+    echo "$foreign_publishers"
+    echo "Set ${env_name} to a free host port in ${APP_DIR}/.env (from the MIKRUS_ENV_FILE GitHub secret) and redeploy."
+    exit 1
+  fi
+
+  if command -v ss >/dev/null 2>&1; then
+    listeners="$(ss -ltnp "( sport = :$port )" 2>/dev/null | tail -n +2 || true)"
+    foreign_listeners="$(printf '%s\n' "$listeners" | grep -v 'docker-proxy' || true)"
+
+    if [[ -n "$foreign_listeners" ]]; then
+      echo "Host port $port required by $service_name is already in use:"
+      echo "$foreign_listeners"
+      echo "Set ${env_name} to a free host port in ${APP_DIR}/.env (from the MIKRUS_ENV_FILE GitHub secret) and redeploy."
+      exit 1
+    fi
+  fi
+}
+
+web_port="$(read_env_value WEB_PORT 8080)"
+api_port="$(read_env_value API_PORT 3001)"
+ai_port="$(read_env_value AI_PORT 8000)"
+
+echo "Preflight host ports: frontend=$web_port api=$api_port ai=$ai_port"
+check_host_port "frontend" "WEB_PORT" "$web_port"
+check_host_port "api-service" "API_PORT" "$api_port"
+check_host_port "ai-service" "AI_PORT" "$ai_port"
+
 if [ -n "$DOCKER_HUB_TOKEN" ]; then
   printf '%s' "$DOCKER_HUB_TOKEN" | docker login --username "$DOCKER_HUB_USERNAME" --password-stdin
 fi
