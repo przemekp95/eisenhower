@@ -36,6 +36,37 @@ export function quadrantToFlags(quadrant) {
   };
 }
 
+export function flagsToQuadrant(task) {
+  if (task.urgent && task.important) {
+    return 0;
+  }
+
+  if (task.urgent) {
+    return 1;
+  }
+
+  if (task.important) {
+    return 2;
+  }
+
+  return 3;
+}
+
+export function groupTasksByQuadrant(tasks) {
+  const grouped = {
+    0: [],
+    1: [],
+    2: [],
+    3: [],
+  };
+
+  for (const task of tasks) {
+    grouped[flagsToQuadrant(task)].push(task);
+  }
+
+  return grouped;
+}
+
 export function createTaskRecord(language, task, id) {
   return {
     id,

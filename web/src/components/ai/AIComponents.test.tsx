@@ -17,7 +17,7 @@ function renderWithLanguage(ui: React.ReactElement) {
 
 describe('AI component error paths', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     localStorage.setItem('eisenhower-language', 'en');
   });
 
@@ -396,6 +396,10 @@ describe('AI component error paths', () => {
         tesseract: true,
         ocr: true,
       },
+      provider_controls: {
+        local_model: { enabled: true, available: true, active: true, reason: null },
+        tesseract: { enabled: true, available: true, active: true, reason: null },
+      },
     };
 
     mockedApi.getTrainingStats.mockImplementation(async () => stats);
@@ -408,7 +412,7 @@ describe('AI component error paths', () => {
 
     renderWithLanguage(<AIManagement onModelUpdated={onModelUpdated} />);
 
-    await waitFor(() => expect(screen.getByText(/Local model: on/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Model: local-minilm-mlp \(on\)/i)).toBeInTheDocument());
 
     fireEvent.change(screen.getByPlaceholderText(/Task text/i), {
       target: { value: 'Escalate outage' },
@@ -431,9 +435,8 @@ describe('AI component error paths', () => {
     fireEvent.click(screen.getByText(/Learn feedback/i));
     await waitFor(() => expect(mockedApi.learnFromFeedback).toHaveBeenCalledWith('Prepare QBR', 3, 2));
 
-    const toggles = screen.getAllByRole('checkbox');
-    fireEvent.click(toggles[0]);
-    fireEvent.click(toggles[1]);
+    fireEvent.click(screen.getByLabelText(/Keep deprecated compatibility flag on retrain/i));
+    fireEvent.click(screen.getByLabelText(/Keep seed examples when clearing training data/i));
     fireEvent.click(screen.getByText(/^Retrain$/i));
     await waitFor(() => expect(mockedApi.retrainModel).toHaveBeenCalledWith(false));
 
@@ -475,6 +478,15 @@ describe('AI component error paths', () => {
         tesseract: true,
         ocr: true,
       },
+      provider_controls: {
+        local_model: {
+          enabled: true,
+          available: false,
+          active: false,
+          reason: 'Model bootstrap failed.',
+        },
+        tesseract: { enabled: true, available: true, active: true, reason: null },
+      },
     });
 
     renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
@@ -483,7 +495,7 @@ describe('AI component error paths', () => {
     expect(
       screen.getByText(/Encoder: sentence-transformers\/paraphrase-multilingual-MiniLM-L12-v2/i)
     ).toBeInTheDocument();
-    expect(screen.getByText('Model bootstrap failed.')).toBeInTheDocument();
+    expect(screen.getAllByText('Model bootstrap failed.')).toHaveLength(2);
   });
 
   it('shows partial status failures when capabilities cannot load', async () => {
@@ -524,6 +536,10 @@ describe('AI component error paths', () => {
         tesseract: true,
         ocr: true,
       },
+      provider_controls: {
+        local_model: { enabled: false, available: true, active: false, reason: 'Disabled in AI management.' },
+        tesseract: { enabled: true, available: true, active: true, reason: null },
+      },
     });
     mockedApi.addTrainingExample.mockRejectedValueOnce('offline');
     mockedApi.getExamplesByQuadrant.mockRejectedValueOnce('offline');
@@ -562,6 +578,10 @@ describe('AI component error paths', () => {
         tesseract: true,
         ocr: true,
       },
+      provider_controls: {
+        local_model: { enabled: true, available: true, active: true, reason: null },
+        tesseract: { enabled: true, available: true, active: true, reason: null },
+      },
     });
     mockedApi.retrainModel.mockRejectedValueOnce(new Error('Retrain exploded'));
     mockedApi.getExamplesByQuadrant
@@ -581,5 +601,189 @@ describe('AI component error paths', () => {
     fireEvent.click(screen.getByText(/Load examples/i));
     await waitFor(() => expect(screen.getByText('Unknown bucket task')).toBeInTheDocument());
     expect(screen.getByText('Quadrant 9')).toBeInTheDocument();
+  });
+
+  it('toggles providers and refreshes their runtime state', async () => {
+    mockedApi.getTrainingStats.mockResolvedValue({
+      total_examples: 5,
+      quadrant_distribution: { '0': 1, '1': 1, '2': 1, '3': 2 },
+      data_sources: { user: 5 },
+      data_file: 'data.json',
+      model_file: 'memory',
+      last_updated: new Date().toISOString(),
+    });
+    mockedApi.getCapabilities
+      .mockResolvedValueOnce({
+        classification: true,
+        langchain_analysis: true,
+        ocr: true,
+        batch_analysis: true,
+        training_management: true,
+        providers: {
+          local_model: true,
+          tesseract: true,
+          ocr: true,
+        },
+        provider_controls: {
+          local_model: { enabled: true, available: true, active: true, reason: null },
+          tesseract: { enabled: true, available: true, active: true, reason: null },
+        },
+      })
+      .mockResolvedValueOnce({
+        classification: false,
+        langchain_analysis: false,
+        ocr: true,
+        batch_analysis: false,
+        training_management: true,
+        providers: {
+          local_model: false,
+          tesseract: true,
+          ocr: true,
+        },
+        provider_controls: {
+          local_model: { enabled: false, available: true, active: false, reason: 'Disabled in AI management.' },
+          tesseract: { enabled: true, available: true, active: true, reason: null },
+        },
+      })
+      .mockResolvedValueOnce({
+        classification: false,
+        langchain_analysis: false,
+        ocr: false,
+        batch_analysis: false,
+        training_management: true,
+        providers: {
+          local_model: false,
+          tesseract: false,
+          ocr: false,
+        },
+        provider_controls: {
+          local_model: { enabled: false, available: true, active: false, reason: 'Disabled in AI management.' },
+          tesseract: { enabled: false, available: true, active: false, reason: 'Disabled in AI management.' },
+        },
+      });
+    mockedApi.setProviderEnabled
+      .mockResolvedValueOnce({
+        provider: 'local_model',
+        enabled: false,
+        available: true,
+        active: false,
+        reason: 'Disabled in AI management.',
+      })
+      .mockResolvedValueOnce({
+        provider: 'tesseract',
+        enabled: false,
+        available: true,
+        active: false,
+        reason: 'Disabled in AI management.',
+      });
+
+    renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
+
+    await waitFor(() => expect(screen.getByText(/Local model/i)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText(/Toggle Local model/i));
+    await waitFor(() => expect(mockedApi.setProviderEnabled).toHaveBeenCalledWith('local_model', false));
+    await waitFor(() => expect(screen.getByText(/Local model disabled\./i)).toBeInTheDocument());
+    expect(screen.getAllByText(/Disabled in AI management/i).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByLabelText(/Toggle Tesseract/i));
+    await waitFor(() => expect(mockedApi.setProviderEnabled).toHaveBeenCalledWith('tesseract', false));
+    await waitFor(() => expect(screen.getByText(/Tesseract disabled\./i)).toBeInTheDocument());
+  });
+
+  it('enables a disabled provider and reports the success state', async () => {
+    mockedApi.getTrainingStats.mockResolvedValue({
+      total_examples: 2,
+      quadrant_distribution: { '0': 1, '1': 1, '2': 0, '3': 0 },
+      data_sources: { default: 2 },
+      data_file: 'data.json',
+      model_file: 'memory',
+      last_updated: new Date().toISOString(),
+    });
+    mockedApi.getCapabilities
+      .mockResolvedValueOnce({
+        classification: false,
+        langchain_analysis: false,
+        ocr: true,
+        batch_analysis: false,
+        training_management: true,
+        providers: {
+          local_model: false,
+          tesseract: true,
+          ocr: true,
+        },
+        provider_controls: {
+          local_model: { enabled: false, available: true, active: false, reason: 'Disabled in AI management.' },
+          tesseract: { enabled: true, available: true, active: true, reason: null },
+        },
+      })
+      .mockResolvedValueOnce({
+        classification: true,
+        langchain_analysis: true,
+        ocr: true,
+        batch_analysis: true,
+        training_management: true,
+        providers: {
+          local_model: true,
+          tesseract: true,
+          ocr: true,
+        },
+        provider_controls: {
+          local_model: { enabled: true, available: true, active: true, reason: null },
+          tesseract: { enabled: true, available: true, active: true, reason: null },
+        },
+      });
+    mockedApi.setProviderEnabled.mockResolvedValueOnce({
+      provider: 'local_model',
+      enabled: true,
+      available: true,
+      active: true,
+      reason: null,
+    });
+
+    renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
+
+    await waitFor(() => expect(screen.getAllByText(/Disabled in AI management/i).length).toBeGreaterThan(0));
+
+    fireEvent.click(screen.getByLabelText(/Toggle Local model/i));
+    await waitFor(() => expect(mockedApi.setProviderEnabled).toHaveBeenCalledWith('local_model', true));
+    await waitFor(() => expect(screen.getByText(/Local model enabled\./i)).toBeInTheDocument());
+  });
+
+  it('surfaces provider toggle failures and unavailable states', async () => {
+    mockedApi.getTrainingStats.mockResolvedValue({
+      total_examples: 2,
+      quadrant_distribution: { '0': 1, '1': 1, '2': 0, '3': 0 },
+      data_sources: { default: 2 },
+      data_file: 'data.json',
+      model_file: 'memory',
+      last_updated: new Date().toISOString(),
+    });
+    mockedApi.getCapabilities.mockResolvedValue({
+      classification: false,
+      langchain_analysis: false,
+      ocr: false,
+      batch_analysis: false,
+      training_management: true,
+      providers: {
+        local_model: false,
+        tesseract: false,
+        ocr: false,
+      },
+      provider_controls: {
+        local_model: { enabled: true, available: false, active: false, reason: 'Model bootstrap failed.' },
+        tesseract: { enabled: true, available: false, active: false, reason: 'Tesseract binary is not available.' },
+      },
+    });
+    mockedApi.setProviderEnabled.mockRejectedValueOnce(new Error('Provider switch failed'));
+
+    renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
+
+    await waitFor(() => expect(screen.getAllByText(/Unavailable in this runtime/i)).toHaveLength(2));
+    expect(screen.getByText('Model bootstrap failed.')).toBeInTheDocument();
+    expect(screen.getByText('Tesseract binary is not available.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(/Toggle Local model/i));
+    await waitFor(() => expect(screen.getByText('Provider switch failed')).toBeInTheDocument());
   });
 });

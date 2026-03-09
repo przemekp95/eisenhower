@@ -57,7 +57,7 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 3. `web`: `cd web && npm ci && npm run dev`
 4. `mobile`: `cd mobile/eisenhower-matrix && npm ci && npm run start`
 
-The AI service is fully local. It uses a frozen multilingual MiniLM encoder plus a small PyTorch MLP head for quadrant classification, stores trained artifacts under `MODEL_CACHE_DIR`, and uses Tesseract for OCR. There is no OpenAI or native C++ classifier path in the default stack. The default MiniLM encoder is preloaded into the Docker image cache outside `/app`, so the compose bind mount does not hide it at runtime.
+The AI service is fully local. It uses a frozen multilingual MiniLM encoder plus a small PyTorch MLP head for quadrant classification, stores trained artifacts under `MODEL_CACHE_DIR`, and uses Tesseract for OCR. There is no OpenAI or native C++ classifier path in the default stack. The default MiniLM encoder is preloaded into the Docker image cache outside `/app`, so the compose bind mount does not hide it at runtime. The AI management panel can also enable or disable the deployed `local_model` and `tesseract` providers, and those switches persist under the runtime cache.
 
 The Expo mobile client now keeps a local task cache in AsyncStorage, refreshes and mutates tasks through `backend-node` when available, and sends picked images to `backend-ai` OCR via `expo-image-picker`.
 

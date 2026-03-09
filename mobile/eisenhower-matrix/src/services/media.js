@@ -2,13 +2,25 @@ import * as ImagePicker from 'expo-image-picker';
 import { mobileConfig } from '../config';
 import { createTaskRecord, quadrantToFlags } from '../utils/taskUtils';
 
+function createOCRRequestError(message, code = 'ocr_request_failed', status = null) {
+  const error = new Error(message);
+  error.code = code;
+  error.status = status;
+  return error;
+}
+
 async function readJson(response) {
+  const payload = await response.json().catch(() => null);
+
   if (!response.ok) {
-    const payload = await response.json().catch(() => null);
-    throw new Error(payload?.error || 'OCR request failed');
+    throw createOCRRequestError(
+      payload?.error || 'OCR request failed',
+      payload?.code || 'ocr_request_failed',
+      response.status
+    );
   }
 
-  return response.json();
+  return payload;
 }
 
 async function pickImageWithExpo() {

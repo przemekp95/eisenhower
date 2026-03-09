@@ -115,6 +115,7 @@ def test_root_and_capabilities(real_model_bundle):
   assert capabilities.json()["classification"] is True
   assert capabilities.json()["providers"]["local_model"] is True
   assert capabilities.json()["providers"]["ocr"] is True
+  assert capabilities.json()["provider_controls"]["local_model"]["enabled"] is True
 
 
 def test_cors_allows_local_frontend_origins(real_model_bundle):
@@ -191,6 +192,40 @@ def test_batch_and_extract_routes(real_model_bundle):
   assert upload.json()["ocr"]["method"] == "plain-text"
 
 
+def test_provider_toggle_endpoint_disables_and_reenables_runtime_features(real_model_bundle):
+  client = build_real_client(real_model_bundle)
+
+  disable_local_model = client.put("/providers/local_model", json={"enabled": False})
+  disabled_classify = client.get("/classify", params={"title": "critical production incident"})
+  disable_tesseract = client.put("/providers/tesseract", json={"enabled": False})
+  disabled_image_upload = client.post(
+    "/extract-tasks-from-image",
+    files={"file": ("tasks.png", b"fake-image", "image/png")},
+  )
+  text_upload = client.post(
+    "/extract-tasks-from-image",
+    files={"file": ("tasks.txt", b"critical production incident\n", "text/plain")},
+  )
+  enable_local_model = client.put("/providers/local_model", json={"enabled": True})
+  enabled_classify = client.get("/classify", params={"title": "critical production incident"})
+  enable_tesseract = client.put("/providers/tesseract", json={"enabled": True})
+
+  assert disable_local_model.status_code == 200
+  assert disable_local_model.json()["enabled"] is False
+  assert disable_local_model.json()["reason"] == "Disabled in AI management."
+  assert disabled_classify.status_code == 503
+  assert disabled_classify.json()["code"] == "provider_disabled"
+  assert disable_tesseract.status_code == 200
+  assert disabled_image_upload.status_code == 503
+  assert disabled_image_upload.json()["code"] == "provider_disabled"
+  assert text_upload.status_code == 503
+  assert text_upload.json()["code"] == "provider_disabled"
+  assert enable_local_model.status_code == 200
+  assert enable_local_model.json()["active"] is True
+  assert enabled_classify.status_code == 200
+  assert enable_tesseract.status_code == 200
+
+
 def test_error_shapes_are_json(real_model_bundle):
   client = build_real_client(real_model_bundle)
 
@@ -220,6 +255,7 @@ def test_capabilities_stay_available_when_startup_raises_generic_error(tmp_path:
 
   assert capabilities.status_code == 200
   assert capabilities.json()["providers"]["local_model"] is False
+  assert capabilities.json()["provider_controls"]["local_model"]["available"] is False
   assert stats.status_code == 200
   assert stats.json()["model_ready"] is False
   assert stats.json()["model_error"] == "corrupt artifacts"

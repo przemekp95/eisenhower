@@ -96,7 +96,7 @@ docker compose --profile production up --build
 ### Backend AI
 
 - Exported through `create_app()` to keep imports side-effect free.
-- Supports local MiniLM-based task classification, deterministic advanced analysis, OCR upload handling, and training-data endpoints.
+- Supports local MiniLM-based task classification, deterministic advanced analysis, OCR upload handling, training-data endpoints, and persisted provider toggles for `local_model` and `tesseract`.
 - Boots from a cached local classifier artifact or trains one from the current training data on first start.
 - Keeps the local model injectable so tests can replace it with lightweight fakes.
 

@@ -14,6 +14,7 @@ import {
   getTrainingStats,
   learnFromFeedback,
   retrainModel,
+  setProviderEnabled,
   updateTask,
 } from './api';
 
@@ -75,6 +76,8 @@ describe('api service', () => {
     await getExamplesByQuadrant(0);
     await getExamplesByQuadrant(0, 5);
     await getCapabilities();
+    await setProviderEnabled('local_model', false);
+    await setProviderEnabled('tesseract', true);
 
     expect((global.fetch as jest.Mock).mock.calls[0][0]).toContain(runtimeConfig.aiApiUrl);
     expect((global.fetch as jest.Mock).mock.calls[1][0]).toContain('language=en');
@@ -84,6 +87,9 @@ describe('api service', () => {
     expect((global.fetch as jest.Mock).mock.calls[10][0]).toContain('/training-data?keep_defaults=false');
     expect((global.fetch as jest.Mock).mock.calls[11][0]).toContain('/training-data?keep_defaults=true');
     expect((global.fetch as jest.Mock).mock.calls[12][0]).toContain('/examples/0?limit=10');
+    expect((global.fetch as jest.Mock).mock.calls[15][0]).toContain('/providers/local_model');
+    expect((global.fetch as jest.Mock).mock.calls[15][1].body).toBe(JSON.stringify({ enabled: false }));
+    expect((global.fetch as jest.Mock).mock.calls[16][0]).toContain('/providers/tesseract');
   });
 
   it('throws JSON errors when requests fail', async () => {

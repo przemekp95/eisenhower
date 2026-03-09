@@ -20,6 +20,7 @@ from .local_model import (
   cosine_similarity,
   utc_now,
 )
+from .provider_state import ProviderStateStore
 from .store import TrainingStore
 
 
@@ -62,11 +63,16 @@ class QuadrantAIService:
     store: TrainingStore,
     local_model: LocalMiniLMClassifier | None = None,
     ocr_runner: Any | None = None,
+    provider_store: ProviderStateStore | None = None,
   ):
     self.settings = settings
     self.store = store
     self.local_model = local_model or LocalMiniLMClassifier(settings=settings)
     self.ocr_runner = ocr_runner or pytesseract.image_to_string
+    self.provider_store = provider_store or ProviderStateStore(
+      self.settings.model_cache_dir / "provider_settings.json"
+    )
+    self.provider_flags = self.provider_store.load()
     self._startup_error: str | None = None
 
     try:
@@ -76,26 +82,32 @@ class QuadrantAIService:
 
   def capabilities(self) -> dict[str, Any]:
     model_status = dict(self.local_model.status())
-    tesseract_enabled = self._tesseract_available()
-    model_ready = bool(model_status["ready"]) and self._startup_error is None
-    model_status["ready"] = model_ready
+    provider_controls = {
+      "local_model": self._provider_state("local_model", model_status=model_status),
+      "tesseract": self._provider_state("tesseract"),
+    }
+    model_ready = bool(provider_controls["local_model"]["active"])
+    tesseract_active = bool(provider_controls["tesseract"]["active"])
+    model_status["ready"] = bool(provider_controls["local_model"]["available"])
     model_status["last_error"] = self._startup_error or model_status.get("last_error")
 
     return {
-      "classification": True,
-      "langchain_analysis": True,
-      "ocr": tesseract_enabled,
-      "batch_analysis": True,
+      "classification": model_ready,
+      "langchain_analysis": model_ready,
+      "ocr": tesseract_active,
+      "batch_analysis": model_ready,
       "training_management": True,
       "providers": {
         "local_model": model_ready,
-        "tesseract": tesseract_enabled,
-        "ocr": tesseract_enabled,
+        "tesseract": tesseract_active,
+        "ocr": tesseract_active,
       },
+      "provider_controls": provider_controls,
       "model": model_status,
     }
 
   def classify_task(self, task: str, use_rag: bool = True) -> dict[str, Any]:
+    self._require_local_model()
     prediction = self._predict(task, limit=3 if use_rag else 0)
     urgent, important = quadrant_to_flags(prediction.quadrant)
 
@@ -116,6 +128,7 @@ class QuadrantAIService:
     }
 
   def analyze_with_reasoning(self, task: str, language: str = "en") -> dict[str, Any]:
+    self._require_local_model()
     resolved_language = normalize_language(language)
     rag = self.classify_task(task, use_rag=True)
     explanation = self.local_model.explain(task, language=resolved_language)
@@ -141,6 +154,7 @@ class QuadrantAIService:
     }
 
   def batch_analyze(self, tasks: list[str]) -> dict[str, Any]:
+    self._require_local_model()
     batch_results = []
     method_summary = {
       "rag": {"quadrant_distribution": {str(index): 0 for index in QUADRANT_NAMES}},
@@ -188,7 +202,8 @@ class QuadrantAIService:
       extracted_text = payload.decode("utf-8", errors="ignore")
       tasks = normalize_extracted_tasks(extracted_text.splitlines())
       method = "plain-text"
-    elif self._looks_like_image(filename, content_type) and self._tesseract_available():
+    elif self._looks_like_image(filename, content_type):
+      self._require_tesseract()
       try:
         tasks, extracted_text = self._extract_tasks_with_tesseract(payload)
         method = "tesseract"
@@ -255,7 +270,8 @@ class QuadrantAIService:
   def get_training_stats(self) -> dict[str, Any]:
     stats = self.store.get_stats()
     model_status = self.local_model.status()
-    model_ready = bool(model_status["ready"]) and self._startup_error is None
+    provider_state = self._provider_state("local_model", model_status=dict(model_status))
+    model_ready = bool(provider_state["active"])
     return {
       **stats,
       "model_file": model_status["artifact_path"],
@@ -265,6 +281,13 @@ class QuadrantAIService:
       "model_trained_at": model_status["trained_at"],
       "model_validation_skipped": model_status["validation_skipped"],
       "model_error": self._startup_error or model_status["last_error"],
+    }
+
+  def set_provider_enabled(self, provider_name: str, enabled: bool) -> dict[str, Any]:
+    self.provider_flags = self.provider_store.set_enabled(provider_name, enabled)
+    return {
+      "provider": provider_name,
+      **self._provider_state(provider_name),
     }
 
   def _predict(self, task: str, limit: int = 3) -> LocalPrediction:
@@ -289,3 +312,60 @@ class QuadrantAIService:
 
   def _tesseract_available(self) -> bool:
     return shutil.which("tesseract") is not None
+
+  def _provider_state(
+    self,
+    provider_name: str,
+    *,
+    model_status: dict[str, Any] | None = None,
+  ) -> dict[str, Any]:
+    enabled = bool(self.provider_flags.get(provider_name, True))
+
+    if provider_name == "local_model":
+      resolved_model_status = model_status or dict(self.local_model.status())
+      available = bool(resolved_model_status["ready"]) and self._startup_error is None
+      reason = None
+      if not enabled:
+        reason = "Disabled in AI management."
+      elif self._startup_error or resolved_model_status.get("last_error"):
+        reason = self._startup_error or resolved_model_status.get("last_error")
+      return {
+        "enabled": enabled,
+        "available": available,
+        "active": enabled and available,
+        "reason": reason,
+      }
+
+    if provider_name == "tesseract":
+      available = self._tesseract_available()
+      reason = None
+      if not enabled:
+        reason = "Disabled in AI management."
+      elif not available:
+        reason = "Tesseract binary is not available."
+      return {
+        "enabled": enabled,
+        "available": available,
+        "active": enabled and available,
+        "reason": reason,
+      }
+
+    raise ValueError(f"Unknown provider: {provider_name}")
+
+  def _require_local_model(self) -> None:
+    provider_state = self._provider_state("local_model")
+    if not provider_state["enabled"]:
+      raise ProviderDisabledError("Local model provider is disabled.")
+    if not provider_state["available"]:
+      raise ModelNotReadyError(str(provider_state["reason"] or "Local model is not ready."))
+
+  def _require_tesseract(self) -> None:
+    provider_state = self._provider_state("tesseract")
+    if not provider_state["enabled"]:
+      raise ProviderDisabledError("Tesseract provider is disabled.")
+    if not provider_state["available"]:
+      raise ProviderDisabledError(str(provider_state["reason"] or "Tesseract provider is unavailable."))
+
+
+class ProviderDisabledError(RuntimeError):
+  pass

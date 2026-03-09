@@ -6,6 +6,7 @@ from PIL import Image
 from app.config import Settings
 from app.local_model import LocalMiniLMClassifier, LocalPrediction, ModelNotReadyError, SimilarExample
 from app.service import (
+  ProviderDisabledError,
   QuadrantAIService,
   cosine_similarity,
   lexical_similarity,
@@ -134,6 +135,8 @@ def test_service_initialization_capabilities_and_stats(real_model_bundle, monkey
 
   assert capabilities["providers"]["local_model"] is True
   assert capabilities["providers"]["tesseract"] is True
+  assert capabilities["provider_controls"]["local_model"]["enabled"] is True
+  assert capabilities["provider_controls"]["tesseract"]["active"] is True
   assert stats["model_name"] == "local-minilm-mlp"
   assert stats["model_ready"] is True
 
@@ -182,6 +185,68 @@ def test_classify_analyze_and_batch_stay_local(real_model_bundle):
   assert batch["summary"]["methods"]["rag"]["quadrant_distribution"]["2"] == 1
 
 
+def test_service_can_toggle_providers_and_persist_runtime_state(real_model_bundle, monkeypatch):
+  service = build_real_service(real_model_bundle)
+  monkeypatch.setattr(service, "_tesseract_available", lambda: True)
+
+  local_model_state = service.set_provider_enabled("local_model", False)
+  tesseract_state = service.set_provider_enabled("tesseract", False)
+  capabilities = service.capabilities()
+
+  assert local_model_state["enabled"] is False
+  assert local_model_state["active"] is False
+  assert local_model_state["reason"] == "Disabled in AI management."
+  assert tesseract_state["enabled"] is False
+  assert capabilities["classification"] is False
+  assert capabilities["providers"]["local_model"] is False
+  assert capabilities["providers"]["tesseract"] is False
+  assert capabilities["provider_controls"]["local_model"]["enabled"] is False
+  assert capabilities["provider_controls"]["tesseract"]["enabled"] is False
+
+  reloaded = build_real_service(real_model_bundle)
+  monkeypatch.setattr(reloaded, "_tesseract_available", lambda: True)
+  reloaded_flags = reloaded.capabilities()["provider_controls"]
+  assert reloaded_flags["local_model"]["enabled"] is False
+  assert reloaded_flags["tesseract"]["enabled"] is False
+
+  restored_local_model = reloaded.set_provider_enabled("local_model", True)
+  restored_tesseract = reloaded.set_provider_enabled("tesseract", True)
+  assert restored_local_model["active"] is True
+  assert restored_tesseract["active"] is True
+
+
+def test_service_blocks_disabled_providers(real_model_bundle, monkeypatch):
+  service = build_real_service(
+    real_model_bundle,
+    ocr_runner=lambda *_args, **_kwargs: "critical production incident",
+  )
+  monkeypatch.setattr(service, "_tesseract_available", lambda: True)
+
+  service.set_provider_enabled("local_model", False)
+  try:
+    service.classify_task("critical production incident")
+  except ProviderDisabledError as issue:
+    assert str(issue) == "Local model provider is disabled."
+  else:
+    raise AssertionError("Expected the local model provider to be disabled.")
+
+  service.set_provider_enabled("local_model", True)
+  service.set_provider_enabled("tesseract", False)
+  try:
+    service.extract_tasks_from_image("tasks.png", png_payload(), "image/png")
+  except ProviderDisabledError as issue:
+    assert str(issue) == "Tesseract provider is disabled."
+  else:
+    raise AssertionError("Expected the Tesseract provider to be disabled.")
+
+  text_upload = service.extract_tasks_from_image(
+    "tasks.txt",
+    b"critical production incident\n",
+    "text/plain",
+  )
+  assert text_upload["ocr"]["method"] == "plain-text"
+
+
 def test_extract_tasks_from_image_prefers_text_and_tesseract_and_filename(real_model_bundle, monkeypatch):
   service = build_real_service(
     real_model_bundle,
@@ -210,7 +275,14 @@ def test_extract_tasks_from_image_prefers_text_and_tesseract_and_filename(real_m
   assert failed_image_upload["ocr"]["method"] == "filename-fallback"
 
   monkeypatch.setattr(service, "_tesseract_available", lambda: False)
-  fallback_upload = service.extract_tasks_from_image("urgent-outage.png", b"", "image/png")
+  try:
+    service.extract_tasks_from_image("urgent-outage.png", b"", "image/png")
+  except ProviderDisabledError as issue:
+    assert str(issue) == "Tesseract binary is not available."
+  else:
+    raise AssertionError("Expected unavailable Tesseract to block image OCR.")
+
+  fallback_upload = service.extract_tasks_from_image("urgent-outage.bin", b"", "application/octet-stream")
   assert fallback_upload["ocr"]["method"] == "filename-fallback"
   assert fallback_upload["classified_tasks"][0]["text"] == "urgent outage"
   assert service._looks_like_image("tasks.png", None) is True
@@ -257,3 +329,37 @@ def test_service_wraps_unexpected_prediction_errors(tmp_path: Path):
     raise AssertionError("Expected ModelNotReadyError")
 
   assert service.get_training_stats()["model_error"] == "bad weights"
+
+
+def test_service_rejects_unknown_provider_names(tmp_path: Path):
+  service = build_service(tmp_path)
+
+  try:
+    service.set_provider_enabled("vision", True)
+  except ValueError as issue:
+    assert str(issue) == "Unknown provider: vision"
+  else:
+    raise AssertionError("Expected an unknown provider name to raise ValueError.")
+
+  try:
+    service._provider_state("vision")
+  except ValueError as issue:
+    assert str(issue) == "Unknown provider: vision"
+  else:
+    raise AssertionError("Expected an unknown provider state lookup to raise ValueError.")
+
+
+def test_service_raises_model_not_ready_when_provider_is_unavailable(tmp_path: Path):
+  class BrokenLocalModel(FakeLocalModel):
+    def ensure_ready(self, records):
+      super().ensure_ready(records)
+      raise RuntimeError("bootstrap failed")
+
+  service = build_service(tmp_path, local_model=BrokenLocalModel())
+
+  try:
+    service.classify_task("urgent outage")
+  except ModelNotReadyError as issue:
+    assert str(issue) == "bootstrap failed"
+  else:
+    raise AssertionError("Expected ModelNotReadyError when the local model is unavailable.")

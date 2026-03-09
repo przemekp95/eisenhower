@@ -71,50 +71,52 @@ export default function AITools({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
-      <div className="w-full max-w-4xl rounded-4xl border border-white/10 bg-slate-900 p-6 text-white shadow-2xl">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold">{t('ai.modal.title')}</h2>
-            <p className="text-sm text-white/60">{t('ai.modal.subtitle')}</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full bg-white/10 px-4 py-2 text-sm transition-all hover:bg-white/15 hover:text-white"
-          >
-            {t('ai.modal.close')}
-          </button>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {tabs.map((tab) => (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 p-4">
+      <div className="flex min-h-full items-start justify-center py-4 sm:items-center">
+        <div className="flex w-full max-w-4xl max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-4xl border border-white/10 bg-slate-900 p-6 text-white shadow-2xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">{t('ai.modal.title')}</h2>
+              <p className="text-sm text-white/60">{t('ai.modal.subtitle')}</p>
+            </div>
             <button
-              key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`rounded-full px-4 py-2 text-sm transition-all ${
-                activeTab === tab.id
-                  ? 'bg-white text-slate-950 hover:bg-white/90'
-                  : 'bg-white/10 text-white hover:bg-white/15 hover:text-white'
-              }`}
+              onClick={onClose}
+              className="rounded-full bg-white/10 px-4 py-2 text-sm transition-all hover:bg-white/15 hover:text-white"
             >
-              {tab.label}
+              {t('ai.modal.close')}
             </button>
-          ))}
+          </div>
+          <div className="mt-4 shrink-0 flex flex-wrap gap-2">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`rounded-full px-4 py-2 text-sm transition-all ${
+                  activeTab === tab.id
+                    ? 'bg-white text-slate-950 hover:bg-white/90'
+                    : 'bg-white/10 text-white hover:bg-white/15 hover:text-white'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-6 min-h-0 flex-1 overflow-y-auto pr-1">
+            {activeTab === 'analysis' ? (
+              <AdvancedAIAnalysis
+                taskTitle={taskTitle}
+                onAnalysisComplete={onAnalysisComplete}
+                onAddToMatrix={onAnalysisTaskAdd}
+              />
+            ) : null}
+            {activeTab === 'ocr' ? <ImageUpload onTasksExtracted={handleOCR} /> : null}
+            {activeTab === 'batch' ? <BatchAnalysis onBatchComplete={handleBatch} /> : null}
+            {activeTab === 'manage' ? <AIManagement onModelUpdated={() => setLastSummary(t('ai.summary.updated'))} /> : null}
+          </div>
+          {lastSummary ? <p className="mt-4 shrink-0 text-sm text-emerald-200">{lastSummary}</p> : null}
         </div>
-        <div className="mt-6">
-          {activeTab === 'analysis' ? (
-            <AdvancedAIAnalysis
-              taskTitle={taskTitle}
-              onAnalysisComplete={onAnalysisComplete}
-              onAddToMatrix={onAnalysisTaskAdd}
-            />
-          ) : null}
-          {activeTab === 'ocr' ? <ImageUpload onTasksExtracted={handleOCR} /> : null}
-          {activeTab === 'batch' ? <BatchAnalysis onBatchComplete={handleBatch} /> : null}
-          {activeTab === 'manage' ? <AIManagement onModelUpdated={() => setLastSummary(t('ai.summary.updated'))} /> : null}
-        </div>
-        {lastSummary ? <p className="mt-4 text-sm text-emerald-200">{lastSummary}</p> : null}
       </div>
     </div>
   );

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
   AICapabilities,
+  AIProviderControl,
+  AIProviderName,
   TrainingStats,
   addTrainingExample,
   clearTrainingData,
@@ -9,6 +11,7 @@ import {
   getTrainingStats,
   learnFromFeedback,
   retrainModel,
+  setProviderEnabled,
 } from '../../services/api';
 import { useLanguage } from '../../i18n/LanguageContext';
 
@@ -19,6 +22,15 @@ interface Props {
 const cardClass = 'rounded-3xl border border-white/10 bg-black/20 p-4';
 const fieldClass = 'w-full rounded-2xl border border-white/15 bg-white/6 px-4 py-3 text-white outline-none transition-colors placeholder:text-white/35 focus:border-cyan-400/60';
 const buttonClass = 'rounded-full px-4 py-2 text-sm font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50';
+
+function fallbackProviderState(active: boolean): AIProviderControl {
+  return {
+    enabled: active,
+    available: active,
+    active,
+    reason: null,
+  };
+}
 
 export default function AIManagement({ onModelUpdated }: Props) {
   const { t } = useLanguage();
@@ -123,10 +135,46 @@ export default function AIManagement({ onModelUpdated }: Props) {
 
   const providerStates = capabilities
     ? [
-        [t('ai.manage.provider.localModel'), Boolean(capabilities.providers.local_model)],
-        [t('ai.manage.provider.tesseract'), Boolean(capabilities.providers.tesseract)],
+        {
+          key: 'local_model' as AIProviderName,
+          label: t('ai.manage.provider.localModel'),
+          control:
+            capabilities.provider_controls?.local_model ??
+            fallbackProviderState(Boolean(capabilities.providers.local_model)),
+        },
+        {
+          key: 'tesseract' as AIProviderName,
+          label: t('ai.manage.provider.tesseract'),
+          control:
+            capabilities.provider_controls?.tesseract ??
+            fallbackProviderState(Boolean(capabilities.providers.tesseract)),
+        },
       ]
     : [];
+
+  const getProviderStatusLabel = (control: AIProviderControl) => {
+    if (control.active) {
+      return t('ai.manage.provider.active');
+    }
+    if (!control.enabled) {
+      return t('ai.manage.provider.disabled');
+    }
+    return t('ai.manage.provider.unavailable');
+  };
+
+  const handleProviderToggle = async (
+    provider: AIProviderName,
+    label: string,
+    nextEnabled: boolean
+  ) => {
+    await runAction(
+      `provider-${provider}`,
+      () => setProviderEnabled(provider, nextEnabled).then(() => undefined),
+      format(nextEnabled ? t('ai.manage.provider.enabledMessage') : t('ai.manage.provider.disabledMessage'), {
+        provider: label,
+      })
+    );
+  };
 
   return (
     <section className="space-y-4 text-sm text-white">
@@ -161,19 +209,39 @@ export default function AIManagement({ onModelUpdated }: Props) {
         </div>
         <div className={cardClass}>
           <p className="text-xs uppercase tracking-[0.32em] text-emerald-200/70">{t('ai.manage.providers')}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 space-y-3">
             {providerStates.length > 0 ? (
-              providerStates.map(([label, enabled]) => (
-                <span
-                  key={label}
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                    enabled
-                      ? 'border-emerald-400/35 bg-emerald-400/12 text-emerald-100'
-                      : 'border-white/10 bg-white/6 text-white/50'
+              providerStates.map(({ key, label, control }) => (
+                <label
+                  key={key}
+                  className={`flex items-center justify-between gap-4 rounded-2xl border px-3 py-3 transition-colors ${
+                    control.active
+                      ? 'border-emerald-400/30 bg-emerald-500/10'
+                      : 'border-white/10 bg-white/6'
                   }`}
                 >
-                  {label}: {enabled ? t('ai.manage.on') : t('ai.manage.off')}
-                </span>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-white">{label}</p>
+                    <p className="text-xs text-white/60">{getProviderStatusLabel(control)}</p>
+                    {control.reason ? (
+                      <p className="mt-1 text-xs text-white/45">{control.reason}</p>
+                    ) : null}
+                  </div>
+                  <span className="relative inline-flex items-center">
+                    <input
+                      type="checkbox"
+                      aria-label={format(t('ai.manage.provider.toggle'), { provider: label })}
+                      checked={control.enabled}
+                      disabled={loadingAction === `provider-${key}`}
+                      onChange={(event) =>
+                        void handleProviderToggle(key, label, event.target.checked)
+                      }
+                      className="peer sr-only"
+                    />
+                    <span className="h-7 w-12 rounded-full bg-white/12 transition-colors peer-checked:bg-cyan-400/70 peer-disabled:opacity-50" />
+                    <span className="pointer-events-none absolute left-1 h-5 w-5 rounded-full bg-white transition-transform peer-checked:translate-x-5" />
+                  </span>
+                </label>
               ))
             ) : (
               <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs text-white/50">
@@ -363,17 +431,19 @@ export default function AIManagement({ onModelUpdated }: Props) {
               {loadingAction === 'examples' ? t('ai.manage.loadingExamples') : t('ai.manage.loadExamples')}
             </button>
             {examples.length > 0 ? (
-              <ul className="space-y-2">
-                {examples.map((example) => (
-                  <li key={`${example.quadrant}-${example.text}`} className="rounded-2xl border border-white/10 bg-white/6 p-3">
-                    <p className="font-medium text-white">{example.text}</p>
-                    <p className="mt-1 text-xs text-white/45">
-                      {quadrants[example.quadrant]?.label ??
-                        format(t('ai.manage.quadrantUnknown'), { quadrant: example.quadrant })}
-                    </p>
-                  </li>
-                ))}
-              </ul>
+              <div className="max-h-72 overflow-y-auto pr-1">
+                <ul className="space-y-2">
+                  {examples.map((example) => (
+                    <li key={`${example.quadrant}-${example.text}`} className="rounded-2xl border border-white/10 bg-white/6 p-3">
+                      <p className="font-medium text-white">{example.text}</p>
+                      <p className="mt-1 text-xs text-white/45">
+                        {quadrants[example.quadrant]?.label ??
+                          format(t('ai.manage.quadrantUnknown'), { quadrant: example.quadrant })}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ) : (
               <p className="text-white/50">{t('ai.manage.examplesPlaceholder')}</p>
             )}

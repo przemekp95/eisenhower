@@ -135,6 +135,10 @@ export interface AICapabilities {
     tesseract?: boolean;
     ocr: boolean;
   };
+  provider_controls?: {
+    local_model: AIProviderControl;
+    tesseract: AIProviderControl;
+  };
   model?: {
     ready: boolean;
     name: string;
@@ -147,6 +151,15 @@ export interface AICapabilities {
     examples_seen?: number;
   };
 }
+
+export interface AIProviderControl {
+  enabled: boolean;
+  available: boolean;
+  active: boolean;
+  reason?: string | null;
+}
+
+export type AIProviderName = 'local_model' | 'tesseract';
 
 export interface TrainingDataClearResult {
   message: string;
@@ -276,4 +289,16 @@ export async function getExamplesByQuadrant(quadrant: number, limit = 10): Promi
 export async function getCapabilities(): Promise<AICapabilities> {
   const response = await fetch(`${runtimeConfig.aiApiUrl}/capabilities`);
   return readJson<AICapabilities>(response);
+}
+
+export async function setProviderEnabled(
+  provider: AIProviderName,
+  enabled: boolean
+): Promise<{ provider: AIProviderName } & AIProviderControl> {
+  const response = await fetch(`${runtimeConfig.aiApiUrl}/providers/${provider}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+  return readJson<{ provider: AIProviderName } & AIProviderControl>(response);
 }

@@ -1,20 +1,28 @@
-import React, { useEffect, useState } from 'react';
-import {
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ScrollView, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AIStatusPanel from './src/components/AIStatusPanel';
 import LanguageSwitcher from './src/components/LanguageSwitcher';
+import MatrixBoard from './src/components/MatrixBoard';
+import TaskComposer from './src/components/TaskComposer';
+import AIToolsModal from './src/components/ai/AIToolsModal';
 import { translations } from './src/i18n/translations';
-import { suggestTaskQuadrant } from './src/services/ai';
-import { loadLanguage, loadTasks, saveLanguage, saveTasks } from './src/services/storage';
+import {
+  addTrainingExample,
+  analyzeTaskAdvanced,
+  batchAnalyzeTasks,
+  clearTrainingData,
+  fetchAICapabilities,
+  fetchTrainingStats,
+  getExamplesByQuadrant,
+  learnFromFeedback,
+  retrainModel,
+  setAIProviderEnabled,
+  suggestTaskQuadrant,
+} from './src/services/ai';
 import { scanTasksFromImage } from './src/services/media';
+import { loadLanguage, loadTasks, saveLanguage, saveTasks } from './src/services/storage';
 import {
   createRemoteTask,
   deleteRemoteTask,
@@ -22,90 +30,218 @@ import {
   isRemoteTaskId,
   updateRemoteTask,
 } from './src/services/tasks';
-import { createTaskRecord, getSampleTasks, mergeTasks } from './src/utils/taskUtils';
+import {
+  createTaskRecord,
+  getSampleTasks,
+  groupTasksByQuadrant,
+  mergeTasks,
+  quadrantToFlags,
+} from './src/utils/taskUtils';
+import {
+  getQuadrantOptions,
+  getSuggestedQuadrant,
+  resolveOCRNotice,
+  resolveSuggestionNotice,
+} from './src/utils/aiUi';
+import styles from './src/styles/appStyles';
 
 export default function App() {
   const [language, setLanguage] = useState('pl');
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [aiLoading, setAiLoading] = useState(true);
   const [notice, setNotice] = useState('');
+  const [aiCapabilities, setAiCapabilities] = useState(null);
+  const [trainingStats, setTrainingStats] = useState(null);
+  const [providerBusy, setProviderBusy] = useState({
+    local_model: false,
+    tesseract: false,
+  });
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
     urgent: false,
     important: false,
   });
+  const [aiToolsOpen, setAiToolsOpen] = useState(false);
+  const [activeAITab, setActiveAITab] = useState('analysis');
+  const [aiToolsError, setAiToolsError] = useState('');
+  const [aiToolsMessage, setAiToolsMessage] = useState('');
+  const [analysisTask, setAnalysisTask] = useState('');
+  const [advancedAnalysis, setAdvancedAnalysis] = useState(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisAdding, setAnalysisAdding] = useState(false);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrResult, setOcrResult] = useState(null);
+  const [batchInput, setBatchInput] = useState('');
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [batchResult, setBatchResult] = useState(null);
+  const [manageLoading, setManageLoading] = useState(false);
+  const [manageAction, setManageAction] = useState('');
+  const [exampleText, setExampleText] = useState('');
+  const [exampleQuadrant, setExampleQuadrant] = useState(2);
+  const [feedbackTask, setFeedbackTask] = useState('');
+  const [predictedQuadrant, setPredictedQuadrant] = useState(1);
+  const [correctQuadrant, setCorrectQuadrant] = useState(0);
+  const [examplesQuadrant, setExamplesQuadrant] = useState(0);
+  const [examples, setExamples] = useState([]);
+  const [preserveExperience, setPreserveExperience] = useState(true);
+  const [keepDefaults, setKeepDefaults] = useState(true);
+  const tasksRef = useRef([]);
 
   const t = translations[language];
+  const quadrantOptions = useMemo(() => getQuadrantOptions(t), [t]);
+
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
 
   useEffect(() => {
     let active = true;
 
     const bootstrap = async () => {
+      let nextLanguage = 'pl';
+      let cachedTasks = getSampleTasks('pl');
+
       try {
-        const nextLanguage = await loadLanguage();
-        let cachedTasks = [];
-
-        try {
-          cachedTasks = await loadTasks(nextLanguage);
-        } catch {
-          cachedTasks = getSampleTasks(nextLanguage);
-        }
-
-        /* istanbul ignore next: defensive unmount guard during async bootstrap */
-        if (!active) {
-          return;
-        }
-
-        setLanguage(nextLanguage);
-        setTasks(cachedTasks);
-        setLoading(false);
-
-        try {
-          const remoteTasks = await fetchRemoteTasks(nextLanguage);
-          await saveTasks(remoteTasks);
-
-          /* istanbul ignore next: defensive unmount guard during async remote refresh */
-          if (!active) {
-            return;
-          }
-
-          setTasks(remoteTasks);
-          setNotice(translations[nextLanguage].syncedRemote);
-        } catch {
-          /* istanbul ignore next: defensive unmount guard during async remote fallback */
-          if (!active) {
-            return;
-          }
-
-          setNotice(translations[nextLanguage].cachedLocal);
-        }
+        nextLanguage = await loadLanguage();
       } catch {
-        /* istanbul ignore next: defensive unmount guard during async bootstrap failure */
+        nextLanguage = 'pl';
+      }
+
+      try {
+        cachedTasks = await loadTasks(nextLanguage);
+      } catch {
+        cachedTasks = getSampleTasks(nextLanguage);
+      }
+
+      if (!active) {
+        return;
+      }
+
+      setLanguage(nextLanguage);
+      setTasks(cachedTasks);
+      setLoading(false);
+
+      const [remoteTasksResult, capabilitiesResult] = await Promise.allSettled([
+        fetchRemoteTasks(nextLanguage),
+        fetchAICapabilities(),
+      ]);
+
+      if (!active) {
+        return;
+      }
+
+      if (remoteTasksResult.status === 'fulfilled') {
+        await saveTasks(remoteTasksResult.value);
+
         if (!active) {
           return;
         }
 
-        setLanguage('pl');
-        setTasks(getSampleTasks('pl'));
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
+        setTasks(remoteTasksResult.value);
+        setNotice(translations[nextLanguage].syncedRemote);
+      } else {
+        setNotice(translations[nextLanguage].cachedLocal);
       }
+
+      setAiCapabilities(capabilitiesResult.status === 'fulfilled' ? capabilitiesResult.value : null);
+      setAiLoading(false);
     };
 
-    void bootstrap();
+    void bootstrap().catch(() => {
+      if (!active) {
+        return;
+      }
+
+      setLanguage('pl');
+      setTasks(getSampleTasks('pl'));
+      setAiCapabilities(null);
+      setLoading(false);
+      setAiLoading(false);
+    });
 
     return () => {
       active = false;
     };
   }, []);
 
+  useEffect(() => {
+    if (!aiToolsOpen) {
+      return;
+    }
+
+    setAnalysisTask((current) => current || newTask.title);
+  }, [aiToolsOpen, newTask.title]);
+
+  useEffect(() => {
+    if (aiToolsOpen && activeAITab === 'manage') {
+      void refreshAIManagement();
+    }
+  }, [aiToolsOpen, activeAITab]);
+
   const persistTasks = async (nextTasks, nextNotice = '') => {
     setTasks(nextTasks);
     setNotice(nextNotice);
     await saveTasks(nextTasks);
+  };
+
+  const refreshAIManagement = async () => {
+    setManageLoading(true);
+
+    try {
+      const [stats, capabilities] = await Promise.all([fetchTrainingStats(), fetchAICapabilities()]);
+      setTrainingStats(stats);
+      setAiCapabilities(capabilities);
+    } catch {
+      setAiToolsError(t.aiManageLoadFailed);
+    } finally {
+      setManageLoading(false);
+    }
+  };
+
+  const resetAIToolFeedback = () => {
+    setAiToolsError('');
+    setAiToolsMessage('');
+  };
+
+  const updateNewTaskField = (key, value) => {
+    setNewTask((current) => ({ ...current, [key]: value }));
+  };
+
+  const importScannedTasks = async (scannedTasks) => {
+    const createdTasks = await Promise.all(
+      scannedTasks.map(async (task) => {
+        try {
+          return await createRemoteTask(task, language);
+        } catch {
+          return task;
+        }
+      })
+    );
+
+    await persistTasks(mergeTasks(tasksRef.current, createdTasks), t.ocrAdded);
+    return createdTasks.length;
+  };
+
+  const addAnalysisTaskToMatrix = async (analysis) => {
+    const quadrant = getSuggestedQuadrant(analysis);
+    const taskRecord = createTaskRecord(
+      language,
+      {
+        title: analysis.task,
+        description: analysis.langchain_analysis?.reasoning || '',
+        ...quadrantToFlags(quadrant),
+      },
+      `analysis-${Date.now()}`
+    );
+
+    try {
+      const remoteTask = await createRemoteTask(taskRecord, language);
+      await persistTasks([remoteTask, ...tasksRef.current], t.syncedRemote);
+    } catch {
+      await persistTasks([taskRecord, ...tasksRef.current], t.cachedLocal);
+    }
   };
 
   const handleLanguageChange = async (nextLanguage) => {
@@ -123,9 +259,9 @@ export default function App() {
 
     try {
       const remoteTask = await createRemoteTask(localTask, language);
-      await persistTasks([remoteTask, ...tasks], t.syncedRemote);
+      await persistTasks([remoteTask, ...tasksRef.current], t.syncedRemote);
     } catch {
-      await persistTasks([localTask, ...tasks], t.cachedLocal);
+      await persistTasks([localTask, ...tasksRef.current], t.cachedLocal);
     }
 
     setNewTask({ title: '', description: '', urgent: false, important: false });
@@ -136,17 +272,20 @@ export default function App() {
       return;
     }
 
-    const suggestion = await suggestTaskQuadrant(newTask.title);
-    setNewTask((current) => ({
-      ...current,
-      urgent: suggestion.urgent,
-      important: suggestion.important,
-    }));
-    setNotice(suggestion.source === 'fallback' ? t.suggestionFailed : '');
+    try {
+      const suggestion = await suggestTaskQuadrant(newTask.title);
+      setNewTask((current) => ({
+        ...current,
+        urgent: suggestion.urgent,
+        important: suggestion.important,
+      }));
+    } catch (error) {
+      setNotice(resolveSuggestionNotice(error, t));
+    }
   };
 
   const handleDelete = async (id) => {
-    const nextTasks = tasks.filter((task) => task.id !== id);
+    const nextTasks = tasksRef.current.filter((task) => task.id !== id);
 
     if (!isRemoteTaskId(id)) {
       await persistTasks(nextTasks, t.cachedLocal);
@@ -162,14 +301,14 @@ export default function App() {
   };
 
   const handleToggle = async (id, key) => {
-    const toggledTask = tasks.find((task) => task.id === id);
-    /* istanbul ignore next: stale press on a task that no longer exists */
+    const toggledTask = tasksRef.current.find((task) => task.id === id);
+
     if (!toggledTask) {
       return;
     }
 
     const nextTask = { ...toggledTask, [key]: !toggledTask[key] };
-    const nextTasks = tasks.map((task) => (task.id === id ? nextTask : task));
+    const nextTasks = tasksRef.current.map((task) => (task.id === id ? nextTask : task));
 
     if (!isRemoteTaskId(id)) {
       await persistTasks(nextTasks, t.cachedLocal);
@@ -179,7 +318,7 @@ export default function App() {
     try {
       const remoteTask = await updateRemoteTask(id, { [key]: nextTask[key] }, language);
       await persistTasks(
-        tasks.map((task) => (task.id === id ? remoteTask : task)),
+        tasksRef.current.map((task) => (task.id === id ? remoteTask : task)),
         t.syncedRemote
       );
     } catch {
@@ -195,21 +334,196 @@ export default function App() {
         return;
       }
 
-      const createdTasks = await Promise.all(
-        scanned.map(async (task) => {
-          try {
-            return await createRemoteTask(task, language);
-          } catch {
-            return task;
-          }
-        })
-      );
-
-      await persistTasks(mergeTasks(tasks, createdTasks), t.ocrAdded);
-    } catch {
-      setNotice(t.ocrFailed);
+      await importScannedTasks(scanned);
+    } catch (error) {
+      setNotice(resolveOCRNotice(error, t));
     }
   };
+
+  const openAITools = (tab = 'analysis') => {
+    resetAIToolFeedback();
+    setAiToolsOpen(true);
+    setActiveAITab(tab);
+    setAnalysisTask(newTask.title);
+  };
+
+  const closeAITools = () => {
+    setAiToolsOpen(false);
+    resetAIToolFeedback();
+  };
+
+  const handleRunAdvancedAnalysis = async () => {
+    if (!analysisTask.trim()) {
+      setAiToolsError(t.aiAnalysisValidation);
+      return;
+    }
+
+    setAnalysisLoading(true);
+    resetAIToolFeedback();
+
+    try {
+      setAdvancedAnalysis(await analyzeTaskAdvanced(analysisTask.trim(), language));
+    } catch (error) {
+      setAiToolsError(error instanceof Error ? error.message : t.aiAnalysisFailed);
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
+
+  const handleAddAdvancedAnalysisToMatrix = async () => {
+    if (!advancedAnalysis) {
+      return;
+    }
+
+    setAnalysisAdding(true);
+    resetAIToolFeedback();
+
+    try {
+      await addAnalysisTaskToMatrix(advancedAnalysis);
+      setAiToolsMessage(t.aiAnalysisAdded);
+    } catch (error) {
+      setAiToolsError(error instanceof Error ? error.message : t.aiAnalysisAddFailed);
+    } finally {
+      setAnalysisAdding(false);
+    }
+  };
+
+  const handleOcrFromTools = async () => {
+    setOcrLoading(true);
+    resetAIToolFeedback();
+
+    try {
+      const scanned = await scanTasksFromImage(language);
+      if (scanned.length === 0) {
+        setOcrResult({ count: 0, items: [] });
+        setAiToolsMessage(t.ocrEmpty);
+        return;
+      }
+
+      const importedCount = await importScannedTasks(scanned);
+      setOcrResult({ count: importedCount, items: scanned });
+      setAiToolsMessage(t.aiOcrImported.replace('{count}', String(importedCount)));
+    } catch (error) {
+      setAiToolsError(resolveOCRNotice(error, t));
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
+  const handleBatchAnalyze = async () => {
+    const entries = batchInput
+      .split('\n')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+
+    if (entries.length === 0) {
+      setAiToolsError(t.aiBatchValidation);
+      return;
+    }
+
+    setBatchLoading(true);
+    resetAIToolFeedback();
+
+    try {
+      const result = await batchAnalyzeTasks(entries);
+      setBatchResult(result);
+      setAiToolsMessage(t.aiBatchComplete.replace('{count}', String(result.summary.total_tasks)));
+    } catch (error) {
+      setAiToolsError(error instanceof Error ? error.message : t.aiBatchFailed);
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+
+  const runManageAction = async (actionKey, action, successMessage, afterSuccess = null) => {
+    setManageAction(actionKey);
+    resetAIToolFeedback();
+
+    try {
+      const result = await action();
+      await refreshAIManagement();
+      if (afterSuccess) {
+        afterSuccess(result);
+      }
+      setAiToolsMessage(typeof successMessage === 'function' ? successMessage(result) : successMessage);
+    } catch (error) {
+      setAiToolsError(error instanceof Error ? error.message : t.aiManageActionFailed);
+    } finally {
+      setManageAction('');
+    }
+  };
+
+  const handleManageProviderToggle = async (providerName) => {
+    const currentState = aiCapabilities?.provider_controls?.[providerName];
+    if (!currentState) {
+      return;
+    }
+
+    setProviderBusy((current) => ({ ...current, [providerName]: true }));
+
+    try {
+      await setAIProviderEnabled(providerName, !currentState.enabled);
+      await refreshAIManagement();
+      setAiToolsMessage(t.aiProviderToggleSaved);
+    } catch (error) {
+      setAiToolsError(error instanceof Error ? error.message : t.aiProviderToggleFailed);
+    } finally {
+      setProviderBusy((current) => ({ ...current, [providerName]: false }));
+    }
+  };
+
+  const handleTabChange = (tab) => {
+    resetAIToolFeedback();
+    setActiveAITab(tab);
+  };
+
+  const handleAddExample = () =>
+    runManageAction(
+      'add-example',
+      () => addTrainingExample(exampleText.trim(), exampleQuadrant),
+      t.aiManageExampleAdded,
+      () => setExampleText('')
+    );
+
+  const handleLearnFeedback = () =>
+    runManageAction(
+      'feedback',
+      () => learnFromFeedback(feedbackTask.trim(), predictedQuadrant, correctQuadrant),
+      t.aiManageFeedbackSaved,
+      () => setFeedbackTask('')
+    );
+
+  const handleRetrain = () =>
+    runManageAction(
+      'retrain',
+      () => retrainModel(preserveExperience),
+      t.aiManageRetrained
+    );
+
+  const handleClear = () =>
+    runManageAction(
+      'clear',
+      () => clearTrainingData(keepDefaults),
+      t.aiManageCleared,
+      () => setExamples([])
+    );
+
+  const handleLoadExamples = () =>
+    runManageAction(
+      'examples',
+      async () => {
+        const response = await getExamplesByQuadrant(examplesQuadrant, 5);
+        setExamples(response.examples || []);
+        return response;
+      },
+      (response) => t.aiManageExamplesLoaded.replace('{count}', String(response?.examples?.length ?? 0))
+    );
+
+  const groupedTasks = groupTasksByQuadrant(tasks);
+  const aiConnected = Boolean(aiCapabilities);
+  const providerControls = aiCapabilities?.provider_controls || {};
+  const suggestDisabled = !providerControls.local_model?.active;
+  const scanDisabled = !providerControls.tesseract?.active;
 
   if (loading) {
     return (
@@ -222,235 +536,103 @@ export default function App() {
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar style="light" />
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>{t.title}</Text>
-          <Text style={styles.subtitle}>{t.subtitle}</Text>
-        </View>
-        <LanguageSwitcher language={language} onChange={handleLanguageChange} />
-      </View>
-
-      {notice ? (
-        <View style={styles.notice}>
-          <Text testID="notice-banner" style={styles.noticeText}>{notice}</Text>
-        </View>
-      ) : null}
-
-      <View style={styles.form}>
-        <TextInput
-          value={newTask.title}
-          onChangeText={(value) => setNewTask((current) => ({ ...current, title: value }))}
-          placeholder={t.titlePlaceholder}
-          placeholderTextColor="#94a3b8"
-          style={styles.input}
-        />
-        <TextInput
-          value={newTask.description}
-          onChangeText={(value) => setNewTask((current) => ({ ...current, description: value }))}
-          placeholder={t.descriptionPlaceholder}
-          placeholderTextColor="#94a3b8"
-          style={styles.input}
-        />
-        <View style={styles.switchRow}>
-          <Text style={styles.switchLabel}>{t.urgent}</Text>
-          <Switch
-            testID="new-task-urgent-switch"
-            value={newTask.urgent}
-            onValueChange={(value) => setNewTask((current) => ({ ...current, urgent: value }))}
-          />
-        </View>
-        <View style={styles.switchRow}>
-          <Text style={styles.switchLabel}>{t.important}</Text>
-          <Switch
-            testID="new-task-important-switch"
-            value={newTask.important}
-            onValueChange={(value) => setNewTask((current) => ({ ...current, important: value }))}
-          />
-        </View>
-        <View style={styles.actions}>
-          <Pressable testID="add-task-button" onPress={handleAddTask} style={styles.primaryButton}>
-            <Text style={styles.primaryButtonText}>{t.addTask}</Text>
-          </Pressable>
-          <Pressable testID="suggest-task-button" onPress={handleSuggest} style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonText}>{t.suggest}</Text>
-          </Pressable>
-          <Pressable testID="scan-task-button" onPress={handleScan} style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonText}>{t.scan}</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <FlatList
-        data={tasks}
-        keyExtractor={(item) => item.id}
-        ListEmptyComponent={<Text style={styles.empty}>{t.empty}</Text>}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>{item.title}</Text>
-                <Text style={styles.cardDescription}>{item.description}</Text>
-              </View>
-              <Pressable
-                testID={`delete-task-${item.id}`}
-                onPress={() => handleDelete(item.id)}
-                style={styles.deleteButton}
-              >
-                <Text style={styles.deleteButtonText}>{t.delete}</Text>
-              </Pressable>
-            </View>
-            <View style={styles.badges}>
-              <Pressable
-                testID={`toggle-urgent-${item.id}`}
-                onPress={() => handleToggle(item.id, 'urgent')}
-                style={styles.badge}
-              >
-                <Text style={styles.badgeText}>{t.urgent}: {item.urgent ? t.on : t.off}</Text>
-              </Pressable>
-              <Pressable
-                testID={`toggle-important-${item.id}`}
-                onPress={() => handleToggle(item.id, 'important')}
-                style={styles.badge}
-              >
-                <Text style={styles.badgeText}>{t.important}: {item.important ? t.on : t.off}</Text>
-              </Pressable>
-            </View>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.title}>{t.title}</Text>
+            <Text style={styles.subtitle}>{t.subtitle}</Text>
           </View>
-        )}
+          <LanguageSwitcher language={language} onChange={handleLanguageChange} />
+        </View>
+
+        {notice ? (
+          <View style={styles.notice}>
+            <Text testID="notice-banner" style={styles.noticeText}>{notice}</Text>
+          </View>
+        ) : null}
+
+        <TaskComposer
+          newTask={newTask}
+          onChangeTask={updateNewTaskField}
+          onAddTask={handleAddTask}
+          onSuggest={handleSuggest}
+          onScan={handleScan}
+          onOpenAITools={() => openAITools('analysis')}
+          suggestDisabled={suggestDisabled}
+          scanDisabled={scanDisabled}
+          t={t}
+        />
+
+        <AIStatusPanel
+          aiLoading={aiLoading}
+          aiConnected={aiConnected}
+          providerControls={providerControls}
+          t={t}
+        />
+
+        <MatrixBoard
+          quadrantOptions={quadrantOptions}
+          groupedTasks={groupedTasks}
+          onDelete={handleDelete}
+          onToggle={handleToggle}
+          t={t}
+        />
+      </ScrollView>
+
+      <AIToolsModal
+        visible={aiToolsOpen}
+        t={t}
+        activeTab={activeAITab}
+        onTabChange={handleTabChange}
+        onClose={closeAITools}
+        quadrantOptions={quadrantOptions}
+        analysisTask={analysisTask}
+        onChangeAnalysisTask={setAnalysisTask}
+        onRunAdvancedAnalysis={handleRunAdvancedAnalysis}
+        analysisLoading={analysisLoading}
+        advancedAnalysis={advancedAnalysis}
+        suggestedQuadrant={advancedAnalysis ? getSuggestedQuadrant(advancedAnalysis) : 3}
+        onAddAdvancedAnalysisToMatrix={handleAddAdvancedAnalysisToMatrix}
+        analysisAdding={analysisAdding}
+        onRunOcr={handleOcrFromTools}
+        ocrLoading={ocrLoading}
+        ocrResult={ocrResult}
+        batchInput={batchInput}
+        onChangeBatchInput={setBatchInput}
+        onRunBatchAnalyze={handleBatchAnalyze}
+        batchLoading={batchLoading}
+        batchResult={batchResult}
+        manageLoading={manageLoading}
+        trainingStats={trainingStats}
+        providerControls={providerControls}
+        providerBusy={providerBusy}
+        onToggleProvider={handleManageProviderToggle}
+        exampleText={exampleText}
+        onChangeExampleText={setExampleText}
+        exampleQuadrant={exampleQuadrant}
+        onSelectExampleQuadrant={setExampleQuadrant}
+        onAddExample={handleAddExample}
+        feedbackTask={feedbackTask}
+        onChangeFeedbackTask={setFeedbackTask}
+        predictedQuadrant={predictedQuadrant}
+        onSelectPredictedQuadrant={setPredictedQuadrant}
+        correctQuadrant={correctQuadrant}
+        onSelectCorrectQuadrant={setCorrectQuadrant}
+        onLearnFeedback={handleLearnFeedback}
+        preserveExperience={preserveExperience}
+        onChangePreserveExperience={setPreserveExperience}
+        keepDefaults={keepDefaults}
+        onChangeKeepDefaults={setKeepDefaults}
+        onRetrain={handleRetrain}
+        onClear={handleClear}
+        examplesQuadrant={examplesQuadrant}
+        onSelectExamplesQuadrant={setExamplesQuadrant}
+        onLoadExamples={handleLoadExamples}
+        examples={examples}
+        aiToolsError={aiToolsError}
+        aiToolsMessage={aiToolsMessage}
+        manageAction={manageAction}
       />
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: '#020617',
-    padding: 16,
-  },
-  loading: {
-    marginTop: 40,
-    color: '#e2e8f0',
-    textAlign: 'center',
-  },
-  header: {
-    marginBottom: 20,
-    gap: 12,
-  },
-  title: {
-    color: '#f8fafc',
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  subtitle: {
-    color: '#94a3b8',
-    marginTop: 6,
-  },
-  notice: {
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 16,
-    backgroundColor: '#10243f',
-  },
-  noticeText: {
-    color: '#bfdbfe',
-    fontWeight: '600',
-  },
-  form: {
-    gap: 12,
-    borderRadius: 24,
-    padding: 16,
-    marginBottom: 20,
-    backgroundColor: '#0f172a',
-  },
-  input: {
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#111827',
-    color: '#f8fafc',
-  },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  switchLabel: {
-    color: '#e2e8f0',
-  },
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  primaryButton: {
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#14b8a6',
-  },
-  primaryButtonText: {
-    color: '#042f2e',
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#1e293b',
-  },
-  secondaryButtonText: {
-    color: '#e2e8f0',
-    fontWeight: '600',
-  },
-  empty: {
-    color: '#94a3b8',
-    textAlign: 'center',
-    marginTop: 32,
-  },
-  card: {
-    gap: 12,
-    marginBottom: 12,
-    borderRadius: 20,
-    padding: 16,
-    backgroundColor: '#0f172a',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  cardTitle: {
-    color: '#f8fafc',
-    fontWeight: '700',
-  },
-  cardDescription: {
-    marginTop: 4,
-    color: '#94a3b8',
-  },
-  deleteButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#7f1d1d',
-  },
-  deleteButtonText: {
-    color: '#fee2e2',
-    fontWeight: '700',
-  },
-  badges: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  badge: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#1e293b',
-  },
-  badgeText: {
-    color: '#cbd5e1',
-  },
-});

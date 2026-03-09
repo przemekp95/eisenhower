@@ -12,12 +12,16 @@ from pydantic import BaseModel, Field
 from .config import Settings, load_settings
 from .defaults import QUADRANT_NAMES
 from .local_model import ModelNotReadyError
-from .service import QuadrantAIService
+from .service import ProviderDisabledError, QuadrantAIService
 from .store import TrainingStore
 
 
 class BatchRequest(BaseModel):
   tasks: list[str] = Field(default_factory=list)
+
+
+class ProviderStateRequest(BaseModel):
+  enabled: bool
 
 
 def create_app(
@@ -130,6 +134,13 @@ def create_app(
   def get_capabilities():
     return resolved_ai_service.capabilities()
 
+  @app.put("/providers/{provider_name}")
+  def update_provider(
+    provider_name: Literal["local_model", "tesseract"],
+    request: ProviderStateRequest,
+  ):
+    return resolved_ai_service.set_provider_enabled(provider_name, request.enabled)
+
   @app.exception_handler(HTTPException)
   async def http_exception_handler(_request, exception: HTTPException):
     return JSONResponse(status_code=exception.status_code, content={"error": exception.detail})
@@ -137,5 +148,9 @@ def create_app(
   @app.exception_handler(ModelNotReadyError)
   async def model_not_ready_handler(_request, exception: ModelNotReadyError):
     return JSONResponse(status_code=503, content={"error": str(exception), "code": "model_not_ready"})
+
+  @app.exception_handler(ProviderDisabledError)
+  async def provider_disabled_handler(_request, exception: ProviderDisabledError):
+    return JSONResponse(status_code=503, content={"error": str(exception), "code": "provider_disabled"})
 
   return app
