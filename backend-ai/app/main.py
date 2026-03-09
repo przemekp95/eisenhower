@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -15,6 +17,8 @@ from .local_model import ModelNotReadyError
 from .service import ProviderDisabledError, QuadrantAIService
 from .store import TrainingStore
 
+request_logger = logging.getLogger("uvicorn.error")
+
 
 class BatchRequest(BaseModel):
   tasks: list[str] = Field(default_factory=list)
@@ -22,6 +26,16 @@ class BatchRequest(BaseModel):
 
 class ProviderStateRequest(BaseModel):
   enabled: bool
+
+
+class OCRAcceptedTask(BaseModel):
+  task: str = Field(..., min_length=1)
+  quadrant: int = Field(..., ge=0, le=3)
+
+
+class OCRFeedbackRequest(BaseModel):
+  tasks: list[OCRAcceptedTask] = Field(default_factory=list)
+  retrain: bool = True
 
 
 def create_app(
@@ -45,6 +59,23 @@ def create_app(
     allow_methods=["*"],
     allow_headers=["*"],
   )
+
+  @app.middleware("http")
+  async def log_requests(request: Request, call_next):
+    if request.url.path == "/" or request.method == "OPTIONS":
+      return await call_next(request)
+
+    started_at = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = int((time.perf_counter() - started_at) * 1000)
+    message = f"backend-ai {request.method} {request.url.path} {response.status_code} {duration_ms}ms"
+
+    if response.status_code >= 500:
+      request_logger.error(message)
+    else:
+      request_logger.info(message)
+
+    return response
 
   @app.get("/")
   def root():
@@ -101,12 +132,30 @@ def create_app(
     predicted_quadrant: int = Form(..., ge=0, le=3),
     correct_quadrant: int = Form(..., ge=0, le=3),
   ):
-    resolved_store.add_example(text=task, quadrant=correct_quadrant, source="feedback")
-    return {
-      "message": "Feedback captured.",
-      "predicted_quadrant": predicted_quadrant,
-      "correct_quadrant": correct_quadrant,
-    }
+    return resolved_ai_service.learn_feedback(
+      task,
+      predicted_quadrant,
+      correct_quadrant,
+      source="feedback",
+    )
+
+  @app.post("/learn-ocr-feedback")
+  def learn_from_ocr_feedback(request: OCRFeedbackRequest):
+    if not request.tasks:
+      raise HTTPException(status_code=400, detail="At least one accepted OCR task is required.")
+
+    return resolved_ai_service.learn_feedback_batch(
+      [
+        {
+          "task": item.task,
+          "predicted_quadrant": item.quadrant,
+          "correct_quadrant": item.quadrant,
+        }
+        for item in request.tasks
+      ],
+      source="ocr-feedback",
+      retrain=request.retrain,
+    )
 
   @app.get("/training-stats")
   def get_training_stats():

@@ -109,49 +109,13 @@ class QuadrantAIService:
   def classify_task(self, task: str, use_rag: bool = True) -> dict[str, Any]:
     self._require_local_model()
     prediction = self._predict(task, limit=3 if use_rag else 0)
-    urgent, important = quadrant_to_flags(prediction.quadrant)
-
-    return {
-      "task": task,
-      "urgent": urgent,
-      "important": important,
-      "quadrant": prediction.quadrant,
-      "quadrant_name": QUADRANT_NAMES[prediction.quadrant],
-      "timestamp": utc_now(),
-      "method": "local-minilm",
-      "confidence": prediction.confidence,
-      "local_scores": {
-        str(index): round(score, 4) for index, score in enumerate(prediction.probabilities)
-      },
-      "similar_examples_used": len(prediction.similar_examples),
-      "top_similar_examples": [example.to_dict("en") for example in prediction.similar_examples],
-    }
+    return self._serialize_classification(task, prediction)
 
   def analyze_with_reasoning(self, task: str, language: str = "en") -> dict[str, Any]:
     self._require_local_model()
     resolved_language = normalize_language(language)
-    rag = self.classify_task(task, use_rag=True)
-    explanation = self.local_model.explain(task, language=resolved_language)
-
-    return {
-      "task": task,
-      "langchain_analysis": {
-        "quadrant": explanation["quadrant"],
-        "reasoning": explanation["reasoning"],
-        "confidence": explanation["confidence"],
-        "method": explanation["method"],
-      },
-      "rag_classification": {
-        "quadrant": rag["quadrant"],
-        "quadrant_name": get_quadrant_name(rag["quadrant"], resolved_language),
-        "confidence": rag["confidence"],
-      },
-      "comparison": {
-        "methods_agree": True,
-        "confidence_difference": 0.0,
-      },
-      "timestamp": utc_now(),
-    }
+    prediction = self._predict(task, limit=3)
+    return self._serialize_analysis(task, prediction, language=resolved_language)
 
   def batch_analyze(self, tasks: list[str]) -> dict[str, Any]:
     self._require_local_model()
@@ -161,9 +125,11 @@ class QuadrantAIService:
       "langchain": {"quadrant_distribution": {str(index): 0 for index in QUADRANT_NAMES}},
     }
 
-    for task in tasks:
-      rag = self.classify_task(task)
-      analysis = self.analyze_with_reasoning(task)["langchain_analysis"]
+    predictions = self._predict_many(tasks, limit=3)
+    for task, prediction in zip(tasks, predictions):
+      serialized = self._serialize_analysis(task, prediction, language="en")
+      rag = serialized["rag_classification"]
+      analysis = serialized["langchain_analysis"]
       rag_quadrant = rag["quadrant"]
       analysis_quadrant = analysis["quadrant"] if analysis["quadrant"] is not None else rag_quadrant
 
@@ -216,15 +182,20 @@ class QuadrantAIService:
       if not extracted_text:
         extracted_text = fallback_name
 
+    self._require_local_model()
+    limited_tasks = tasks[:10]
+    predictions = self._predict_many(limited_tasks, limit=3)
     classified = []
-    for task in tasks[:10]:
-      classification = self.classify_task(task)
+    for task, prediction in zip(limited_tasks, predictions):
+      classification = self._serialize_classification(task, prediction)
       classified.append(
         {
           "text": task,
           "quadrant": classification["quadrant"],
           "quadrant_name": classification["quadrant_name"],
           "confidence": classification["confidence"],
+          "similar_examples_used": classification["similar_examples_used"],
+          "top_similar_examples": classification["top_similar_examples"],
         }
       )
 
@@ -241,7 +212,7 @@ class QuadrantAIService:
       },
       "ocr": {
         "extracted_text": extracted_text,
-        "raw_tasks_detected": len(tasks),
+        "raw_tasks_detected": len(limited_tasks),
         "method": method,
       },
       "classified_tasks": classified,
@@ -255,6 +226,51 @@ class QuadrantAIService:
       },
       "timestamp": utc_now(),
     }
+
+  def learn_feedback(
+    self,
+    task: str,
+    predicted_quadrant: int,
+    correct_quadrant: int,
+    *,
+    source: str = "feedback",
+  ) -> dict[str, Any]:
+    record = self.store.add_example(text=task, quadrant=correct_quadrant, source=source)
+    return {
+      "message": "Feedback captured.",
+      "predicted_quadrant": predicted_quadrant,
+      "correct_quadrant": correct_quadrant,
+      "example": record,
+    }
+
+  def learn_feedback_batch(
+    self,
+    items: list[dict[str, Any]],
+    *,
+    source: str = "feedback",
+    retrain: bool = False,
+  ) -> dict[str, Any]:
+    records = [
+      {
+        "text": str(item["task"]).strip(),
+        "quadrant": int(item["correct_quadrant"]),
+        "source": source,
+        "timestamp": utc_now(),
+      }
+      for item in items
+      if str(item["task"]).strip()
+    ]
+    saved_records = self.store.add_examples(records)
+    response: dict[str, Any] = {
+      "message": "Feedback captured.",
+      "examples_added": len(saved_records),
+      "retrained": False,
+      "source": source,
+    }
+    if retrain and saved_records:
+      response["training"] = self.retrain()
+      response["retrained"] = True
+    return response
 
   def retrain(self, preserve_experience: bool = True) -> dict[str, Any]:
     training_result = self.local_model.train(self.store.load())
@@ -298,6 +314,68 @@ class QuadrantAIService:
     except Exception as issue:
       self._startup_error = str(issue)
       raise ModelNotReadyError(str(issue)) from issue
+
+  def _predict_many(self, tasks: list[str], limit: int = 3) -> list[LocalPrediction]:
+    predict_many = getattr(self.local_model, "predict_many", None)
+    if callable(predict_many):
+      try:
+        return predict_many(tasks, limit=limit)
+      except ModelNotReadyError:
+        raise
+      except Exception as issue:
+        self._startup_error = str(issue)
+        raise ModelNotReadyError(str(issue)) from issue
+
+    return [self._predict(task, limit=limit) for task in tasks]
+
+  def _serialize_analysis(
+    self,
+    task: str,
+    prediction: LocalPrediction,
+    language: str = "en",
+  ) -> dict[str, Any]:
+    resolved_language = normalize_language(language)
+    rag = self._serialize_classification(task, prediction)
+    explanation = self.local_model.explain(task, language=resolved_language, prediction=prediction)
+
+    return {
+      "task": task,
+      "langchain_analysis": {
+        "quadrant": explanation["quadrant"],
+        "reasoning": explanation["reasoning"],
+        "confidence": explanation["confidence"],
+        "method": explanation["method"],
+      },
+      "rag_classification": {
+        "quadrant": rag["quadrant"],
+        "quadrant_name": get_quadrant_name(rag["quadrant"], resolved_language),
+        "confidence": rag["confidence"],
+      },
+      "comparison": {
+        "methods_agree": True,
+        "confidence_difference": 0.0,
+      },
+      "timestamp": utc_now(),
+    }
+
+  def _serialize_classification(self, task: str, prediction: LocalPrediction) -> dict[str, Any]:
+    urgent, important = quadrant_to_flags(prediction.quadrant)
+
+    return {
+      "task": task,
+      "urgent": urgent,
+      "important": important,
+      "quadrant": prediction.quadrant,
+      "quadrant_name": QUADRANT_NAMES[prediction.quadrant],
+      "timestamp": utc_now(),
+      "method": "local-minilm",
+      "confidence": prediction.confidence,
+      "local_scores": {
+        str(index): round(score, 4) for index, score in enumerate(prediction.probabilities)
+      },
+      "similar_examples_used": len(prediction.similar_examples),
+      "top_similar_examples": [example.to_dict("en") for example in prediction.similar_examples],
+    }
 
   def _extract_tasks_with_tesseract(self, payload: bytes) -> tuple[list[str], str]:
     image = Image.open(BytesIO(payload))

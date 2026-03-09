@@ -189,4 +189,21 @@ describe('AIToolsModal', () => {
     expect(props.onSelectExamplesQuadrant).toHaveBeenCalledWith(3);
     expect(props.onLoadExamples).toHaveBeenCalled();
   });
+
+  it('renders unavailable model state in the manage summary', () => {
+    const props = createProps({
+      activeTab: 'manage',
+      trainingStats: {
+        total_examples: 2,
+        model_name: 'local-minilm-mlp',
+        model_ready: false,
+        model_encoder: null,
+      },
+    });
+
+    const { getByText, queryByText } = render(<AIToolsModal {...props} />);
+
+    expect(getByText(/Niedostępny/)).toBeTruthy();
+    expect(queryByText('encoder')).toBeNull();
+  });
 });

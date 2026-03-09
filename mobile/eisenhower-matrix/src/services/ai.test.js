@@ -7,6 +7,7 @@ import {
   fetchAICapabilities,
   fetchTrainingStats,
   getExamplesByQuadrant,
+  learnFromAcceptedOCRTasks,
   learnFromFeedback,
   retrainModel,
   setAIProviderEnabled,
@@ -186,13 +187,20 @@ describe('ai service', () => {
   it('submits training examples and feedback', async () => {
     global.fetch
       .mockResolvedValueOnce({ ok: true, json: async () => ({ message: 'Training example added.' }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ message: 'Feedback captured.' }) });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ message: 'Feedback captured.' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ examples_added: 1, retrained: true }) });
 
     await expect(addTrainingExample('Plan roadmap', 2)).resolves.toMatchObject({
       message: 'Training example added.',
     });
     await expect(learnFromFeedback('Plan roadmap', 1, 2)).resolves.toMatchObject({
       message: 'Feedback captured.',
+    });
+    await expect(
+      learnFromAcceptedOCRTasks([{ title: 'Plan roadmap', urgent: false, important: true }], false)
+    ).resolves.toMatchObject({
+      examples_added: 1,
+      retrained: true,
     });
 
     expect(global.fetch).toHaveBeenNthCalledWith(
@@ -213,6 +221,63 @@ describe('ai service', () => {
         body: 'task=Plan+roadmap&predicted_quadrant=1&correct_quadrant=2',
       })
     );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      3,
+      `${mobileConfig.aiApiUrl}/learn-ocr-feedback`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tasks: [{ task: 'Plan roadmap', quadrant: 2 }],
+          retrain: false,
+        }),
+      })
+    );
+  });
+
+  it('maps accepted OCR tasks to all quadrants before sending feedback', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ examples_added: 4, retrained: true }),
+    });
+
+    await expect(
+      learnFromAcceptedOCRTasks([
+        { title: 'Do now', urgent: true, important: true },
+        { title: 'Delegate', urgent: true, important: false },
+        { title: 'Schedule', urgent: false, important: true },
+        { title: 'Delete', urgent: false, important: false },
+      ])
+    ).resolves.toMatchObject({
+      examples_added: 4,
+      retrained: true,
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${mobileConfig.aiApiUrl}/learn-ocr-feedback`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tasks: [
+            { task: 'Do now', quadrant: 0 },
+            { task: 'Delegate', quadrant: 1 },
+            { task: 'Schedule', quadrant: 2 },
+            { task: 'Delete', quadrant: 3 },
+          ],
+          retrain: true,
+        }),
+      })
+    );
+  });
+
+  it('skips accepted OCR feedback requests when the task list is empty', async () => {
+    await expect(learnFromAcceptedOCRTasks([], false)).resolves.toEqual({
+      examples_added: 0,
+      retrained: false,
+    });
+
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('handles retrain, clear data and examples browsing', async () => {
