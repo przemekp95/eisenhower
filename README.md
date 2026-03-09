@@ -50,6 +50,7 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 
 ### Mobile
 
+- `EXPO_PUBLIC_APP_ORIGIN_URL`: optional shared HTTPS origin for Expo, used to derive `/api` and `/ai`
 - `EXPO_PUBLIC_API_URL`: Node API URL used for mobile task CRUD sync
 - `EXPO_PUBLIC_AI_API_URL`: AI backend URL used by the Expo application
 

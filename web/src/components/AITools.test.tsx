@@ -132,6 +132,40 @@ describe('AITools', () => {
     expect(document.documentElement.style.overflow).toBe('');
   });
 
+  it('adds body padding when the viewport has a scrollbar gap', () => {
+    const originalInnerWidth = window.innerWidth;
+    const originalClientWidth = document.documentElement.clientWidth;
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1200 });
+    Object.defineProperty(document.documentElement, 'clientWidth', { configurable: true, value: 1180 });
+
+    const { unmount } = renderTools();
+
+    expect(document.body.style.paddingRight).toBe('20px');
+
+    unmount();
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalInnerWidth });
+    Object.defineProperty(document.documentElement, 'clientWidth', { configurable: true, value: originalClientWidth });
+  });
+
+  it('does not add body padding when the viewport has no scrollbar gap', () => {
+    const originalInnerWidth = window.innerWidth;
+    const originalClientWidth = document.documentElement.clientWidth;
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1200 });
+    Object.defineProperty(document.documentElement, 'clientWidth', { configurable: true, value: 1200 });
+
+    const { unmount } = renderTools();
+
+    expect(document.body.style.paddingRight).toBe('');
+
+    unmount();
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalInnerWidth });
+    Object.defineProperty(document.documentElement, 'clientWidth', { configurable: true, value: originalClientWidth });
+  });
+
   it('closes the modal on Escape', () => {
     const onClose = jest.fn();
     renderTools(jest.fn(), { onClose });
@@ -139,6 +173,42 @@ describe('AITools', () => {
     fireEvent.keyDown(window, { key: 'Escape' });
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores non-Escape key presses', () => {
+    const onClose = jest.fn();
+    renderTools(jest.fn(), { onClose });
+
+    fireEvent.keyDown(window, { key: 'Enter' });
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes the modal when clicking the backdrop', () => {
+    const onClose = jest.fn();
+    const { container } = renderTools(jest.fn(), { onClose });
+
+    fireEvent.mouseDown(container.firstChild as Element);
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not close the modal when clicking inside the dialog', () => {
+    const onClose = jest.fn();
+    renderTools(jest.fn(), { onClose });
+
+    fireEvent.mouseDown(screen.getByRole('dialog'));
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not close the modal when clicking the layout wrapper above the dialog', () => {
+    const onClose = jest.fn();
+    renderTools(jest.fn(), { onClose });
+
+    fireEvent.mouseDown(screen.getByRole('dialog').parentElement as Element);
+
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('switches to batch and OCR tools', async () => {

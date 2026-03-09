@@ -28,6 +28,16 @@ class ProviderStateRequest(BaseModel):
   enabled: bool
 
 
+class OCRAcceptedTask(BaseModel):
+  task: str = Field(..., min_length=1)
+  quadrant: int = Field(..., ge=0, le=3)
+
+
+class OCRFeedbackRequest(BaseModel):
+  tasks: list[OCRAcceptedTask] = Field(default_factory=list)
+  retrain: bool = True
+
+
 def create_app(
   settings: Settings | None = None,
   store: TrainingStore | None = None,
@@ -122,12 +132,30 @@ def create_app(
     predicted_quadrant: int = Form(..., ge=0, le=3),
     correct_quadrant: int = Form(..., ge=0, le=3),
   ):
-    resolved_store.add_example(text=task, quadrant=correct_quadrant, source="feedback")
-    return {
-      "message": "Feedback captured.",
-      "predicted_quadrant": predicted_quadrant,
-      "correct_quadrant": correct_quadrant,
-    }
+    return resolved_ai_service.learn_feedback(
+      task,
+      predicted_quadrant,
+      correct_quadrant,
+      source="feedback",
+    )
+
+  @app.post("/learn-ocr-feedback")
+  def learn_from_ocr_feedback(request: OCRFeedbackRequest):
+    if not request.tasks:
+      raise HTTPException(status_code=400, detail="At least one accepted OCR task is required.")
+
+    return resolved_ai_service.learn_feedback_batch(
+      [
+        {
+          "task": item.task,
+          "predicted_quadrant": item.quadrant,
+          "correct_quadrant": item.quadrant,
+        }
+        for item in request.tasks
+      ],
+      source="ocr-feedback",
+      retrain=request.retrain,
+    )
 
   @app.get("/training-stats")
   def get_training_stats():

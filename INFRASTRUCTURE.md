@@ -106,6 +106,7 @@ docker compose --profile production up --build
 
 - Expo-managed package with Jest and React Native Testing Library coverage gates.
 - Stores a local task cache with AsyncStorage.
+- Can derive both backend URLs from a shared `EXPO_PUBLIC_APP_ORIGIN_URL` such as the production web origin.
 - Uses `EXPO_PUBLIC_API_URL` for task CRUD sync and `EXPO_PUBLIC_AI_API_URL` for AI and OCR requests.
 - Uses `expo-image-picker` to select images for OCR uploads.
 
@@ -123,6 +124,7 @@ docker compose --profile production up --build
 | Backend AI | `MODEL_CACHE_DIR` | Cache and model artifacts |
 | Backend AI | `LOCAL_MODEL_NAME` | Frozen sentence-transformer encoder |
 | Backend AI | `LOCAL_MODEL_EPOCHS` | Max epochs for explicit retraining |
+| Mobile | `EXPO_PUBLIC_APP_ORIGIN_URL` | Shared HTTPS origin that maps to `/api` and `/ai` |
 | Mobile | `EXPO_PUBLIC_AI_API_URL` | AI service base URL for Expo |
 | Mobile | `EXPO_PUBLIC_API_URL` | Node API base URL for Expo |
 

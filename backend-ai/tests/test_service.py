@@ -22,6 +22,8 @@ class FakeLocalModel:
     self.ensure_ready_calls: list[list[dict]] = []
     self.train_calls: list[list[dict]] = []
     self.predict_calls: list[tuple[str, int]] = []
+    self.predict_many_calls: list[tuple[list[str], int]] = []
+    self.explain_calls: list[tuple[str, str, int | None]] = []
 
   def ensure_ready(self, records):
     self.ensure_ready_calls.append(records)
@@ -55,7 +57,17 @@ class FakeLocalModel:
       ][:limit],
     )
 
-  def explain(self, task: str, language: str = "en"):
+  def predict_many(self, tasks: list[str], limit: int = 3):
+    self.predict_many_calls.append((list(tasks), limit))
+    return [self.predict(task, limit=limit) for task in tasks]
+
+  def explain(
+    self,
+    task: str,
+    language: str = "en",
+    prediction: LocalPrediction | None = None,
+  ):
+    self.explain_calls.append((task, language, prediction.quadrant if prediction is not None else None))
     return {
       "quadrant": 0 if "urgent" in task else 2,
       "quadrant_name": "Zrób teraz" if language == "pl" and "urgent" in task else "Deleguj",
@@ -287,6 +299,102 @@ def test_extract_tasks_from_image_prefers_text_and_tesseract_and_filename(real_m
   assert fallback_upload["classified_tasks"][0]["text"] == "urgent outage"
   assert service._looks_like_image("tasks.png", None) is True
   assert service._looks_like_image("tasks.bin", None) is False
+
+
+def test_extract_tasks_from_image_uses_batch_prediction_with_rag(tmp_path: Path):
+  local_model = FakeLocalModel()
+  service = build_service(tmp_path, local_model=local_model)
+
+  upload = service.extract_tasks_from_image(
+    "tasks.txt",
+    b"critical production incident\nexercise twice a week\n",
+    "text/plain",
+  )
+
+  assert upload["summary"]["total_tasks"] == 2
+  assert upload["classified_tasks"][0]["similar_examples_used"] == 1
+  assert upload["classified_tasks"][0]["top_similar_examples"][0]["text"] == "prepare strategic roadmap"
+  assert local_model.predict_many_calls == [(["critical production incident", "exercise twice a week"], 3)]
+  assert local_model.predict_calls == [("critical production incident", 3), ("exercise twice a week", 3)]
+
+
+def test_learn_feedback_batch_can_retrain_after_saving_records(tmp_path: Path):
+  local_model = FakeLocalModel()
+  service = build_service(tmp_path, local_model=local_model)
+
+  result = service.learn_feedback_batch(
+    [
+      {"task": "urgent outage", "predicted_quadrant": 0, "correct_quadrant": 0},
+      {"task": "prepare roadmap", "predicted_quadrant": 2, "correct_quadrant": 2},
+    ],
+    source="ocr-feedback",
+    retrain=True,
+  )
+
+  stats = service.get_training_stats()
+
+  assert result["examples_added"] == 2
+  assert result["retrained"] is True
+  assert result["training"]["examples_seen"] == stats["total_examples"]
+  assert local_model.train_calls
+  assert stats["data_sources"]["ocr-feedback"] == 2
+
+
+def test_batch_analyze_reuses_single_batch_prediction_for_both_methods(tmp_path: Path):
+  local_model = FakeLocalModel()
+  service = build_service(tmp_path, local_model=local_model)
+
+  result = service.batch_analyze(["urgent outage", "prepare roadmap"])
+
+  assert result["summary"]["total_tasks"] == 2
+  assert local_model.predict_many_calls == [(["urgent outage", "prepare roadmap"], 3)]
+  assert local_model.predict_calls == [("urgent outage", 3), ("prepare roadmap", 3)]
+  assert local_model.explain_calls == [("urgent outage", "en", 0), ("prepare roadmap", "en", 2)]
+
+
+def test_service_batch_prediction_falls_back_when_local_model_has_no_predict_many(tmp_path: Path):
+  class LegacyLocalModel(FakeLocalModel):
+    predict_many = None  # type: ignore[assignment]
+
+  legacy_model = LegacyLocalModel()
+  service = build_service(tmp_path, local_model=legacy_model)
+
+  predictions = service._predict_many(["urgent outage", "prepare roadmap"], limit=0)
+
+  assert [prediction.quadrant for prediction in predictions] == [0, 2]
+  assert legacy_model.predict_calls == [("urgent outage", 0), ("prepare roadmap", 0)]
+
+
+def test_service_wraps_unexpected_batch_prediction_errors(tmp_path: Path):
+  class ExplodingBatchModel(FakeLocalModel):
+    def predict_many(self, tasks: list[str], limit: int = 3):
+      raise RuntimeError("batch offline")
+
+  service = build_service(tmp_path, local_model=ExplodingBatchModel())
+
+  try:
+    service._predict_many(["urgent outage"], limit=0)
+  except ModelNotReadyError as issue:
+    assert str(issue) == "batch offline"
+  else:
+    raise AssertionError("Expected ModelNotReadyError for unexpected batch prediction failure.")
+
+  assert service.get_training_stats()["model_error"] == "batch offline"
+
+
+def test_service_preserves_model_not_ready_from_batch_prediction(tmp_path: Path):
+  class BrokenBatchModel(FakeLocalModel):
+    def predict_many(self, tasks: list[str], limit: int = 3):
+      raise ModelNotReadyError("batch unavailable")
+
+  service = build_service(tmp_path, local_model=BrokenBatchModel())
+
+  try:
+    service._predict_many(["urgent outage"], limit=0)
+  except ModelNotReadyError as issue:
+    assert str(issue) == "batch unavailable"
+  else:
+    raise AssertionError("Expected ModelNotReadyError for unavailable batch prediction.")
 
 
 def test_retrain_passes_records_and_marks_preserve_flag_deprecated(real_model_bundle):

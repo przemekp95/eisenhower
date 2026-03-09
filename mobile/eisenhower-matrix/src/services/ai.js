@@ -21,6 +21,19 @@ async function readJson(response) {
   return payload;
 }
 
+function resolveTaskQuadrant(task) {
+  if (task.urgent && task.important) {
+    return 0;
+  }
+  if (task.urgent) {
+    return 1;
+  }
+  if (task.important) {
+    return 2;
+  }
+  return 3;
+}
+
 export async function suggestTaskQuadrant(title) {
   const response = await fetch(
     `${mobileConfig.aiApiUrl}/classify?title=${encodeURIComponent(title)}&use_rag=true`
@@ -95,6 +108,23 @@ export async function learnFromFeedback(task, predictedQuadrant, correctQuadrant
       predicted_quadrant: String(predictedQuadrant),
       correct_quadrant: String(correctQuadrant),
     }).toString(),
+  });
+
+  return readJson(response);
+}
+
+export async function learnFromAcceptedOCRTasks(tasks, retrain = true) {
+  if (!tasks.length) {
+    return { examples_added: 0, retrained: false };
+  }
+
+  const response = await fetch(`${mobileConfig.aiApiUrl}/learn-ocr-feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tasks: tasks.map((task) => ({ task: task.title, quadrant: resolveTaskQuadrant(task) })),
+      retrain,
+    }),
   });
 
   return readJson(response);

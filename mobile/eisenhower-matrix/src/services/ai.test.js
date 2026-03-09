@@ -7,6 +7,7 @@ import {
   fetchAICapabilities,
   fetchTrainingStats,
   getExamplesByQuadrant,
+  learnFromAcceptedOCRTasks,
   learnFromFeedback,
   retrainModel,
   setAIProviderEnabled,
@@ -186,13 +187,20 @@ describe('ai service', () => {
   it('submits training examples and feedback', async () => {
     global.fetch
       .mockResolvedValueOnce({ ok: true, json: async () => ({ message: 'Training example added.' }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ message: 'Feedback captured.' }) });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ message: 'Feedback captured.' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ examples_added: 1, retrained: true }) });
 
     await expect(addTrainingExample('Plan roadmap', 2)).resolves.toMatchObject({
       message: 'Training example added.',
     });
     await expect(learnFromFeedback('Plan roadmap', 1, 2)).resolves.toMatchObject({
       message: 'Feedback captured.',
+    });
+    await expect(
+      learnFromAcceptedOCRTasks([{ title: 'Plan roadmap', urgent: false, important: true }], false)
+    ).resolves.toMatchObject({
+      examples_added: 1,
+      retrained: true,
     });
 
     expect(global.fetch).toHaveBeenNthCalledWith(
@@ -211,6 +219,18 @@ describe('ai service', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: 'task=Plan+roadmap&predicted_quadrant=1&correct_quadrant=2',
+      })
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      3,
+      `${mobileConfig.aiApiUrl}/learn-ocr-feedback`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tasks: [{ task: 'Plan roadmap', quadrant: 2 }],
+          retrain: false,
+        }),
       })
     );
   });

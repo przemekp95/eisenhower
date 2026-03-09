@@ -127,7 +127,7 @@ class LocalMiniLMClassifier:
     embedding = self._encode([task])[0]
     probabilities = self._predict_probabilities(embedding)
     quadrant = max(range(len(probabilities)), key=probabilities.__getitem__)
-    similar_examples = self.find_similar_examples(task, limit=limit)
+    similar_examples = self._find_similar_examples_for_embedding(embedding, limit=limit)
 
     return LocalPrediction(
       quadrant=quadrant,
@@ -136,11 +136,42 @@ class LocalMiniLMClassifier:
       similar_examples=similar_examples,
     )
 
+  def predict_many(self, tasks: list[str], limit: int = 3) -> list[LocalPrediction]:
+    self._require_ready()
+    if any(not task.strip() for task in tasks):
+      raise ValueError("Task must not be empty.")
+
+    embeddings = self._encode(tasks)
+    probability_rows = self._predict_probabilities_many(embeddings)
+
+    predictions: list[LocalPrediction] = []
+    for embedding, probabilities in zip(embeddings, probability_rows):
+      quadrant = max(range(len(probabilities)), key=probabilities.__getitem__)
+      predictions.append(
+        LocalPrediction(
+          quadrant=quadrant,
+          confidence=round(probabilities[quadrant], 4),
+          probabilities=[round(value, 4) for value in probabilities],
+          similar_examples=self._find_similar_examples_for_embedding(embedding, limit=limit),
+        )
+      )
+
+    return predictions
+
   def find_similar_examples(self, task: str, limit: int = 3) -> list[SimilarExample]:
     self._require_ready()
-    index = self._index or self._load_index()
     query_embedding = self._encode([task])[0]
+    return self._find_similar_examples_for_embedding(query_embedding, limit=limit)
 
+  def _find_similar_examples_for_embedding(
+    self,
+    query_embedding: list[float],
+    limit: int = 3,
+  ) -> list[SimilarExample]:
+    if limit <= 0:
+      return []
+
+    index = self._index or self._load_index()
     scored: list[SimilarExample] = []
     for item in index.get("items", []):
       similarity = cosine_similarity(query_embedding, item["embedding"])
@@ -343,12 +374,15 @@ class LocalMiniLMClassifier:
     return index
 
   def _predict_probabilities(self, embedding: list[float]) -> list[float]:
+    return self._predict_probabilities_many([embedding])[0]
+
+  def _predict_probabilities_many(self, embeddings: list[list[float]]) -> list[list[float]]:
     torch = self._require_torch()
     self._require_ready()
     with torch.no_grad():
-      logits = self._head(torch.tensor([embedding], dtype=torch.float32))
-      probabilities = torch.softmax(logits, dim=1)[0].tolist()
-    return [float(value) for value in probabilities]
+      logits = self._head(torch.tensor(embeddings, dtype=torch.float32))
+      probability_rows = torch.softmax(logits, dim=1).tolist()
+    return [[float(value) for value in probabilities] for probabilities in probability_rows]
 
   def _build_head(self, input_dim: int | None = None):
     torch = self._require_torch()

@@ -15,6 +15,7 @@ jest.mock('./src/services/ai', () => ({
   fetchTrainingStats: jest.fn(),
   setAIProviderEnabled: jest.fn(),
   addTrainingExample: jest.fn(),
+  learnFromAcceptedOCRTasks: jest.fn(),
   learnFromFeedback: jest.fn(),
   retrainModel: jest.fn(),
   clearTrainingData: jest.fn(),
@@ -135,6 +136,7 @@ describe('Mobile App', () => {
       active: false,
     });
     ai.addTrainingExample.mockResolvedValue({ message: 'ok' });
+    ai.learnFromAcceptedOCRTasks.mockResolvedValue({ examples_added: 1, retrained: true });
     ai.learnFromFeedback.mockResolvedValue({ message: 'ok' });
     ai.retrainModel.mockResolvedValue({ status: 'completed' });
     ai.clearTrainingData.mockResolvedValue({ remaining_examples: 4 });
@@ -428,6 +430,16 @@ describe('Mobile App', () => {
       timeout: ASYNC_TIMEOUT,
     });
     await waitFor(() => expect(getByTestId('notice-banner').props.children).toBe('OCR dodał zadania do tablicy'), {
+      timeout: ASYNC_TIMEOUT,
+    });
+    await waitFor(() => expect(ai.learnFromAcceptedOCRTasks).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          title: 'Scanned task',
+          important: true,
+        }),
+      ]
+    ), {
       timeout: ASYNC_TIMEOUT,
     });
     expect(media.scanTasksFromImage).toHaveBeenCalledWith('pl');
