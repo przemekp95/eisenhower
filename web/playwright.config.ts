@@ -5,6 +5,7 @@ const webDir = __dirname;
 const backendDir = path.resolve(webDir, '../backend-node');
 const frontendUrl = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:4173';
 const apiUrl = process.env.PLAYWRIGHT_API_URL ?? 'http://127.0.0.1:3101';
+const { NO_COLOR: _ignoredNoColor, ...childEnv } = process.env;
 
 export default defineConfig({
   testDir: './e2e',
@@ -36,7 +37,7 @@ export default defineConfig({
       command: 'npm run dev:e2e',
       cwd: backendDir,
       env: {
-        ...process.env,
+        ...childEnv,
         HOST: '127.0.0.1',
         PORT: '3101',
       },
@@ -48,7 +49,7 @@ export default defineConfig({
       command: 'npm run dev -- --host 127.0.0.1 --port 4173 --strictPort',
       cwd: webDir,
       env: {
-        ...process.env,
+        ...childEnv,
         VITE_AI_API_URL: 'http://127.0.0.1:8100',
         VITE_API_URL: apiUrl,
       },

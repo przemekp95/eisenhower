@@ -90,5 +90,6 @@ Required checks for both `dev` and `master`:
 - `test-frontend-e2e`
 - `test-backend-ai`
 - `test-mobile`
+- `test-mobile-native-android`
 
 Coverage thresholds remain service-specific. The web and backend services enforce `100%`, while the Expo mobile client currently enforces `95%` statements/functions/lines and `90%` branches.

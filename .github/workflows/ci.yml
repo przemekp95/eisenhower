@@ -228,3 +228,59 @@ jobs:
       - name: Test with coverage
         working-directory: mobile/eisenhower-matrix
         run: npm run test:coverage
+
+  test-mobile-native-android:
+    name: test-mobile-native-android
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mobile/eisenhower-matrix/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.1.12297006" \
+            "cmake;3.30.5"
+
+      - name: Install dependencies
+        working-directory: mobile/eisenhower-matrix
+        run: npm ci
+
+      - name: Generate native Android project
+        working-directory: mobile/eisenhower-matrix
+        env:
+          CI: "1"
+          EXPO_NO_TELEMETRY: "1"
+          NODE_ENV: production
+        run: npx expo prebuild --platform android --no-install --clean
+
+      - name: Android native smoke build
+        working-directory: mobile/eisenhower-matrix/android
+        env:
+          CI: "1"
+          EXPO_NO_TELEMETRY: "1"
+          NODE_ENV: production
+        run: |
+          export ANDROID_HOME="${ANDROID_SDK_ROOT}"
+          ./gradlew assembleDebug
