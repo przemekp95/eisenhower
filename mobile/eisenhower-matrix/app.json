@@ -2,8 +2,36 @@
   "expo": {
     "name": "Eisenhower Matrix",
     "slug": "eisenhower-matrix",
+    "scheme": "eisenhowermatrix",
     "version": "1.0.0",
     "orientation": "portrait",
-    "platforms": ["ios", "android"]
+    "icon": "./assets/icon.png",
+    "platforms": ["ios", "android"],
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#020617"
+    },
+    "ios": {
+      "bundleIdentifier": "com.przemekp95.eisenhowermatrix",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.przemekp95.eisenhowermatrix",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#020617"
+      }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Eisenhower Matrix to import task photos for OCR.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ]
+    ]
   }
 }

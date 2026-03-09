@@ -1,14 +1,12 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { DragDropContext, Draggable, Droppable, DropResult } from '@hello-pangea/dnd';
 import { classifyTask, LangChainAnalysis, OCRResult } from '../services/api';
 import { Task, TaskInput } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
 import { shouldDisableMotion } from '../lib/motion';
 import { restoreReadyState } from '../lib/uiState';
+import { AIToolsComponent, MatrixSceneComponent } from './matrixLazyComponents';
 import { quadrantToTaskState, resolveSuggestedQuadrant } from './matrixUtils';
-
-const LazyAITools = lazy(() => import('./AITools'));
-const LazyMatrixScene = lazy(() => import('./MatrixScene'));
 
 interface Props {
   tasks: Task[];
@@ -244,7 +242,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
       />
 
       <Suspense fallback={<div className="absolute inset-0 bg-linear-to-br from-teal-500/20 to-cyan-500/10" />}>
-        <LazyMatrixScene />
+        <MatrixSceneComponent />
       </Suspense>
 
       <div className="relative z-10 space-y-6">
@@ -477,7 +475,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
 
       {showAiTools ? (
         <Suspense fallback={<div className="fixed inset-0 grid place-items-center bg-black/70 text-white">{t('ai.loading')}</div>}>
-          <LazyAITools
+          <AIToolsComponent
             taskTitle={newTask.title}
             onClose={() => setShowAiTools(false)}
             onAnalysisComplete={handleAnalysisComplete}
