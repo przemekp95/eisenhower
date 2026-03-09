@@ -37,13 +37,10 @@ jest.mock('@hello-pangea/dnd', () => {
       ),
   };
 });
-jest.mock('./components/MatrixScene', () => ({
+jest.mock('./components/matrixLazyComponents', () => ({
   __esModule: true,
-  default: () => <div data-testid="matrix-scene" />,
-}));
-jest.mock('./components/AITools', () => ({
-  __esModule: true,
-  default: ({
+  MatrixSceneComponent: () => <div data-testid="matrix-scene" />,
+  AIToolsComponent: ({
     onAnalysisComplete,
     onAnalysisTaskAdd,
     onOCRTasksExtracted,

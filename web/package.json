@@ -9,11 +9,11 @@
     "test": "jest --runInBand",
     "test:coverage": "jest --coverage --runInBand",
     "test:integration": "jest --config jest.integration.config.js --runInBand",
-    "test:e2e": "playwright test",
-    "test:e2e:headed": "playwright test --headed",
-    "test:e2e:install": "playwright install chromium",
-    "test:e2e:ai-smoke": "playwright test --config=playwright.ai-smoke.config.ts",
-    "test:e2e:ai-smoke:headed": "playwright test --config=playwright.ai-smoke.config.ts --headed"
+    "test:e2e": "node scripts/runPlaywright.js test",
+    "test:e2e:headed": "node scripts/runPlaywright.js test --headed",
+    "test:e2e:install": "node scripts/runPlaywright.js install chromium",
+    "test:e2e:ai-smoke": "node scripts/runPlaywright.js test --config=playwright.ai-smoke.config.ts",
+    "test:e2e:ai-smoke:headed": "node scripts/runPlaywright.js test --config=playwright.ai-smoke.config.ts --headed"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",

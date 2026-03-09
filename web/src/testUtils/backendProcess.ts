@@ -79,12 +79,13 @@ export async function startBackendProcess(): Promise<RunningBackendProcess> {
     process.platform === 'win32'
       ? path.join(backendDir, 'node_modules/.bin/tsx.cmd')
       : path.join(backendDir, 'node_modules/.bin/tsx');
+  const { NO_COLOR: _ignoredNoColor, ...childEnv } = process.env;
   let output = '';
 
   const child = spawn(tsxCommand, ['scripts/e2e-server.ts'], {
     cwd: backendDir,
     env: {
-      ...process.env,
+      ...childEnv,
       HOST: '127.0.0.1',
       PORT: String(port),
     },

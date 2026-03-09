@@ -24,6 +24,11 @@ jest.mock('gsap', () => ({
     to: (...args: unknown[]) => mockGsapTo(...args),
   },
 }));
+jest.mock('./components/matrixLazyComponents', () => ({
+  __esModule: true,
+  MatrixSceneComponent: () => <div data-testid="matrix-scene" />,
+  AIToolsComponent: () => <div>AI tools</div>,
+}));
 
 const mockedApi = jest.mocked(api);
 
