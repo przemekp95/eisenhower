@@ -10,7 +10,7 @@ services:
       - mongodb_data:/data/db
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
+      interval: 60s
       timeout: 10s
       retries: 5
 

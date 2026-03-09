@@ -118,6 +118,42 @@ def test_local_model_bootstraps_trains_and_predicts(tmp_path: Path):
   assert status["examples_seen"] == len(records())
 
 
+def test_local_model_predict_reuses_query_embedding_and_supports_batch_predictions(tmp_path: Path):
+  encoder = FakeEncoder()
+  model = LocalMiniLMClassifier(settings=build_settings(tmp_path), encoder=encoder)
+
+  model.train(records())
+  encoder.calls.clear()
+
+  single_prediction = model.predict("urgent deadline today", limit=0)
+  batch_predictions = model.predict_many(
+    ["urgent deadline today", "prepare strategic roadmap"],
+    limit=0,
+  )
+
+  assert single_prediction.similar_examples == []
+  assert batch_predictions[0].quadrant == single_prediction.quadrant
+  assert batch_predictions[1].confidence > 0
+  assert all(prediction.similar_examples == [] for prediction in batch_predictions)
+  assert encoder.calls == [
+    ["urgent deadline today"],
+    ["urgent deadline today", "prepare strategic roadmap"],
+  ]
+  assert model.find_similar_examples("urgent deadline today", limit=0) == []
+
+
+def test_local_model_batch_predict_rejects_empty_tasks(tmp_path: Path):
+  model = LocalMiniLMClassifier(settings=build_settings(tmp_path), encoder=FakeEncoder())
+  model.train(records())
+
+  try:
+    model.predict_many(["urgent deadline today", "   "], limit=0)
+  except ValueError as issue:
+    assert str(issue) == "Task must not be empty."
+  else:
+    raise AssertionError("Expected ValueError")
+
+
 def test_local_model_loads_existing_artifacts_without_retraining(tmp_path: Path):
   settings = build_settings(tmp_path)
   trainer = LocalMiniLMClassifier(settings=settings, encoder=FakeEncoder())

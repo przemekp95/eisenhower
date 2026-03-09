@@ -30,16 +30,23 @@ class TrainingStore:
       json.dump(items, handle, ensure_ascii=False, indent=2)
 
   def add_example(self, text: str, quadrant: int, source: str = "user") -> dict:
-    items = self.load()
     record = {
       "text": text,
       "quadrant": quadrant,
       "source": source,
       "timestamp": utc_now(),
     }
-    items.append(record)
-    self.save(items)
+    self.add_examples([record])
     return record
+
+  def add_examples(self, records: list[dict]) -> list[dict]:
+    if not records:
+      return []
+
+    items = self.load()
+    items.extend(records)
+    self.save(items)
+    return records
 
   def clear(self, keep_defaults: bool) -> list[dict]:
     items = [dict(item) for item in DEFAULT_TRAINING_DATA] if keep_defaults else []

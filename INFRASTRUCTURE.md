@@ -106,6 +106,7 @@ docker compose --profile production up --build
 
 - Expo-managed package with Jest and React Native Testing Library coverage gates.
 - Stores a local task cache with AsyncStorage.
+- Can derive both backend URLs from a shared `EXPO_PUBLIC_APP_ORIGIN_URL` such as the production web origin.
 - Uses `EXPO_PUBLIC_API_URL` for task CRUD sync and `EXPO_PUBLIC_AI_API_URL` for AI and OCR requests.
 - Uses `expo-image-picker` to select images for OCR uploads.
 
@@ -123,8 +124,11 @@ docker compose --profile production up --build
 | Backend AI | `MODEL_CACHE_DIR` | Cache and model artifacts |
 | Backend AI | `LOCAL_MODEL_NAME` | Frozen sentence-transformer encoder |
 | Backend AI | `LOCAL_MODEL_EPOCHS` | Max epochs for explicit retraining |
+| Mobile | `EXPO_PUBLIC_APP_ORIGIN_URL` | Shared HTTPS origin that maps to `/api` and `/ai` |
 | Mobile | `EXPO_PUBLIC_AI_API_URL` | AI service base URL for Expo |
 | Mobile | `EXPO_PUBLIC_API_URL` | Node API base URL for Expo |
+
+If the mobile APK is built in GitHub Actions without these mobile variables set in repository `Variables`, the packaged app falls back to the local `127.0.0.1` development endpoints.
 
 ## CI and Branch Governance
 
@@ -133,7 +137,7 @@ The repository uses three workflows:
 - `branch-policy.yml`
   Ensures only `dev` can open pull requests into `master`.
 - `ci.yml`
-  Runs `security-lint`, `test-backend-node`, `test-frontend`, `test-backend-ai`, and `test-mobile` on `dev` and `master`.
+  Runs `security-lint`, `test-backend-node`, `test-frontend`, `test-backend-ai`, and `test-mobile` on `dev` and `master`. The Android native job also uploads a downloadable debug APK artifact for each successful run, and the workflow can be started manually with `workflow_dispatch`.
 - `release.yml`
   Builds Docker images on pushes to `master` and performs optional deployments when required secrets are present (`deploy-mikrus` and ECS).
 

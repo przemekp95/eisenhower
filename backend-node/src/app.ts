@@ -31,6 +31,34 @@ export function createApp(options: CreateAppOptions = {}) {
   const config = loadConfig();
   const app = express();
 
+  app.use((req, res, next) => {
+    if (process.env.NODE_ENV === 'test') {
+      next();
+      return;
+    }
+
+    const path = req.originalUrl.split('?')[0];
+    if (path === '/health' || req.method === 'OPTIONS') {
+      next();
+      return;
+    }
+
+    const startedAt = Date.now();
+
+    res.on('finish', () => {
+      const durationMs = Date.now() - startedAt;
+      const message = `backend-node ${req.method} ${path} ${res.statusCode} ${durationMs}ms`;
+
+      if (res.statusCode >= 500) {
+        console.error(message);
+        return;
+      }
+
+      console.info(message);
+    });
+
+    next();
+  });
   app.use(helmet());
   app.use(
     rateLimit({

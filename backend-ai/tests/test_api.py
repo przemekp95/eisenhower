@@ -16,6 +16,7 @@ class FakeLocalModel:
     self.startup_error = startup_error
     self.ensure_ready_calls: list[list[dict]] = []
     self.train_calls: list[list[dict]] = []
+    self.predict_many_calls: list[tuple[list[str], int]] = []
 
   def ensure_ready(self, records):
     self.ensure_ready_calls.append(records)
@@ -56,7 +57,11 @@ class FakeLocalModel:
       similar_examples=similar_examples,
     )
 
-  def explain(self, task: str, language: str = "en"):
+  def predict_many(self, tasks: list[str], limit: int = 3):
+    self.predict_many_calls.append((list(tasks), limit))
+    return [self.predict(task, limit=limit) for task in tasks]
+
+  def explain(self, task: str, language: str = "en", prediction: LocalPrediction | None = None):
     quadrant = 2 if "roadmap" in task else 0
     return {
       "quadrant": quadrant,
@@ -197,6 +202,38 @@ def test_training_management_endpoints(real_model_bundle):
   assert clear.json()["remaining_examples"] == 0
 
 
+def test_ocr_feedback_endpoint_batches_examples_and_retrains(tmp_path: Path):
+  local_model = FakeLocalModel()
+  client = build_client(tmp_path, local_model=local_model)
+
+  feedback = client.post(
+    "/learn-ocr-feedback",
+    json={
+      "tasks": [
+        {"task": "urgent outage", "quadrant": 0},
+        {"task": "prepare roadmap", "quadrant": 2},
+      ],
+      "retrain": True,
+    },
+  )
+  stats = client.get("/training-stats")
+
+  assert feedback.status_code == 200
+  assert feedback.json()["examples_added"] == 2
+  assert feedback.json()["retrained"] is True
+  assert feedback.json()["training"]["examples_seen"] == stats.json()["total_examples"]
+  assert local_model.train_calls
+
+
+def test_ocr_feedback_endpoint_rejects_empty_batches(tmp_path: Path):
+  client = build_client(tmp_path)
+
+  feedback = client.post("/learn-ocr-feedback", json={"tasks": []})
+
+  assert feedback.status_code == 400
+  assert feedback.json()["error"] == "At least one accepted OCR task is required."
+
+
 def test_batch_and_extract_routes(real_model_bundle):
   client = build_real_client(real_model_bundle)
 
@@ -211,6 +248,8 @@ def test_batch_and_extract_routes(real_model_bundle):
   assert upload.status_code == 200
   assert upload.json()["summary"]["total_tasks"] == 2
   assert upload.json()["ocr"]["method"] == "plain-text"
+  assert upload.json()["classified_tasks"][0]["similar_examples_used"] >= 1
+  assert upload.json()["classified_tasks"][0]["top_similar_examples"]
 
 
 def test_provider_toggle_endpoint_disables_and_reenables_runtime_features(real_model_bundle):

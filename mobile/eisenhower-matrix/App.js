@@ -16,6 +16,7 @@ import {
   fetchAICapabilities,
   fetchTrainingStats,
   getExamplesByQuadrant,
+  learnFromAcceptedOCRTasks,
   learnFromFeedback,
   retrainModel,
   setAIProviderEnabled,
@@ -219,6 +220,8 @@ export default function App() {
         }
       })
     );
+
+    void learnFromAcceptedOCRTasks(createdTasks).catch(() => undefined);
 
     await persistTasks(mergeTasks(tasksRef.current, createdTasks), t.ocrAdded);
     return createdTasks.length;

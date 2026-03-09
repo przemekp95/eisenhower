@@ -74,6 +74,8 @@ export interface OCRResult {
     quadrant: number;
     quadrant_name: string;
     confidence: number;
+    similar_examples_used?: number;
+    top_similar_examples?: SimilarExampleResult[];
   }>;
   summary: {
     total_tasks: number;
@@ -164,6 +166,11 @@ export type AIProviderName = 'local_model' | 'tesseract';
 export interface TrainingDataClearResult {
   message: string;
   remaining_examples: number;
+}
+
+export interface OCRAcceptedTask {
+  text: string;
+  quadrant: number;
 }
 
 export async function getTasks(): Promise<Task[]> {
@@ -267,6 +274,25 @@ export async function learnFromFeedback(
     }),
   });
   await readJson<void>(response);
+}
+
+export async function learnFromAcceptedOCRTasks(
+  tasks: OCRAcceptedTask[],
+  retrain = true
+): Promise<{ examples_added: number; retrained: boolean }> {
+  if (tasks.length === 0) {
+    return { examples_added: 0, retrained: false };
+  }
+
+  const response = await fetch(`${runtimeConfig.aiApiUrl}/learn-ocr-feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tasks: tasks.map((task) => ({ task: task.text, quadrant: task.quadrant })),
+      retrain,
+    }),
+  });
+  return readJson<{ examples_added: number; retrained: boolean }>(response);
 }
 
 export async function getTrainingStats(): Promise<TrainingStats> {

@@ -186,6 +186,7 @@ jest.mock('gsap', () => ({
 }));
 
 const classifyTask = jest.mocked(api.classifyTask);
+const learnFromAcceptedOCRTasks = jest.mocked(api.learnFromAcceptedOCRTasks);
 
 function renderMatrix() {
   return render(
@@ -207,6 +208,7 @@ function renderMatrix() {
 describe('Matrix', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    learnFromAcceptedOCRTasks.mockResolvedValue({ examples_added: 2, retrained: true });
     dragCallbacks.length = 0;
     matrixTimelineOnCompleteCallbacks.length = 0;
     mockShouldDisableMotion.mockReturnValue(true);
@@ -371,6 +373,14 @@ describe('Matrix', () => {
     fireEvent.click(await screen.findByText('Import OCR tasks'));
 
     await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(learnFromAcceptedOCRTasks).toHaveBeenCalledWith(
+        [
+          { text: 'Escalate outage', quadrant: 0 },
+          { text: 'Plan roadmap', quadrant: 2 },
+        ]
+      )
+    );
     expect(onAddTask).toHaveBeenNthCalledWith(1, {
       title: 'Escalate outage',
       description: '',
@@ -383,6 +393,26 @@ describe('Matrix', () => {
       urgent: false,
       important: true,
     });
+  });
+
+  it('keeps importing OCR tasks when persisting accepted OCR feedback fails', async () => {
+    const onAddTask = jest.fn().mockResolvedValue(undefined);
+    learnFromAcceptedOCRTasks.mockRejectedValueOnce(new Error('feedback offline'));
+
+    render(
+      <LanguageProvider>
+        <Matrix tasks={[]} loading={false} onAddTask={onAddTask} onUpdateTask={jest.fn()} onDeleteTask={jest.fn()} />
+      </LanguageProvider>
+    );
+
+    fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
+      target: { value: 'dowolne zadanie' },
+    });
+    fireEvent.click(screen.getByText(/Otwórz narzędzia AI/i));
+    fireEvent.click(await screen.findByText('Import OCR tasks'));
+
+    await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(learnFromAcceptedOCRTasks).toHaveBeenCalledTimes(1));
   });
 
   it('adds the analyzed task to the matrix and resets the form', async () => {

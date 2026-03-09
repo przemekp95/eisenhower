@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { DragDropContext, Draggable, Droppable, DropResult } from '@hello-pangea/dnd';
-import { classifyTask, LangChainAnalysis, OCRResult } from '../services/api';
+import { classifyTask, LangChainAnalysis, learnFromAcceptedOCRTasks, OCRResult } from '../services/api';
 import { Task, TaskInput } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
 import { shouldDisableMotion } from '../lib/motion';
@@ -131,6 +131,8 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
         ...quadrantToTaskState(detectedTask.quadrant),
       });
     }
+
+    void learnFromAcceptedOCRTasks(importedTasks).catch(() => undefined);
 
     return importedTasks.length;
   };
