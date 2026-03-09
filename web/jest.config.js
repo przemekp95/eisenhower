@@ -13,6 +13,7 @@ module.exports = {
     '!src/**/*.integration.test.ts',
     '!src/**/*.integration.test.tsx',
     '!src/main.tsx',
+    '!src/components/matrixLazyComponents.tsx',
     '!src/components/MatrixScene.tsx',
     '!src/testUtils/**/*.{ts,tsx}',
   ],
