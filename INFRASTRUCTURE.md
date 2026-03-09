@@ -1,6 +1,6 @@
 # Eisenhower Matrix Infrastructure
 
-Last updated: 2026-03-08
+Last updated: 2026-03-09
 
 This document describes the current infrastructure and delivery model of the Eisenhower Matrix monorepo. It favors the state that is implemented in the repository today over aspirational architecture.
 
@@ -85,6 +85,7 @@ docker compose --profile production up --build
 
 - Uses `VITE_API_URL` for task CRUD.
 - Uses `VITE_AI_API_URL` for AI-specific requests.
+- Production container injects these values at runtime via `/runtime-config.js`.
 - Includes lazy-loaded AI and 3D modules to keep the main bundle smaller.
 
 ### Backend Node
@@ -133,7 +134,7 @@ The repository uses three workflows:
 - `ci.yml`
   Runs `security-lint`, `test-backend-node`, `test-frontend`, `test-backend-ai`, and `test-mobile` on `dev` and `master`.
 - `release.yml`
-  Builds Docker images on pushes to `master` and performs deployment only when the required secrets are present.
+  Builds Docker images on pushes to `master` and performs optional deployments when required secrets are present (`deploy-mikrus` and ECS).
 
 Protected branches:
 
@@ -173,7 +174,8 @@ flowchart LR
     Feature["feature/* branch"] --> Dev["PR into dev"]
     Dev --> Master["PR from dev into master"]
     Master --> Release["Docker release workflow"]
-    Release --> Deploy["Optional ECS deployment when secrets exist"]
+    Release --> DeployMikrus["Optional Mikrus deployment when secrets exist"]
+    Release --> DeployEcs["Optional ECS deployment when secrets exist"]
 ```
 
 ## Data Flow

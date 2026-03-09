@@ -24,6 +24,7 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 
 - `VITE_API_URL`: Node API base URL, default `http://localhost:3001`
 - `VITE_AI_API_URL`: AI service base URL, default `http://localhost:8000`
+- Production `web` image generates `/runtime-config.js` at container startup, so `VITE_*` values can be changed without rebuilding the image.
 
 ### Backend Node
 
@@ -77,6 +78,24 @@ The manual AI smoke does the opposite: it does not start any local test servers 
 - Run the suite: `cd web && npm run test:integration`
 
 The integration suite renders the React app in JSDOM, but talks to a real Express API backed by `mongodb-memory-server`, so CRUD is exercised without mocking `./services/api` or `fetch`.
+
+## Mikrus Deployment
+
+Pushes to `master` run `release.yml`, which can deploy to Mikrus over SSH when secrets are configured.
+
+- `DOCKER_HUB_USERNAME`: Docker Hub namespace used for images
+- `DOCKER_HUB_TOKEN`: Docker Hub token (optional for pull, required for image push in workflow)
+- `MIKRUS_HOST`: server host (IPv6 is supported)
+- `MIKRUS_USER`: SSH user (`root` supported)
+- `MIKRUS_SSH_KEY`: private key content used by GitHub Actions
+- `MIKRUS_ENV_FILE`: full `.env` content written on the server
+- `MIKRUS_APP_DIR`: optional deploy directory override
+
+Default deploy directory is `/home/<MIKRUS_USER>/apps/demo-fortis`, except `root` which defaults to `/root/apps/demo-fortis`.
+Reference files:
+
+- `deploy/mikrus/docker-compose.yml`
+- `deploy/mikrus/.env.example`
 
 ## Quality Gates
 

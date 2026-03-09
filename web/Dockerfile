@@ -17,18 +17,23 @@ RUN apk add --no-cache curl && \
     chown -R nginx:nginx /var/cache/nginx /tmp/nginx /usr/share/nginx/html
 
 COPY nginx.conf /etc/nginx/nginx.conf
+COPY docker-entrypoint.sh /docker-entrypoint.sh
 COPY --from=build /app/dist /usr/share/nginx/html
 
-RUN chown -R nginx:nginx /etc/nginx/nginx.conf /usr/share/nginx/html
+RUN chown -R nginx:nginx /etc/nginx/nginx.conf /usr/share/nginx/html /docker-entrypoint.sh && \
+    chmod 755 /docker-entrypoint.sh
 
 USER nginx
+
+ENV VITE_API_URL=http://localhost:3001
+ENV VITE_AI_API_URL=http://localhost:8000
 
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:3000/ || exit 1
 
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["/docker-entrypoint.sh"]
 
 # Development stage
 FROM node:20-alpine AS development
