@@ -158,23 +158,28 @@ class LocalMiniLMClassifier:
     scored.sort(key=lambda candidate: candidate.score, reverse=True)
     return scored[:limit]
 
-  def explain(self, task: str, language: str = "en") -> dict[str, Any]:
-    prediction = self.predict(task, limit=3)
+  def explain(
+    self,
+    task: str,
+    language: str = "en",
+    prediction: LocalPrediction | None = None,
+  ) -> dict[str, Any]:
+    resolved_prediction = prediction or self.predict(task, limit=3)
     resolved_language = normalize_language(language)
-    quadrant_name = get_quadrant_name(prediction.quadrant, resolved_language)
+    quadrant_name = get_quadrant_name(resolved_prediction.quadrant, resolved_language)
 
-    if prediction.similar_examples:
+    if resolved_prediction.similar_examples:
       example_descriptions = ", ".join(
         (
           f'„{example.text}” ({get_quadrant_name(example.quadrant, resolved_language)}, '
           f'{round(example.score * 100)}%)'
         )
-        for example in prediction.similar_examples[:2]
+        for example in resolved_prediction.similar_examples[:2]
       )
     else:
       example_descriptions = ""
 
-    confidence_pct = round(prediction.confidence * 100)
+    confidence_pct = round(resolved_prediction.confidence * 100)
     if resolved_language == "pl":
       reasoning = (
         f'Lokalny model MiniLM przypisał zadanie do kwadrantu „{quadrant_name}” '
@@ -195,12 +200,12 @@ class LocalMiniLMClassifier:
         reasoning += " The model did not find strongly similar examples in the local dataset."
 
     return {
-      "quadrant": prediction.quadrant,
+      "quadrant": resolved_prediction.quadrant,
       "quadrant_name": quadrant_name,
-      "confidence": prediction.confidence,
+      "confidence": resolved_prediction.confidence,
       "reasoning": reasoning,
       "method": "local-analysis",
-      "similar_examples": [example.to_dict(resolved_language) for example in prediction.similar_examples],
+      "similar_examples": [example.to_dict(resolved_language) for example in resolved_prediction.similar_examples],
     }
 
   def train(self, records: list[dict[str, Any]]) -> dict[str, Any]:

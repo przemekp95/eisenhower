@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -14,6 +16,8 @@ from .defaults import QUADRANT_NAMES
 from .local_model import ModelNotReadyError
 from .service import ProviderDisabledError, QuadrantAIService
 from .store import TrainingStore
+
+request_logger = logging.getLogger("uvicorn.error")
 
 
 class BatchRequest(BaseModel):
@@ -45,6 +49,23 @@ def create_app(
     allow_methods=["*"],
     allow_headers=["*"],
   )
+
+  @app.middleware("http")
+  async def log_requests(request: Request, call_next):
+    if request.url.path == "/" or request.method == "OPTIONS":
+      return await call_next(request)
+
+    started_at = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = int((time.perf_counter() - started_at) * 1000)
+    message = f"backend-ai {request.method} {request.url.path} {response.status_code} {duration_ms}ms"
+
+    if response.status_code >= 500:
+      request_logger.error(message)
+    else:
+      request_logger.info(message)
+
+    return response
 
   @app.get("/")
   def root():

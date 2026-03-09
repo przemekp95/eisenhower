@@ -109,29 +109,14 @@ class QuadrantAIService:
   def classify_task(self, task: str, use_rag: bool = True) -> dict[str, Any]:
     self._require_local_model()
     prediction = self._predict(task, limit=3 if use_rag else 0)
-    urgent, important = quadrant_to_flags(prediction.quadrant)
-
-    return {
-      "task": task,
-      "urgent": urgent,
-      "important": important,
-      "quadrant": prediction.quadrant,
-      "quadrant_name": QUADRANT_NAMES[prediction.quadrant],
-      "timestamp": utc_now(),
-      "method": "local-minilm",
-      "confidence": prediction.confidence,
-      "local_scores": {
-        str(index): round(score, 4) for index, score in enumerate(prediction.probabilities)
-      },
-      "similar_examples_used": len(prediction.similar_examples),
-      "top_similar_examples": [example.to_dict("en") for example in prediction.similar_examples],
-    }
+    return self._serialize_classification(task, prediction)
 
   def analyze_with_reasoning(self, task: str, language: str = "en") -> dict[str, Any]:
     self._require_local_model()
     resolved_language = normalize_language(language)
-    rag = self.classify_task(task, use_rag=True)
-    explanation = self.local_model.explain(task, language=resolved_language)
+    prediction = self._predict(task, limit=3)
+    rag = self._serialize_classification(task, prediction)
+    explanation = self.local_model.explain(task, language=resolved_language, prediction=prediction)
 
     return {
       "task": task,
@@ -298,6 +283,25 @@ class QuadrantAIService:
     except Exception as issue:
       self._startup_error = str(issue)
       raise ModelNotReadyError(str(issue)) from issue
+
+  def _serialize_classification(self, task: str, prediction: LocalPrediction) -> dict[str, Any]:
+    urgent, important = quadrant_to_flags(prediction.quadrant)
+
+    return {
+      "task": task,
+      "urgent": urgent,
+      "important": important,
+      "quadrant": prediction.quadrant,
+      "quadrant_name": QUADRANT_NAMES[prediction.quadrant],
+      "timestamp": utc_now(),
+      "method": "local-minilm",
+      "confidence": prediction.confidence,
+      "local_scores": {
+        str(index): round(score, 4) for index, score in enumerate(prediction.probabilities)
+      },
+      "similar_examples_used": len(prediction.similar_examples),
+      "top_similar_examples": [example.to_dict("en") for example in prediction.similar_examples],
+    }
 
   def _extract_tasks_with_tesseract(self, payload: bytes) -> tuple[list[str], str]:
     image = Image.open(BytesIO(payload))

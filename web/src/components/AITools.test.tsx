@@ -7,7 +7,10 @@ jest.mock('../services/api');
 
 const mockedApi = jest.mocked(api);
 
-function renderTools(onOCRTasksExtracted = jest.fn()) {
+function renderTools(
+  onOCRTasksExtracted = jest.fn(),
+  overrides: Partial<React.ComponentProps<typeof AITools>> = {}
+) {
   return render(
     <LanguageProvider>
       <AITools
@@ -15,6 +18,7 @@ function renderTools(onOCRTasksExtracted = jest.fn()) {
         onClose={jest.fn()}
         onAnalysisComplete={jest.fn()}
         onOCRTasksExtracted={onOCRTasksExtracted}
+        {...overrides}
       />
     </LanguageProvider>
   );
@@ -114,6 +118,27 @@ describe('AITools', () => {
     fireEvent.click(screen.getByText(/Run advanced analysis/i));
 
     await waitFor(() => expect(screen.getByText(/Critical path/i)).toBeInTheDocument());
+  });
+
+  it('locks page scroll while the modal is open and restores it on unmount', () => {
+    const { unmount } = renderTools();
+
+    expect(document.body.style.overflow).toBe('hidden');
+    expect(document.documentElement.style.overflow).toBe('hidden');
+
+    unmount();
+
+    expect(document.body.style.overflow).toBe('');
+    expect(document.documentElement.style.overflow).toBe('');
+  });
+
+  it('closes the modal on Escape', () => {
+    const onClose = jest.fn();
+    renderTools(jest.fn(), { onClose });
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('switches to batch and OCR tools', async () => {
