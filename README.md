@@ -36,13 +36,12 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 
 - `TRAINING_DATA_PATH`: path to the training examples file
 - `MODEL_CACHE_DIR`: directory used for model and cache artifacts
-- `OPENAI_API_KEY`: enables OpenAI reasoning, vision OCR, and embedding-backed similarity review
-- `OPENAI_BASE_URL`: optional OpenAI-compatible API base URL
-- `OPENAI_CLASSIFICATION_MODEL`: structured-output model for optional model review, default `gpt-4o-mini`
-- `OPENAI_REASONING_MODEL`: model for deeper task analysis, default `gpt-4o-mini`
-- `OPENAI_VISION_MODEL`: model used for image task extraction, default `gpt-4o-mini`
-- `OPENAI_EMBEDDING_MODEL`: model used for similarity lookup, default `text-embedding-3-small`
-- `OPENAI_TIMEOUT_SECONDS`: request timeout for OpenAI calls, default `30`
+- `LOCAL_MODEL_NAME`: sentence-transformer used as the frozen encoder, default `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
+- `LOCAL_MODEL_EPOCHS`: max epochs for explicit retraining, default `60`
+- `LOCAL_MODEL_PATIENCE`: early-stopping patience for explicit retraining, default `8`
+- `LOCAL_MODEL_HIDDEN_DIM`: hidden layer width for the classification head, default `128`
+- `LOCAL_MODEL_DROPOUT`: dropout for the classification head, default `0.1`
+- `LOCAL_MODEL_LEARNING_RATE`: optimizer learning rate for the classification head, default `0.01`
 - `TESSERACT_LANGUAGES`: OCR language pack list for Tesseract fallback, default `eng+pol`
 - `CORS_ALLOW_ORIGINS`: comma-separated frontend origins allowed to call the AI API, defaults to local `localhost` and `127.0.0.1` dev hosts
 
@@ -57,7 +56,7 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 3. `web`: `cd web && npm ci && npm run dev`
 4. `mobile`: `cd mobile/eisenhower-matrix && npm ci && npm run start`
 
-The AI service classifies tasks locally by default from the experience store and the rebuilt similarity index. When `OPENAI_API_KEY` is present, OpenAI augments that local path with reasoning, vision OCR, and embedding-backed similarity review. Without the key, the service still keeps the local classifier and uses Tesseract OCR where available.
+The AI service is fully local. It uses a frozen multilingual MiniLM encoder plus a small PyTorch MLP head for quadrant classification, stores trained artifacts under `MODEL_CACHE_DIR`, and uses Tesseract for OCR. There is no OpenAI or native C++ classifier path in the default stack.
 
 ## Frontend E2E
 

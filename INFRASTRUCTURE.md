@@ -10,7 +10,7 @@ This document describes the current infrastructure and delivery model of the Eis
 | --- | --- | --- |
 | `web` | React 18, TypeScript, Vite, Tailwind | Browser UI for task management and AI tools |
 | `backend-node` | Node.js, Express, TypeScript, MongoDB | Task API and health endpoints |
-| `backend-ai` | Python 3.11, FastAPI | Task classification, OCR endpoints, training data management |
+| `backend-ai` | Python 3.12, FastAPI, PyTorch, MiniLM | Local task classification, OCR endpoints, training data management |
 | `mobile/eisenhower-matrix` | Expo, React Native | Mobile client with local persistence and AI-assisted flows |
 | `docker-compose.yml` | Docker Compose | Local multi-service stack |
 | `.github/workflows/*.yml` | GitHub Actions | CI, branch policy, and release automation |
@@ -94,8 +94,9 @@ docker compose --profile production up --build
 ### Backend AI
 
 - Exported through `create_app()` to keep imports side-effect free.
-- Supports task classification, batch analysis, OCR upload handling, and training-data endpoints.
-- Keeps heavier providers injectable so tests can replace them with lightweight fakes.
+- Supports local MiniLM-based task classification, deterministic advanced analysis, OCR upload handling, and training-data endpoints.
+- Boots from a cached local classifier artifact or trains one from the current training data on first start.
+- Keeps the local model injectable so tests can replace it with lightweight fakes.
 
 ### Mobile
 
@@ -114,6 +115,8 @@ docker compose --profile production up --build
 | Backend Node | `JWT_SECRET` | Required outside tests |
 | Backend AI | `TRAINING_DATA_PATH` | Training examples path |
 | Backend AI | `MODEL_CACHE_DIR` | Cache and model artifacts |
+| Backend AI | `LOCAL_MODEL_NAME` | Frozen sentence-transformer encoder |
+| Backend AI | `LOCAL_MODEL_EPOCHS` | Max epochs for explicit retraining |
 | Mobile | `EXPO_PUBLIC_AI_API_URL` | AI service base URL for Expo |
 
 ## CI and Branch Governance
@@ -188,5 +191,4 @@ sequenceDiagram
 
 ## Notes
 
-- The optional C++ classifier path is documented separately in `backend-ai/README_CPP.md` and `backend-ai/HYBRID_README.md`.
 - If the runtime contract changes, update this document together with the relevant service README or configuration file.
