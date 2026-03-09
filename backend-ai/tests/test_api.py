@@ -78,7 +78,12 @@ class FakeLocalModel:
     }
 
 
-def build_client(tmp_path: Path, *, local_model: FakeLocalModel | None = None) -> TestClient:
+def build_client(
+  tmp_path: Path,
+  *,
+  local_model: FakeLocalModel | None = None,
+  tesseract_available: bool | None = None,
+) -> TestClient:
   settings = Settings(
     training_data_path=tmp_path / "training.json",
     model_cache_dir=tmp_path / "runtime",
@@ -89,10 +94,12 @@ def build_client(tmp_path: Path, *, local_model: FakeLocalModel | None = None) -
     store=store,
     local_model=local_model or FakeLocalModel(),
   )
+  if tesseract_available is not None:
+    service._tesseract_available = lambda: tesseract_available  # type: ignore[method-assign]
   return TestClient(create_app(settings=settings, store=store, ai_service=service))
 
 
-def build_real_client(real_model_bundle) -> TestClient:
+def build_real_client(real_model_bundle, *, tesseract_available: bool | None = None) -> TestClient:
   settings = real_model_bundle["settings"]
   store = TrainingStore(settings.training_data_path)
   local_model = LocalMiniLMClassifier(settings=settings, encoder=real_model_bundle["encoder"])
@@ -101,11 +108,13 @@ def build_real_client(real_model_bundle) -> TestClient:
     store=store,
     local_model=local_model,
   )
+  if tesseract_available is not None:
+    service._tesseract_available = lambda: tesseract_available  # type: ignore[method-assign]
   return TestClient(create_app(settings=settings, store=store, ai_service=service))
 
 
 def test_root_and_capabilities(real_model_bundle):
-  client = build_real_client(real_model_bundle)
+  client = build_real_client(real_model_bundle, tesseract_available=True)
 
   root = client.get("/")
   capabilities = client.get("/capabilities")
@@ -116,6 +125,18 @@ def test_root_and_capabilities(real_model_bundle):
   assert capabilities.json()["providers"]["local_model"] is True
   assert capabilities.json()["providers"]["ocr"] is True
   assert capabilities.json()["provider_controls"]["local_model"]["enabled"] is True
+
+
+def test_capabilities_report_ocr_unavailable_without_host_tesseract(real_model_bundle):
+  client = build_real_client(real_model_bundle, tesseract_available=False)
+
+  capabilities = client.get("/capabilities")
+
+  assert capabilities.status_code == 200
+  assert capabilities.json()["providers"]["local_model"] is True
+  assert capabilities.json()["providers"]["ocr"] is False
+  assert capabilities.json()["provider_controls"]["tesseract"]["available"] is False
+  assert capabilities.json()["provider_controls"]["tesseract"]["active"] is False
 
 
 def test_cors_allows_local_frontend_origins(real_model_bundle):
