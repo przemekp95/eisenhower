@@ -279,7 +279,7 @@ jobs:
           NODE_ENV: production
         run: npx expo prebuild --platform android --no-install --clean
 
-      - name: Android native smoke build
+      - name: Android native release APK
         working-directory: mobile/eisenhower-matrix/android
         env:
           CI: "1"
@@ -287,15 +287,15 @@ jobs:
           NODE_ENV: production
         run: |
           export ANDROID_HOME="${ANDROID_SDK_ROOT}"
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease
 
       - name: Prepare APK artifact
         shell: bash
         run: |
           mkdir -p mobile/eisenhower-matrix/output
           cp \
-            mobile/eisenhower-matrix/android/app/build/outputs/apk/debug/app-debug.apk \
-            "mobile/eisenhower-matrix/output/eisenhower-matrix-android-debug-${GITHUB_SHA::7}.apk"
+            mobile/eisenhower-matrix/android/app/build/outputs/apk/release/app-release.apk \
+            "mobile/eisenhower-matrix/output/eisenhower-matrix-android-release-${GITHUB_SHA::7}.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
