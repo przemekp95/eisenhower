@@ -86,6 +86,7 @@ docker compose --profile production up --build
 - Uses `VITE_API_URL` for task CRUD.
 - Uses `VITE_AI_API_URL` for AI-specific requests.
 - Production container injects these values at runtime via `/runtime-config.js`.
+- Production can route both values through same-origin reverse proxy paths such as `/api` and `/ai` to avoid mixed-content and CORS issues.
 - Includes lazy-loaded AI and 3D modules to keep the main bundle smaller.
 
 ### Backend Node

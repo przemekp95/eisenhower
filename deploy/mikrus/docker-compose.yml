@@ -27,7 +27,7 @@ services:
       LOCAL_MODEL_DROPOUT: ${LOCAL_MODEL_DROPOUT:-0.1}
       LOCAL_MODEL_LEARNING_RATE: ${LOCAL_MODEL_LEARNING_RATE:-0.01}
       TESSERACT_LANGUAGES: ${TESSERACT_LANGUAGES:-eng+pol}
-      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:8080}
     volumes:
       - ai_data:/app/data
     ports:
@@ -63,15 +63,15 @@ services:
     image: ${DOCKER_HUB_USERNAME:?DOCKER_HUB_USERNAME is required}/eisenhower-web:latest
     restart: unless-stopped
     environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
-      VITE_AI_API_URL: ${VITE_AI_API_URL:-http://localhost:8000}
+      VITE_API_URL: ${VITE_API_URL:-/api}
+      VITE_AI_API_URL: ${VITE_AI_API_URL:-/ai}
     depends_on:
       api-service:
         condition: service_started
       ai-service:
         condition: service_started
     ports:
-      - "${WEB_PORT:-3000}:3000"
+      - "${WEB_PORT:-8080}:3000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
