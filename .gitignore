@@ -46,6 +46,8 @@ mobile/eisenhower-matrix/coverage/
 mobile/eisenhower-matrix/.expo/
 mobile/eisenhower-matrix/.expo-shared/
 mobile/eisenhower-matrix/.jest/
+mobile/eisenhower-matrix/android/
+mobile/eisenhower-matrix/ios/
 
 # Infrastructure
 docker-entrypoint-initdb.d/
