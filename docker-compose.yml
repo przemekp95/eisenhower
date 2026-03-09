@@ -13,7 +13,10 @@ services:
       - LOCAL_MODEL_NAME=${LOCAL_MODEL_NAME:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
       - LOCAL_MODEL_EPOCHS=${LOCAL_MODEL_EPOCHS:-60}
       - LOCAL_MODEL_PATIENCE=${LOCAL_MODEL_PATIENCE:-8}
-      - HF_HOME=/app/data/huggingface
+      - LOCAL_MODEL_HIDDEN_DIM=${LOCAL_MODEL_HIDDEN_DIM:-128}
+      - LOCAL_MODEL_DROPOUT=${LOCAL_MODEL_DROPOUT:-0.1}
+      - LOCAL_MODEL_LEARNING_RATE=${LOCAL_MODEL_LEARNING_RATE:-0.01}
+      - HF_HOME=/home/app/.cache/huggingface
     volumes:
       - ./backend-ai:/app
     restart: unless-stopped

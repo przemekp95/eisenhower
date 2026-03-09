@@ -71,12 +71,15 @@ class QuadrantAIService:
 
     try:
       self.local_model.ensure_ready(self.store.load())
-    except ModelNotReadyError as issue:
+    except Exception as issue:
       self._startup_error = str(issue)
 
   def capabilities(self) -> dict[str, Any]:
-    model_status = self.local_model.status()
+    model_status = dict(self.local_model.status())
     tesseract_enabled = self._tesseract_available()
+    model_ready = bool(model_status["ready"]) and self._startup_error is None
+    model_status["ready"] = model_ready
+    model_status["last_error"] = self._startup_error or model_status.get("last_error")
 
     return {
       "classification": True,
@@ -85,7 +88,7 @@ class QuadrantAIService:
       "batch_analysis": True,
       "training_management": True,
       "providers": {
-        "local_model": bool(model_status["ready"]),
+        "local_model": model_ready,
         "tesseract": tesseract_enabled,
         "ocr": tesseract_enabled,
       },
@@ -252,11 +255,12 @@ class QuadrantAIService:
   def get_training_stats(self) -> dict[str, Any]:
     stats = self.store.get_stats()
     model_status = self.local_model.status()
+    model_ready = bool(model_status["ready"]) and self._startup_error is None
     return {
       **stats,
       "model_file": model_status["artifact_path"],
       "model_name": model_status["name"],
-      "model_ready": model_status["ready"],
+      "model_ready": model_ready,
       "model_encoder": model_status["encoder_name"],
       "model_trained_at": model_status["trained_at"],
       "model_validation_skipped": model_status["validation_skipped"],

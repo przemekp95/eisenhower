@@ -10,7 +10,7 @@ This document describes the current infrastructure and delivery model of the Eis
 | --- | --- | --- |
 | `web` | React 18, TypeScript, Vite, Tailwind | Browser UI for task management and AI tools |
 | `backend-node` | Node.js, Express, TypeScript, MongoDB | Task API and health endpoints |
-| `backend-ai` | Python 3.12, FastAPI, PyTorch, MiniLM | Local task classification, OCR endpoints, training data management |
+| `backend-ai` | Python 3.11, FastAPI, PyTorch, MiniLM | Local task classification, OCR endpoints, training data management |
 | `mobile/eisenhower-matrix` | Expo, React Native | Mobile client with local persistence and AI-assisted flows |
 | `docker-compose.yml` | Docker Compose | Local multi-service stack |
 | `.github/workflows/*.yml` | GitHub Actions | CI, branch policy, and release automation |

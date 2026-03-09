@@ -57,6 +57,17 @@ class FakeEncoderWithToList(FakeEncoder):
     )
 
 
+class Fake256Encoder(FakeEncoder):
+  def _vectorize(self, text: str, *, normalize_embeddings: bool) -> list[float]:
+    base = super()._vectorize(text, normalize_embeddings=False)
+    vector = base[:256]
+    if normalize_embeddings:
+      magnitude = math.sqrt(sum(value * value for value in vector))
+      if magnitude:
+        vector = [value / magnitude for value in vector]
+    return vector
+
+
 def build_settings(tmp_path: Path) -> Settings:
   return Settings(
     training_data_path=tmp_path / "training.json",
@@ -95,6 +106,7 @@ def test_local_model_bootstraps_trains_and_predicts(tmp_path: Path):
   assert model.index_path.exists()
   assert explanation["method"] == "local-analysis"
   assert status["ready"] is True
+  assert status["examples_seen"] == len(records())
 
 
 def test_local_model_loads_existing_artifacts_without_retraining(tmp_path: Path):
@@ -108,6 +120,80 @@ def test_local_model_loads_existing_artifacts_without_retraining(tmp_path: Path)
 
   assert loader.status()["ready"] is True
   assert loader.predict("urgent deadline today").confidence > 0
+
+
+def test_local_model_marks_corrupt_artifacts_as_not_ready(tmp_path: Path):
+  settings = build_settings(tmp_path)
+  settings.model_cache_dir.mkdir(parents=True, exist_ok=True)
+  settings.model_cache_dir.joinpath("local_minilm_head.pt").write_text("not a torch file", encoding="utf-8")
+  settings.model_cache_dir.joinpath("local_minilm_meta.json").write_text(
+    '{"encoder_name": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", "hidden_dim": 128}',
+    encoding="utf-8",
+  )
+  settings.model_cache_dir.joinpath("local_minilm_index.json").write_text('{"items": []}', encoding="utf-8")
+
+  model = LocalMiniLMClassifier(settings=settings, encoder=FakeEncoder())
+
+  try:
+    model.ensure_ready(records())
+  except ModelNotReadyError as issue:
+    assert "Weights only load failed" in str(issue)
+  else:
+    raise AssertionError("Expected ModelNotReadyError")
+
+  status = model.status()
+  assert status["ready"] is False
+  assert "Weights only load failed" in status["last_error"]
+
+
+def test_local_model_rejects_artifacts_for_different_encoder(tmp_path: Path):
+  trainer_settings = build_settings(tmp_path)
+  trainer = LocalMiniLMClassifier(settings=trainer_settings, encoder=FakeEncoder())
+  trainer.train(records())
+
+  loader_settings = Settings(
+    training_data_path=trainer_settings.training_data_path,
+    model_cache_dir=trainer_settings.model_cache_dir,
+    local_model_name="sentence-transformers/all-MiniLM-L6-v2",
+    local_model_epochs=6,
+    local_model_patience=2,
+  )
+  loader = LocalMiniLMClassifier(settings=loader_settings, encoder=FakeEncoder())
+
+  try:
+    loader.ensure_ready(records())
+  except ModelNotReadyError as issue:
+    assert "different encoder" in str(issue)
+  else:
+    raise AssertionError("Expected ModelNotReadyError")
+
+  assert loader.status()["ready"] is False
+
+
+def test_local_model_rejects_artifacts_for_different_hidden_dim_and_reuses_cached_dim(tmp_path: Path):
+  trainer_settings = build_settings(tmp_path)
+  trainer = LocalMiniLMClassifier(settings=trainer_settings, encoder=FakeEncoder())
+  trainer.train(records())
+
+  loader_settings = Settings(
+    training_data_path=trainer_settings.training_data_path,
+    model_cache_dir=trainer_settings.model_cache_dir,
+    local_model_hidden_dim=64,
+    local_model_epochs=6,
+    local_model_patience=2,
+  )
+  loader = LocalMiniLMClassifier(settings=loader_settings, encoder=FakeEncoder())
+
+  try:
+    loader.ensure_ready(records())
+  except ModelNotReadyError as issue:
+    assert "different hidden dimension" in str(issue)
+  else:
+    raise AssertionError("Expected ModelNotReadyError")
+
+  warm_model = LocalMiniLMClassifier(settings=build_settings(tmp_path / "warm"), encoder=FakeEncoderWithToList())
+  assert warm_model._resolve_embedding_dim() == 384
+  assert warm_model._resolve_embedding_dim() == 384
 
 
 def test_local_model_rejects_empty_training_set(tmp_path: Path):
@@ -195,6 +281,31 @@ def test_local_model_covers_english_reasoning_with_examples(tmp_path: Path):
   explanation = model.explain("urgent deadline today", language="en")
 
   assert "Closest training examples" in explanation["reasoning"]
+
+
+def test_local_model_supports_non_default_embedding_dimension(tmp_path: Path):
+  settings = build_settings(tmp_path)
+  model = LocalMiniLMClassifier(settings=settings, encoder=Fake256Encoder())
+
+  model.ensure_ready(records())
+  prediction = model.predict("prepare strategic roadmap")
+
+  assert prediction.confidence > 0
+  assert model.status()["ready"] is True
+
+
+def test_local_model_real_minilm_smoke_predicts_stable_examples(real_model_bundle):
+  settings = real_model_bundle["settings"]
+  model = LocalMiniLMClassifier(settings=settings, encoder=real_model_bundle["encoder"])
+
+  model.ensure_ready(real_model_bundle["records"])
+  urgent_prediction = model.predict("critical production incident")
+  delegate_prediction = model.predict("exercise twice a week")
+
+  assert urgent_prediction.quadrant == 0
+  assert delegate_prediction.quadrant == 2
+  assert urgent_prediction.confidence > 0
+  assert delegate_prediction.confidence > 0
 
 
 def test_split_indices_covers_validation_and_skip_paths():

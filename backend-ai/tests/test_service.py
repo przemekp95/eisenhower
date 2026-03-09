@@ -4,7 +4,7 @@ from pathlib import Path
 from PIL import Image
 
 from app.config import Settings
-from app.local_model import LocalPrediction, ModelNotReadyError, SimilarExample
+from app.local_model import LocalMiniLMClassifier, LocalPrediction, ModelNotReadyError, SimilarExample
 from app.service import (
   QuadrantAIService,
   cosine_similarity,
@@ -88,6 +88,18 @@ def build_service(tmp_path: Path, *, local_model=None, ocr_runner=None):
   )
 
 
+def build_real_service(real_model_bundle, *, ocr_runner=None):
+  settings = real_model_bundle["settings"]
+  store = TrainingStore(settings.training_data_path)
+  local_model = LocalMiniLMClassifier(settings=settings, encoder=real_model_bundle["encoder"])
+  return QuadrantAIService(
+    settings=settings,
+    store=store,
+    local_model=local_model,
+    ocr_runner=ocr_runner,
+  )
+
+
 def png_payload() -> bytes:
   image = Image.new("RGB", (4, 4), "white")
   buffer = BytesIO()
@@ -113,15 +125,13 @@ def test_service_helpers_cover_normalization_similarity_and_flags():
   assert lexical_similarity("pilne zadanie", "pilne nowe zadanie") > 0
 
 
-def test_service_initialization_capabilities_and_stats(tmp_path: Path, monkeypatch):
-  local_model = FakeLocalModel()
-  service = build_service(tmp_path, local_model=local_model)
+def test_service_initialization_capabilities_and_stats(real_model_bundle, monkeypatch):
+  service = build_real_service(real_model_bundle)
   monkeypatch.setattr(service, "_tesseract_available", lambda: True)
 
   capabilities = service.capabilities()
   stats = service.get_training_stats()
 
-  assert local_model.ensure_ready_calls
   assert capabilities["providers"]["local_model"] is True
   assert capabilities["providers"]["tesseract"] is True
   assert stats["model_name"] == "local-minilm-mlp"
@@ -138,30 +148,51 @@ def test_service_records_startup_error_when_model_bootstrap_fails(tmp_path: Path
   stats = service.get_training_stats()
 
   assert stats["model_error"] == "bootstrap failed"
+  assert stats["model_ready"] is False
+  assert service.capabilities()["providers"]["local_model"] is False
 
 
-def test_classify_analyze_and_batch_stay_local(tmp_path: Path):
-  local_model = FakeLocalModel()
-  service = build_service(tmp_path, local_model=local_model)
+def test_service_records_unexpected_startup_errors_without_crashing(tmp_path: Path):
+  class ExplodingLocalModel(FakeLocalModel):
+    def ensure_ready(self, records):
+      super().ensure_ready(records)
+      raise RuntimeError("corrupt artifacts")
 
-  classification = service.classify_task("urgent outage")
-  analysis = service.analyze_with_reasoning("prepare roadmap", language="pl")
-  batch = service.batch_analyze(["urgent outage", "prepare roadmap"])
+  service = build_service(tmp_path, local_model=ExplodingLocalModel())
+
+  assert service.get_training_stats()["model_error"] == "corrupt artifacts"
+  assert service.get_training_stats()["model_ready"] is False
+  assert service.capabilities()["providers"]["local_model"] is False
+
+
+def test_classify_analyze_and_batch_stay_local(real_model_bundle):
+  service = build_real_service(real_model_bundle)
+
+  classification = service.classify_task("critical production incident")
+  analysis = service.analyze_with_reasoning("exercise twice a week", language="pl")
+  batch = service.batch_analyze(["critical production incident", "exercise twice a week"])
 
   assert classification["method"] == "local-minilm"
   assert classification["quadrant"] == 0
-  assert classification["similar_examples_used"] == 1
+  assert classification["similar_examples_used"] >= 1
   assert analysis["langchain_analysis"]["method"] == "local-analysis"
   assert analysis["rag_classification"]["quadrant_name"] == "Deleguj"
   assert batch["summary"]["total_tasks"] == 2
-  assert local_model.predict_calls[0] == ("urgent outage", 3)
+  assert batch["summary"]["methods"]["rag"]["quadrant_distribution"]["0"] == 1
+  assert batch["summary"]["methods"]["rag"]["quadrant_distribution"]["2"] == 1
 
 
-def test_extract_tasks_from_image_prefers_text_and_tesseract_and_filename(tmp_path: Path, monkeypatch):
-  local_model = FakeLocalModel()
-  service = build_service(tmp_path, local_model=local_model, ocr_runner=lambda *_args, **_kwargs: "urgent outage\nprepare roadmap")
+def test_extract_tasks_from_image_prefers_text_and_tesseract_and_filename(real_model_bundle, monkeypatch):
+  service = build_real_service(
+    real_model_bundle,
+    ocr_runner=lambda *_args, **_kwargs: "critical production incident\nexercise twice a week",
+  )
 
-  text_upload = service.extract_tasks_from_image("tasks.txt", b"urgent outage\nprepare roadmap\n", "text/plain")
+  text_upload = service.extract_tasks_from_image(
+    "tasks.txt",
+    b"critical production incident\nexercise twice a week\n",
+    "text/plain",
+  )
   assert text_upload["ocr"]["method"] == "plain-text"
   assert text_upload["summary"]["total_tasks"] == 2
 
@@ -170,9 +201,8 @@ def test_extract_tasks_from_image_prefers_text_and_tesseract_and_filename(tmp_pa
   assert image_upload["ocr"]["method"] == "tesseract"
   assert image_upload["summary"]["total_tasks"] == 2
 
-  failing_service = build_service(
-    tmp_path / "failure-case",
-    local_model=FakeLocalModel(),
+  failing_service = build_real_service(
+    real_model_bundle,
     ocr_runner=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("ocr failed")),
   )
   monkeypatch.setattr(failing_service, "_tesseract_available", lambda: True)
@@ -187,15 +217,14 @@ def test_extract_tasks_from_image_prefers_text_and_tesseract_and_filename(tmp_pa
   assert service._looks_like_image("tasks.bin", None) is False
 
 
-def test_retrain_passes_records_and_marks_preserve_flag_deprecated(tmp_path: Path):
-  local_model = FakeLocalModel()
-  service = build_service(tmp_path, local_model=local_model)
+def test_retrain_passes_records_and_marks_preserve_flag_deprecated(real_model_bundle):
+  service = build_real_service(real_model_bundle)
 
   result = service.retrain(preserve_experience=False)
 
-  assert local_model.train_calls
   assert result["preserve_experience"] is False
   assert result["preserve_experience_deprecated"] is True
+  assert result["examples_seen"] >= len(real_model_bundle["records"])
 
 
 def test_service_surfaces_model_not_ready(tmp_path: Path):

@@ -71,6 +71,7 @@ class LocalMiniLMClassifier:
     self._torch = torch_module
     self._head = None
     self._index: dict[str, Any] | None = None
+    self._embedding_dim: int | None = None
     self._status = {
       "ready": False,
       "name": "local-minilm-mlp",
@@ -105,11 +106,18 @@ class LocalMiniLMClassifier:
       return
 
     self.settings.model_cache_dir.mkdir(parents=True, exist_ok=True)
-    if self.head_path.exists() and self.meta_path.exists() and self.index_path.exists():
-      self._load_artifacts()
-      return
+    try:
+      if self.head_path.exists() and self.meta_path.exists() and self.index_path.exists():
+        self._load_artifacts()
+        return
 
-    self.train(records)
+      self.train(records)
+    except ModelNotReadyError as issue:
+      self._mark_not_ready(str(issue))
+      raise
+    except Exception as issue:
+      self._mark_not_ready(str(issue))
+      raise ModelNotReadyError(str(issue)) from issue
 
   def predict(self, task: str, limit: int = 3) -> LocalPrediction:
     self._require_ready()
@@ -205,6 +213,8 @@ class LocalMiniLMClassifier:
     labels = [int(record["quadrant"]) for record in cleaned_records]
     sources = [record.get("source", "unknown") for record in cleaned_records]
     embeddings = self._encode(texts)
+    embedding_dim = len(embeddings[0]) if embeddings else self._resolve_embedding_dim()
+    self._embedding_dim = embedding_dim
 
     train_indices, validation_indices, validation_skipped = split_indices(labels)
     torch = self._require_torch()
@@ -213,7 +223,7 @@ class LocalMiniLMClassifier:
     embedding_tensor = torch.tensor(embeddings, dtype=torch.float32)
     label_tensor = torch.tensor(labels, dtype=torch.long)
 
-    head = self._build_head()
+    head = self._build_head(embedding_dim)
     optimizer = torch.optim.AdamW(head.parameters(), lr=self.settings.local_model_learning_rate)
     criterion = torch.nn.CrossEntropyLoss()
 
@@ -255,6 +265,7 @@ class LocalMiniLMClassifier:
       "encoder_name": self.settings.local_model_name,
       "hidden_dim": self.settings.local_model_hidden_dim,
       "dropout": self.settings.local_model_dropout,
+      "embedding_dim": embedding_dim,
       "trained_at": trained_at,
       "examples_seen": len(cleaned_records),
       "validation_skipped": validation_skipped,
@@ -298,7 +309,11 @@ class LocalMiniLMClassifier:
 
   def _load_artifacts(self) -> None:
     torch = self._require_torch()
-    head = self._build_head()
+    metadata = json.loads(self.meta_path.read_text(encoding="utf-8"))
+    self._validate_artifact_metadata(metadata)
+    embedding_dim = int(metadata.get("embedding_dim") or self._resolve_embedding_dim())
+    self._embedding_dim = embedding_dim
+    head = self._build_head(embedding_dim)
     try:
       state = torch.load(self.head_path, map_location="cpu", weights_only=True)
     except TypeError:
@@ -307,7 +322,6 @@ class LocalMiniLMClassifier:
     head.eval()
     self._head = head
     self._index = self._load_index()
-    metadata = json.loads(self.meta_path.read_text(encoding="utf-8"))
     self._status.update(
       {
         "ready": True,
@@ -331,10 +345,11 @@ class LocalMiniLMClassifier:
       probabilities = torch.softmax(logits, dim=1)[0].tolist()
     return [float(value) for value in probabilities]
 
-  def _build_head(self):
+  def _build_head(self, input_dim: int | None = None):
     torch = self._require_torch()
+    resolved_input_dim = input_dim or self._embedding_dim or self._resolve_embedding_dim()
     return torch.nn.Sequential(
-      torch.nn.Linear(384, self.settings.local_model_hidden_dim),
+      torch.nn.Linear(resolved_input_dim, self.settings.local_model_hidden_dim),
       torch.nn.GELU(),
       torch.nn.Dropout(self.settings.local_model_dropout),
       torch.nn.Linear(self.settings.local_model_hidden_dim, len(QUADRANT_NAMES)),
@@ -363,6 +378,58 @@ class LocalMiniLMClassifier:
 
     self._encoder = self._sentence_transformer_factory(self.settings.local_model_name)
     return self._encoder
+
+  def _resolve_embedding_dim(self) -> int:
+    if self._embedding_dim is not None:
+      return self._embedding_dim
+
+    encoder = self._load_encoder()
+    dimension_getter = getattr(encoder, "get_sentence_embedding_dimension", None)
+    if callable(dimension_getter):
+      dimension = int(dimension_getter())
+      if dimension > 0:
+        self._embedding_dim = dimension
+        return dimension
+
+    probe = encoder.encode(
+      ["dimension probe"],
+      normalize_embeddings=True,
+      convert_to_numpy=True,
+      show_progress_bar=False,
+    )
+    if hasattr(probe, "tolist"):
+      probe = probe.tolist()
+
+    dimension = len(probe[0])
+    self._embedding_dim = dimension
+    return dimension
+
+  def _validate_artifact_metadata(self, metadata: dict[str, Any]) -> None:
+    artifact_encoder = metadata.get("encoder_name")
+    if artifact_encoder and artifact_encoder != self.settings.local_model_name:
+      raise ModelNotReadyError(
+        "Saved model artifacts were created for a different encoder. "
+        "Clear the cache or retrain the local model."
+      )
+
+    artifact_hidden_dim = int(metadata.get("hidden_dim", self.settings.local_model_hidden_dim))
+    if artifact_hidden_dim != self.settings.local_model_hidden_dim:
+      raise ModelNotReadyError(
+        "Saved model artifacts were created with a different hidden dimension. "
+        "Clear the cache or retrain the local model."
+      )
+
+  def _mark_not_ready(self, error: str) -> None:
+    self._head = None
+    self._index = None
+    self._status.update(
+      {
+        "ready": False,
+        "trained_at": None,
+        "validation_skipped": True,
+        "last_error": error,
+      }
+    )
 
   def _require_torch(self):
     if self._torch is None:

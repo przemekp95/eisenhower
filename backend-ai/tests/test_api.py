@@ -3,21 +3,24 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.config import Settings
-from app.local_model import LocalPrediction, ModelNotReadyError, SimilarExample
+from app.local_model import LocalMiniLMClassifier, LocalPrediction, ModelNotReadyError, SimilarExample
 from app.main import create_app
 from app.service import QuadrantAIService
 from app.store import TrainingStore
 
 
 class FakeLocalModel:
-  def __init__(self, *, ready: bool = True, fail_predict: bool = False):
+  def __init__(self, *, ready: bool = True, fail_predict: bool = False, startup_error: Exception | None = None):
     self.ready = ready
     self.fail_predict = fail_predict
+    self.startup_error = startup_error
     self.ensure_ready_calls: list[list[dict]] = []
     self.train_calls: list[list[dict]] = []
 
   def ensure_ready(self, records):
     self.ensure_ready_calls.append(records)
+    if self.startup_error is not None:
+      raise self.startup_error
     if not self.ready:
       raise ModelNotReadyError("Model bootstrap failed.")
 
@@ -89,8 +92,20 @@ def build_client(tmp_path: Path, *, local_model: FakeLocalModel | None = None) -
   return TestClient(create_app(settings=settings, store=store, ai_service=service))
 
 
-def test_root_and_capabilities(tmp_path: Path):
-  client = build_client(tmp_path)
+def build_real_client(real_model_bundle) -> TestClient:
+  settings = real_model_bundle["settings"]
+  store = TrainingStore(settings.training_data_path)
+  local_model = LocalMiniLMClassifier(settings=settings, encoder=real_model_bundle["encoder"])
+  service = QuadrantAIService(
+    settings=settings,
+    store=store,
+    local_model=local_model,
+  )
+  return TestClient(create_app(settings=settings, store=store, ai_service=service))
+
+
+def test_root_and_capabilities(real_model_bundle):
+  client = build_real_client(real_model_bundle)
 
   root = client.get("/")
   capabilities = client.get("/capabilities")
@@ -102,8 +117,8 @@ def test_root_and_capabilities(tmp_path: Path):
   assert capabilities.json()["providers"]["ocr"] is True
 
 
-def test_cors_allows_local_frontend_origins(tmp_path: Path):
-  client = build_client(tmp_path)
+def test_cors_allows_local_frontend_origins(real_model_bundle):
+  client = build_real_client(real_model_bundle)
 
   response = client.options(
     "/analyze-langchain",
@@ -117,11 +132,11 @@ def test_cors_allows_local_frontend_origins(tmp_path: Path):
   assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
 
 
-def test_classify_and_langchain_analysis(tmp_path: Path):
-  client = build_client(tmp_path)
+def test_classify_and_langchain_analysis(real_model_bundle):
+  client = build_real_client(real_model_bundle)
 
-  classify = client.get("/classify", params={"title": "urgent client deadline"})
-  analyze = client.post("/analyze-langchain", params={"task": "prepare roadmap", "language": "pl"})
+  classify = client.get("/classify", params={"title": "critical production incident"})
+  analyze = client.post("/analyze-langchain", params={"task": "exercise twice a week", "language": "pl"})
 
   assert classify.status_code == 200
   assert classify.json()["quadrant"] == 0
@@ -132,15 +147,14 @@ def test_classify_and_langchain_analysis(tmp_path: Path):
   assert analyze.json()["rag_classification"]["quadrant_name"] == "Deleguj"
 
 
-def test_training_management_endpoints(tmp_path: Path):
-  local_model = FakeLocalModel()
-  client = build_client(tmp_path, local_model=local_model)
+def test_training_management_endpoints(real_model_bundle):
+  client = build_real_client(real_model_bundle)
 
   add = client.post("/add-example", data={"text": "review invoices", "quadrant": 1})
   feedback = client.post(
     "/learn-feedback",
     data={
-      "task": "prepare roadmap",
+      "task": "exercise twice a week",
       "predicted_quadrant": 1,
       "correct_quadrant": 2,
     },
@@ -157,17 +171,17 @@ def test_training_management_endpoints(tmp_path: Path):
   assert examples.status_code == 200
   assert retrain.json()["preserve_experience"] is False
   assert retrain.json()["preserve_experience_deprecated"] is True
-  assert local_model.train_calls
+  assert retrain.json()["examples_seen"] >= len(real_model_bundle["records"])
   assert clear.json()["remaining_examples"] == 0
 
 
-def test_batch_and_extract_routes(tmp_path: Path):
-  client = build_client(tmp_path)
+def test_batch_and_extract_routes(real_model_bundle):
+  client = build_real_client(real_model_bundle)
 
-  batch = client.post("/batch-analyze", json={"tasks": ["urgent outage", "prepare roadmap"]})
+  batch = client.post("/batch-analyze", json={"tasks": ["critical production incident", "exercise twice a week"]})
   upload = client.post(
     "/extract-tasks-from-image",
-    files={"file": ("tasks.txt", b"urgent outage\nprepare roadmap\n", "text/plain")},
+    files={"file": ("tasks.txt", b"critical production incident\nexercise twice a week\n", "text/plain")},
   )
 
   assert batch.status_code == 200
@@ -177,8 +191,8 @@ def test_batch_and_extract_routes(tmp_path: Path):
   assert upload.json()["ocr"]["method"] == "plain-text"
 
 
-def test_error_shapes_are_json(tmp_path: Path):
-  client = build_client(tmp_path)
+def test_error_shapes_are_json(real_model_bundle):
+  client = build_real_client(real_model_bundle)
 
   missing = client.post("/batch-analyze", json={"tasks": []})
   quadrant = client.get("/examples/9")
@@ -196,3 +210,16 @@ def test_model_not_ready_errors_return_503(tmp_path: Path):
 
   assert response.status_code == 503
   assert response.json()["code"] == "model_not_ready"
+
+
+def test_capabilities_stay_available_when_startup_raises_generic_error(tmp_path: Path):
+  client = build_client(tmp_path, local_model=FakeLocalModel(startup_error=RuntimeError("corrupt artifacts")))
+
+  capabilities = client.get("/capabilities")
+  stats = client.get("/training-stats")
+
+  assert capabilities.status_code == 200
+  assert capabilities.json()["providers"]["local_model"] is False
+  assert stats.status_code == 200
+  assert stats.json()["model_ready"] is False
+  assert stats.json()["model_error"] == "corrupt artifacts"

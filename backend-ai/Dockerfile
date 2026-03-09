@@ -8,7 +8,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=on \
     PIP_DEFAULT_TIMEOUT=100 \
     POETRY_VERSION=1.6.1 \
-    HF_HOME=/app/data/huggingface
+    HF_HOME=/home/app/.cache/huggingface
 
 WORKDIR /app
 
@@ -67,7 +67,7 @@ ENV PATH=/home/app/.local/bin:$PATH
 COPY --chown=app:app . .
 
 # Create data directory
-RUN mkdir -p /app/data /app/data/huggingface /app/logs
+RUN mkdir -p /app/data /app/logs /home/app/.cache/huggingface
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \

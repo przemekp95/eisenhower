@@ -32,7 +32,7 @@ def create_app(
 
   app = FastAPI(
     title=resolved_settings.app_name,
-    description="Import-safe task classifier with lazy AI providers.",
+    description="Import-safe local task classifier with OCR support.",
   )
   app.add_middleware(
     CORSMiddleware,
