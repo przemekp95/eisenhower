@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loadLanguage, loadTasks, saveLanguage, saveTasks } from './storage';
+import { getSampleTasks } from '../utils/taskUtils';
 
 describe('storage service', () => {
   beforeEach(() => {
@@ -21,5 +22,10 @@ describe('storage service', () => {
     await expect(loadTasks('pl')).resolves.toEqual([
       { id: '1', title: 'Stored', description: '', urgent: false, important: false },
     ]);
+  });
+
+  it('falls back to localized seeds when stored JSON is invalid', async () => {
+    await AsyncStorage.setItem('eisenhower-mobile/tasks', '{bad json');
+    await expect(loadTasks('en')).resolves.toEqual(getSampleTasks('en'));
   });
 });

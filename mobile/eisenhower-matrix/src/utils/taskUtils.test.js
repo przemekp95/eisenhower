@@ -2,6 +2,7 @@ import {
   classifyTaskFallback,
   createTaskRecord,
   getSampleTasks,
+  mergeTasks,
   quadrantToFlags,
 } from './taskUtils';
 
@@ -30,5 +31,21 @@ describe('taskUtils', () => {
       important: false,
       locale: 'pl',
     });
+  });
+
+  it('merges tasks without duplicates or blank titles', () => {
+    expect(
+      mergeTasks(
+        [{ id: '1', title: 'Existing', description: '', urgent: false, important: false }],
+        [
+          { id: '2', title: 'Existing', description: '', urgent: true, important: true },
+          { id: '3', title: 'Fresh', description: 'new', urgent: false, important: true },
+          { id: '4', title: '   ', description: '', urgent: false, important: false },
+        ]
+      )
+    ).toEqual([
+      { id: '2', title: 'Existing', description: '', urgent: true, important: true },
+      { id: '3', title: 'Fresh', description: 'new', urgent: false, important: true },
+    ]);
   });
 });

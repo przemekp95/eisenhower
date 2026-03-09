@@ -47,6 +47,7 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 
 ### Mobile
 
+- `EXPO_PUBLIC_API_URL`: Node API URL used for mobile task CRUD sync
 - `EXPO_PUBLIC_AI_API_URL`: AI backend URL used by the Expo application
 
 ## Local Development
@@ -57,6 +58,8 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 4. `mobile`: `cd mobile/eisenhower-matrix && npm ci && npm run start`
 
 The AI service is fully local. It uses a frozen multilingual MiniLM encoder plus a small PyTorch MLP head for quadrant classification, stores trained artifacts under `MODEL_CACHE_DIR`, and uses Tesseract for OCR. There is no OpenAI or native C++ classifier path in the default stack. The default MiniLM encoder is preloaded into the Docker image cache outside `/app`, so the compose bind mount does not hide it at runtime.
+
+The Expo mobile client now keeps a local task cache in AsyncStorage, refreshes and mutates tasks through `backend-node` when available, and sends picked images to `backend-ai` OCR via `expo-image-picker`.
 
 ## Frontend E2E
 
@@ -88,4 +91,4 @@ Required checks for both `dev` and `master`:
 - `test-backend-ai`
 - `test-mobile`
 
-Each active service enforces its own coverage threshold of `100%`.
+Coverage thresholds remain service-specific. The web and backend services enforce `100%`, while the Expo mobile client currently enforces `95%` statements/functions/lines and `90%` branches.

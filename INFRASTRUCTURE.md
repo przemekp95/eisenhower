@@ -11,7 +11,7 @@ This document describes the current infrastructure and delivery model of the Eis
 | `web` | React 18, TypeScript, Vite, Tailwind | Browser UI for task management and AI tools |
 | `backend-node` | Node.js, Express, TypeScript, MongoDB | Task API and health endpoints |
 | `backend-ai` | Python 3.11, FastAPI, PyTorch, MiniLM | Local task classification, OCR endpoints, training data management |
-| `mobile/eisenhower-matrix` | Expo, React Native | Mobile client with local persistence and AI-assisted flows |
+| `mobile/eisenhower-matrix` | Expo, React Native, Expo Image Picker | Mobile client with local cache, task API sync, and AI-assisted flows |
 | `docker-compose.yml` | Docker Compose | Local multi-service stack |
 | `.github/workflows/*.yml` | GitHub Actions | CI, branch policy, and release automation |
 
@@ -41,6 +41,7 @@ graph TB
 
     Web --> Api
     Web --> Ai
+    Mobile --> Api
     Mobile --> Ai
     Api --> Mongo
     Api --> Ai
@@ -54,6 +55,7 @@ graph TB
 
 - Web task CRUD flows call `backend-node`.
 - Web AI tooling and the mobile client call `backend-ai`.
+- The mobile client reads and mutates tasks through `backend-node` when the API is reachable, while keeping AsyncStorage as a local cache.
 - `backend-node` persists tasks in MongoDB.
 - Redis, Nginx, Prometheus, and Grafana are available in Docker Compose as optional infrastructure layers.
 
@@ -101,7 +103,9 @@ docker compose --profile production up --build
 ### Mobile
 
 - Expo-managed package with Jest and React Native Testing Library coverage gates.
-- Stores local state with AsyncStorage and uses `EXPO_PUBLIC_AI_API_URL` for AI requests.
+- Stores a local task cache with AsyncStorage.
+- Uses `EXPO_PUBLIC_API_URL` for task CRUD sync and `EXPO_PUBLIC_AI_API_URL` for AI and OCR requests.
+- Uses `expo-image-picker` to select images for OCR uploads.
 
 ## Configuration Matrix
 
@@ -118,6 +122,7 @@ docker compose --profile production up --build
 | Backend AI | `LOCAL_MODEL_NAME` | Frozen sentence-transformer encoder |
 | Backend AI | `LOCAL_MODEL_EPOCHS` | Max epochs for explicit retraining |
 | Mobile | `EXPO_PUBLIC_AI_API_URL` | AI service base URL for Expo |
+| Mobile | `EXPO_PUBLIC_API_URL` | Node API base URL for Expo |
 
 ## CI and Branch Governance
 
@@ -152,7 +157,7 @@ Current repository-level controls include:
 - mandatory CI checks on protected branches
 - Trivy SARIF upload in CI
 - Node API runtime config with explicit `JWT_SECRET` outside tests
-- coverage thresholds at `>= 80%` per active service
+- service-specific coverage thresholds, with `100%` on web/backends and `95/90` gates on mobile
 
 Recommended production additions that are not fully implemented in this repository:
 

@@ -12,7 +12,11 @@ describe('ai service', () => {
       json: async () => ({ urgent: true, important: false }),
     });
 
-    await expect(suggestTaskQuadrant('urgent')).resolves.toEqual({ urgent: true, important: false });
+    await expect(suggestTaskQuadrant('urgent')).resolves.toEqual({
+      urgent: true,
+      important: false,
+      source: 'remote',
+    });
     expect(global.fetch).toHaveBeenCalledWith(
       `${mobileConfig.aiApiUrl}/classify?title=urgent&use_rag=true`
     );
@@ -24,6 +28,20 @@ describe('ai service', () => {
     await expect(suggestTaskQuadrant('urgent client deadline')).resolves.toEqual({
       urgent: true,
       important: true,
+      source: 'fallback',
+    });
+  });
+
+  it('falls back when the backend responds with a non-ok status', async () => {
+    global.fetch.mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: 'bad request' }),
+    });
+
+    await expect(suggestTaskQuadrant('watch series')).resolves.toEqual({
+      urgent: false,
+      important: false,
+      source: 'fallback',
     });
   });
 });

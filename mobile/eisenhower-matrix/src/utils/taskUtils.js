@@ -46,3 +46,19 @@ export function createTaskRecord(language, task, id) {
     locale: language,
   };
 }
+
+export function mergeTasks(existingTasks, incomingTasks) {
+  const seen = new Set();
+  const merged = [];
+
+  for (const task of [...incomingTasks, ...existingTasks]) {
+    const identity = `${task.title}`.trim().toLowerCase() + '::' + `${task.description || ''}`.trim().toLowerCase();
+    if (!task.title?.trim() || seen.has(identity)) {
+      continue;
+    }
+    seen.add(identity);
+    merged.push(task);
+  }
+
+  return merged;
+}

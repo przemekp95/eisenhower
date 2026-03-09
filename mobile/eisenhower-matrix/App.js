@@ -15,12 +15,20 @@ import { translations } from './src/i18n/translations';
 import { suggestTaskQuadrant } from './src/services/ai';
 import { loadLanguage, loadTasks, saveLanguage, saveTasks } from './src/services/storage';
 import { scanTasksFromImage } from './src/services/media';
-import { createTaskRecord, getSampleTasks } from './src/utils/taskUtils';
+import {
+  createRemoteTask,
+  deleteRemoteTask,
+  fetchRemoteTasks,
+  isRemoteTaskId,
+  updateRemoteTask,
+} from './src/services/tasks';
+import { createTaskRecord, getSampleTasks, mergeTasks } from './src/utils/taskUtils';
 
 export default function App() {
   const [language, setLanguage] = useState('pl');
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState('');
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
@@ -36,15 +44,44 @@ export default function App() {
     const bootstrap = async () => {
       try {
         const nextLanguage = await loadLanguage();
-        const nextTasks = await loadTasks(nextLanguage);
+        let cachedTasks = [];
 
+        try {
+          cachedTasks = await loadTasks(nextLanguage);
+        } catch {
+          cachedTasks = getSampleTasks(nextLanguage);
+        }
+
+        /* istanbul ignore next: defensive unmount guard during async bootstrap */
         if (!active) {
           return;
         }
 
         setLanguage(nextLanguage);
-        setTasks(nextTasks);
+        setTasks(cachedTasks);
+        setLoading(false);
+
+        try {
+          const remoteTasks = await fetchRemoteTasks(nextLanguage);
+          await saveTasks(remoteTasks);
+
+          /* istanbul ignore next: defensive unmount guard during async remote refresh */
+          if (!active) {
+            return;
+          }
+
+          setTasks(remoteTasks);
+          setNotice(translations[nextLanguage].syncedRemote);
+        } catch {
+          /* istanbul ignore next: defensive unmount guard during async remote fallback */
+          if (!active) {
+            return;
+          }
+
+          setNotice(translations[nextLanguage].cachedLocal);
+        }
       } catch {
+        /* istanbul ignore next: defensive unmount guard during async bootstrap failure */
         if (!active) {
           return;
         }
@@ -65,13 +102,15 @@ export default function App() {
     };
   }, []);
 
-  const persistTasks = async (nextTasks) => {
+  const persistTasks = async (nextTasks, nextNotice = '') => {
     setTasks(nextTasks);
+    setNotice(nextNotice);
     await saveTasks(nextTasks);
   };
 
   const handleLanguageChange = async (nextLanguage) => {
     setLanguage(nextLanguage);
+    setNotice('');
     await saveLanguage(nextLanguage);
   };
 
@@ -80,12 +119,15 @@ export default function App() {
       return;
     }
 
-    const nextTasks = [
-      createTaskRecord(language, newTask, `task-${Date.now()}`),
-      ...tasks,
-    ];
+    const localTask = createTaskRecord(language, newTask, `local-${Date.now()}`);
 
-    await persistTasks(nextTasks);
+    try {
+      const remoteTask = await createRemoteTask(localTask, language);
+      await persistTasks([remoteTask, ...tasks], t.syncedRemote);
+    } catch {
+      await persistTasks([localTask, ...tasks], t.cachedLocal);
+    }
+
     setNewTask({ title: '', description: '', urgent: false, important: false });
   };
 
@@ -95,23 +137,77 @@ export default function App() {
     }
 
     const suggestion = await suggestTaskQuadrant(newTask.title);
-    setNewTask((current) => ({ ...current, ...suggestion }));
+    setNewTask((current) => ({
+      ...current,
+      urgent: suggestion.urgent,
+      important: suggestion.important,
+    }));
+    setNotice(suggestion.source === 'fallback' ? t.suggestionFailed : '');
   };
 
   const handleDelete = async (id) => {
-    await persistTasks(tasks.filter((task) => task.id !== id));
+    const nextTasks = tasks.filter((task) => task.id !== id);
+
+    if (!isRemoteTaskId(id)) {
+      await persistTasks(nextTasks, t.cachedLocal);
+      return;
+    }
+
+    try {
+      await deleteRemoteTask(id);
+      await persistTasks(nextTasks, t.syncedRemote);
+    } catch {
+      await persistTasks(nextTasks, t.cachedLocal);
+    }
   };
 
   const handleToggle = async (id, key) => {
-    await persistTasks(
-      tasks.map((task) => (task.id === id ? { ...task, [key]: !task[key] } : task))
-    );
+    const toggledTask = tasks.find((task) => task.id === id);
+    /* istanbul ignore next: stale press on a task that no longer exists */
+    if (!toggledTask) {
+      return;
+    }
+
+    const nextTask = { ...toggledTask, [key]: !toggledTask[key] };
+    const nextTasks = tasks.map((task) => (task.id === id ? nextTask : task));
+
+    if (!isRemoteTaskId(id)) {
+      await persistTasks(nextTasks, t.cachedLocal);
+      return;
+    }
+
+    try {
+      const remoteTask = await updateRemoteTask(id, { [key]: nextTask[key] }, language);
+      await persistTasks(
+        tasks.map((task) => (task.id === id ? remoteTask : task)),
+        t.syncedRemote
+      );
+    } catch {
+      await persistTasks(nextTasks, t.cachedLocal);
+    }
   };
 
   const handleScan = async () => {
-    const scanned = await scanTasksFromImage();
-    if (scanned.length > 0) {
-      await persistTasks([...scanned, ...tasks]);
+    try {
+      const scanned = await scanTasksFromImage(language);
+      if (scanned.length === 0) {
+        setNotice(t.ocrEmpty);
+        return;
+      }
+
+      const createdTasks = await Promise.all(
+        scanned.map(async (task) => {
+          try {
+            return await createRemoteTask(task, language);
+          } catch {
+            return task;
+          }
+        })
+      );
+
+      await persistTasks(mergeTasks(tasks, createdTasks), t.ocrAdded);
+    } catch {
+      setNotice(t.ocrFailed);
     }
   };
 
@@ -134,6 +230,12 @@ export default function App() {
         <LanguageSwitcher language={language} onChange={handleLanguageChange} />
       </View>
 
+      {notice ? (
+        <View style={styles.notice}>
+          <Text testID="notice-banner" style={styles.noticeText}>{notice}</Text>
+        </View>
+      ) : null}
+
       <View style={styles.form}>
         <TextInput
           value={newTask.title}
@@ -152,6 +254,7 @@ export default function App() {
         <View style={styles.switchRow}>
           <Text style={styles.switchLabel}>{t.urgent}</Text>
           <Switch
+            testID="new-task-urgent-switch"
             value={newTask.urgent}
             onValueChange={(value) => setNewTask((current) => ({ ...current, urgent: value }))}
           />
@@ -159,6 +262,7 @@ export default function App() {
         <View style={styles.switchRow}>
           <Text style={styles.switchLabel}>{t.important}</Text>
           <Switch
+            testID="new-task-important-switch"
             value={newTask.important}
             onValueChange={(value) => setNewTask((current) => ({ ...current, important: value }))}
           />
@@ -201,14 +305,14 @@ export default function App() {
                 onPress={() => handleToggle(item.id, 'urgent')}
                 style={styles.badge}
               >
-                <Text style={styles.badgeText}>{t.urgent}: {item.urgent ? 'on' : 'off'}</Text>
+                <Text style={styles.badgeText}>{t.urgent}: {item.urgent ? t.on : t.off}</Text>
               </Pressable>
               <Pressable
                 testID={`toggle-important-${item.id}`}
                 onPress={() => handleToggle(item.id, 'important')}
                 style={styles.badge}
               >
-                <Text style={styles.badgeText}>{t.important}: {item.important ? 'on' : 'off'}</Text>
+                <Text style={styles.badgeText}>{t.important}: {item.important ? t.on : t.off}</Text>
               </Pressable>
             </View>
           </View>
@@ -241,6 +345,17 @@ const styles = StyleSheet.create({
   subtitle: {
     color: '#94a3b8',
     marginTop: 6,
+  },
+  notice: {
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+    backgroundColor: '#10243f',
+  },
+  noticeText: {
+    color: '#bfdbfe',
+    fontWeight: '600',
   },
   form: {
     gap: 12,

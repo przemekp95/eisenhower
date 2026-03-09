@@ -15,8 +15,12 @@ export async function suggestTaskQuadrant(title) {
     return {
       urgent: data.urgent,
       important: data.important,
+      source: 'remote',
     };
   } catch {
-    return classifyTaskFallback(title);
+    return {
+      ...classifyTaskFallback(title),
+      source: 'fallback',
+    };
   }
 }
