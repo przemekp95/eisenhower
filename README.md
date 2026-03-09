@@ -25,6 +25,8 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 - `VITE_API_URL`: Node API base URL, default `http://localhost:3001`
 - `VITE_AI_API_URL`: AI service base URL, default `http://localhost:8000`
 - Production `web` image generates `/runtime-config.js` at container startup, so `VITE_*` values can be changed without rebuilding the image.
+- The production entrypoint also versions the `/runtime-config.js` URL at startup and serves that file with `no-store`, so CDN caches do not pin stale backend URLs.
+- Production deploys can use relative `VITE_API_URL=/api` and `VITE_AI_API_URL=/ai` when the frontend reverse proxies both backends over the same HTTPS origin.
 
 ### Backend Node
 
@@ -93,6 +95,7 @@ Pushes to `master` run `release.yml`, which can deploy to Mikrus over SSH when s
 
 Default deploy directory is `/home/<MIKRUS_USER>/apps/demo-fortis`, except `root` which defaults to `/root/apps/demo-fortis`.
 The example Mikrus env uses `WEB_PORT=8080` to avoid common `3000` collisions on shared hosts. If your target already listens on any configured host port, update `WEB_PORT`, `API_PORT`, `AI_PORT`, and matching URLs in `MIKRUS_ENV_FILE` before redeploying.
+For HTTPS deployments behind a public host, prefer `VITE_API_URL=/api` and `VITE_AI_API_URL=/ai`, and set `CORS_ALLOW_ORIGINS` to the public frontend origin.
 Reference files:
 
 - `deploy/mikrus/docker-compose.yml`

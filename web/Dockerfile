@@ -25,8 +25,8 @@ RUN chown -R nginx:nginx /etc/nginx/nginx.conf /usr/share/nginx/html /docker-ent
 
 USER nginx
 
-ENV VITE_API_URL=http://localhost:3001
-ENV VITE_AI_API_URL=http://localhost:8000
+ENV VITE_API_URL=/api
+ENV VITE_AI_API_URL=/ai
 
 EXPOSE 3000
 
