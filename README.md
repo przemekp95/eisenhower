@@ -36,6 +36,15 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 
 - `TRAINING_DATA_PATH`: path to the training examples file
 - `MODEL_CACHE_DIR`: directory used for model and cache artifacts
+- `OPENAI_API_KEY`: enables OpenAI reasoning, vision OCR, and embedding-backed similarity review
+- `OPENAI_BASE_URL`: optional OpenAI-compatible API base URL
+- `OPENAI_CLASSIFICATION_MODEL`: structured-output model for optional model review, default `gpt-4o-mini`
+- `OPENAI_REASONING_MODEL`: model for deeper task analysis, default `gpt-4o-mini`
+- `OPENAI_VISION_MODEL`: model used for image task extraction, default `gpt-4o-mini`
+- `OPENAI_EMBEDDING_MODEL`: model used for similarity lookup, default `text-embedding-3-small`
+- `OPENAI_TIMEOUT_SECONDS`: request timeout for OpenAI calls, default `30`
+- `TESSERACT_LANGUAGES`: OCR language pack list for Tesseract fallback, default `eng+pol`
+- `CORS_ALLOW_ORIGINS`: comma-separated frontend origins allowed to call the AI API, defaults to local `localhost` and `127.0.0.1` dev hosts
 
 ### Mobile
 
@@ -48,12 +57,17 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 3. `web`: `cd web && npm ci && npm run dev`
 4. `mobile`: `cd mobile/eisenhower-matrix && npm ci && npm run start`
 
+The AI service classifies tasks locally by default from the experience store and the rebuilt similarity index. When `OPENAI_API_KEY` is present, OpenAI augments that local path with reasoning, vision OCR, and embedding-backed similarity review. Without the key, the service still keeps the local classifier and uses Tesseract OCR where available.
+
 ## Frontend E2E
 
 - Install browsers once: `cd web && npm run test:e2e:install`
 - Run the smoke suite: `cd web && npm run test:e2e`
+- Run the live AI smoke manually: `cd web && npm run test:e2e:ai-smoke`
 
 The Playwright suite starts an isolated Vite frontend plus a real Node API backed by an ephemeral `mongodb-memory-server` instance, so it does not depend on a manually running MongoDB container.
+
+The manual AI smoke does the opposite: it does not start any local test servers and instead expects the live frontend and AI runtime to already be available, by default on `http://127.0.0.1:5173` and `http://127.0.0.1:8000`.
 
 ## Frontend Integration
 
@@ -75,4 +89,4 @@ Required checks for both `dev` and `master`:
 - `test-backend-ai`
 - `test-mobile`
 
-Each active service enforces its own coverage threshold of `>= 80%`.
+Each active service enforces its own coverage threshold of `100%`.

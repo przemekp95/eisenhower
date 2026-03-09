@@ -1,3 +1,4 @@
+import type { Language } from '../i18n/translations';
 import { LangChainAnalysis } from '../services/api';
 import { Task } from '../types';
 
@@ -13,7 +14,8 @@ export function restoreReadyState(cancelled: boolean, onReady: () => void) {
 
 export async function runAdvancedTaskAnalysis(
   taskTitle: string,
-  analyze: (task: string) => Promise<LangChainAnalysis>
+  language: Language,
+  analyze: (task: string, language: Language) => Promise<LangChainAnalysis>
 ) {
   const normalizedTaskTitle = taskTitle.trim();
 
@@ -21,7 +23,7 @@ export async function runAdvancedTaskAnalysis(
     return null;
   }
 
-  return analyze(normalizedTaskTitle);
+  return analyze(normalizedTaskTitle, language);
 }
 
 export function applyAdvancedAnalysisResult(

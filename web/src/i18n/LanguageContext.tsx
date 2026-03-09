@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { translations, Language, TranslationKey } from './translations';
 
 interface LanguageContextType {
@@ -9,16 +9,19 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Try to get language from localStorage, default to Polish
-  const [language, setLanguageState] = useState<Language>('pl');
+export function resolveInitialLanguage(storage: Pick<Storage, 'getItem'> | null | undefined): Language {
+  if (!storage) {
+    return 'pl';
+  }
 
-  useEffect(() => {
-    const savedLang = localStorage.getItem('eisenhower-language') as Language;
-    if (savedLang && (savedLang === 'en' || savedLang === 'pl')) {
-      setLanguageState(savedLang);
-    }
-  }, []);
+  const savedLang = storage.getItem('eisenhower-language') as Language | null;
+  return savedLang === 'en' || savedLang === 'pl' ? savedLang : 'pl';
+}
+
+export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [language, setLanguageState] = useState<Language>(() => {
+    return resolveInitialLanguage(typeof window === 'undefined' ? null : localStorage);
+  });
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);

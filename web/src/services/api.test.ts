@@ -3,6 +3,7 @@ import {
   addTrainingExample,
   analyzeWithLangChain,
   batchAnalyzeTasks,
+  clearTrainingData,
   classifyTask,
   createTask,
   deleteTask,
@@ -61,6 +62,7 @@ describe('api service', () => {
 
     await classifyTask('urgent');
     await analyzeWithLangChain('urgent');
+    await analyzeWithLangChain('urgent', 'pl');
     await batchAnalyzeTasks(['one']);
     await extractTasksFromImage(new File(['task'], 'tasks.txt', { type: 'text/plain' }));
     await addTrainingExample('task', 1);
@@ -68,14 +70,20 @@ describe('api service', () => {
     await retrainModel(false);
     await retrainModel();
     await getTrainingStats();
+    await clearTrainingData(false);
+    await clearTrainingData();
     await getExamplesByQuadrant(0);
     await getExamplesByQuadrant(0, 5);
     await getCapabilities();
 
     expect((global.fetch as jest.Mock).mock.calls[0][0]).toContain(runtimeConfig.aiApiUrl);
-    expect((global.fetch as jest.Mock).mock.calls[6][1].body.toString()).toContain('preserve_experience=false');
-    expect((global.fetch as jest.Mock).mock.calls[7][1].body.toString()).toContain('preserve_experience=true');
-    expect((global.fetch as jest.Mock).mock.calls[9][0]).toContain('/examples/0?limit=10');
+    expect((global.fetch as jest.Mock).mock.calls[1][0]).toContain('language=en');
+    expect((global.fetch as jest.Mock).mock.calls[2][0]).toContain('language=pl');
+    expect((global.fetch as jest.Mock).mock.calls[7][1].body.toString()).toContain('preserve_experience=false');
+    expect((global.fetch as jest.Mock).mock.calls[8][1].body.toString()).toContain('preserve_experience=true');
+    expect((global.fetch as jest.Mock).mock.calls[10][0]).toContain('/training-data?keep_defaults=false');
+    expect((global.fetch as jest.Mock).mock.calls[11][0]).toContain('/training-data?keep_defaults=true');
+    expect((global.fetch as jest.Mock).mock.calls[12][0]).toContain('/examples/0?limit=10');
   });
 
   it('throws JSON errors when requests fail', async () => {

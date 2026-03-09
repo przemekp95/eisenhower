@@ -56,13 +56,13 @@ describe('uiState helpers', () => {
       timestamp: new Date().toISOString(),
     });
 
-    await expect(runAdvancedTaskAnalysis('   ', analyze)).resolves.toBeNull();
-    await expect(runAdvancedTaskAnalysis('  roadmap  ', analyze)).resolves.toMatchObject({
+    await expect(runAdvancedTaskAnalysis('   ', 'pl', analyze)).resolves.toBeNull();
+    await expect(runAdvancedTaskAnalysis('  roadmap  ', 'pl', analyze)).resolves.toMatchObject({
       task: 'roadmap',
     });
 
     expect(analyze).toHaveBeenCalledTimes(1);
-    expect(analyze).toHaveBeenCalledWith('roadmap');
+    expect(analyze).toHaveBeenCalledWith('roadmap', 'pl');
   });
 
   it('only applies completed advanced-analysis results', () => {

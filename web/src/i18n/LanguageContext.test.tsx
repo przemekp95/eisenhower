@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
 import LanguageSwitcher from '../components/LanguageSwitcher';
-import { LanguageProvider, useLanguage } from './LanguageContext';
+import { LanguageProvider, resolveInitialLanguage, useLanguage } from './LanguageContext';
 
 function ReadLanguage() {
   const { language } = useLanguage();
@@ -54,5 +55,17 @@ describe('LanguageContext', () => {
 
   it('throws when used without a provider', () => {
     expect(() => render(<ReadLanguage />)).toThrow('useLanguage must be used within a LanguageProvider');
+  });
+
+  it('defaults to polish when rendered without window access', () => {
+    expect(resolveInitialLanguage(undefined)).toBe('pl');
+    expect(resolveInitialLanguage(null)).toBe('pl');
+    expect(
+      renderToString(
+        <LanguageProvider>
+          <ReadLanguage />
+        </LanguageProvider>
+      )
+    ).toContain('pl');
   });
 });

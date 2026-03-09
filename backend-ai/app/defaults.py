@@ -15,3 +15,23 @@ QUADRANT_NAMES = {
   2: "Delegate",
   3: "Delete",
 }
+
+LOCALIZED_QUADRANT_NAMES = {
+  "en": QUADRANT_NAMES,
+  "pl": {
+    0: "Zrób teraz",
+    1: "Zaplanuj",
+    2: "Deleguj",
+    3: "Usuń",
+  },
+}
+
+
+def normalize_language(language: str | None) -> str:
+  return "pl" if language == "pl" else "en"
+
+
+def get_quadrant_name(quadrant: int, language: str | None = None) -> str:
+  normalized_language = normalize_language(language)
+  localized_names = LOCALIZED_QUADRANT_NAMES[normalized_language]
+  return localized_names.get(quadrant, QUADRANT_NAMES[quadrant])

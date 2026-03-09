@@ -31,16 +31,32 @@ def test_root_and_capabilities(tmp_path: Path):
   assert capabilities.json()["classification"] is True
 
 
+def test_cors_allows_local_frontend_origins(tmp_path: Path):
+  client = build_client(tmp_path)
+
+  response = client.options(
+    "/analyze-langchain",
+    headers={
+      "Origin": "http://127.0.0.1:5173",
+      "Access-Control-Request-Method": "POST",
+    },
+  )
+
+  assert response.status_code == 200
+  assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
+
+
 def test_classify_and_langchain_analysis(tmp_path: Path):
   client = build_client(tmp_path)
 
   classify = client.get("/classify", params={"title": "urgent client deadline"})
-  analyze = client.post("/analyze-langchain", params={"task": "prepare roadmap"})
+  analyze = client.post("/analyze-langchain", params={"task": "prepare roadmap", "language": "pl"})
 
   assert classify.status_code == 200
   assert classify.json()["quadrant"] == 0
   assert analyze.status_code == 200
   assert analyze.json()["langchain_analysis"]["quadrant"] == 2
+  assert analyze.json()["rag_classification"]["quadrant_name"] == "Deleguj"
 
 
 def test_training_management_endpoints(tmp_path: Path):

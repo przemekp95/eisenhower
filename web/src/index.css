@@ -9,10 +9,6 @@
   color utility to any element that depends on these defaults.
 */
 @layer base {
-  html {
-    text-size-adjust: 100%;
-  }
-
   *,
   ::after,
   ::before,

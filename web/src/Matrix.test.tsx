@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import Matrix from './components/Matrix';
 import { LanguageProvider } from './i18n/LanguageContext';
 import * as api from './services/api';
-import { quadrantToTaskState, resolveSuggestedQuadrant } from './components/matrixUtils';
+import { quadrantToTaskState, resolveQuadrantLabel, resolveSuggestedQuadrant } from './components/matrixUtils';
 
 jest.mock('./services/api');
 
@@ -45,13 +45,43 @@ jest.mock('./components/AITools', () => ({
   __esModule: true,
   default: ({
     onAnalysisComplete,
+    onAnalysisTaskAdd,
+    onOCRTasksExtracted,
     onClose,
   }: {
     onAnalysisComplete: (analysis: api.LangChainAnalysis) => void;
+    onAnalysisTaskAdd: (analysis: api.LangChainAnalysis) => Promise<void>;
+    onOCRTasksExtracted: (result: api.OCRResult) => Promise<number>;
     onClose: () => void;
   }) => (
     <div>
       <p>AI tools</p>
+      <button
+        type="button"
+        onClick={() =>
+          void onAnalysisTaskAdd({
+            task: 'critical task',
+            langchain_analysis: {
+              quadrant: 1,
+              reasoning: 'Schedule this',
+              confidence: 0.9,
+              method: 'langchain',
+            },
+            rag_classification: {
+              quadrant: 0,
+              quadrant_name: 'Do Now',
+              confidence: 0.7,
+            },
+            comparison: {
+              methods_agree: false,
+              confidence_difference: 0.2,
+            },
+            timestamp: new Date().toISOString(),
+          })
+        }
+      >
+        Add analyzed task
+      </button>
       <button
         type="button"
         onClick={() =>
@@ -77,6 +107,60 @@ jest.mock('./components/AITools', () => ({
         }
       >
         Apply AI analysis
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          void onOCRTasksExtracted({
+            filename: 'tasks.txt',
+            image_info: {
+              size_bytes: 32,
+              shape: 'unknown',
+            },
+            ocr: {
+              extracted_text: 'Escalate outage\nPlan roadmap',
+              raw_tasks_detected: 3,
+              method: 'openai-vision',
+            },
+            classified_tasks: [
+              {
+                text: 'Escalate outage',
+                quadrant: 0,
+                quadrant_name: 'Do Now',
+                confidence: 0.96,
+              },
+              {
+                text: '   ',
+                quadrant: 1,
+                quadrant_name: 'Schedule',
+                confidence: 0.2,
+              },
+              {
+                text: 'Plan roadmap',
+                quadrant: 2,
+                quadrant_name: 'Delegate',
+                confidence: 0.74,
+              },
+              {
+                text: 'Escalate outage',
+                quadrant: 0,
+                quadrant_name: 'Do Now',
+                confidence: 0.9,
+              },
+            ],
+            summary: {
+              total_tasks: 3,
+              quadrant_distribution: {
+                counts: { 0: 2, 1: 0, 2: 1, 3: 0 },
+                percentages: { 0: 66.67, 1: 0, 2: 33.33, 3: 0 },
+                quadrant_names: { 0: 'Do Now', 1: 'Schedule', 2: 'Delegate', 3: 'Delete' },
+              },
+            },
+            timestamp: new Date().toISOString(),
+          })
+        }
+      >
+        Import OCR tasks
       </button>
       <button type="button" onClick={onClose}>
         Close AI tools
@@ -274,6 +358,97 @@ describe('Matrix', () => {
     });
   });
 
+  it('imports OCR tasks into the matrix form pipeline', async () => {
+    const onAddTask = jest.fn().mockResolvedValue(undefined);
+
+    render(
+      <LanguageProvider>
+        <Matrix tasks={[]} loading={false} onAddTask={onAddTask} onUpdateTask={jest.fn()} onDeleteTask={jest.fn()} />
+      </LanguageProvider>
+    );
+
+    fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
+      target: { value: 'dowolne zadanie' },
+    });
+    fireEvent.click(screen.getByText(/Otwórz narzędzia AI/i));
+    fireEvent.click(await screen.findByText('Import OCR tasks'));
+
+    await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(2));
+    expect(onAddTask).toHaveBeenNthCalledWith(1, {
+      title: 'Escalate outage',
+      description: '',
+      urgent: true,
+      important: true,
+    });
+    expect(onAddTask).toHaveBeenNthCalledWith(2, {
+      title: 'Plan roadmap',
+      description: '',
+      urgent: false,
+      important: true,
+    });
+  });
+
+  it('adds the analyzed task to the matrix and resets the form', async () => {
+    const onAddTask = jest.fn().mockResolvedValue(undefined);
+
+    render(
+      <LanguageProvider>
+        <Matrix tasks={[]} loading={false} onAddTask={onAddTask} onUpdateTask={jest.fn()} onDeleteTask={jest.fn()} />
+      </LanguageProvider>
+    );
+
+    fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
+      target: { value: 'Przygotować plan kwartalny' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/Opis/i), {
+      target: { value: 'Do omówienia z zarządem' },
+    });
+    fireEvent.click(screen.getByText(/Otwórz narzędzia AI/i));
+    fireEvent.click(await screen.findByText('Add analyzed task'));
+
+    await waitFor(() =>
+      expect(onAddTask).toHaveBeenCalledWith({
+        title: 'Przygotować plan kwartalny',
+        description: 'Do omówienia z zarządem',
+        urgent: true,
+        important: false,
+      })
+    );
+    await waitFor(() => expect(screen.getByPlaceholderText(/Tytuł zadania/i)).toHaveValue(''));
+    await waitFor(() => expect(screen.queryByText(/AI tools/i)).not.toBeInTheDocument());
+  });
+
+  it('falls back to the analyzed title when the draft title is cleared before adding', async () => {
+    const onAddTask = jest.fn().mockResolvedValue(undefined);
+
+    render(
+      <LanguageProvider>
+        <Matrix tasks={[]} loading={false} onAddTask={onAddTask} onUpdateTask={jest.fn()} onDeleteTask={jest.fn()} />
+      </LanguageProvider>
+    );
+
+    fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
+      target: { value: 'tymczasowy tytuł' },
+    });
+    fireEvent.click(screen.getByText(/Otwórz narzędzia AI/i));
+    await screen.findByText('Add analyzed task');
+
+    fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
+      target: { value: '   ' },
+    });
+    fireEvent.click(screen.getByText('Add analyzed task'));
+
+    await waitFor(() =>
+      expect(onAddTask).toHaveBeenCalledWith({
+        title: 'critical task',
+        description: '',
+        urgent: true,
+        important: false,
+      })
+    );
+  });
+
+
   it('ignores empty AI suggestions', async () => {
     render(
       <LanguageProvider>
@@ -390,6 +565,20 @@ describe('Matrix', () => {
     expect(quadrantToTaskState(1)).toEqual({ urgent: true, important: false });
     expect(quadrantToTaskState(2)).toEqual({ urgent: false, important: true });
     expect(quadrantToTaskState(3)).toEqual({ urgent: false, important: false });
+    expect(
+      resolveQuadrantLabel(
+        2,
+        { 0: 'Do Now', 1: 'Schedule', 2: 'Delegate', 3: 'Delete' },
+        (quadrant) => `Quadrant ${quadrant}`
+      )
+    ).toBe('Delegate');
+    expect(
+      resolveQuadrantLabel(
+        9,
+        { 0: 'Do Now', 1: 'Schedule', 2: 'Delegate', 3: 'Delete' },
+        (quadrant) => `Quadrant ${quadrant}`
+      )
+    ).toBe('Quadrant 9');
 
     expect(resolveSuggestedQuadrant({
       task: 'non-urgent',
@@ -427,8 +616,11 @@ describe('Matrix', () => {
       </LanguageProvider>
     );
 
+    const onDragEnd = dragCallbacks.at(-1);
+    expect(onDragEnd).toBeDefined();
+
     await act(async () => {
-      await dragCallbacks[0]?.({
+      await onDragEnd?.({
         destination: null,
         source: { droppableId: 'do' },
         draggableId: '1',
@@ -437,7 +629,7 @@ describe('Matrix', () => {
     expect(onUpdateTask).not.toHaveBeenCalled();
 
     await act(async () => {
-      await dragCallbacks[0]?.({
+      await onDragEnd?.({
         destination: { droppableId: 'do' },
         source: { droppableId: 'do' },
         draggableId: '1',
@@ -446,7 +638,7 @@ describe('Matrix', () => {
     expect(onUpdateTask).not.toHaveBeenCalled();
 
     await act(async () => {
-      await dragCallbacks[0]?.({
+      await onDragEnd?.({
         destination: { droppableId: 'delete' },
         source: { droppableId: 'do' },
         draggableId: '1',

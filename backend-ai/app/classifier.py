@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from .defaults import QUADRANT_NAMES
+from .defaults import QUADRANT_NAMES, get_quadrant_name, normalize_language
 
 
 def utc_now() -> str:
@@ -75,22 +75,29 @@ class HeuristicClassifier:
       "top_similar_examples": [],
     }
 
-  def analyze_with_langchain(self, task: str) -> dict:
+  def analyze_with_langchain(self, task: str, language: str = "en") -> dict:
     rag = self.classify_task(task, use_rag=True)
     langchain_quadrant = rag["quadrant"]
     confidence = min(rag["confidence"] + 0.08, 0.94)
+    resolved_language = normalize_language(language)
+    quadrant_name = get_quadrant_name(langchain_quadrant, resolved_language)
+    reasoning = (
+      f"Kwadrant „{quadrant_name}” został wybrany na podstawie heurystyki pilności i ważności."
+      if resolved_language == "pl"
+      else f'The "{quadrant_name}" quadrant was selected from the urgency/importance heuristic.'
+    )
 
     return {
       "task": task,
       "langchain_analysis": {
         "quadrant": langchain_quadrant,
-        "reasoning": f"Quadrant {langchain_quadrant} selected from urgency/importance keyword heuristic.",
+        "reasoning": reasoning,
         "confidence": confidence,
         "method": "lazy-langchain",
       },
       "rag_classification": {
         "quadrant": rag["quadrant"],
-        "quadrant_name": rag["quadrant_name"],
+        "quadrant_name": get_quadrant_name(rag["quadrant"], resolved_language),
         "confidence": rag["confidence"],
       },
       "comparison": {

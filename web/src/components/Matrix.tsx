@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { DragDropContext, Draggable, Droppable, DropResult } from '@hello-pangea/dnd';
-import { classifyTask, LangChainAnalysis } from '../services/api';
+import { classifyTask, LangChainAnalysis, OCRResult } from '../services/api';
 import { Task, TaskInput } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
 import { shouldDisableMotion } from '../lib/motion';
@@ -85,6 +85,56 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
       ...current,
       ...quadrantToTaskState(suggestedQuadrant),
     }));
+  };
+
+  const handleAnalysisImport = async (analysis: LangChainAnalysis) => {
+    const title = newTask.title.trim() || analysis.task.trim();
+
+    await onAddTask({
+      title,
+      description: newTask.description.trim(),
+      ...quadrantToTaskState(resolveSuggestedQuadrant(analysis)),
+    });
+
+    setNewTask({ title: '', description: '', urgent: false, important: false });
+    setShowAiTools(false);
+  };
+
+  const handleOCRImport = async (result: OCRResult) => {
+    const importedTasks = result.classified_tasks.reduce<Array<{ text: string; quadrant: number }>>(
+      (collection, detectedTask) => {
+        const title = detectedTask.text.trim();
+
+        if (!title) {
+          return collection;
+        }
+
+        const duplicate = collection.some(
+          (task) => task.text === title && task.quadrant === detectedTask.quadrant
+        );
+
+        if (duplicate) {
+          return collection;
+        }
+
+        collection.push({
+          text: title,
+          quadrant: detectedTask.quadrant,
+        });
+        return collection;
+      },
+      []
+    );
+
+    for (const detectedTask of importedTasks) {
+      await onAddTask({
+        title: detectedTask.text,
+        description: '',
+        ...quadrantToTaskState(detectedTask.quadrant),
+      });
+    }
+
+    return importedTasks.length;
   };
 
   const onDragEnd = async (result: DropResult) => {
@@ -431,6 +481,8 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
             taskTitle={newTask.title}
             onClose={() => setShowAiTools(false)}
             onAnalysisComplete={handleAnalysisComplete}
+            onAnalysisTaskAdd={handleAnalysisImport}
+            onOCRTasksExtracted={handleOCRImport}
           />
         </Suspense>
       ) : null}

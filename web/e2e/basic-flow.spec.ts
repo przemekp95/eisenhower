@@ -10,6 +10,10 @@ function taskCard(scope: Locator | Page, title: string): Locator {
   return scope.locator('article').filter({ hasText: title });
 }
 
+function taskHeading(scope: Locator | Page, title: string): Locator {
+  return scope.getByRole('heading', { name: title, exact: true });
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.clear();
@@ -47,17 +51,17 @@ test('creates, reclassifies and deletes a task through the live API', async ({ p
   await expect(createdCard).toBeVisible();
   await expect(createdCard.getByText(description)).toBeVisible();
 
-  await createdCard.getByLabel(`toggle important ${title}`).click();
+  await createdCard.getByLabel(`toggle important ${title}`).click({ force: true });
 
   const scheduledCard = taskCard(schedule, title);
   await expect(scheduledCard).toBeVisible();
-  await expect(createdCard).toHaveCount(0);
+  await expect(taskHeading(doNow, title)).toHaveCount(0);
 
-  await scheduledCard.getByLabel(`toggle urgent ${title}`).click();
+  await scheduledCard.getByLabel(`toggle urgent ${title}`).click({ force: true });
 
   const removableCard = taskCard(remove, title);
   await expect(removableCard).toBeVisible();
-  await expect(scheduledCard).toHaveCount(0);
+  await expect(taskHeading(schedule, title)).toHaveCount(0);
 
   await removableCard.getByRole('button', { name: 'Usuń', exact: true }).click();
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Container, Graphics, Ticker, WebGLRenderer } from 'pixi.js';
+import { installPixiFirefoxWorkarounds } from './pixiFirefoxWorkarounds';
 
 type Halo = {
   graphic: Graphics;
@@ -56,6 +57,8 @@ export default function MatrixScene() {
     if (!host) {
       return;
     }
+
+    installPixiFirefoxWorkarounds();
 
     let mounted = true;
     let initialized = false;
