@@ -74,7 +74,7 @@ describe('App', () => {
       quadrant: 1,
       quadrant_name: 'Schedule',
       timestamp: new Date().toISOString(),
-      method: 'heuristic',
+      method: 'local-minilm',
     });
   });
 

@@ -9,9 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from .classifier import HeuristicClassifier
 from .config import Settings, load_settings
 from .defaults import QUADRANT_NAMES
+from .local_model import ModelNotReadyError
 from .service import QuadrantAIService
 from .store import TrainingStore
 
@@ -22,18 +22,12 @@ class BatchRequest(BaseModel):
 
 def create_app(
   settings: Settings | None = None,
-  classifier: HeuristicClassifier | None = None,
   store: TrainingStore | None = None,
   ai_service: QuadrantAIService | None = None,
 ) -> FastAPI:
   resolved_settings = settings or load_settings()
-  resolved_classifier = classifier or HeuristicClassifier()
   resolved_store = store or TrainingStore(resolved_settings.training_data_path)
-  resolved_ai_service = ai_service or QuadrantAIService(
-    settings=resolved_settings,
-    store=resolved_store,
-    fallback_classifier=resolved_classifier,
-  )
+  resolved_ai_service = ai_service or QuadrantAIService(settings=resolved_settings, store=resolved_store)
   resolved_settings.model_cache_dir.mkdir(parents=True, exist_ok=True)
 
   app = FastAPI(
@@ -112,7 +106,7 @@ def create_app(
 
   @app.get("/training-stats")
   def get_training_stats():
-    return resolved_store.get_stats()
+    return resolved_ai_service.get_training_stats()
 
   @app.delete("/training-data")
   def clear_training_data(keep_defaults: bool = Query(True)):
@@ -139,5 +133,9 @@ def create_app(
   @app.exception_handler(HTTPException)
   async def http_exception_handler(_request, exception: HTTPException):
     return JSONResponse(status_code=exception.status_code, content={"error": exception.detail})
+
+  @app.exception_handler(ModelNotReadyError)
+  async def model_not_ready_handler(_request, exception: ModelNotReadyError):
+    return JSONResponse(status_code=503, content={"error": str(exception), "code": "model_not_ready"})
 
   return app

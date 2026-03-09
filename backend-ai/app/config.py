@@ -15,13 +15,12 @@ def parse_csv_list(value: str | None, default: tuple[str, ...]) -> tuple[str, ..
 class Settings:
   training_data_path: Path
   model_cache_dir: Path
-  openai_api_key: str | None = None
-  openai_base_url: str | None = None
-  openai_classification_model: str = "gpt-4o-mini"
-  openai_reasoning_model: str = "gpt-4o-mini"
-  openai_vision_model: str = "gpt-4o-mini"
-  openai_embedding_model: str = "text-embedding-3-small"
-  openai_timeout_seconds: float = 30.0
+  local_model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+  local_model_hidden_dim: int = 128
+  local_model_dropout: float = 0.1
+  local_model_epochs: int = 60
+  local_model_patience: int = 8
+  local_model_learning_rate: float = 0.01
   tesseract_languages: str = "eng+pol"
   app_name: str = "AI Quadrant Classifier"
   cors_allow_origins: tuple[str, ...] = (
@@ -43,13 +42,15 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     model_cache_dir=Path(
       source.get("MODEL_CACHE_DIR", str(base_dir / "data" / "runtime"))
     ),
-    openai_api_key=source.get("OPENAI_API_KEY"),
-    openai_base_url=source.get("OPENAI_BASE_URL"),
-    openai_classification_model=source.get("OPENAI_CLASSIFICATION_MODEL", "gpt-4o-mini"),
-    openai_reasoning_model=source.get("OPENAI_REASONING_MODEL", "gpt-4o-mini"),
-    openai_vision_model=source.get("OPENAI_VISION_MODEL", "gpt-4o-mini"),
-    openai_embedding_model=source.get("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
-    openai_timeout_seconds=float(source.get("OPENAI_TIMEOUT_SECONDS", "30")),
+    local_model_name=source.get(
+      "LOCAL_MODEL_NAME",
+      "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    ),
+    local_model_hidden_dim=int(source.get("LOCAL_MODEL_HIDDEN_DIM", "128")),
+    local_model_dropout=float(source.get("LOCAL_MODEL_DROPOUT", "0.1")),
+    local_model_epochs=int(source.get("LOCAL_MODEL_EPOCHS", "60")),
+    local_model_patience=int(source.get("LOCAL_MODEL_PATIENCE", "8")),
+    local_model_learning_rate=float(source.get("LOCAL_MODEL_LEARNING_RATE", "0.01")),
     tesseract_languages=source.get("TESSERACT_LANGUAGES", "eng+pol"),
     cors_allow_origins=parse_csv_list(
       source.get("CORS_ALLOW_ORIGINS"),

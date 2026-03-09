@@ -115,6 +115,12 @@ export interface TrainingStats {
   data_sources: { [key: string]: number };
   data_file: string;
   model_file: string;
+  model_name?: string;
+  model_ready?: boolean;
+  model_encoder?: string;
+  model_trained_at?: string | null;
+  model_validation_skipped?: boolean;
+  model_error?: string | null;
   last_updated: string;
 }
 
@@ -125,13 +131,20 @@ export interface AICapabilities {
   batch_analysis: boolean;
   training_management: boolean;
   providers: {
-    openai?: boolean;
-    embeddings: boolean;
-    vector_db: boolean;
-    langchain: boolean;
-    vision?: boolean;
+    local_model: boolean;
     tesseract?: boolean;
     ocr: boolean;
+  };
+  model?: {
+    ready: boolean;
+    name: string;
+    encoder_name: string;
+    artifact_path: string;
+    index_path: string;
+    trained_at?: string | null;
+    validation_skipped?: boolean;
+    last_error?: string | null;
+    examples_seen?: number;
   };
 }
 
@@ -215,13 +228,15 @@ export async function addTrainingExample(text: string, quadrant: number): Promis
   await readJson<void>(response);
 }
 
-export async function retrainModel(preserveExperience = true): Promise<{ preserve_experience: boolean }> {
+export async function retrainModel(
+  preserveExperience = true
+): Promise<{ preserve_experience: boolean; preserve_experience_deprecated?: boolean }> {
   const response = await fetch(`${runtimeConfig.aiApiUrl}/retrain`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ preserve_experience: preserveExperience.toString() }),
   });
-  return readJson<{ preserve_experience: boolean }>(response);
+  return readJson<{ preserve_experience: boolean; preserve_experience_deprecated?: boolean }>(response);
 }
 
 export async function learnFromFeedback(

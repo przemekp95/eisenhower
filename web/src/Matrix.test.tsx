@@ -120,7 +120,7 @@ jest.mock('./components/AITools', () => ({
             ocr: {
               extracted_text: 'Escalate outage\nPlan roadmap',
               raw_tasks_detected: 3,
-              method: 'openai-vision',
+              method: 'tesseract',
             },
             classified_tasks: [
               {
@@ -337,7 +337,7 @@ describe('Matrix', () => {
       quadrant: 0,
       quadrant_name: 'Do Now',
       timestamp: new Date().toISOString(),
-      method: 'heuristic',
+      method: 'local-minilm',
     });
 
     render(

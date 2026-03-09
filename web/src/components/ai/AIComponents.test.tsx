@@ -380,6 +380,9 @@ describe('AI component error paths', () => {
       data_sources: { default: 8 },
       data_file: 'data.json',
       model_file: 'memory',
+      model_name: 'local-minilm-mlp',
+      model_ready: true,
+      model_encoder: 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2',
       last_updated: new Date().toISOString(),
     };
     const capabilities = {
@@ -389,11 +392,7 @@ describe('AI component error paths', () => {
       batch_analysis: true,
       training_management: true,
       providers: {
-        openai: true,
-        embeddings: true,
-        vector_db: false,
-        langchain: false,
-        vision: true,
+        local_model: true,
         tesseract: true,
         ocr: true,
       },
@@ -409,7 +408,7 @@ describe('AI component error paths', () => {
 
     renderWithLanguage(<AIManagement onModelUpdated={onModelUpdated} />);
 
-    await waitFor(() => expect(screen.getByText(/OpenAI: on/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Local model: on/i)).toBeInTheDocument());
 
     fireEvent.change(screen.getByPlaceholderText(/Task text/i), {
       target: { value: 'Escalate outage' },
@@ -450,6 +449,43 @@ describe('AI component error paths', () => {
     expect(onModelUpdated).toHaveBeenCalledTimes(4);
   });
 
+  it('renders local model metadata and errors in the training state card', async () => {
+    mockedApi.getTrainingStats.mockResolvedValueOnce({
+      total_examples: 4,
+      quadrant_distribution: { '0': 1, '1': 1, '2': 1, '3': 1 },
+      data_sources: { default: 4 },
+      data_file: 'data.json',
+      model_file: 'runtime/local_minilm_head.pt',
+      model_name: 'local-minilm-mlp',
+      model_ready: false,
+      model_encoder: 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2',
+      model_trained_at: new Date().toISOString(),
+      model_validation_skipped: true,
+      model_error: 'Model bootstrap failed.',
+      last_updated: new Date().toISOString(),
+    });
+    mockedApi.getCapabilities.mockResolvedValueOnce({
+      classification: true,
+      langchain_analysis: true,
+      ocr: true,
+      batch_analysis: true,
+      training_management: true,
+      providers: {
+        local_model: false,
+        tesseract: true,
+        ocr: true,
+      },
+    });
+
+    renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
+
+    await waitFor(() => expect(screen.getByText(/Model: local-minilm-mlp \(off\)/i)).toBeInTheDocument());
+    expect(
+      screen.getByText(/Encoder: sentence-transformers\/paraphrase-multilingual-MiniLM-L12-v2/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText('Model bootstrap failed.')).toBeInTheDocument();
+  });
+
   it('shows partial status failures when capabilities cannot load', async () => {
     mockedApi.getTrainingStats.mockResolvedValueOnce({
       total_examples: 2,
@@ -484,11 +520,7 @@ describe('AI component error paths', () => {
       batch_analysis: true,
       training_management: true,
       providers: {
-        openai: false,
-        embeddings: false,
-        vector_db: false,
-        langchain: false,
-        vision: false,
+        local_model: false,
         tesseract: true,
         ocr: true,
       },
@@ -526,11 +558,7 @@ describe('AI component error paths', () => {
       batch_analysis: true,
       training_management: true,
       providers: {
-        openai: true,
-        embeddings: true,
-        vector_db: false,
-        langchain: false,
-        vision: true,
+        local_model: true,
         tesseract: true,
         ocr: true,
       },

@@ -7,7 +7,8 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=on \
     PIP_DISABLE_PIP_VERSION_CHECK=on \
     PIP_DEFAULT_TIMEOUT=100 \
-    POETRY_VERSION=1.6.1
+    POETRY_VERSION=1.6.1 \
+    HF_HOME=/app/data/huggingface
 
 WORKDIR /app
 
@@ -37,6 +38,10 @@ RUN apt-get update \
 USER app
 COPY --chown=app:app requirements.txt .
 RUN pip install --user -r requirements.txt
+RUN python - <<'PY'
+from sentence_transformers import SentenceTransformer
+SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+PY
 
 # Production stage
 FROM base as production
@@ -62,7 +67,7 @@ ENV PATH=/home/app/.local/bin:$PATH
 COPY --chown=app:app . .
 
 # Create data directory
-RUN mkdir -p /app/data /app/logs
+RUN mkdir -p /app/data /app/data/huggingface /app/logs
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \

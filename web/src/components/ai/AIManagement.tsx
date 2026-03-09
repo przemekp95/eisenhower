@@ -123,9 +123,7 @@ export default function AIManagement({ onModelUpdated }: Props) {
 
   const providerStates = capabilities
     ? [
-        [t('ai.manage.provider.openai'), Boolean(capabilities.providers.openai)],
-        [t('ai.manage.provider.vision'), Boolean(capabilities.providers.vision)],
-        [t('ai.manage.provider.embeddings'), capabilities.providers.embeddings],
+        [t('ai.manage.provider.localModel'), Boolean(capabilities.providers.local_model)],
         [t('ai.manage.provider.tesseract'), Boolean(capabilities.providers.tesseract)],
       ]
     : [];
@@ -139,6 +137,20 @@ export default function AIManagement({ onModelUpdated }: Props) {
             <div className="mt-3 space-y-2 text-white/80">
               <p className="text-2xl font-semibold text-white">{stats.total_examples}</p>
               <p>{t('ai.manage.totalExamples')}</p>
+              {stats.model_name ? (
+                <p className="text-white/55">
+                  {format(t('ai.manage.modelStatus'), {
+                    model: stats.model_name,
+                    status: stats.model_ready ? t('ai.manage.on') : t('ai.manage.off'),
+                  })}
+                </p>
+              ) : null}
+              {stats.model_encoder ? (
+                <p className="text-white/45">
+                  {format(t('ai.manage.modelEncoder'), { encoder: stats.model_encoder })}
+                </p>
+              ) : null}
+              {stats.model_error ? <p className="text-red-200">{stats.model_error}</p> : null}
               <p className="text-white/55">
                 {format(t('ai.manage.lastUpdated'), { date: new Date(stats.last_updated).toLocaleString() })}
               </p>

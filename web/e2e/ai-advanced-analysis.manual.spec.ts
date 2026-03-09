@@ -20,8 +20,8 @@ test('opens AI tools and runs advanced analysis against the live AI service', as
 
   const capabilities = await capabilitiesResponse.json();
   test.skip(
-    !capabilities?.providers?.openai,
-    `OpenAI provider is disabled on ${aiApiUrl}; enable it before running the manual AI smoke.`
+    !capabilities?.providers?.local_model,
+    `Local model is disabled on ${aiApiUrl}; bootstrap the AI service before running the manual AI smoke.`
   );
 
   const taskTitle = `Prepare board meeting agenda for Q${new Date().getUTCMonth() + 1}`;
@@ -52,7 +52,7 @@ test('opens AI tools and runs advanced analysis against the live AI service', as
   const analysisResponse = await analysisResponsePromise;
   const analysisPayload = await analysisResponse.json();
 
-  expect(analysisPayload.langchain_analysis.method).toBe('openai-reasoning');
+  expect(analysisPayload.langchain_analysis.method).toBe('local-analysis');
   expect(analysisPayload.langchain_analysis.reasoning).toBeTruthy();
 
   await expect(page.getByText(/Suggested quadrant:/i)).toBeVisible();

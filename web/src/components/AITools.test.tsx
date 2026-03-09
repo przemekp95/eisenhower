@@ -96,11 +96,7 @@ describe('AITools', () => {
       batch_analysis: true,
       training_management: true,
       providers: {
-        openai: true,
-        embeddings: true,
-        vector_db: false,
-        langchain: false,
-        vision: true,
+        local_model: true,
         tesseract: true,
         ocr: true,
       },
