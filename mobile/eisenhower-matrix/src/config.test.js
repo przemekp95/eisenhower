@@ -48,4 +48,20 @@ describe('mobile config', () => {
       aiApiUrl: 'https://ai.example.com',
     });
   });
+
+  it('rejects an empty EXPO_PUBLIC_API_URL value', () => {
+    process.env.EXPO_PUBLIC_API_URL = '   ';
+
+    expect(() => require('./config')).toThrow(
+      'EXPO_PUBLIC_API_URL must not be empty when provided.'
+    );
+  });
+
+  it('rejects an empty EXPO_PUBLIC_AI_API_URL value', () => {
+    process.env.EXPO_PUBLIC_AI_API_URL = '';
+
+    expect(() => require('./config')).toThrow(
+      'EXPO_PUBLIC_AI_API_URL must not be empty when provided.'
+    );
+  });
 });

@@ -4,6 +4,7 @@ coverage/
 .DS_Store
 .env
 .env.*
+!mobile/eisenhower-matrix/.env.production.example
 .venv/
 venv/
 __pycache__/

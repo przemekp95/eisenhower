@@ -125,10 +125,10 @@ docker compose --profile production up --build
 | Backend AI | `LOCAL_MODEL_NAME` | Frozen sentence-transformer encoder |
 | Backend AI | `LOCAL_MODEL_EPOCHS` | Max epochs for explicit retraining |
 | Mobile | `EXPO_PUBLIC_APP_ORIGIN_URL` | Shared HTTPS origin that maps to `/api` and `/ai` |
-| Mobile | `EXPO_PUBLIC_AI_API_URL` | AI service base URL for Expo |
-| Mobile | `EXPO_PUBLIC_API_URL` | Node API base URL for Expo |
+| Mobile | `EXPO_PUBLIC_AI_API_URL` | AI service base URL for Expo; if set, it must not be empty |
+| Mobile | `EXPO_PUBLIC_API_URL` | Node API base URL for Expo; if set, it must not be empty |
 
-If the mobile APK is built in GitHub Actions without these mobile variables set in repository `Variables`, the packaged app falls back to the local `127.0.0.1` development endpoints.
+For the Android CI build, `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_AI_API_URL` repository variables are mandatory and must point at the public production endpoints. The current production values are `https://tymon169-8081.mikrus.cloud/api` and `https://tymon169-8081.mikrus.cloud/ai`. `EXPO_PUBLIC_APP_ORIGIN_URL` is optional and can be set to `https://tymon169-8081.mikrus.cloud`. The Android artifact build also fails if the packaged APK still contains loopback development URLs.
 
 ## CI and Branch Governance
 
@@ -137,7 +137,7 @@ The repository uses three workflows:
 - `branch-policy.yml`
   Ensures only `dev` can open pull requests into `master`.
 - `ci.yml`
-  Runs `security-lint`, `test-backend-node`, `test-frontend`, `test-backend-ai`, and `test-mobile` on `dev` and `master`. The Android native job also uploads a downloadable debug APK artifact for each successful run, and the workflow can be started manually with `workflow_dispatch`.
+  Runs `security-lint`, `test-backend-node`, `test-frontend`, `test-backend-ai`, and `test-mobile` on `dev` and `master`. The Android native job also uploads a downloadable release APK artifact for each successful run, validates that public backend URLs were embedded into the bundle, and the workflow can be started manually with `workflow_dispatch`.
 - `release.yml`
   Builds Docker images on pushes to `master` and performs optional deployments when required secrets are present (`deploy-mikrus` and ECS).
 

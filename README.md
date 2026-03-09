@@ -51,10 +51,10 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 ### Mobile
 
 - `EXPO_PUBLIC_APP_ORIGIN_URL`: optional shared HTTPS origin for Expo, used to derive `/api` and `/ai`
-- `EXPO_PUBLIC_API_URL`: Node API URL used for mobile task CRUD sync
-- `EXPO_PUBLIC_AI_API_URL`: AI backend URL used by the Expo application
+- `EXPO_PUBLIC_API_URL`: Node API URL used for mobile task CRUD sync; if set, it must not be empty
+- `EXPO_PUBLIC_AI_API_URL`: AI backend URL used by the Expo application; if set, it must not be empty
 
-For GitHub Actions Android builds, set one of these in repository `Variables` if you want the generated APK to point at a deployed backend instead of the local `127.0.0.1` fallback.
+For GitHub Actions Android builds, `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_AI_API_URL` repository variables are required and must be public HTTP(S) URLs. The current production values are `https://tymon169-8081.mikrus.cloud/api` and `https://tymon169-8081.mikrus.cloud/ai`. `EXPO_PUBLIC_APP_ORIGIN_URL` remains optional and can be set to `https://tymon169-8081.mikrus.cloud`.
 
 ## Local Development
 
