@@ -68,6 +68,47 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  deploy-mikrus:
+    name: deploy-mikrus
+    runs-on: ubuntu-latest
+    needs: docker-release
+    env:
+      MIKRUS_HOST: ${{ secrets.MIKRUS_HOST }}
+      MIKRUS_USER: ${{ secrets.MIKRUS_USER }}
+      MIKRUS_SSH_KEY: ${{ secrets.MIKRUS_SSH_KEY }}
+      MIKRUS_ENV_FILE: ${{ secrets.MIKRUS_ENV_FILE }}
+      MIKRUS_APP_DIR: ${{ secrets.MIKRUS_APP_DIR }}
+      DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+      DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check Mikrus configuration
+        id: mikrus-config
+        shell: bash
+        run: |
+          missing=0
+
+          for key in MIKRUS_HOST MIKRUS_USER MIKRUS_SSH_KEY MIKRUS_ENV_FILE DOCKER_HUB_USERNAME DOCKER_HUB_TOKEN; do
+            if [ -z "${!key}" ]; then
+              echo "$key is missing."
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -eq 0 ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Mikrus deployment secrets are not configured. Skipping deployment."
+          fi
+
+      - name: Deploy to Mikrus
+        if: ${{ steps.mikrus-config.outputs.enabled == 'true' }}
+        shell: bash
+        run: .github/scripts/deploy-mikrus.sh
+
   deploy:
     name: deploy
     runs-on: ubuntu-latest

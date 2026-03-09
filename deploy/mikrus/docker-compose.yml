@@ -1,0 +1,83 @@
+name: eisenhower
+
+services:
+  mongodb:
+    image: mongo:7-jammy
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: eisenhower
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  ai-service:
+    image: ${DOCKER_HUB_USERNAME:?DOCKER_HUB_USERNAME is required}/eisenhower-ai:latest
+    restart: unless-stopped
+    environment:
+      TRAINING_DATA_PATH: /app/data/training_data.json
+      MODEL_CACHE_DIR: /app/data/runtime
+      LOCAL_MODEL_NAME: ${LOCAL_MODEL_NAME:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
+      LOCAL_MODEL_EPOCHS: ${LOCAL_MODEL_EPOCHS:-60}
+      LOCAL_MODEL_PATIENCE: ${LOCAL_MODEL_PATIENCE:-8}
+      LOCAL_MODEL_HIDDEN_DIM: ${LOCAL_MODEL_HIDDEN_DIM:-128}
+      LOCAL_MODEL_DROPOUT: ${LOCAL_MODEL_DROPOUT:-0.1}
+      LOCAL_MODEL_LEARNING_RATE: ${LOCAL_MODEL_LEARNING_RATE:-0.01}
+      TESSERACT_LANGUAGES: ${TESSERACT_LANGUAGES:-eng+pol}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000}
+    volumes:
+      - ai_data:/app/data
+    ports:
+      - "${AI_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  api-service:
+    image: ${DOCKER_HUB_USERNAME:?DOCKER_HUB_USERNAME is required}/eisenhower-api:latest
+    restart: unless-stopped
+    environment:
+      PORT: 3001
+      MONGODB_URI: mongodb://mongodb:27017/eisenhower
+      AI_SERVICE_URL: http://ai-service:8000
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      ai-service:
+        condition: service_started
+    ports:
+      - "${API_PORT:-3001}:3001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    image: ${DOCKER_HUB_USERNAME:?DOCKER_HUB_USERNAME is required}/eisenhower-web:latest
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
+      VITE_AI_API_URL: ${VITE_AI_API_URL:-http://localhost:8000}
+    depends_on:
+      api-service:
+        condition: service_started
+      ai-service:
+        condition: service_started
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  mongodb_data:
+  ai_data:
