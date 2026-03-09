@@ -70,7 +70,9 @@ jobs:
 
   deploy-mikrus:
     name: deploy-mikrus
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - mikrus
     needs: docker-release
     env:
       MIKRUS_HOST: ${{ secrets.MIKRUS_HOST }}
