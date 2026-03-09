@@ -235,6 +235,51 @@ describe('ai service', () => {
     );
   });
 
+  it('maps accepted OCR tasks to all quadrants before sending feedback', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ examples_added: 4, retrained: true }),
+    });
+
+    await expect(
+      learnFromAcceptedOCRTasks([
+        { title: 'Do now', urgent: true, important: true },
+        { title: 'Delegate', urgent: true, important: false },
+        { title: 'Schedule', urgent: false, important: true },
+        { title: 'Delete', urgent: false, important: false },
+      ])
+    ).resolves.toMatchObject({
+      examples_added: 4,
+      retrained: true,
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${mobileConfig.aiApiUrl}/learn-ocr-feedback`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tasks: [
+            { task: 'Do now', quadrant: 0 },
+            { task: 'Delegate', quadrant: 1 },
+            { task: 'Schedule', quadrant: 2 },
+            { task: 'Delete', quadrant: 3 },
+          ],
+          retrain: true,
+        }),
+      })
+    );
+  });
+
+  it('skips accepted OCR feedback requests when the task list is empty', async () => {
+    await expect(learnFromAcceptedOCRTasks([], false)).resolves.toEqual({
+      examples_added: 0,
+      retrained: false,
+    });
+
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('handles retrain, clear data and examples browsing', async () => {
     global.fetch
       .mockResolvedValueOnce({ ok: true, json: async () => ({ status: 'completed' }) })
