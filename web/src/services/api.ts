@@ -1,4 +1,5 @@
 import { runtimeConfig } from '../config';
+import type { Language } from '../i18n/translations';
 import { Task, TaskInput } from '../types';
 
 async function readJson<T>(response: Response): Promise<T> {
@@ -27,6 +28,14 @@ export interface ClassificationResult {
   timestamp: string;
   method: string;
   confidence?: number;
+}
+
+export interface SimilarExampleResult {
+  text: string;
+  quadrant: number;
+  quadrant_name: string;
+  source: string;
+  score: number;
 }
 
 export interface LangChainAnalysis {
@@ -106,7 +115,55 @@ export interface TrainingStats {
   data_sources: { [key: string]: number };
   data_file: string;
   model_file: string;
+  model_name?: string;
+  model_ready?: boolean;
+  model_encoder?: string;
+  model_trained_at?: string | null;
+  model_validation_skipped?: boolean;
+  model_error?: string | null;
   last_updated: string;
+}
+
+export interface AICapabilities {
+  classification: boolean;
+  langchain_analysis: boolean;
+  ocr: boolean;
+  batch_analysis: boolean;
+  training_management: boolean;
+  providers: {
+    local_model: boolean;
+    tesseract?: boolean;
+    ocr: boolean;
+  };
+  provider_controls?: {
+    local_model: AIProviderControl;
+    tesseract: AIProviderControl;
+  };
+  model?: {
+    ready: boolean;
+    name: string;
+    encoder_name: string;
+    artifact_path: string;
+    index_path: string;
+    trained_at?: string | null;
+    validation_skipped?: boolean;
+    last_error?: string | null;
+    examples_seen?: number;
+  };
+}
+
+export interface AIProviderControl {
+  enabled: boolean;
+  available: boolean;
+  active: boolean;
+  reason?: string | null;
+}
+
+export type AIProviderName = 'local_model' | 'tesseract';
+
+export interface TrainingDataClearResult {
+  message: string;
+  remaining_examples: number;
 }
 
 export async function getTasks(): Promise<Task[]> {
@@ -146,9 +203,9 @@ export async function classifyTask(title: string): Promise<ClassificationResult>
   return readJson<ClassificationResult>(response);
 }
 
-export async function analyzeWithLangChain(task: string): Promise<LangChainAnalysis> {
+export async function analyzeWithLangChain(task: string, language: Language = 'en'): Promise<LangChainAnalysis> {
   const response = await fetch(
-    `${runtimeConfig.aiApiUrl}/analyze-langchain?task=${encodeURIComponent(task)}`,
+    `${runtimeConfig.aiApiUrl}/analyze-langchain?task=${encodeURIComponent(task)}&language=${language}`,
     { method: 'POST' }
   );
   return readJson<LangChainAnalysis>(response);
@@ -184,13 +241,15 @@ export async function addTrainingExample(text: string, quadrant: number): Promis
   await readJson<void>(response);
 }
 
-export async function retrainModel(preserveExperience = true): Promise<{ preserve_experience: boolean }> {
+export async function retrainModel(
+  preserveExperience = true
+): Promise<{ preserve_experience: boolean; preserve_experience_deprecated?: boolean }> {
   const response = await fetch(`${runtimeConfig.aiApiUrl}/retrain`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ preserve_experience: preserveExperience.toString() }),
   });
-  return readJson<{ preserve_experience: boolean }>(response);
+  return readJson<{ preserve_experience: boolean; preserve_experience_deprecated?: boolean }>(response);
 }
 
 export async function learnFromFeedback(
@@ -215,12 +274,31 @@ export async function getTrainingStats(): Promise<TrainingStats> {
   return readJson<TrainingStats>(response);
 }
 
-export async function getExamplesByQuadrant(quadrant: number, limit = 10) {
+export async function clearTrainingData(keepDefaults = true): Promise<TrainingDataClearResult> {
+  const response = await fetch(`${runtimeConfig.aiApiUrl}/training-data?keep_defaults=${keepDefaults}`, {
+    method: 'DELETE',
+  });
+  return readJson<TrainingDataClearResult>(response);
+}
+
+export async function getExamplesByQuadrant(quadrant: number, limit = 10): Promise<{ examples: Array<{ text: string; quadrant: number }> }> {
   const response = await fetch(`${runtimeConfig.aiApiUrl}/examples/${quadrant}?limit=${limit}`);
   return readJson<{ examples: Array<{ text: string; quadrant: number }> }>(response);
 }
 
-export async function getCapabilities() {
+export async function getCapabilities(): Promise<AICapabilities> {
   const response = await fetch(`${runtimeConfig.aiApiUrl}/capabilities`);
-  return readJson<Record<string, unknown>>(response);
+  return readJson<AICapabilities>(response);
+}
+
+export async function setProviderEnabled(
+  provider: AIProviderName,
+  enabled: boolean
+): Promise<{ provider: AIProviderName } & AIProviderControl> {
+  const response = await fetch(`${runtimeConfig.aiApiUrl}/providers/${provider}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+  return readJson<{ provider: AIProviderName } & AIProviderControl>(response);
 }

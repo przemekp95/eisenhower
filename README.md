@@ -36,9 +36,18 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 
 - `TRAINING_DATA_PATH`: path to the training examples file
 - `MODEL_CACHE_DIR`: directory used for model and cache artifacts
+- `LOCAL_MODEL_NAME`: sentence-transformer used as the frozen encoder, default `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
+- `LOCAL_MODEL_EPOCHS`: max epochs for explicit retraining, default `60`
+- `LOCAL_MODEL_PATIENCE`: early-stopping patience for explicit retraining, default `8`
+- `LOCAL_MODEL_HIDDEN_DIM`: hidden layer width for the classification head, default `128`
+- `LOCAL_MODEL_DROPOUT`: dropout for the classification head, default `0.1`
+- `LOCAL_MODEL_LEARNING_RATE`: optimizer learning rate for the classification head, default `0.01`
+- `TESSERACT_LANGUAGES`: OCR language pack list for Tesseract fallback, default `eng+pol`
+- `CORS_ALLOW_ORIGINS`: comma-separated frontend origins allowed to call the AI API, defaults to local `localhost` and `127.0.0.1` dev hosts
 
 ### Mobile
 
+- `EXPO_PUBLIC_API_URL`: Node API URL used for mobile task CRUD sync
 - `EXPO_PUBLIC_AI_API_URL`: AI backend URL used by the Expo application
 
 ## Local Development
@@ -48,6 +57,27 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 3. `web`: `cd web && npm ci && npm run dev`
 4. `mobile`: `cd mobile/eisenhower-matrix && npm ci && npm run start`
 
+The AI service is fully local. It uses a frozen multilingual MiniLM encoder plus a small PyTorch MLP head for quadrant classification, stores trained artifacts under `MODEL_CACHE_DIR`, and uses Tesseract for OCR. There is no OpenAI or native C++ classifier path in the default stack. The default MiniLM encoder is preloaded into the Docker image cache outside `/app`, so the compose bind mount does not hide it at runtime. The AI management panel can also enable or disable the deployed `local_model` and `tesseract` providers, and those switches persist under the runtime cache.
+
+The Expo mobile client now keeps a local task cache in AsyncStorage, refreshes and mutates tasks through `backend-node` when available, and sends picked images to `backend-ai` OCR via `expo-image-picker`.
+
+## Frontend E2E
+
+- Install browsers once: `cd web && npm run test:e2e:install`
+- Run the smoke suite: `cd web && npm run test:e2e`
+- Run the live AI smoke manually: `cd web && npm run test:e2e:ai-smoke`
+
+The Playwright suite starts an isolated Vite frontend plus a real Node API backed by an ephemeral `mongodb-memory-server` instance, so it does not depend on a manually running MongoDB container.
+
+The manual AI smoke does the opposite: it does not start any local test servers and instead expects the live frontend and AI runtime to already be available, by default on `http://127.0.0.1:5173` and `http://127.0.0.1:8000`.
+
+## Frontend Integration
+
+- Install dependencies in both packages: `cd backend-node && npm ci` and `cd web && npm ci`
+- Run the suite: `cd web && npm run test:integration`
+
+The integration suite renders the React app in JSDOM, but talks to a real Express API backed by `mongodb-memory-server`, so CRUD is exercised without mocking `./services/api` or `fetch`.
+
 ## Quality Gates
 
 Required checks for both `dev` and `master`:
@@ -56,7 +86,9 @@ Required checks for both `dev` and `master`:
 - `security-lint`
 - `test-backend-node`
 - `test-frontend`
+- `test-frontend-integration`
+- `test-frontend-e2e`
 - `test-backend-ai`
 - `test-mobile`
 
-Each active service enforces its own coverage threshold of `>= 80%`.
+Coverage thresholds remain service-specific. The web and backend services enforce `100%`, while the Expo mobile client currently enforces `95%` statements/functions/lines and `90%` branches.

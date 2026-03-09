@@ -10,6 +10,13 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+      - LOCAL_MODEL_NAME=${LOCAL_MODEL_NAME:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
+      - LOCAL_MODEL_EPOCHS=${LOCAL_MODEL_EPOCHS:-60}
+      - LOCAL_MODEL_PATIENCE=${LOCAL_MODEL_PATIENCE:-8}
+      - LOCAL_MODEL_HIDDEN_DIM=${LOCAL_MODEL_HIDDEN_DIM:-128}
+      - LOCAL_MODEL_DROPOUT=${LOCAL_MODEL_DROPOUT:-0.1}
+      - LOCAL_MODEL_LEARNING_RATE=${LOCAL_MODEL_LEARNING_RATE:-0.01}
+      - HF_HOME=/home/app/.cache/huggingface
     volumes:
       - ./backend-ai:/app
     restart: unless-stopped
@@ -34,7 +41,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3001/health"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -66,6 +66,17 @@ describe('health routes', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('uses the default configured AI url when no url override is provided', async () => {
+    const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+    } as Response);
+
+    await expect(defaultAiHealthChecker()).resolves.toBe('healthy');
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8000', {
+      headers: { Accept: 'application/json' },
+    });
+  });
+
   it('uses default health dependencies when not overridden', async () => {
     jest.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true } as Response);
     jest.spyOn(dbModule, 'getDatabaseStatus').mockReturnValue('connected');

@@ -58,7 +58,7 @@ class TrainingStore:
       "quadrant_distribution": dict(quadrant_distribution),
       "data_sources": dict(source_distribution),
       "data_file": str(self.path),
-      "model_file": "heuristic-memory",
+      "model_file": "",
       "last_updated": utc_now(),
       "quadrant_names": QUADRANT_NAMES,
     }
