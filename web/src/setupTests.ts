@@ -29,17 +29,6 @@ jest.mock('@hello-pangea/dnd', () => ({
     ),
 }));
 
-jest.mock('@react-three/fiber', () => ({
-  Canvas: ({ children }: { children: React.ReactNode }) =>
-    React.createElement('div', { 'data-testid': 'canvas' }, children),
-}));
-
-jest.mock('@react-three/drei', () => ({
-  OrbitControls: () => null,
-  Sphere: ({ children }: { children: React.ReactNode }) =>
-    React.createElement('div', { 'data-testid': 'sphere' }, children),
-}));
-
 jest.mock('./components/MatrixScene', () => ({
   __esModule: true,
   default: () => React.createElement('div', { 'data-testid': 'matrix-scene' }),

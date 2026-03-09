@@ -3,6 +3,7 @@ import {
   addTrainingExample,
   analyzeWithLangChain,
   batchAnalyzeTasks,
+  clearTrainingData,
   classifyTask,
   createTask,
   deleteTask,
@@ -13,6 +14,7 @@ import {
   getTrainingStats,
   learnFromFeedback,
   retrainModel,
+  setProviderEnabled,
   updateTask,
 } from './api';
 
@@ -61,16 +63,33 @@ describe('api service', () => {
 
     await classifyTask('urgent');
     await analyzeWithLangChain('urgent');
+    await analyzeWithLangChain('urgent', 'pl');
     await batchAnalyzeTasks(['one']);
     await extractTasksFromImage(new File(['task'], 'tasks.txt', { type: 'text/plain' }));
     await addTrainingExample('task', 1);
     await learnFromFeedback('task', 1, 2);
     await retrainModel(false);
+    await retrainModel();
     await getTrainingStats();
+    await clearTrainingData(false);
+    await clearTrainingData();
+    await getExamplesByQuadrant(0);
     await getExamplesByQuadrant(0, 5);
     await getCapabilities();
+    await setProviderEnabled('local_model', false);
+    await setProviderEnabled('tesseract', true);
 
     expect((global.fetch as jest.Mock).mock.calls[0][0]).toContain(runtimeConfig.aiApiUrl);
+    expect((global.fetch as jest.Mock).mock.calls[1][0]).toContain('language=en');
+    expect((global.fetch as jest.Mock).mock.calls[2][0]).toContain('language=pl');
+    expect((global.fetch as jest.Mock).mock.calls[7][1].body.toString()).toContain('preserve_experience=false');
+    expect((global.fetch as jest.Mock).mock.calls[8][1].body.toString()).toContain('preserve_experience=true');
+    expect((global.fetch as jest.Mock).mock.calls[10][0]).toContain('/training-data?keep_defaults=false');
+    expect((global.fetch as jest.Mock).mock.calls[11][0]).toContain('/training-data?keep_defaults=true');
+    expect((global.fetch as jest.Mock).mock.calls[12][0]).toContain('/examples/0?limit=10');
+    expect((global.fetch as jest.Mock).mock.calls[15][0]).toContain('/providers/local_model');
+    expect((global.fetch as jest.Mock).mock.calls[15][1].body).toBe(JSON.stringify({ enabled: false }));
+    expect((global.fetch as jest.Mock).mock.calls[16][0]).toContain('/providers/tesseract');
   });
 
   it('throws JSON errors when requests fail', async () => {
@@ -83,6 +102,19 @@ describe('api service', () => {
 
     await expect(createTask({ title: '', description: '', urgent: false, important: false })).rejects.toThrow(
       'Validation failed'
+    );
+  });
+
+  it('falls back to a generic JSON error when the payload has no message', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 400,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({}),
+    });
+
+    await expect(createTask({ title: '', description: '', urgent: false, important: false })).rejects.toThrow(
+      'Request failed'
     );
   });
 

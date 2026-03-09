@@ -14,8 +14,6 @@ coverage
 .prettierrc
 .prettierignore
 jest.config.js
-postcss.config.js
-tailwind.config.js
 .tsbuildinfo
 dist
 *.log

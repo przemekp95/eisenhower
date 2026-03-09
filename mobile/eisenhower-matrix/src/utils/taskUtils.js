@@ -36,6 +36,37 @@ export function quadrantToFlags(quadrant) {
   };
 }
 
+export function flagsToQuadrant(task) {
+  if (task.urgent && task.important) {
+    return 0;
+  }
+
+  if (task.urgent) {
+    return 1;
+  }
+
+  if (task.important) {
+    return 2;
+  }
+
+  return 3;
+}
+
+export function groupTasksByQuadrant(tasks) {
+  const grouped = {
+    0: [],
+    1: [],
+    2: [],
+    3: [],
+  };
+
+  for (const task of tasks) {
+    grouped[flagsToQuadrant(task)].push(task);
+  }
+
+  return grouped;
+}
+
 export function createTaskRecord(language, task, id) {
   return {
     id,
@@ -45,4 +76,20 @@ export function createTaskRecord(language, task, id) {
     important: Boolean(task.important),
     locale: language,
   };
+}
+
+export function mergeTasks(existingTasks, incomingTasks) {
+  const seen = new Set();
+  const merged = [];
+
+  for (const task of [...incomingTasks, ...existingTasks]) {
+    const identity = `${task.title}`.trim().toLowerCase() + '::' + `${task.description || ''}`.trim().toLowerCase();
+    if (!task.title?.trim() || seen.has(identity)) {
+      continue;
+    }
+    seen.add(identity);
+    merged.push(task);
+  }
+
+  return merged;
 }

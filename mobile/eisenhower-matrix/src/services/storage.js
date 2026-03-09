@@ -15,7 +15,15 @@ export async function saveLanguage(language) {
 
 export async function loadTasks(language) {
   const stored = await AsyncStorage.getItem(TASKS_KEY);
-  return stored ? JSON.parse(stored) : getSampleTasks(language);
+  if (!stored) {
+    return getSampleTasks(language);
+  }
+
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return getSampleTasks(language);
+  }
 }
 
 export async function saveTasks(tasks) {
