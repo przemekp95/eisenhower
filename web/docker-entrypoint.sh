@@ -7,6 +7,7 @@ escape_json() {
 
 api_url="$(escape_json "${VITE_API_URL:-http://localhost:3001}")"
 ai_api_url="$(escape_json "${VITE_AI_API_URL:-http://localhost:8000}")"
+config_version="$(date +%s)"
 
 cat > /usr/share/nginx/html/runtime-config.js <<EOF
 window.__APP_CONFIG__ = {
@@ -14,5 +15,7 @@ window.__APP_CONFIG__ = {
   aiApiUrl: "${ai_api_url}"
 };
 EOF
+
+sed -i "s/__RUNTIME_CONFIG_VERSION__/${config_version}/g" /usr/share/nginx/html/index.html
 
 exec nginx -g 'daemon off;'

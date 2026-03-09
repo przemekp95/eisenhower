@@ -34,7 +34,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 EXPOSE 3001
 
-CMD ["npm", "start"]
+CMD ["node", "dist/server.js"]
 
 # Development stage
 FROM node:20-alpine AS development
