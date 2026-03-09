@@ -68,6 +68,15 @@ class Fake256Encoder(FakeEncoder):
     return vector
 
 
+class FakeEncoderWithDimensionGetter(FakeEncoder):
+  def __init__(self, dimension: int = 384):
+    super().__init__()
+    self.dimension = dimension
+
+  def get_sentence_embedding_dimension(self) -> int:
+    return self.dimension
+
+
 def build_settings(tmp_path: Path) -> Settings:
   return Settings(
     training_data_path=tmp_path / "training.json",
@@ -194,6 +203,15 @@ def test_local_model_rejects_artifacts_for_different_hidden_dim_and_reuses_cache
   warm_model = LocalMiniLMClassifier(settings=build_settings(tmp_path / "warm"), encoder=FakeEncoderWithToList())
   assert warm_model._resolve_embedding_dim() == 384
   assert warm_model._resolve_embedding_dim() == 384
+
+
+def test_local_model_uses_encoder_dimension_getter_before_probe_encode(tmp_path: Path):
+  encoder = FakeEncoderWithDimensionGetter(384)
+  model = LocalMiniLMClassifier(settings=build_settings(tmp_path), encoder=encoder)
+
+  assert model._resolve_embedding_dim() == 384
+  assert model._resolve_embedding_dim() == 384
+  assert encoder.calls == []
 
 
 def test_local_model_rejects_empty_training_set(tmp_path: Path):
