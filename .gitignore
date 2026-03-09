@@ -37,6 +37,7 @@ backend-ai/.pytest_cache/
 backend-ai/training_data.json
 backend-ai/quadrant_model.pkl
 backend-ai/chroma_db/
+backend-ai/data/huggingface/
 backend-ai/data/runtime/
 
 # Mobile / Expo
