@@ -1,9 +1,12 @@
 describe('mobile config', () => {
   const originalEnv = process.env;
+  const originalDev = global.__DEV__;
 
   beforeEach(() => {
     jest.resetModules();
     process.env = { ...originalEnv };
+    process.env.NODE_ENV = 'test';
+    global.__DEV__ = true;
     delete process.env.EXPO_PUBLIC_APP_ORIGIN_URL;
     delete process.env.EXPO_PUBLIC_API_URL;
     delete process.env.EXPO_PUBLIC_AI_API_URL;
@@ -11,6 +14,7 @@ describe('mobile config', () => {
 
   afterAll(() => {
     process.env = originalEnv;
+    global.__DEV__ = originalDev;
   });
 
   it('defaults to local development urls when no Expo variables are set', () => {
@@ -62,6 +66,15 @@ describe('mobile config', () => {
 
     expect(() => require('./config')).toThrow(
       'EXPO_PUBLIC_AI_API_URL must not be empty when provided.'
+    );
+  });
+
+  it('requires public urls in production builds', () => {
+    process.env.NODE_ENV = 'production';
+    global.__DEV__ = false;
+
+    expect(() => require('./config')).toThrow(
+      'EXPO_PUBLIC_API_URL or EXPO_PUBLIC_APP_ORIGIN_URL is required in production builds.'
     );
   });
 });
