@@ -54,6 +54,8 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 - `EXPO_PUBLIC_API_URL`: Node API URL used for mobile task CRUD sync
 - `EXPO_PUBLIC_AI_API_URL`: AI backend URL used by the Expo application
 
+For GitHub Actions Android builds, set one of these in repository `Variables` if you want the generated APK to point at a deployed backend instead of the local `127.0.0.1` fallback.
+
 ## Local Development
 
 1. `backend-node`: `cd backend-node && npm ci && npm run dev`
@@ -117,3 +119,5 @@ Required checks for both `dev` and `master`:
 - `test-mobile-native-android`
 
 Coverage thresholds remain service-specific. The web and backend services enforce `100%`, while the Expo mobile client currently enforces `95%` statements/functions/lines and `90%` branches.
+The `test-mobile-native-android` job now also uploads a downloadable debug APK artifact from each successful run.
+The same `ci.yml` workflow can also be started manually with `workflow_dispatch`, so you can trigger an APK build from the GitHub Actions UI for a branch without merging it first.
