@@ -6,6 +6,7 @@ Monorepo for the Eisenhower Matrix application with a React web client, a Node/E
 
 - `feature/* -> dev`
 - `dev -> master`
+- every merge to `master` automatically opens or refreshes a sync PR `master -> dev`
 - `master` remains the default branch
 - `dev` and `master` are protected with GitHub rulesets
 
@@ -58,8 +59,23 @@ For GitHub Actions Android builds, `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_AI_API
 
 ## Local Development
 
+Root commands:
+
+- `make setup`
+- `make test`
+- `make build`
+- `make verify`
+- `make dev-web`
+- `make dev-api`
+- `make dev-ai`
+- `make dev-mobile`
+
+`make verify` mirrors the local release-quality sweep used most often in CI: backend-node build + coverage, web build + coverage + integration, backend-ai pytest, and mobile coverage.
+
+Per-service fallback:
+
 1. `backend-node`: `cd backend-node && npm ci && npm run dev`
-2. `backend-ai`: `cd backend-ai && python3 -m pip install -r requirements.txt && python3 -m uvicorn main:app --reload`
+2. `backend-ai`: `cd backend-ai && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt pytest pytest-cov httpx && .venv/bin/python -m uvicorn main:app --reload`
 3. `web`: `cd web && npm ci && npm run dev`
 4. `mobile`: `cd mobile/eisenhower-matrix && npm ci && npm run start`
 
@@ -112,12 +128,15 @@ Required checks for both `dev` and `master`:
 - `security-lint`
 - `test-backend-node`
 - `test-frontend`
-- `test-frontend-integration`
-- `test-frontend-e2e`
 - `test-backend-ai`
 - `test-mobile`
+
+Additional strong workflow checks that remain enabled, but are not required for branch protection in the current 1-2 sprint hardening phase:
+
+- `test-frontend-integration`
+- `test-frontend-e2e`
 - `test-mobile-native-android`
 
 Coverage thresholds remain service-specific. The web and backend services enforce `100%`, while the Expo mobile client currently enforces `95%` statements/functions/lines and `90%` branches.
-The `test-mobile-native-android` job now also uploads a downloadable debug APK artifact from each successful run.
+The `test-mobile-native-android` job now also uploads a downloadable release APK artifact from each successful run.
 The same `ci.yml` workflow can also be started manually with `workflow_dispatch`, so you can trigger an APK build from the GitHub Actions UI for a branch without merging it first.

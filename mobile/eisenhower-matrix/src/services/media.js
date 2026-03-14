@@ -1,26 +1,10 @@
+import { createAiApi } from '@eisenhower/api-client';
 import * as ImagePicker from 'expo-image-picker';
-import { mobileConfig } from '../config';
 import { createTaskRecord, quadrantToFlags } from '../utils/taskUtils';
+import { mobileConfig } from '../config';
 
-function createOCRRequestError(message, code = 'ocr_request_failed', status = null) {
-  const error = new Error(message);
-  error.code = code;
-  error.status = status;
-  return error;
-}
-
-async function readJson(response) {
-  const payload = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw createOCRRequestError(
-      payload?.error || 'OCR request failed',
-      payload?.code || 'ocr_request_failed',
-      response.status
-    );
-  }
-
-  return payload;
+function getAiApi() {
+  return createAiApi(mobileConfig.aiApiUrl);
 }
 
 async function pickImageWithExpo() {
@@ -74,17 +58,12 @@ export async function scanTasksFromImage(language = 'pl', adapter = null) {
     return [];
   }
 
-  const formData = new FormData();
-  formData.append('file', {
-    uri: image.uri,
-    name: image.name,
-    type: image.type,
-  });
-
-  const response = await fetch(`${mobileConfig.aiApiUrl}/extract-tasks-from-image`, {
-    method: 'POST',
-    body: formData,
-  });
-
-  return mapOcrResponseToTasks(language, await readJson(response));
+  return mapOcrResponseToTasks(
+    language,
+    await getAiApi().extractTasksFromImage({
+      uri: image.uri,
+      name: image.name,
+      type: image.type,
+    })
+  );
 }
