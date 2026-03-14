@@ -46,13 +46,16 @@ const ASYNC_TIMEOUT = 10_000;
 jest.setTimeout(20_000);
 
 function remoteTask(overrides = {}) {
+  const resolvedId = overrides.id || '507f1f77bcf86cd799439011';
   return {
-    id: '507f1f77bcf86cd799439011',
+    id: resolvedId,
     title: 'Seed task',
     description: 'desc',
     urgent: true,
     important: false,
     locale: 'pl',
+    remoteId: resolvedId,
+    syncState: 'synced',
     ...overrides,
   };
 }
@@ -163,6 +166,52 @@ describe('Mobile App', () => {
     expect(getByText('Deleguj')).toBeTruthy();
     expect(getByText('Zaplanuj')).toBeTruthy();
     expect(getAllByText('Usuń').length).toBeGreaterThan(0);
+  });
+
+  it('reconciles pending local tasks after the API becomes available again', async () => {
+    storage.loadTasks.mockResolvedValue([
+      {
+        id: 'local-1',
+        title: 'Offline draft',
+        description: 'kept locally',
+        urgent: false,
+        important: true,
+        locale: 'pl',
+        remoteId: null,
+        syncState: 'pending_create',
+      },
+    ]);
+    tasksApi.fetchRemoteTasks.mockResolvedValue([]);
+    tasksApi.createRemoteTask.mockResolvedValueOnce(
+      remoteTask({
+        id: '507f1f77bcf86cd799439055',
+        title: 'Offline draft',
+        description: 'kept locally',
+        urgent: false,
+        important: true,
+      })
+    );
+
+    const { getByText, getByTestId, queryByTestId } = render(<App />);
+
+    await waitFor(() => expect(tasksApi.createRemoteTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Offline draft',
+        description: 'kept locally',
+        urgent: false,
+        important: true,
+      }),
+      'pl'
+    ), {
+      timeout: ASYNC_TIMEOUT,
+    });
+    await waitFor(() => expect(getByText('Offline draft')).toBeTruthy(), {
+      timeout: ASYNC_TIMEOUT,
+    });
+    await waitFor(() => expect(getByTestId('notice-banner').props.children).toBe('Zsynchronizowano z API'), {
+      timeout: ASYNC_TIMEOUT,
+    });
+    expect(queryByTestId('sync-pending-local-1')).toBeNull();
   });
 
   it('adds and deletes remote tasks', async () => {
@@ -282,6 +331,33 @@ describe('Mobile App', () => {
     });
   });
 
+  it('surfaces add-to-matrix errors when the local persistence fallback also fails', async () => {
+    storage.loadTasks.mockResolvedValue([]);
+    tasksApi.fetchRemoteTasks.mockResolvedValue([]);
+
+    const { getByTestId } = render(<App />);
+
+    await waitFor(() => expect(getByTestId('open-ai-tools-button')).toBeTruthy(), {
+      timeout: ASYNC_TIMEOUT,
+    });
+
+    fireEvent.press(getByTestId('open-ai-tools-button'));
+    fireEvent.changeText(getByTestId('ai-analysis-input'), 'Prepare roadmap');
+    fireEvent.press(getByTestId('ai-analysis-run-button'));
+
+    await waitFor(() => expect(getByTestId('ai-analysis-add-button')).toBeTruthy(), {
+      timeout: ASYNC_TIMEOUT,
+    });
+
+    tasksApi.createRemoteTask.mockRejectedValueOnce(new Error('offline'));
+    storage.saveTasks.mockRejectedValueOnce(new Error('disk full'));
+    fireEvent.press(getByTestId('ai-analysis-add-button'));
+
+    await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe('disk full'), {
+      timeout: ASYNC_TIMEOUT,
+    });
+  });
+
   it('opens and closes the AI tools modal from the dedicated close button', async () => {
     const { getByTestId, queryByTestId } = render(<App />);
 
@@ -394,6 +470,33 @@ describe('Mobile App', () => {
     await waitFor(() => expect(getByTestId('ai-tools-message').props.children).toBe('Załadowano 1 przykładów'), {
       timeout: ASYNC_TIMEOUT,
     });
+  });
+
+  it('ignores provider toggles when provider controls are missing from capabilities', async () => {
+    ai.fetchAICapabilities.mockResolvedValue(
+      capabilities({
+        providers: { local_model: false, tesseract: true, ocr: true },
+        provider_controls: {
+          tesseract: { enabled: true, available: true, active: true, reason: null },
+        },
+      })
+    );
+
+    const { getByTestId } = render(<App />);
+
+    await waitFor(() => expect(getByTestId('open-ai-tools-button')).toBeTruthy(), {
+      timeout: ASYNC_TIMEOUT,
+    });
+
+    fireEvent.press(getByTestId('open-ai-tools-button'));
+    fireEvent.press(getByTestId('ai-tab-manage'));
+
+    await waitFor(() => expect(ai.fetchTrainingStats).toHaveBeenCalled(), {
+      timeout: ASYNC_TIMEOUT,
+    });
+
+    fireEvent(getByTestId('modal-provider-switch-local_model'), 'valueChange', true);
+    expect(ai.setAIProviderEnabled).not.toHaveBeenCalled();
   });
 
   it('scans tasks through OCR and creates them remotely', async () => {
@@ -565,6 +668,7 @@ describe('Mobile App', () => {
     await waitFor(() => expect(getByText('Pilne: wył.')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
+    expect(getByTestId('sync-pending-507f1f77bcf86cd799439011')).toBeTruthy();
 
     fireEvent.press(getByTestId('delete-task-507f1f77bcf86cd799439011'));
     await waitFor(() => expect(queryByText('Seed task')).toBeNull(), {
@@ -784,5 +888,6 @@ describe('Mobile App', () => {
     await waitFor(() => expect(getByText('Offline scan')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
+    expect(getByTestId('sync-pending-ocr-1')).toBeTruthy();
   });
 });

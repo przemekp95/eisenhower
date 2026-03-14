@@ -1,3 +1,9 @@
+import {
+  TASK_SYNC_STATE,
+  createPendingTask,
+  isTaskVisible,
+} from './taskSync';
+
 export function getSampleTasks(language) {
   return [
     {
@@ -6,6 +12,9 @@ export function getSampleTasks(language) {
       description: language === 'pl' ? 'Termin dzisiaj' : 'Due today',
       urgent: true,
       important: true,
+      locale: language,
+      remoteId: null,
+      syncState: TASK_SYNC_STATE.localSeed,
     },
     {
       id: 'seed-2',
@@ -13,6 +22,9 @@ export function getSampleTasks(language) {
       description: language === 'pl' ? 'Długoterminowy cel' : 'Long-term goal',
       urgent: false,
       important: true,
+      locale: language,
+      remoteId: null,
+      syncState: TASK_SYNC_STATE.localSeed,
     },
   ];
 }
@@ -61,6 +73,10 @@ export function groupTasksByQuadrant(tasks) {
   };
 
   for (const task of tasks) {
+    if (!isTaskVisible(task)) {
+      continue;
+    }
+
     grouped[flagsToQuadrant(task)].push(task);
   }
 
@@ -68,14 +84,7 @@ export function groupTasksByQuadrant(tasks) {
 }
 
 export function createTaskRecord(language, task, id) {
-  return {
-    id,
-    title: task.title.trim(),
-    description: task.description.trim(),
-    urgent: Boolean(task.urgent),
-    important: Boolean(task.important),
-    locale: language,
-  };
+  return createPendingTask(language, task, id);
 }
 
 export function mergeTasks(existingTasks, incomingTasks) {

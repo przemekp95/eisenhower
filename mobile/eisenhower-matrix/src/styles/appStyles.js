@@ -243,6 +243,17 @@ const styles = StyleSheet.create({
     marginTop: 4,
     color: '#94a3b8',
   },
+  pendingSyncBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(245, 158, 11, 0.18)',
+    color: '#fcd34d',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   deleteButton: {
     alignSelf: 'flex-start',
     borderRadius: 999,

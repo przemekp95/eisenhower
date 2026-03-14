@@ -39,6 +39,8 @@ describe('taskUtils', () => {
       urgent: true,
       important: false,
       locale: 'pl',
+      remoteId: null,
+      syncState: 'pending_create',
     });
   });
 
@@ -65,6 +67,7 @@ describe('taskUtils', () => {
         { id: '2', title: 'Delegate', description: '', urgent: true, important: false },
         { id: '3', title: 'Schedule', description: '', urgent: false, important: true },
         { id: '4', title: 'Drop', description: '', urgent: false, important: false },
+        { id: '5', title: 'Hidden delete', description: '', urgent: true, important: false, syncState: 'pending_delete' },
       ])
     ).toEqual({
       0: [{ id: '1', title: 'Now', description: '', urgent: true, important: true }],
