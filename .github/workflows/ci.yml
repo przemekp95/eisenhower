@@ -271,6 +271,57 @@ jobs:
         working-directory: mobile/eisenhower-matrix
         run: npm ci
 
+      - name: Validate mobile public endpoints
+        shell: bash
+        run: |
+          trim() {
+            local value="$1"
+            value="${value#"${value%%[![:space:]]*}"}"
+            value="${value%"${value##*[![:space:]]}"}"
+            printf '%s' "$value"
+          }
+
+          is_public_http_url() {
+            local value
+            value="$(trim "$1")"
+            [[ "$value" =~ ^https?:// ]] || return 1
+            [[ "$value" == *,* ]] && return 1
+            [[ "$value" =~ ^https?://(localhost|127\.0\.0\.1|10\.0\.2\.2|\[::1\])([/:]|$) ]] && return 1
+            return 0
+          }
+
+          api_url="$(trim "${EXPO_PUBLIC_API_URL:-}")"
+          ai_url="$(trim "${EXPO_PUBLIC_AI_API_URL:-}")"
+          app_origin="$(trim "${EXPO_PUBLIC_APP_ORIGIN_URL:-}")"
+
+          if ! is_public_http_url "$api_url"; then
+            echo "::error::EXPO_PUBLIC_API_URL repository variable is required and must be a public http(s) URL."
+            exit 1
+          fi
+
+          if ! is_public_http_url "$ai_url"; then
+            echo "::error::EXPO_PUBLIC_AI_API_URL repository variable is required and must be a public http(s) URL."
+            exit 1
+          fi
+
+          if [[ -n "$app_origin" ]]; then
+            if ! is_public_http_url "$app_origin"; then
+              echo "::error::EXPO_PUBLIC_APP_ORIGIN_URL must be a public http(s) URL when provided."
+              exit 1
+            fi
+
+            app_origin="${app_origin%/}"
+          fi
+
+          api_url="${api_url%/}"
+          ai_url="${ai_url%/}"
+
+          {
+            echo "EXPO_PUBLIC_APP_ORIGIN_URL=$app_origin"
+            echo "EXPO_PUBLIC_API_URL=$api_url"
+            echo "EXPO_PUBLIC_AI_API_URL=$ai_url"
+          } >> "$GITHUB_ENV"
+
       - name: Generate native Android project
         working-directory: mobile/eisenhower-matrix
         env:
@@ -279,7 +330,7 @@ jobs:
           NODE_ENV: production
         run: npx expo prebuild --platform android --no-install --clean
 
-      - name: Android native smoke build
+      - name: Android native release APK
         working-directory: mobile/eisenhower-matrix/android
         env:
           CI: "1"
@@ -287,15 +338,36 @@ jobs:
           NODE_ENV: production
         run: |
           export ANDROID_HOME="${ANDROID_SDK_ROOT}"
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease
+
+      - name: Verify embedded mobile endpoints
+        shell: bash
+        run: |
+          bundle_strings_file="$(mktemp)"
+          unzip -p mobile/eisenhower-matrix/android/app/build/outputs/apk/release/app-release.apk assets/index.android.bundle | strings > "$bundle_strings_file"
+
+          if grep -Eq 'http://(127\.0\.0\.1|localhost|10\.0\.2\.2)(:[0-9]+)?' "$bundle_strings_file"; then
+            echo "::error::Release APK still contains loopback development endpoints."
+            exit 1
+          fi
+
+          if ! grep -Fq "$EXPO_PUBLIC_API_URL" "$bundle_strings_file"; then
+            echo "::error::Release APK does not contain the resolved task API URL."
+            exit 1
+          fi
+
+          if ! grep -Fq "$EXPO_PUBLIC_AI_API_URL" "$bundle_strings_file"; then
+            echo "::error::Release APK does not contain the resolved AI API URL."
+            exit 1
+          fi
 
       - name: Prepare APK artifact
         shell: bash
         run: |
           mkdir -p mobile/eisenhower-matrix/output
           cp \
-            mobile/eisenhower-matrix/android/app/build/outputs/apk/debug/app-debug.apk \
-            "mobile/eisenhower-matrix/output/eisenhower-matrix-android-debug-${GITHUB_SHA::7}.apk"
+            mobile/eisenhower-matrix/android/app/build/outputs/apk/release/app-release.apk \
+            "mobile/eisenhower-matrix/output/eisenhower-matrix-android-release-${GITHUB_SHA::7}.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

@@ -4,6 +4,7 @@ coverage/
 .DS_Store
 .env
 .env.*
+!mobile/eisenhower-matrix/.env.production.example
 .venv/
 venv/
 __pycache__/
@@ -46,6 +47,8 @@ mobile/eisenhower-matrix/coverage/
 mobile/eisenhower-matrix/.expo/
 mobile/eisenhower-matrix/.expo-shared/
 mobile/eisenhower-matrix/.jest/
+mobile/eisenhower-matrix/android/
+mobile/eisenhower-matrix/ios/
 
 # Infrastructure
 docker-entrypoint-initdb.d/
