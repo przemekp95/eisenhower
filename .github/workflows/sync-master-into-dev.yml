@@ -22,8 +22,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Prepare sync branch
-        id: sync-branch
+      - name: Select sync strategy
+        id: sync-strategy
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
@@ -31,24 +31,146 @@ jobs:
 
           git fetch origin dev master
 
+          target_sha="$(git rev-parse origin/master)"
+          dev_sha="$(git rev-parse origin/dev)"
+
+          echo "target_sha=$target_sha" >> "$GITHUB_OUTPUT"
+          echo "dev_sha=$dev_sha" >> "$GITHUB_OUTPUT"
+
           if git merge-base --is-ancestor origin/master origin/dev; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            echo "reason=dev already contains origin/master" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          if git merge-base --is-ancestor origin/dev origin/master; then
+            echo "mode=fast-forward" >> "$GITHUB_OUTPUT"
+            echo "reason=origin/dev can be fast-forwarded to origin/master" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "mode=pull-request" >> "$GITHUB_OUTPUT"
+          echo "reason=origin/dev advanced independently and requires a merge sync" >> "$GITHUB_OUTPUT"
+
+      - name: Discover master CI run
+        if: ${{ steps.sync-strategy.outputs.mode == 'fast-forward' }}
+        id: master-ci-run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          target_sha="${{ steps.sync-strategy.outputs.target_sha }}"
+
+          for _ in $(seq 1 30); do
+            run_id="$(gh run list \
+              --workflow ci.yml \
+              --branch master \
+              --event push \
+              --json databaseId,headSha \
+              --jq '[.[] | select(.headSha == "'"$target_sha"'")] | sort_by(.databaseId) | last | .databaseId // empty')"
+
+            if [ -n "$run_id" ]; then
+              echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          echo "Could not find the push CI run for master SHA $target_sha."
+          exit 1
+
+      - name: Wait for master CI
+        if: ${{ steps.sync-strategy.outputs.mode == 'fast-forward' }}
+        id: wait-master-ci
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          exit_code=0
+          gh run watch "${{ steps.master-ci-run.outputs.run_id }}" --exit-status || exit_code=$?
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+
+      - name: Publish fast-forward branch-policy status
+        if: ${{ steps.sync-strategy.outputs.mode == 'fast-forward' && steps.wait-master-ci.outputs.exit_code == '0' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          target_sha="${{ steps.sync-strategy.outputs.target_sha }}"
+          target_url="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/statuses/$target_sha" \
+            -f context=branch-policy \
+            -f state=success \
+            -f description="Fast-forward sync from master into dev is allowed." \
+            -f target_url="$target_url"
+
+      - name: Configure fast-forward deploy key
+        if: ${{ steps.sync-strategy.outputs.mode == 'fast-forward' && steps.wait-master-ci.outputs.exit_code == '0' }}
+        env:
+          DEV_SYNC_DEPLOY_KEY: ${{ secrets.DEV_SYNC_DEPLOY_KEY }}
+        shell: bash
+        run: |
+          if [ -z "${DEV_SYNC_DEPLOY_KEY:-}" ]; then
+            echo "DEV_SYNC_DEPLOY_KEY secret is required for fast-forward sync."
+            exit 1
+          fi
+
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$DEV_SYNC_DEPLOY_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keyscan github.com >> "$HOME/.ssh/known_hosts"
+          chmod 644 "$HOME/.ssh/known_hosts"
+
+          git remote set-url origin "git@github.com:${{ github.repository }}.git"
+
+      - name: Fast-forward dev to master
+        if: ${{ steps.sync-strategy.outputs.mode == 'fast-forward' && steps.wait-master-ci.outputs.exit_code == '0' }}
+        id: fast-forward
+        shell: bash
+        run: |
+          target_sha="${{ steps.sync-strategy.outputs.target_sha }}"
+          dev_sha="${{ steps.sync-strategy.outputs.dev_sha }}"
+
+          if git push origin "$target_sha:refs/heads/dev"; then
+            echo "result=success" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Fast-forward push to dev failed, likely because dev advanced before the sync completed."
+          echo "result=fallback" >> "$GITHUB_OUTPUT"
+
+      - name: Fail when master CI did not pass
+        if: ${{ steps.sync-strategy.outputs.mode == 'fast-forward' && steps.wait-master-ci.outputs.exit_code != '0' }}
+        shell: bash
+        run: |
+          echo "Master CI did not pass for ${{ steps.sync-strategy.outputs.target_sha }}, so dev was not moved to the release SHA."
+          exit 1
+
+      - name: Prepare sync branch
+        if: ${{ steps.sync-strategy.outputs.mode == 'pull-request' || steps.fast-forward.outputs.result == 'fallback' }}
+        id: sync-branch
+        shell: bash
+        run: |
+          git fetch origin dev master
 
           branch_name="sync/master-into-dev"
 
           git checkout -B "$branch_name" origin/dev
-          # Force a dedicated sync commit so the PR does not inherit master-only check results.
+          # Fall back to a dedicated sync commit only when fast-forward is no longer possible.
           git merge --no-ff --no-edit origin/master
           git push origin "$branch_name" --force-with-lease
 
-          echo "skip=false" >> "$GITHUB_OUTPUT"
           echo "branch_name=$branch_name" >> "$GITHUB_OUTPUT"
           echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Create or update sync PR
-        if: ${{ steps.sync-branch.outputs.skip != 'true' }}
+        if: ${{ steps.sync-strategy.outputs.mode == 'pull-request' || steps.fast-forward.outputs.result == 'fallback' }}
         id: sync-pr
         env:
           GH_TOKEN: ${{ github.token }}
@@ -79,13 +201,13 @@ jobs:
           echo "number=$pr_number" >> "$GITHUB_OUTPUT"
 
       - name: Enable auto-merge for sync PR
-        if: ${{ steps.sync-branch.outputs.skip != 'true' }}
+        if: ${{ steps.sync-strategy.outputs.mode == 'pull-request' || steps.fast-forward.outputs.result == 'fallback' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh pr merge "${{ steps.sync-pr.outputs.number }}" --merge --auto --delete-branch
 
       - name: Kick sync PR required checks
-        if: ${{ steps.sync-branch.outputs.skip != 'true' }}
+        if: ${{ steps.sync-strategy.outputs.mode == 'pull-request' || steps.fast-forward.outputs.result == 'fallback' }}
         id: kick-checks
         env:
           GH_TOKEN: ${{ github.token }}
@@ -100,7 +222,7 @@ jobs:
             -f head_branch="${{ steps.sync-branch.outputs.branch_name }}"
 
       - name: Discover dispatched sync runs
-        if: ${{ steps.sync-branch.outputs.skip != 'true' }}
+        if: ${{ steps.sync-strategy.outputs.mode == 'pull-request' || steps.fast-forward.outputs.result == 'fallback' }}
         id: dispatched-runs
         env:
           GH_TOKEN: ${{ github.token }}
@@ -138,7 +260,7 @@ jobs:
           echo "branch_policy_run_id=$branch_policy_run_id" >> "$GITHUB_OUTPUT"
 
       - name: Mark sync PR statuses pending
-        if: ${{ steps.sync-branch.outputs.skip != 'true' }}
+        if: ${{ steps.sync-strategy.outputs.mode == 'pull-request' || steps.fast-forward.outputs.result == 'fallback' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         shell: bash
@@ -151,7 +273,7 @@ jobs:
             --phase requested
 
       - name: Wait for dispatched sync checks
-        if: ${{ steps.sync-branch.outputs.skip != 'true' }}
+        if: ${{ steps.sync-strategy.outputs.mode == 'pull-request' || steps.fast-forward.outputs.result == 'fallback' }}
         id: wait-sync-checks
         env:
           GH_TOKEN: ${{ github.token }}
@@ -167,7 +289,7 @@ jobs:
           echo "branch_policy_exit_code=$branch_policy_exit_code" >> "$GITHUB_OUTPUT"
 
       - name: Bridge dispatched sync check results
-        if: ${{ always() && steps.sync-branch.outputs.skip != 'true' }}
+        if: ${{ always() && (steps.sync-strategy.outputs.mode == 'pull-request' || steps.fast-forward.outputs.result == 'fallback') }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         shell: bash
@@ -180,7 +302,7 @@ jobs:
             --phase completed
 
       - name: Enforce dispatched sync check results
-        if: ${{ steps.sync-branch.outputs.skip != 'true' }}
+        if: ${{ steps.sync-strategy.outputs.mode == 'pull-request' || steps.fast-forward.outputs.result == 'fallback' }}
         shell: bash
         run: |
           if [ "${{ steps.wait-sync-checks.outputs.ci_exit_code }}" != "0" ] || [ "${{ steps.wait-sync-checks.outputs.branch_policy_exit_code }}" != "0" ]; then
