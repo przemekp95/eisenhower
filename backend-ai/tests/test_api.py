@@ -252,6 +252,42 @@ def test_batch_and_extract_routes(real_model_bundle):
   assert upload.json()["classified_tasks"][0]["top_similar_examples"]
 
 
+def test_client_facing_payloads_keep_the_fields_used_by_web_and_mobile(real_model_bundle):
+  client = build_real_client(real_model_bundle)
+
+  classify = client.get("/classify", params={"title": "critical production incident"})
+  analyze = client.post("/analyze-langchain", params={"task": "exercise twice a week", "language": "pl"})
+  batch = client.post("/batch-analyze", json={"tasks": ["critical production incident", "exercise twice a week"]})
+  upload = client.post(
+    "/extract-tasks-from-image",
+    files={"file": ("tasks.txt", b"critical production incident\nexercise twice a week\n", "text/plain")},
+  )
+
+  classification_payload = classify.json()
+  analysis_payload = analyze.json()
+  batch_payload = batch.json()
+  upload_payload = upload.json()
+
+  assert classify.status_code == 200
+  assert {"task", "urgent", "important", "quadrant", "quadrant_name", "method"} <= set(classification_payload)
+
+  assert analyze.status_code == 200
+  assert {"task", "langchain_analysis", "rag_classification"} <= set(analysis_payload)
+  assert {"quadrant", "reasoning", "method"} <= set(analysis_payload["langchain_analysis"])
+  assert {"quadrant", "quadrant_name"} <= set(analysis_payload["rag_classification"])
+
+  assert batch.status_code == 200
+  assert {"batch_results", "summary"} <= set(batch_payload)
+  assert batch_payload["summary"]["total_tasks"] == 2
+  assert {"task", "analyses"} <= set(batch_payload["batch_results"][0])
+  assert {"rag", "langchain"} <= set(batch_payload["batch_results"][0]["analyses"])
+
+  assert upload.status_code == 200
+  assert {"classified_tasks", "summary"} <= set(upload_payload)
+  assert upload_payload["summary"]["total_tasks"] == 2
+  assert {"text", "quadrant", "quadrant_name", "confidence"} <= set(upload_payload["classified_tasks"][0])
+
+
 def test_provider_toggle_endpoint_disables_and_reenables_runtime_features(real_model_bundle):
   client = build_real_client(real_model_bundle)
 

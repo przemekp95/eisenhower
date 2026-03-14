@@ -16,6 +16,7 @@
     "test:e2e:ai-smoke:headed": "node scripts/runPlaywright.js test --config=playwright.ai-smoke.config.ts --headed"
   },
   "dependencies": {
+    "@eisenhower/api-client": "file:../packages/api-client",
     "@hello-pangea/dnd": "^18.0.1",
     "gsap": "^3.14.2",
     "lenis": "^1.3.18",

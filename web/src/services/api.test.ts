@@ -144,7 +144,7 @@ describe('api service', () => {
     });
 
     await expect(createTask({ title: '', description: '', urgent: false, important: false })).rejects.toThrow(
-      'Request failed'
+      'Task request failed'
     );
   });
 
@@ -156,6 +156,6 @@ describe('api service', () => {
       json: async () => undefined,
     });
 
-    await expect(classifyTask('urgent')).rejects.toThrow('Request failed');
+    await expect(classifyTask('urgent')).rejects.toThrow('AI request failed');
   });
 });

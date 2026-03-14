@@ -1,12 +1,11 @@
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { DragDropContext, Draggable, Droppable, DropResult } from '@hello-pangea/dnd';
-import { classifyTask, LangChainAnalysis, learnFromAcceptedOCRTasks, OCRResult } from '../services/api';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd';
 import { Task, TaskInput } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
 import { shouldDisableMotion } from '../lib/motion';
 import { restoreReadyState } from '../lib/uiState';
+import { useMatrixController } from '../hooks/useMatrixController';
 import { AIToolsComponent, MatrixSceneComponent } from './matrixLazyComponents';
-import { quadrantToTaskState, resolveSuggestedQuadrant } from './matrixUtils';
 
 interface Props {
   tasks: Task[];
@@ -22,131 +21,27 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
   const [matrixIntroState, setMatrixIntroState] = useState<'pending' | 'ready'>(() =>
     shouldDisableMotion() ? 'ready' : 'pending'
   );
-  const [newTask, setNewTask] = useState<TaskInput>({
-    title: '',
-    description: '',
-    urgent: false,
-    important: false,
+  const {
+    aiError,
+    aiLoading,
+    closeAiTools,
+    handleAnalysisComplete,
+    handleAnalysisImport,
+    handleDragEnd,
+    handleOCRImport,
+    handleSubmit,
+    handleSuggest,
+    newTask,
+    openAiTools,
+    quadrants,
+    showAiTools,
+    updateNewTaskField,
+  } = useMatrixController({
+    tasks,
+    onAddTask,
+    onUpdateTask,
+    translate: t,
   });
-  const [showAiTools, setShowAiTools] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-
-  const quadrants = useMemo(
-    () => [
-      { key: 'do', label: t('matrix.do'), filter: (task: Task) => task.urgent && task.important },
-      { key: 'schedule', label: t('matrix.schedule'), filter: (task: Task) => task.urgent && !task.important },
-      { key: 'delegate', label: t('matrix.delegate'), filter: (task: Task) => !task.urgent && task.important },
-      { key: 'delete', label: t('matrix.delete'), filter: (task: Task) => !task.urgent && !task.important },
-    ],
-    [t]
-  );
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!newTask.title.trim()) {
-      return;
-    }
-
-    await onAddTask({
-      ...newTask,
-      title: newTask.title.trim(),
-      description: newTask.description.trim(),
-    });
-    setNewTask({ title: '', description: '', urgent: false, important: false });
-  };
-
-  const handleSuggest = async () => {
-    if (!newTask.title.trim()) {
-      return;
-    }
-
-    setAiLoading(true);
-    setAiError(null);
-    try {
-      const prediction = await classifyTask(newTask.title);
-      setNewTask((current) => ({
-        ...current,
-        urgent: prediction.urgent,
-        important: prediction.important,
-      }));
-    } catch (issue) {
-      setAiError(issue instanceof Error ? issue.message : 'Suggestion failed');
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  const handleAnalysisComplete = (analysis: LangChainAnalysis) => {
-    const suggestedQuadrant = resolveSuggestedQuadrant(analysis);
-    setNewTask((current) => ({
-      ...current,
-      ...quadrantToTaskState(suggestedQuadrant),
-    }));
-  };
-
-  const handleAnalysisImport = async (analysis: LangChainAnalysis) => {
-    const title = newTask.title.trim() || analysis.task.trim();
-
-    await onAddTask({
-      title,
-      description: newTask.description.trim(),
-      ...quadrantToTaskState(resolveSuggestedQuadrant(analysis)),
-    });
-
-    setNewTask({ title: '', description: '', urgent: false, important: false });
-    setShowAiTools(false);
-  };
-
-  const handleOCRImport = async (result: OCRResult) => {
-    const importedTasks = result.classified_tasks.reduce<Array<{ text: string; quadrant: number }>>(
-      (collection, detectedTask) => {
-        const title = detectedTask.text.trim();
-
-        if (!title) {
-          return collection;
-        }
-
-        const duplicate = collection.some(
-          (task) => task.text === title && task.quadrant === detectedTask.quadrant
-        );
-
-        if (duplicate) {
-          return collection;
-        }
-
-        collection.push({
-          text: title,
-          quadrant: detectedTask.quadrant,
-        });
-        return collection;
-      },
-      []
-    );
-
-    for (const detectedTask of importedTasks) {
-      await onAddTask({
-        title: detectedTask.text,
-        description: '',
-        ...quadrantToTaskState(detectedTask.quadrant),
-      });
-    }
-
-    void learnFromAcceptedOCRTasks(importedTasks).catch(() => undefined);
-
-    return importedTasks.length;
-  };
-
-  const onDragEnd = async (result: DropResult) => {
-    if (!result.destination || result.destination.droppableId === result.source.droppableId) {
-      return;
-    }
-
-    const nextState = quadrantToTaskState(
-      ['do', 'schedule', 'delegate', 'delete'].indexOf(result.destination.droppableId)
-    );
-    await onUpdateTask(result.draggableId, nextState);
-  };
 
   useEffect(() => {
     const root = matrixRef.current;
@@ -230,7 +125,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
     <div
       ref={matrixRef}
       data-matrix-intro={matrixIntroState}
-      className="matrix-shell relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-slate-900/[0.82] p-6 shadow-[0_30px_100px_rgba(2,6,23,0.62)] backdrop-blur-xl"
+      className="matrix-shell relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-slate-900/82 p-6 shadow-[0_30px_100px_rgba(2,6,23,0.62)] backdrop-blur-xl"
     >
       <div aria-hidden="true" className="matrix-noise" />
       <div
@@ -240,7 +135,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
       <div
         data-matrix-beam
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-10 top-14 h-px bg-gradient-to-r from-transparent via-cyan-200/[0.65] to-transparent opacity-[0.12]"
+        className="pointer-events-none absolute inset-x-10 top-14 h-px bg-linear-to-r from-transparent via-cyan-200/65 to-transparent opacity-[0.12]"
       />
 
       <Suspense fallback={<div className="absolute inset-0 bg-linear-to-br from-teal-500/20 to-cyan-500/10" />}>
@@ -251,7 +146,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
         <form
           data-matrix-form
           onSubmit={handleSubmit}
-          className="relative grid gap-3 overflow-hidden rounded-[2rem] border border-white/10 bg-black/[0.28] p-4 backdrop-blur md:grid-cols-2"
+          className="relative grid gap-3 overflow-hidden rounded-4xl border border-white/10 bg-black/[0.28] p-4 backdrop-blur md:grid-cols-2"
         >
           <div
             aria-hidden="true"
@@ -263,14 +158,14 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
           />
           <input
             value={newTask.title}
-            onChange={(event) => setNewTask((current) => ({ ...current, title: event.target.value }))}
-            className="rounded-full border border-white/10 bg-white/10 px-4 py-3 text-white transition-all placeholder:text-white/50 focus:border-emerald-200/40 focus:bg-white/[0.12] focus:outline-hidden"
+            onChange={(event) => updateNewTaskField('title', event.target.value)}
+            className="rounded-full border border-white/10 bg-white/10 px-4 py-3 text-white transition-all placeholder:text-white/50 focus:border-emerald-200/40 focus:bg-white/12 focus:outline-hidden"
             placeholder={t('form.title')}
           />
           <input
             value={newTask.description}
-            onChange={(event) => setNewTask((current) => ({ ...current, description: event.target.value }))}
-            className="rounded-full border border-white/10 bg-white/10 px-4 py-3 text-white transition-all placeholder:text-white/50 focus:border-cyan-200/40 focus:bg-white/[0.12] focus:outline-hidden"
+            onChange={(event) => updateNewTaskField('description', event.target.value)}
+            className="rounded-full border border-white/10 bg-white/10 px-4 py-3 text-white transition-all placeholder:text-white/50 focus:border-cyan-200/40 focus:bg-white/12 focus:outline-hidden"
             placeholder={t('form.description')}
           />
           <label
@@ -283,7 +178,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
             <input
               type="checkbox"
               checked={newTask.urgent}
-              onChange={(event) => setNewTask((current) => ({ ...current, urgent: event.target.checked }))}
+              onChange={(event) => updateNewTaskField('urgent', event.target.checked)}
               className="sr-only"
             />
             <div className="flex items-center gap-3">
@@ -318,7 +213,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
             <input
               type="checkbox"
               checked={newTask.important}
-              onChange={(event) => setNewTask((current) => ({ ...current, important: event.target.checked }))}
+              onChange={(event) => updateNewTaskField('important', event.target.checked)}
               className="sr-only"
             />
             <div className="flex items-center gap-3">
@@ -361,7 +256,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
             </button>
             <button
               type="button"
-              onClick={() => setShowAiTools(true)}
+              onClick={openAiTools}
               disabled={!newTask.title.trim()}
               className={`rounded-full bg-white/10 px-4 py-2 text-sm text-white transition-all hover:bg-white/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10 ${
                 newTask.title.trim() ? 'pulse-ai' : ''
@@ -373,7 +268,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
           {aiError ? <p className="md:col-span-2 text-sm text-red-200">{aiError}</p> : null}
         </form>
 
-        <DragDropContext onDragEnd={(result) => void onDragEnd(result)}>
+        <DragDropContext onDragEnd={(result) => void handleDragEnd(result)}>
           <div className="grid gap-4 lg:grid-cols-2">
             {quadrants.map((quadrant) => (
               <Droppable key={quadrant.key} droppableId={quadrant.key}>
@@ -382,7 +277,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
                     data-matrix-section
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className="group relative min-h-56 overflow-hidden rounded-[1.9rem] border border-white/10 bg-white/[0.06] p-4 transition-all duration-300 hover:-translate-y-1 hover:border-white/[0.14] hover:bg-white/[0.07]"
+                    className="group relative min-h-56 overflow-hidden rounded-[1.9rem] border border-white/10 bg-white/6 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-white/[0.14] hover:bg-white/[0.07]"
                   >
                     <div
                       aria-hidden="true"
@@ -405,7 +300,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
                               ref={dragProvided.innerRef}
                               {...dragProvided.draggableProps}
                               {...dragProvided.dragHandleProps}
-                              className="relative cursor-grab overflow-hidden rounded-[1.4rem] border border-white/10 bg-slate-950/[0.72] p-4 text-white transition-all hover:border-white/[0.16] hover:bg-slate-950/[0.82] hover:shadow-[0_20px_50px_rgba(2,6,23,0.45)] active:cursor-grabbing"
+                              className="relative cursor-grab overflow-hidden rounded-[1.4rem] border border-white/10 bg-slate-950/72 p-4 text-white transition-all hover:border-white/16 hover:bg-slate-950/82 hover:shadow-[0_20px_50px_rgba(2,6,23,0.45)] active:cursor-grabbing"
                             >
                               <div
                                 aria-hidden="true"
@@ -479,7 +374,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
         <Suspense fallback={<div className="fixed inset-0 grid place-items-center bg-black/70 text-white">{t('ai.loading')}</div>}>
           <AIToolsComponent
             taskTitle={newTask.title}
-            onClose={() => setShowAiTools(false)}
+            onClose={closeAiTools}
             onAnalysisComplete={handleAnalysisComplete}
             onAnalysisTaskAdd={handleAnalysisImport}
             onOCRTasksExtracted={handleOCRImport}
