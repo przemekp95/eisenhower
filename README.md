@@ -6,9 +6,12 @@ Monorepo for the Eisenhower Matrix application with a React web client, a Node/E
 
 - `feature/* -> dev`
 - `dev -> master`
-- every merge to `master` automatically opens or refreshes a sync PR `master -> dev`
+- every merge to `master` automatically fast-forwards `dev` to the same commit SHA when `dev` has not advanced independently
+- if `dev` moves ahead before that fast-forward lands, the repository falls back to the technical sync PR `master -> dev`
 - `master` remains the default branch
 - `dev` and `master` are protected with GitHub rulesets
+
+The automatic fast-forward uses a dedicated repository deploy key (`DEV_SYNC_DEPLOY_KEY`) so GitHub Actions can update the protected `dev` branch without broadening admin bypass access.
 
 Pull requests into `master` are allowed only from `dev`. While the repository has a single maintainer, the required approval count remains `0`, but pull requests and passing checks are mandatory.
 
