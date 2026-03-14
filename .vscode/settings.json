@@ -1,4 +1,5 @@
 {
+    "typescript.tsdk": "backend-node/node_modules/typescript/lib",
     "trivy.secretScanning": true,
     "trivy.useConfigFile": true,
     "trivy.onlyUseConfigFile": true,

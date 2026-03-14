@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,73 +7,52 @@ import LanguageSwitcher from './src/components/LanguageSwitcher';
 import MatrixBoard from './src/components/MatrixBoard';
 import TaskComposer from './src/components/TaskComposer';
 import AIToolsModal from './src/components/ai/AIToolsModal';
-import { translations } from './src/i18n/translations';
+import useTaskSyncController from './src/hooks/useTaskSyncController';
 import {
   addTrainingExample,
   analyzeTaskAdvanced,
   batchAnalyzeTasks,
   clearTrainingData,
-  fetchAICapabilities,
   fetchTrainingStats,
   getExamplesByQuadrant,
-  learnFromAcceptedOCRTasks,
   learnFromFeedback,
   retrainModel,
   setAIProviderEnabled,
-  suggestTaskQuadrant,
 } from './src/services/ai';
 import { scanTasksFromImage } from './src/services/media';
-import { loadLanguage, loadTasks, saveLanguage, saveTasks } from './src/services/storage';
-import {
-  createRemoteTask,
-  deleteRemoteTask,
-  fetchRemoteTasks,
-  updateRemoteTask,
-} from './src/services/tasks';
-import {
-  createTaskRecord,
-  getSampleTasks,
-  groupTasksByQuadrant,
-  mergeTasks,
-  quadrantToFlags,
-} from './src/utils/taskUtils';
-import {
-  getQuadrantOptions,
-  getSuggestedQuadrant,
-  resolveOCRNotice,
-  resolveSuggestionNotice,
-} from './src/utils/aiUi';
-import {
-  TASK_SYNC_STATE,
-  getTaskRemoteId,
-  hasPendingTasks,
-  markTaskPendingDelete,
-  markTaskPendingUpdate,
-  normalizeStoredTasks,
-  reconcilePendingTasks,
-  removeTask,
-  taskToRemotePayload,
-  upsertTask,
-} from './src/utils/taskSync';
+import { getSuggestedQuadrant, resolveOCRNotice } from './src/utils/aiUi';
 import styles from './src/styles/appStyles';
 
 export default function App() {
-  const [language, setLanguage] = useState('pl');
-  const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [aiLoading, setAiLoading] = useState(true);
-  const [notice, setNotice] = useState('');
-  const [aiCapabilities, setAiCapabilities] = useState(null);
+  const {
+    addAnalysisTaskToMatrix,
+    aiCapabilities,
+    aiConnected,
+    aiLoading,
+    groupedTasks,
+    handleAddTask,
+    handleDelete,
+    handleLanguageChange,
+    handleScan,
+    handleSuggest,
+    handleToggle,
+    importScannedTasks,
+    language,
+    loading,
+    newTask,
+    notice,
+    providerControls,
+    quadrantOptions,
+    refreshCapabilities,
+    scanDisabled,
+    suggestDisabled,
+    t,
+    updateNewTaskField: updateTaskDraftField,
+  } = useTaskSyncController();
   const [trainingStats, setTrainingStats] = useState(null);
   const [providerBusy, setProviderBusy] = useState({
     local_model: false,
     tesseract: false,
-  });
-  const [newTask, setNewTask] = useState({
-    title: '',
-    description: '',
-    urgent: false,
-    important: false,
   });
   const [aiToolsOpen, setAiToolsOpen] = useState(false);
   const [activeAITab, setActiveAITab] = useState('analysis');
@@ -99,99 +78,6 @@ export default function App() {
   const [examples, setExamples] = useState([]);
   const [preserveExperience, setPreserveExperience] = useState(true);
   const [keepDefaults, setKeepDefaults] = useState(true);
-  const tasksRef = useRef([]);
-
-  const t = translations[language];
-  const quadrantOptions = useMemo(() => getQuadrantOptions(t), [t]);
-
-  useEffect(() => {
-    tasksRef.current = tasks;
-  }, [tasks]);
-
-  useEffect(() => {
-    let active = true;
-
-    const bootstrap = async () => {
-      let nextLanguage = 'pl';
-      let cachedTasks = getSampleTasks('pl');
-
-      try {
-        nextLanguage = await loadLanguage();
-      } catch {
-        nextLanguage = 'pl';
-      }
-
-      try {
-        cachedTasks = await loadTasks(nextLanguage);
-      } catch {
-        cachedTasks = getSampleTasks(nextLanguage);
-      }
-
-      const normalizedCachedTasks = normalizeStoredTasks(cachedTasks, nextLanguage);
-
-      if (!active) {
-        return;
-      }
-
-      setLanguage(nextLanguage);
-      setTasks(normalizedCachedTasks);
-      setLoading(false);
-
-      const [remoteTasksResult, capabilitiesResult] = await Promise.allSettled([
-        fetchRemoteTasks(nextLanguage),
-        fetchAICapabilities(),
-      ]);
-
-      if (!active) {
-        return;
-      }
-
-      if (remoteTasksResult.status === 'fulfilled') {
-        let resolvedTasks = normalizeStoredTasks(remoteTasksResult.value, nextLanguage);
-        resolvedTasks = await reconcilePendingTasks({
-          cachedTasks: normalizedCachedTasks,
-          remoteTasks: resolvedTasks,
-          language: nextLanguage,
-          createRemoteTask,
-          updateRemoteTask,
-          deleteRemoteTask,
-        });
-        await saveTasks(resolvedTasks);
-
-        if (!active) {
-          return;
-        }
-
-        setTasks(resolvedTasks);
-        setNotice(
-          hasPendingTasks(resolvedTasks)
-            ? translations[nextLanguage].pendingSyncNotice
-            : translations[nextLanguage].syncedRemote
-        );
-      } else {
-        setNotice(translations[nextLanguage].cachedLocal);
-      }
-
-      setAiCapabilities(capabilitiesResult.status === 'fulfilled' ? capabilitiesResult.value : null);
-      setAiLoading(false);
-    };
-
-    void bootstrap().catch(() => {
-      if (!active) {
-        return;
-      }
-
-      setLanguage('pl');
-      setTasks(getSampleTasks('pl'));
-      setAiCapabilities(null);
-      setLoading(false);
-      setAiLoading(false);
-    });
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   useEffect(() => {
     if (!aiToolsOpen) {
@@ -207,20 +93,12 @@ export default function App() {
     }
   }, [aiToolsOpen, activeAITab]);
 
-  const persistTasks = async (nextTasks, nextNotice = '', languageOverride = language) => {
-    const normalizedTasks = normalizeStoredTasks(nextTasks, languageOverride);
-    setTasks(normalizedTasks);
-    setNotice(nextNotice);
-    await saveTasks(normalizedTasks);
-  };
-
   const refreshAIManagement = async () => {
     setManageLoading(true);
 
     try {
-      const [stats, capabilities] = await Promise.all([fetchTrainingStats(), fetchAICapabilities()]);
+      const [stats] = await Promise.all([fetchTrainingStats(), refreshCapabilities()]);
       setTrainingStats(stats);
-      setAiCapabilities(capabilities);
     } catch {
       setAiToolsError(t.aiManageLoadFailed);
     } finally {
@@ -231,155 +109,6 @@ export default function App() {
   const resetAIToolFeedback = () => {
     setAiToolsError('');
     setAiToolsMessage('');
-  };
-
-  const updateNewTaskField = (key, value) => {
-    setNewTask((current) => ({ ...current, [key]: value }));
-  };
-
-  const importScannedTasks = async (scannedTasks) => {
-    const createdTasks = await Promise.all(
-      scannedTasks.map(async (task, index) => {
-        try {
-          return await createRemoteTask(taskToRemotePayload(task), language);
-        } catch {
-          return createTaskRecord(language, task, task.id || `local-scan-${Date.now()}-${index}`);
-        }
-      })
-    );
-
-    void learnFromAcceptedOCRTasks(createdTasks).catch(() => undefined);
-
-    await persistTasks(mergeTasks(tasksRef.current, createdTasks), t.ocrAdded);
-    return createdTasks.length;
-  };
-
-  const addAnalysisTaskToMatrix = async (analysis) => {
-    const quadrant = getSuggestedQuadrant(analysis);
-    const taskRecord = createTaskRecord(
-      language,
-      {
-        title: analysis.task,
-        description: analysis.langchain_analysis?.reasoning || '',
-        ...quadrantToFlags(quadrant),
-      },
-      `analysis-${Date.now()}`
-    );
-
-    try {
-      const remoteTask = await createRemoteTask(taskToRemotePayload(taskRecord), language);
-      await persistTasks([remoteTask, ...tasksRef.current], t.syncedRemote);
-    } catch {
-      await persistTasks([taskRecord, ...tasksRef.current], t.cachedLocal);
-    }
-  };
-
-  const handleLanguageChange = async (nextLanguage) => {
-    setLanguage(nextLanguage);
-    setNotice('');
-    await saveLanguage(nextLanguage);
-  };
-
-  const handleAddTask = async () => {
-    if (!newTask.title.trim()) {
-      return;
-    }
-
-    const localTask = createTaskRecord(language, newTask, `local-${Date.now()}`);
-
-    try {
-      const remoteTask = await createRemoteTask(taskToRemotePayload(localTask), language);
-      await persistTasks([remoteTask, ...tasksRef.current], t.syncedRemote);
-    } catch {
-      await persistTasks([localTask, ...tasksRef.current], t.cachedLocal);
-    }
-
-    setNewTask({ title: '', description: '', urgent: false, important: false });
-  };
-
-  const handleSuggest = async () => {
-    if (!newTask.title.trim()) {
-      return;
-    }
-
-    try {
-      const suggestion = await suggestTaskQuadrant(newTask.title);
-      setNewTask((current) => ({
-        ...current,
-        urgent: suggestion.urgent,
-        important: suggestion.important,
-      }));
-    } catch (error) {
-      setNotice(resolveSuggestionNotice(error, t));
-    }
-  };
-
-  const handleDelete = async (id) => {
-    const currentTask = tasksRef.current.find((task) => task.id === id);
-
-    if (!currentTask) {
-      return;
-    }
-
-    const remoteId = getTaskRemoteId(currentTask);
-
-    if (!remoteId || currentTask.syncState === TASK_SYNC_STATE.pendingCreate || currentTask.syncState === TASK_SYNC_STATE.localSeed) {
-      await persistTasks(removeTask(tasksRef.current, currentTask), t.cachedLocal);
-      return;
-    }
-
-    try {
-      await deleteRemoteTask(remoteId);
-      await persistTasks(removeTask(tasksRef.current, currentTask), t.syncedRemote);
-    } catch {
-      const pendingDeleteTask = markTaskPendingDelete(currentTask);
-      const nextTasks = pendingDeleteTask
-        ? upsertTask(removeTask(tasksRef.current, currentTask), pendingDeleteTask)
-        : removeTask(tasksRef.current, currentTask);
-      await persistTasks(nextTasks, t.cachedLocal);
-    }
-  };
-
-  const handleToggle = async (id, key) => {
-    const toggledTask = tasksRef.current.find((task) => task.id === id);
-
-    if (!toggledTask) {
-      return;
-    }
-
-    const nextTask = { ...toggledTask, [key]: !toggledTask[key] };
-    const localTask = markTaskPendingUpdate(toggledTask, { [key]: !toggledTask[key] });
-    const nextTasks = upsertTask(tasksRef.current, localTask);
-    const remoteId = getTaskRemoteId(toggledTask);
-
-    if (!remoteId) {
-      await persistTasks(nextTasks, t.cachedLocal);
-      return;
-    }
-
-    try {
-      const remoteTask = await updateRemoteTask(remoteId, { [key]: nextTask[key] }, language);
-      await persistTasks(
-        upsertTask(tasksRef.current, remoteTask),
-        t.syncedRemote
-      );
-    } catch {
-      await persistTasks(nextTasks, t.cachedLocal);
-    }
-  };
-
-  const handleScan = async () => {
-    try {
-      const scanned = await scanTasksFromImage(language);
-      if (scanned.length === 0) {
-        setNotice(t.ocrEmpty);
-        return;
-      }
-
-      await importScannedTasks(scanned);
-    } catch (error) {
-      setNotice(resolveOCRNotice(error, t));
-    }
   };
 
   const openAITools = (tab = 'analysis') => {
@@ -561,12 +290,6 @@ export default function App() {
       (response) => t.aiManageExamplesLoaded.replace('{count}', String(response?.examples?.length ?? 0))
     );
 
-  const groupedTasks = groupTasksByQuadrant(tasks);
-  const aiConnected = Boolean(aiCapabilities);
-  const providerControls = aiCapabilities?.provider_controls || {};
-  const suggestDisabled = !providerControls.local_model?.active;
-  const scanDisabled = !providerControls.tesseract?.active;
-
   if (loading) {
     return (
       <SafeAreaView style={styles.screen}>
@@ -595,7 +318,7 @@ export default function App() {
 
         <TaskComposer
           newTask={newTask}
-          onChangeTask={updateNewTaskField}
+          onChangeTask={updateTaskDraftField}
           onAddTask={handleAddTask}
           onSuggest={handleSuggest}
           onScan={handleScan}

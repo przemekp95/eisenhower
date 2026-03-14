@@ -1,11 +1,4 @@
-export interface Task {
-  _id: string;
-  title: string;
-  description: string;
-  urgent: boolean;
-  important: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-}
+import type { TaskDto, TaskInputDto } from '@eisenhower/api-client';
 
-export type TaskInput = Omit<Task, '_id' | 'createdAt' | 'updatedAt'>;
+export type Task = TaskDto;
+export type TaskInput = TaskInputDto;

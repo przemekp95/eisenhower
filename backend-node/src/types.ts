@@ -1,9 +1,6 @@
-export interface TaskPayload {
-  title: string;
-  description?: string;
-  urgent: boolean;
-  important: boolean;
-}
-
-export type HealthState = 'healthy' | 'unhealthy' | 'unreachable';
-export type DatabaseState = 'connected' | 'disconnected';
+export type {
+  DatabaseState,
+  HealthResponseDto,
+  HealthState,
+  TaskInputDto as TaskPayload,
+} from '@eisenhower/api-client';
