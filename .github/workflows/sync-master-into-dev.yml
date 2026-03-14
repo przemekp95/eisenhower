@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -57,14 +58,17 @@ jobs:
             --jq '.[0].number')"
 
           if [ -z "$pr_number" ]; then
+            printf '%s\n' \
+              '## Summary' \
+              '- sync the latest master merge history back into dev' \
+              '- keep the promotion flow `feature/* -> dev -> master` working without manual sync pull requests' \
+              > /tmp/sync-pr-body.md
+
             pr_url="$(gh pr create \
               --base dev \
               --head "${{ steps.sync-branch.outputs.branch_name }}" \
               --title "Sync master into dev" \
-              --body "## Summary
-- sync the latest master merge history back into dev
-- keep the promotion flow \`feature/* -> dev -> master\` working without manual sync pull requests
-")"
+              --body-file /tmp/sync-pr-body.md)"
             pr_number="${pr_url##*/}"
           fi
 
