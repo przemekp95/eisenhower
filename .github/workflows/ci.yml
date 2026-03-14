@@ -26,8 +26,53 @@ env:
   PYTHON_VERSION: "3.11"
 
 jobs:
+  resolve-run-mode:
+    name: resolve-run-mode
+    runs-on: ubuntu-latest
+    outputs:
+      skip_full_ci: ${{ steps.resolve.outputs.skip_full_ci }}
+      reason: ${{ steps.resolve.outputs.reason }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve CI mode
+        id: resolve
+        shell: bash
+        run: |
+          skip_full_ci=false
+          reason=standard
+
+          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF_NAME}" == "dev" ]]; then
+            git fetch --no-tags --depth=1 origin master
+            master_sha="$(git rev-parse origin/master)"
+
+            if [[ "${GITHUB_SHA}" == "$master_sha" ]]; then
+              skip_full_ci=true
+              reason=fast-forward-sync
+            fi
+          fi
+
+          echo "skip_full_ci=$skip_full_ci" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          echo "Resolved mode: $reason"
+
+      - name: Summarize mode
+        shell: bash
+        run: |
+          {
+            echo "### CI run mode"
+            echo
+            echo "- reason: ${{ steps.resolve.outputs.reason }}"
+            echo "- skip_full_ci: ${{ steps.resolve.outputs.skip_full_ci }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   security-lint:
     name: security-lint
+    needs: resolve-run-mode
+    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' }}
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -71,6 +116,8 @@ jobs:
 
   test-backend-node:
     name: test-backend-node
+    needs: resolve-run-mode
+    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' }}
     runs-on: ubuntu-latest
     services:
       mongodb:
@@ -105,6 +152,8 @@ jobs:
 
   test-frontend:
     name: test-frontend
+    needs: resolve-run-mode
+    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -130,7 +179,8 @@ jobs:
         run: npm run test:coverage
 
   test-frontend-e2e:
-    if: ${{ !inputs.sync_pr_mode }}
+    needs: resolve-run-mode
+    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' && !inputs.sync_pr_mode }}
     name: test-frontend-e2e
     runs-on: ubuntu-latest
     steps:
@@ -164,7 +214,7 @@ jobs:
 
       - name: Upload Playwright artifacts
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: playwright-report
           path: |
@@ -173,7 +223,8 @@ jobs:
           if-no-files-found: ignore
 
   test-frontend-integration:
-    if: ${{ !inputs.sync_pr_mode }}
+    needs: resolve-run-mode
+    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' && !inputs.sync_pr_mode }}
     name: test-frontend-integration
     runs-on: ubuntu-latest
     steps:
@@ -203,6 +254,8 @@ jobs:
 
   test-backend-ai:
     name: test-backend-ai
+    needs: resolve-run-mode
+    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -236,6 +289,8 @@ jobs:
 
   test-mobile:
     name: test-mobile
+    needs: resolve-run-mode
+    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -257,7 +312,8 @@ jobs:
         run: npm run test:coverage
 
   test-mobile-native-android:
-    if: ${{ !inputs.sync_pr_mode }}
+    needs: resolve-run-mode
+    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' && !inputs.sync_pr_mode }}
     name: test-mobile-native-android
     runs-on: ubuntu-latest
     env:
@@ -397,7 +453,7 @@ jobs:
             "mobile/eisenhower-matrix/output/eisenhower-matrix-android-release-${GITHUB_SHA::7}.apk"
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: eisenhower-matrix-android-apk-${{ github.sha }}
           path: mobile/eisenhower-matrix/output/*.apk
