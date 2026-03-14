@@ -1,6 +1,16 @@
 name: Branch Policy
 
 on:
+  workflow_dispatch:
+    inputs:
+      base_branch:
+        description: Base branch to validate against
+        required: true
+        type: string
+      head_branch:
+        description: Head branch to validate against
+        required: true
+        type: string
   pull_request:
     branches:
       - dev
@@ -10,13 +20,16 @@ jobs:
   branch-policy:
     name: branch-policy
     runs-on: ubuntu-latest
+    env:
+      BASE_BRANCH: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.base_branch || github.base_ref }}
+      HEAD_BRANCH: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.head_branch || github.head_ref }}
     steps:
       - name: Validate branch flow
         run: |
-          echo "Base branch: ${{ github.base_ref }}"
-          echo "Head branch: ${{ github.head_ref }}"
+          echo "Base branch: $BASE_BRANCH"
+          echo "Head branch: $HEAD_BRANCH"
 
-          if [ "${{ github.base_ref }}" = "master" ] && [ "${{ github.head_ref }}" != "dev" ]; then
+          if [ "$BASE_BRANCH" = "master" ] && [ "$HEAD_BRANCH" != "dev" ]; then
             echo "Only the dev branch can open a PR into master."
             exit 1
           fi
