@@ -10,6 +10,7 @@ permissions:
   actions: write
   contents: write
   pull-requests: write
+  statuses: write
 
 jobs:
   sync-master-into-dev:
@@ -44,6 +45,7 @@ jobs:
 
           echo "skip=false" >> "$GITHUB_OUTPUT"
           echo "branch_name=$branch_name" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Create or update sync PR
         if: ${{ steps.sync-branch.outputs.skip != 'true' }}
@@ -84,6 +86,7 @@ jobs:
 
       - name: Kick sync PR required checks
         if: ${{ steps.sync-branch.outputs.skip != 'true' }}
+        id: kick-checks
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -95,3 +98,92 @@ jobs:
             --ref "${{ steps.sync-branch.outputs.branch_name }}" \
             -f base_branch=dev \
             -f head_branch="${{ steps.sync-branch.outputs.branch_name }}"
+
+      - name: Discover dispatched sync runs
+        if: ${{ steps.sync-branch.outputs.skip != 'true' }}
+        id: dispatched-runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          branch_name="${{ steps.sync-branch.outputs.branch_name }}"
+          head_sha="${{ steps.sync-branch.outputs.head_sha }}"
+
+          find_run_id() {
+            local workflow="$1"
+
+            for _ in $(seq 1 30); do
+              run_id="$(gh run list \
+                --workflow "$workflow" \
+                --branch "$branch_name" \
+                --event workflow_dispatch \
+                --json databaseId,headSha \
+                --jq '[.[] | select(.headSha == "'"$head_sha"'")] | sort_by(.databaseId) | last | .databaseId // empty')"
+
+              if [ -n "$run_id" ]; then
+                printf '%s' "$run_id"
+                return 0
+              fi
+
+              sleep 5
+            done
+
+            return 1
+          }
+
+          ci_run_id="$(find_run_id ci.yml)"
+          branch_policy_run_id="$(find_run_id branch-policy.yml)"
+
+          echo "ci_run_id=$ci_run_id" >> "$GITHUB_OUTPUT"
+          echo "branch_policy_run_id=$branch_policy_run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Mark sync PR statuses pending
+        if: ${{ steps.sync-branch.outputs.skip != 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          node .github/scripts/bridge-sync-pr-statuses.mjs \
+            --run-id "${{ steps.dispatched-runs.outputs.ci_run_id }}" \
+            --phase requested
+          node .github/scripts/bridge-sync-pr-statuses.mjs \
+            --run-id "${{ steps.dispatched-runs.outputs.branch_policy_run_id }}" \
+            --phase requested
+
+      - name: Wait for dispatched sync checks
+        if: ${{ steps.sync-branch.outputs.skip != 'true' }}
+        id: wait-sync-checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          ci_exit_code=0
+          branch_policy_exit_code=0
+
+          gh run watch "${{ steps.dispatched-runs.outputs.ci_run_id }}" --exit-status || ci_exit_code=$?
+          gh run watch "${{ steps.dispatched-runs.outputs.branch_policy_run_id }}" --exit-status || branch_policy_exit_code=$?
+
+          echo "ci_exit_code=$ci_exit_code" >> "$GITHUB_OUTPUT"
+          echo "branch_policy_exit_code=$branch_policy_exit_code" >> "$GITHUB_OUTPUT"
+
+      - name: Bridge dispatched sync check results
+        if: ${{ always() && steps.sync-branch.outputs.skip != 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          node .github/scripts/bridge-sync-pr-statuses.mjs \
+            --run-id "${{ steps.dispatched-runs.outputs.ci_run_id }}" \
+            --phase completed
+          node .github/scripts/bridge-sync-pr-statuses.mjs \
+            --run-id "${{ steps.dispatched-runs.outputs.branch_policy_run_id }}" \
+            --phase completed
+
+      - name: Enforce dispatched sync check results
+        if: ${{ steps.sync-branch.outputs.skip != 'true' }}
+        shell: bash
+        run: |
+          if [ "${{ steps.wait-sync-checks.outputs.ci_exit_code }}" != "0" ] || [ "${{ steps.wait-sync-checks.outputs.branch_policy_exit_code }}" != "0" ]; then
+            echo "One or more dispatched sync checks failed."
+            exit 1
+          fi
