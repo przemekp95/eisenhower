@@ -80,19 +80,68 @@ jobs:
           echo "Could not find the push CI run for master SHA $target_sha."
           exit 1
 
-      - name: Wait for master CI
+      - name: Wait for required master checks
         if: ${{ steps.sync-strategy.outputs.mode == 'fast-forward' }}
-        id: wait-master-ci
+        id: wait-master-checks
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          exit_code=0
-          gh run watch "${{ steps.master-ci-run.outputs.run_id }}" --exit-status || exit_code=$?
-          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          run_id="${{ steps.master-ci-run.outputs.run_id }}"
+          repo="${{ github.repository }}"
+          required_jobs=(
+            security-lint
+            test-backend-node
+            test-frontend
+            test-backend-ai
+            test-mobile
+          )
+
+          for _ in $(seq 1 120); do
+            payload="$(gh api "/repos/$repo/actions/runs/$run_id/jobs?per_page=100")"
+
+            missing_jobs=0
+            pending_jobs=0
+            failed_jobs=()
+
+            for job_name in "${required_jobs[@]}"; do
+              job_status="$(printf '%s' "$payload" | jq -r --arg name "$job_name" '.jobs[] | select(.name == $name) | .status' | tail -n 1)"
+              job_conclusion="$(printf '%s' "$payload" | jq -r --arg name "$job_name" '.jobs[] | select(.name == $name) | .conclusion' | tail -n 1)"
+
+              if [ -z "$job_status" ]; then
+                missing_jobs=1
+                continue
+              fi
+
+              if [ "$job_status" != "completed" ]; then
+                pending_jobs=1
+                continue
+              fi
+
+              if [ "$job_conclusion" != "success" ]; then
+                failed_jobs+=("$job_name:$job_conclusion")
+              fi
+            done
+
+            if [ "${#failed_jobs[@]}" -gt 0 ]; then
+              echo "Required master checks failed: ${failed_jobs[*]}"
+              echo "exit_code=1" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            if [ "$missing_jobs" -eq 0 ] && [ "$pending_jobs" -eq 0 ]; then
+              echo "exit_code=0" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          echo "Timed out while waiting for required master checks."
+          echo "exit_code=1" >> "$GITHUB_OUTPUT"
 
       - name: Publish fast-forward branch-policy status
-        if: ${{ steps.sync-strategy.outputs.mode == 'fast-forward' && steps.wait-master-ci.outputs.exit_code == '0' }}
+        if: ${{ steps.sync-strategy.outputs.mode == 'fast-forward' && steps.wait-master-checks.outputs.exit_code == '0' }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -110,7 +159,7 @@ jobs:
             -f target_url="$target_url"
 
       - name: Configure fast-forward deploy key
-        if: ${{ steps.sync-strategy.outputs.mode == 'fast-forward' && steps.wait-master-ci.outputs.exit_code == '0' }}
+        if: ${{ steps.sync-strategy.outputs.mode == 'fast-forward' && steps.wait-master-checks.outputs.exit_code == '0' }}
         env:
           DEV_SYNC_DEPLOY_KEY: ${{ secrets.DEV_SYNC_DEPLOY_KEY }}
         shell: bash
@@ -130,7 +179,7 @@ jobs:
           git remote set-url origin "git@github.com:${{ github.repository }}.git"
 
       - name: Fast-forward dev to master
-        if: ${{ steps.sync-strategy.outputs.mode == 'fast-forward' && steps.wait-master-ci.outputs.exit_code == '0' }}
+        if: ${{ steps.sync-strategy.outputs.mode == 'fast-forward' && steps.wait-master-checks.outputs.exit_code == '0' }}
         id: fast-forward
         shell: bash
         run: |
@@ -146,10 +195,10 @@ jobs:
           echo "result=fallback" >> "$GITHUB_OUTPUT"
 
       - name: Fail when master CI did not pass
-        if: ${{ steps.sync-strategy.outputs.mode == 'fast-forward' && steps.wait-master-ci.outputs.exit_code != '0' }}
+        if: ${{ steps.sync-strategy.outputs.mode == 'fast-forward' && steps.wait-master-checks.outputs.exit_code != '0' }}
         shell: bash
         run: |
-          echo "Master CI did not pass for ${{ steps.sync-strategy.outputs.target_sha }}, so dev was not moved to the release SHA."
+          echo "Required master checks did not pass for ${{ steps.sync-strategy.outputs.target_sha }}, so dev was not moved to the release SHA."
           exit 1
 
       - name: Prepare sync branch

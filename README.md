@@ -12,6 +12,7 @@ Monorepo for the Eisenhower Matrix application with a React web client, a Node/E
 - `dev` and `master` are protected with GitHub rulesets
 
 The automatic fast-forward uses a dedicated repository deploy key (`DEV_SYNC_DEPLOY_KEY`) so GitHub Actions can update the protected `dev` branch without broadening admin bypass access.
+That fast-forward waits only for the required gates (`branch-policy`, `security-lint`, `test-backend-node`, `test-frontend`, `test-backend-ai`, `test-mobile`), so optional long-running jobs such as the Android release build do not delay `dev` and `master` from reconverging on the same SHA.
 
 Pull requests into `master` are allowed only from `dev`. While the repository has a single maintainer, the required approval count remains `0`, but pull requests and passing checks are mandatory.
 
