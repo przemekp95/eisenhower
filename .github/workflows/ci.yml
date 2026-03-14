@@ -6,6 +6,12 @@ concurrency:
 
 on:
   workflow_dispatch:
+    inputs:
+      sync_pr_mode:
+        description: Run only the required sync-PR checks
+        required: false
+        type: boolean
+        default: false
   pull_request:
     branches:
       - dev
@@ -124,6 +130,7 @@ jobs:
         run: npm run test:coverage
 
   test-frontend-e2e:
+    if: ${{ !inputs.sync_pr_mode }}
     name: test-frontend-e2e
     runs-on: ubuntu-latest
     steps:
@@ -166,6 +173,7 @@ jobs:
           if-no-files-found: ignore
 
   test-frontend-integration:
+    if: ${{ !inputs.sync_pr_mode }}
     name: test-frontend-integration
     runs-on: ubuntu-latest
     steps:
@@ -249,6 +257,7 @@ jobs:
         run: npm run test:coverage
 
   test-mobile-native-android:
+    if: ${{ !inputs.sync_pr_mode }}
     name: test-mobile-native-android
     runs-on: ubuntu-latest
     env:
