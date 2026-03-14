@@ -88,7 +88,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh workflow run ci.yml --ref "${{ steps.sync-branch.outputs.branch_name }}"
+          gh workflow run ci.yml \
+            --ref "${{ steps.sync-branch.outputs.branch_name }}" \
+            -f sync_pr_mode=true
           gh workflow run branch-policy.yml \
             --ref "${{ steps.sync-branch.outputs.branch_name }}" \
             -f base_branch=dev \
