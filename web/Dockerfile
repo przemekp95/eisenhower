@@ -1,12 +1,16 @@
 # Build stage
 FROM node:20-alpine AS build
 
-WORKDIR /app
+WORKDIR /app/web
 
-COPY package.json package-lock.json ./
+COPY web/package.json web/package-lock.json ./
+COPY packages/api-client/package.json ../packages/api-client/package.json
+COPY packages/api-client/index.js ../packages/api-client/index.js
+COPY packages/api-client/index.d.ts ../packages/api-client/index.d.ts
 RUN npm ci --no-audit --no-fund
 
-COPY . .
+COPY web ./
+COPY packages/api-client ../packages/api-client
 RUN npm run build
 
 # Production stage
@@ -16,9 +20,9 @@ RUN apk add --no-cache curl && \
     mkdir -p /var/cache/nginx /tmp/nginx && \
     chown -R nginx:nginx /var/cache/nginx /tmp/nginx /usr/share/nginx/html
 
-COPY nginx.conf /etc/nginx/nginx.conf
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY web/nginx.conf /etc/nginx/nginx.conf
+COPY web/docker-entrypoint.sh /docker-entrypoint.sh
+COPY --from=build /app/web/dist /usr/share/nginx/html
 
 RUN chown -R nginx:nginx /etc/nginx/nginx.conf /usr/share/nginx/html /docker-entrypoint.sh && \
     chmod 755 /docker-entrypoint.sh
@@ -38,15 +42,19 @@ CMD ["/docker-entrypoint.sh"]
 # Development stage
 FROM node:20-alpine AS development
 
-WORKDIR /app
-RUN chown node:node /app
+WORKDIR /app/web
+RUN chown node:node /app /app/web
 
 USER node
 
-COPY --chown=node:node package.json package-lock.json ./
+COPY --chown=node:node web/package.json web/package-lock.json ./
+COPY --chown=node:node packages/api-client/package.json ../packages/api-client/package.json
+COPY --chown=node:node packages/api-client/index.js ../packages/api-client/index.js
+COPY --chown=node:node packages/api-client/index.d.ts ../packages/api-client/index.d.ts
 RUN npm ci --no-audit --no-fund
 
-COPY --chown=node:node . .
+COPY --chown=node:node web ./
+COPY --chown=node:node packages/api-client ../packages/api-client
 
 EXPOSE 5173
 
