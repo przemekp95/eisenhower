@@ -37,7 +37,8 @@ jobs:
           branch_name="sync/master-into-dev"
 
           git checkout -B "$branch_name" origin/dev
-          git merge --no-edit origin/master
+          # Force a dedicated sync commit so the PR does not inherit master-only check results.
+          git merge --no-ff --no-edit origin/master
           git push origin "$branch_name" --force-with-lease
 
           echo "skip=false" >> "$GITHUB_OUTPUT"
