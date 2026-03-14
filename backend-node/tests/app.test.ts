@@ -66,6 +66,21 @@ describe('app middleware', () => {
     expect(errorSpy).not.toHaveBeenCalled();
   });
 
+  it('skips request logging for readiness checks', async () => {
+    const infoSpy = jest.spyOn(console, 'info').mockImplementation(() => undefined);
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const app = createApp({
+      aiHealthChecker: async () => 'healthy',
+      databaseStatusResolver: () => 'connected',
+    });
+
+    const response = await request(app).get('/health/ready');
+
+    expect(response.status).toBe(200);
+    expect(infoSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
   it('skips request logging for OPTIONS preflight requests', async () => {
     const infoSpy = jest.spyOn(console, 'info').mockImplementation(() => undefined);
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);

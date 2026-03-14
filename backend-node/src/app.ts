@@ -38,7 +38,7 @@ export function createApp(options: CreateAppOptions = {}) {
     }
 
     const path = req.originalUrl.split('?')[0];
-    if (path === '/health' || req.method === 'OPTIONS') {
+    if ((path === '/health' || path === '/health/ready') || req.method === 'OPTIONS') {
       next();
       return;
     }

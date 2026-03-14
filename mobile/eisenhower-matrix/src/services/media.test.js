@@ -26,6 +26,8 @@ describe('media service', () => {
         urgent: true,
         important: true,
         locale: 'pl',
+        remoteId: null,
+        syncState: 'pending_create',
       },
     ]);
   });
@@ -70,6 +72,8 @@ describe('media service', () => {
         urgent: false,
         important: true,
         locale: 'en',
+        remoteId: null,
+        syncState: 'pending_create',
       },
     ]);
   });
@@ -110,6 +114,8 @@ describe('media service', () => {
         urgent: true,
         important: true,
         locale: 'pl',
+        remoteId: null,
+        syncState: 'pending_create',
       },
     ]);
   });

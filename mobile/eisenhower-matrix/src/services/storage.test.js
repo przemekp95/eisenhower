@@ -20,7 +20,16 @@ describe('storage service', () => {
     await expect(loadTasks('pl')).resolves.toHaveLength(2);
     await saveTasks([{ id: '1', title: 'Stored', description: '', urgent: false, important: false }]);
     await expect(loadTasks('pl')).resolves.toEqual([
-      { id: '1', title: 'Stored', description: '', urgent: false, important: false },
+      {
+        id: '1',
+        title: 'Stored',
+        description: '',
+        urgent: false,
+        important: false,
+        locale: 'pl',
+        remoteId: null,
+        syncState: 'pending_create',
+      },
     ]);
   });
 

@@ -31,6 +31,8 @@ describe('tasks service', () => {
         urgent: true,
         important: false,
         locale: 'en',
+        remoteId: '507f1f77bcf86cd799439011',
+        syncState: 'synced',
       },
     ]);
     expect(global.fetch).toHaveBeenCalledWith(`${mobileConfig.apiUrl}/tasks`);
@@ -98,6 +100,8 @@ describe('tasks service', () => {
       urgent: false,
       important: false,
       locale: 'pl',
+      remoteId: '1',
+      syncState: 'synced',
     });
   });
 
@@ -142,6 +146,8 @@ describe('tasks service', () => {
         urgent: false,
         important: false,
         locale: 'pl',
+        remoteId: '507f1f77bcf86cd799439014',
+        syncState: 'synced',
       });
 
     expect(normalizeRemoteTask({ _id: '507f1f77bcf86cd799439015', title: null, description: null, urgent: 0, important: 1 })).toEqual({
@@ -151,6 +157,8 @@ describe('tasks service', () => {
       urgent: false,
       important: true,
       locale: 'pl',
+      remoteId: '507f1f77bcf86cd799439015',
+      syncState: 'synced',
     });
   });
 });

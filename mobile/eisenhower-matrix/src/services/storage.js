@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getSampleTasks } from '../utils/taskUtils';
+import { normalizeStoredTasks } from '../utils/taskSync';
 
 const TASKS_KEY = 'eisenhower-mobile/tasks';
 const LANGUAGE_KEY = 'eisenhower-mobile/language';
@@ -20,7 +21,7 @@ export async function loadTasks(language) {
   }
 
   try {
-    return JSON.parse(stored);
+    return normalizeStoredTasks(JSON.parse(stored), language);
   } catch {
     return getSampleTasks(language);
   }

@@ -28,7 +28,6 @@ import {
   createRemoteTask,
   deleteRemoteTask,
   fetchRemoteTasks,
-  isRemoteTaskId,
   updateRemoteTask,
 } from './src/services/tasks';
 import {
@@ -44,6 +43,18 @@ import {
   resolveOCRNotice,
   resolveSuggestionNotice,
 } from './src/utils/aiUi';
+import {
+  TASK_SYNC_STATE,
+  getTaskRemoteId,
+  hasPendingTasks,
+  markTaskPendingDelete,
+  markTaskPendingUpdate,
+  normalizeStoredTasks,
+  reconcilePendingTasks,
+  removeTask,
+  taskToRemotePayload,
+  upsertTask,
+} from './src/utils/taskSync';
 import styles from './src/styles/appStyles';
 
 export default function App() {
@@ -116,12 +127,14 @@ export default function App() {
         cachedTasks = getSampleTasks(nextLanguage);
       }
 
+      const normalizedCachedTasks = normalizeStoredTasks(cachedTasks, nextLanguage);
+
       if (!active) {
         return;
       }
 
       setLanguage(nextLanguage);
-      setTasks(cachedTasks);
+      setTasks(normalizedCachedTasks);
       setLoading(false);
 
       const [remoteTasksResult, capabilitiesResult] = await Promise.allSettled([
@@ -134,14 +147,27 @@ export default function App() {
       }
 
       if (remoteTasksResult.status === 'fulfilled') {
-        await saveTasks(remoteTasksResult.value);
+        let resolvedTasks = normalizeStoredTasks(remoteTasksResult.value, nextLanguage);
+        resolvedTasks = await reconcilePendingTasks({
+          cachedTasks: normalizedCachedTasks,
+          remoteTasks: resolvedTasks,
+          language: nextLanguage,
+          createRemoteTask,
+          updateRemoteTask,
+          deleteRemoteTask,
+        });
+        await saveTasks(resolvedTasks);
 
         if (!active) {
           return;
         }
 
-        setTasks(remoteTasksResult.value);
-        setNotice(translations[nextLanguage].syncedRemote);
+        setTasks(resolvedTasks);
+        setNotice(
+          hasPendingTasks(resolvedTasks)
+            ? translations[nextLanguage].pendingSyncNotice
+            : translations[nextLanguage].syncedRemote
+        );
       } else {
         setNotice(translations[nextLanguage].cachedLocal);
       }
@@ -181,10 +207,11 @@ export default function App() {
     }
   }, [aiToolsOpen, activeAITab]);
 
-  const persistTasks = async (nextTasks, nextNotice = '') => {
-    setTasks(nextTasks);
+  const persistTasks = async (nextTasks, nextNotice = '', languageOverride = language) => {
+    const normalizedTasks = normalizeStoredTasks(nextTasks, languageOverride);
+    setTasks(normalizedTasks);
     setNotice(nextNotice);
-    await saveTasks(nextTasks);
+    await saveTasks(normalizedTasks);
   };
 
   const refreshAIManagement = async () => {
@@ -212,11 +239,11 @@ export default function App() {
 
   const importScannedTasks = async (scannedTasks) => {
     const createdTasks = await Promise.all(
-      scannedTasks.map(async (task) => {
+      scannedTasks.map(async (task, index) => {
         try {
-          return await createRemoteTask(task, language);
+          return await createRemoteTask(taskToRemotePayload(task), language);
         } catch {
-          return task;
+          return createTaskRecord(language, task, task.id || `local-scan-${Date.now()}-${index}`);
         }
       })
     );
@@ -240,7 +267,7 @@ export default function App() {
     );
 
     try {
-      const remoteTask = await createRemoteTask(taskRecord, language);
+      const remoteTask = await createRemoteTask(taskToRemotePayload(taskRecord), language);
       await persistTasks([remoteTask, ...tasksRef.current], t.syncedRemote);
     } catch {
       await persistTasks([taskRecord, ...tasksRef.current], t.cachedLocal);
@@ -261,7 +288,7 @@ export default function App() {
     const localTask = createTaskRecord(language, newTask, `local-${Date.now()}`);
 
     try {
-      const remoteTask = await createRemoteTask(localTask, language);
+      const remoteTask = await createRemoteTask(taskToRemotePayload(localTask), language);
       await persistTasks([remoteTask, ...tasksRef.current], t.syncedRemote);
     } catch {
       await persistTasks([localTask, ...tasksRef.current], t.cachedLocal);
@@ -288,17 +315,27 @@ export default function App() {
   };
 
   const handleDelete = async (id) => {
-    const nextTasks = tasksRef.current.filter((task) => task.id !== id);
+    const currentTask = tasksRef.current.find((task) => task.id === id);
 
-    if (!isRemoteTaskId(id)) {
-      await persistTasks(nextTasks, t.cachedLocal);
+    if (!currentTask) {
+      return;
+    }
+
+    const remoteId = getTaskRemoteId(currentTask);
+
+    if (!remoteId || currentTask.syncState === TASK_SYNC_STATE.pendingCreate || currentTask.syncState === TASK_SYNC_STATE.localSeed) {
+      await persistTasks(removeTask(tasksRef.current, currentTask), t.cachedLocal);
       return;
     }
 
     try {
-      await deleteRemoteTask(id);
-      await persistTasks(nextTasks, t.syncedRemote);
+      await deleteRemoteTask(remoteId);
+      await persistTasks(removeTask(tasksRef.current, currentTask), t.syncedRemote);
     } catch {
+      const pendingDeleteTask = markTaskPendingDelete(currentTask);
+      const nextTasks = pendingDeleteTask
+        ? upsertTask(removeTask(tasksRef.current, currentTask), pendingDeleteTask)
+        : removeTask(tasksRef.current, currentTask);
       await persistTasks(nextTasks, t.cachedLocal);
     }
   };
@@ -311,17 +348,19 @@ export default function App() {
     }
 
     const nextTask = { ...toggledTask, [key]: !toggledTask[key] };
-    const nextTasks = tasksRef.current.map((task) => (task.id === id ? nextTask : task));
+    const localTask = markTaskPendingUpdate(toggledTask, { [key]: !toggledTask[key] });
+    const nextTasks = upsertTask(tasksRef.current, localTask);
+    const remoteId = getTaskRemoteId(toggledTask);
 
-    if (!isRemoteTaskId(id)) {
+    if (!remoteId) {
       await persistTasks(nextTasks, t.cachedLocal);
       return;
     }
 
     try {
-      const remoteTask = await updateRemoteTask(id, { [key]: nextTask[key] }, language);
+      const remoteTask = await updateRemoteTask(remoteId, { [key]: nextTask[key] }, language);
       await persistTasks(
-        tasksRef.current.map((task) => (task.id === id ? remoteTask : task)),
+        upsertTask(tasksRef.current, remoteTask),
         t.syncedRemote
       );
     } catch {
