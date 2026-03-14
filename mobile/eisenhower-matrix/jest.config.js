@@ -1,6 +1,7 @@
 module.exports = {
   preset: 'jest-expo',
   setupFilesAfterEnv: ['<rootDir>/src/setupTests.js'],
+  modulePaths: ['<rootDir>/node_modules'],
   collectCoverageFrom: ['App.js', 'src/**/*.js'],
   coverageThreshold: {
     global: {
