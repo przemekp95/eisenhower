@@ -29,8 +29,8 @@ services:
   # Node.js API Service with MongoDB
   api-service:
     build:
-      context: ./backend-node
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend-node/Dockerfile
     ports:
       - "3001:3001"
     environment:
@@ -49,8 +49,8 @@ services:
   # React Frontend App
   frontend:
     build:
-      context: ./web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: web/Dockerfile
     ports:
       - "3000:3000"
       - "5173:5173"  # Vite dev server

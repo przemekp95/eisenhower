@@ -21,11 +21,18 @@ jobs:
     name: branch-policy
     runs-on: ubuntu-latest
     env:
+      EVENT_NAME: ${{ github.event_name }}
       BASE_BRANCH: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.base_branch || github.base_ref }}
       HEAD_BRANCH: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.head_branch || github.head_ref }}
+      SYNC_BRANCH: sync/master-into-dev
     steps:
       - name: Validate branch flow
         run: |
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "$HEAD_BRANCH" = "$SYNC_BRANCH" ]; then
+            echo "Technical sync branch detected on pull_request; strict policy is validated by the dispatched sync check."
+            exit 0
+          fi
+
           echo "Base branch: $BASE_BRANCH"
           echo "Head branch: $HEAD_BRANCH"
 

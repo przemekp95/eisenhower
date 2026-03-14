@@ -25,11 +25,11 @@ jobs:
             dockerfile: ./backend-ai/Dockerfile
             tag: eisenhower-ai
           - name: backend-node
-            context: ./backend-node
+            context: .
             dockerfile: ./backend-node/Dockerfile
             tag: eisenhower-api
           - name: web
-            context: ./web
+            context: .
             dockerfile: ./web/Dockerfile
             tag: eisenhower-web
     steps:
