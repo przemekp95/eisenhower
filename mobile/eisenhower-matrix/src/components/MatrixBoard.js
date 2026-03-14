@@ -48,6 +48,11 @@ export default function MatrixBoard({
                         {item.description ? (
                           <Text style={styles.cardDescription}>{item.description}</Text>
                         ) : null}
+                        {item.syncState && item.syncState !== 'synced' && item.syncState !== 'local_seed' ? (
+                          <Text testID={`sync-pending-${item.id}`} style={styles.pendingSyncBadge}>
+                            {t.pendingSync}
+                          </Text>
+                        ) : null}
                       </View>
                       <Pressable
                         testID={`delete-task-${item.id}`}

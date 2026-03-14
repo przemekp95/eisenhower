@@ -40,7 +40,7 @@ function formatProcessError(message: string, output: string) {
 
 function requestHealth(url: string) {
   return new Promise<number>((resolve, reject) => {
-    const request = http.get(`${url}/health`, (response) => {
+    const request = http.get(`${url}/health/ready`, (response) => {
       response.resume();
       resolve(response.statusCode ?? 0);
     });

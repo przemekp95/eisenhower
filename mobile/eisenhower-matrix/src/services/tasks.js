@@ -1,4 +1,5 @@
 import { mobileConfig } from '../config';
+import { TASK_SYNC_STATE, isRemoteTaskId as isRemoteObjectId } from '../utils/taskSync';
 
 function isJsonResponse(response) {
   const contentType = response.headers?.get?.('content-type') ?? '';
@@ -23,17 +24,21 @@ async function readJson(response) {
 }
 
 export function isRemoteTaskId(id) {
-  return /^[a-f0-9]{24}$/i.test(String(id || ''));
+  return isRemoteObjectId(id);
 }
 
 export function normalizeRemoteTask(task, language = 'pl') {
+  const remoteId = String(task._id || task.id);
+
   return {
-    id: String(task._id || task.id),
+    id: remoteId,
     title: String(task.title || '').trim(),
     description: String(task.description || '').trim(),
     urgent: Boolean(task.urgent),
     important: Boolean(task.important),
     locale: task.locale || language,
+    remoteId,
+    syncState: TASK_SYNC_STATE.synced,
   };
 }
 
