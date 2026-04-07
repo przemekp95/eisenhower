@@ -15,6 +15,12 @@ def parse_csv_list(value: str | None, default: tuple[str, ...]) -> tuple[str, ..
 class Settings:
   training_data_path: Path
   model_cache_dir: Path
+  # MinIO Object Storage
+  minio_endpoint: str | None = None
+  minio_access_key: str | None = None
+  minio_secret_key: str | None = None
+  minio_bucket: str | None = None
+  minio_secure: bool = False
   local_model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
   local_model_hidden_dim: int = 128
   local_model_dropout: float = 0.1
@@ -61,6 +67,12 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     local_model_patience=int(source.get("LOCAL_MODEL_PATIENCE", "8")),
     local_model_learning_rate=float(source.get("LOCAL_MODEL_LEARNING_RATE", "0.01")),
     tesseract_languages=source.get("TESSERACT_LANGUAGES", "eng+pol"),
+    # MinIO Object Storage
+    minio_endpoint=source.get("MINIO_ENDPOINT") or None,
+    minio_access_key=source.get("MINIO_ACCESS_KEY") or None,
+    minio_secret_key=source.get("MINIO_SECRET_KEY") or None,
+    minio_bucket=source.get("MINIO_BUCKET") or None,
+    minio_secure=source.get("MINIO_SECURE", "false").lower() in ("true", "1", "yes"),
     cors_allow_origins=parse_csv_list(
       source.get("CORS_ALLOW_ORIGINS"),
       (

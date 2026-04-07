@@ -23,6 +23,12 @@ services:
       - QDRANT_PORT=6334
       - QDRANT_COLLECTION=eisenhower_task_embeddings
       - QDRANT_VECTOR_SIZE=384
+      # MinIO Object Storage
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-eisenhower-admin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-StrongPassword123!}
+      - MINIO_BUCKET=eisenhower
+      - MINIO_SECURE=false
     depends_on:
       - qdrant
     volumes:
@@ -55,6 +61,12 @@ services:
       - QDRANT_PORT=6334
       - QDRANT_COLLECTION=eisenhower_task_embeddings
       - QDRANT_VECTOR_SIZE=384
+      # MinIO Object Storage
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-eisenhower-admin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-StrongPassword123!}
+      - MINIO_BUCKET=eisenhower
+      - MINIO_SECURE=false
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     depends_on:
@@ -170,6 +182,27 @@ services:
       retries: 5
       start_period: 30s
 
+  # MinIO Object Storage (S3 kompatybilny)
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Web Console
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-eisenhower-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-StrongPassword123!}
+      MINIO_BROWSER_REDIRECT_URL: http://localhost:9001
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
   # Nginx Reverse Proxy (production)
   nginx:
     image: nginx:alpine
@@ -232,6 +265,7 @@ volumes:
     driver: local
   qdrant_snapshots:
     driver: local
+  minio_data:
 
 networks:
   default:
