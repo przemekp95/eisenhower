@@ -23,6 +23,7 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 - `backend-node`: REST API for tasks and health checks
 - `backend-ai`: FastAPI service for classification, OCR, and batch analysis
 - `mobile/eisenhower-matrix`: Expo / React Native client
+- `qdrant`: Vector Database for task embeddings semantic search
 
 ## Runtime Configuration
 
@@ -54,6 +55,41 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 - `TESSERACT_LANGUAGES`: OCR language pack list for Tesseract fallback, default `eng+pol`
 - `CORS_ALLOW_ORIGINS`: comma-separated frontend origins allowed to call the AI API, defaults to local `localhost` and `127.0.0.1` dev hosts
 
+---
+
+### 📊 Qdrant Vector Database
+Baza wektorowa do przechowywania i wyszukiwania osadzeń zadań dla klasyfikacji AI.
+
+#### Konfiguracja środowiskowa:
+| Zmienna | Opis | Domyślna wartość |
+|---------|------|------------------|
+| `QDRANT_HOST` | Adres hosta usługi Qdrant | `qdrant` |
+| `QDRANT_PORT` | Port gRPC API | `6334` |
+| `QDRANT_COLLECTION` | Nazwa kolekcji osadzeń | `eisenhower_task_embeddings` |
+| `QDRANT_VECTOR_SIZE` | Rozmiar wektora osadzenia | `384` |
+| `MIGRATION_MAX_RETRIES` | Maksymalna liczba prób połączenia | `5` |
+| `MIGRATION_RETRY_DELAY` | Opóźnienie między próbami (sekundy) | `2` |
+| `MIGRATION_BATCH_SIZE` | Rozmiar partii podczas migracji | `50` |
+
+#### Dostęp:
+- **Panel administracyjny**: http://localhost:6333/dashboard
+- **HTTP API**: `localhost:6333`
+- **gRPC API**: `localhost:6334`
+
+#### Migracja danych:
+```bash
+# Uruchom migrację istniejących zadań do Qdrant
+docker compose exec ai-service python scripts/migrate_to_qdrant.py
+```
+
+Skrypt migracji:
+✅ Event Driven - publikuje wszystkie zdarzenia statusu
+✅ Retry z wykładniczym opóźnieniem
+✅ Obsługa fallback przy awariach
+✅ Pełne metryki i logowanie strukturalne
+✅ Bezpieczne przetwarzanie wsadowe
+
+---
 ### Mobile
 
 - `EXPO_PUBLIC_APP_ORIGIN_URL`: optional shared HTTPS origin for Expo, used to derive `/api` and `/ai`
