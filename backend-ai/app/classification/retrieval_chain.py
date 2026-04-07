@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Dict, Optional, Any, Callable
+from typing import List, Dict, Optional, Any
 from dataclasses import dataclass
 import logging
 
@@ -8,7 +8,6 @@ from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.documents import Document
-from langchain_core.language_models import BaseLLM
 
 from ..defaults import QUADRANT_NAMES
 from ..domain.events import event_publisher, VectorItemAddedEvent, DomainEvent

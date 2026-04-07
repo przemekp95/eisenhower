@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any
 import logging
@@ -17,15 +16,12 @@ from .local_model import (
   LocalMiniLMClassifier,
   LocalPrediction,
   ModelNotReadyError,
-  SimilarExample,
   cosine_similarity,
   utc_now,
 )
 from .provider_state import ProviderStateStore
 from .store import TrainingStore
 from .vector import QdrantVectorStore, EisenhowerEmbeddings, LangChainQdrantAdapter
-from .classification import QuadrantRetrievalQA
-from .llm_provider import LLMProvider, LLMProviderError
 
 logger = logging.getLogger(__name__)
 
@@ -73,8 +69,7 @@ class QuadrantAIService:
     vector_store = None,
     langchain_adapter = None,
   ):
-    from .vector import QdrantVectorStore, EisenhowerEmbeddings, LangChainQdrantAdapter
-    from .domain.events import event_publisher, VectorItemAddedEvent
+    from .domain.events import event_publisher
 
     self.settings = settings
     self.store = store
