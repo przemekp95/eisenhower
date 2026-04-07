@@ -230,3 +230,96 @@ Additional strong workflow checks that remain enabled, but are not required for 
 Coverage thresholds remain service-specific. The web and backend services enforce `100%`, while the Expo mobile client currently enforces `95%` statements/functions/lines and `90%` branches.
 The `test-mobile-native-android` job now also uploads a downloadable release APK artifact from each successful run.
 The same `ci.yml` workflow can also be started manually with `workflow_dispatch`, so you can trigger an APK build from the GitHub Actions UI for a branch without merging it first.
+
+---
+
+## 🖥️ Running with NVIDIA GPU Acceleration
+
+To enable hardware acceleration for AI service and local LLM:
+
+1. Install NVIDIA drivers and **NVIDIA Container Toolkit**:
+   ```bash
+   # Ubuntu / Debian
+   distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+   curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
+   curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+   sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+   sudo systemctl restart docker
+   ```
+
+2. Start stack with GPU profile enabled:
+   ```bash
+   docker compose --profile gpu up --build
+   ```
+
+3. Verify acceleration status:
+   ```bash
+   docker compose exec ai-service python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
+   ```
+
+✅ For NVIDIA cards with >= 6GB VRAM the entire LLM system runs fully on GPU, providing ~10-20x speedup over CPU execution.
+
+---
+
+## 📦 MinIO Object Storage Profile
+
+MinIO is included in the full stack for secure managed file storage:
+
+### Start with MinIO profile enabled:
+```bash
+docker compose --profile minio up --build
+```
+
+### Admin Web Console:
+- **URL**: http://localhost:9001
+- **Default credentials**:
+  - Username: `minioadmin`
+  - Password: `minioadmin123`
+
+### Environment Configuration:
+| Variable | Default Value | Description |
+|---------|---------------|-------------|
+| `MINIO_ENABLED` | `true` | Enable/disable MinIO integration |
+| `MINIO_ENDPOINT` | `minio:9000` | MinIO service endpoint address |
+| `MINIO_ACCESS_KEY` | `minioadmin` | API access key |
+| `MINIO_SECRET_KEY` | `minioadmin123` | API secret key |
+| `MINIO_BUCKET_NAME` | `eisenhower-attachments` | Default bucket name |
+
+---
+
+## 🔄 Migration Instructions
+
+### Migration from version <= 1.8 to 1.9+ (Qdrant + LLM stack)
+
+1. Stop running containers:
+   ```bash
+   docker compose down
+   ```
+
+2. Pull latest images:
+   ```bash
+   docker compose pull
+   ```
+
+3. Start only database services first:
+   ```bash
+   docker compose up -d mongodb qdrant minio
+   ```
+
+4. Wait 30 seconds for full initialization, then run migration script:
+   ```bash
+   docker compose run --rm ai-service python scripts/migrate_to_qdrant.py
+   ```
+
+5. Start complete stack:
+   ```bash
+   docker compose up --build -d
+   ```
+
+### Migration verification:
+```bash
+# Check Qdrant collection status
+curl http://localhost:6333/collections/eisenhower_task_embeddings
+```
+
+✅ Migration script is idempotent - it can be safely run multiple times.

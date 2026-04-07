@@ -1,6 +1,6 @@
 # Eisenhower Matrix Infrastructure
 
-Last updated: 2026-03-09
+Last updated: 2026-04-07
 
 This document describes the current infrastructure and delivery model of the Eisenhower Matrix monorepo. It favors the state that is implemented in the repository today over aspirational architecture.
 
@@ -10,10 +10,13 @@ This document describes the current infrastructure and delivery model of the Eis
 | --- | --- | --- |
 | `web` | React 18, TypeScript, Vite, Tailwind | Browser UI for task management and AI tools |
 | `backend-node` | Node.js, Express, TypeScript, MongoDB | Task API and health endpoints |
-| `backend-ai` | Python 3.11, FastAPI, PyTorch, MiniLM | Local task classification, OCR endpoints, training data management |
+| `backend-ai` | Python 3.11, FastAPI, PyTorch, MiniLM, LangChain, Llama.cpp | Local task classification, OCR endpoints, RAG system, LLM inference, training data management |
 | `mobile/eisenhower-matrix` | Expo, React Native, Expo Image Picker | Mobile client with local cache, task API sync, and AI-assisted flows |
 | `docker-compose.yml` | Docker Compose | Local multi-service stack |
 | `.github/workflows/*.yml` | GitHub Actions | CI, branch policy, and release automation |
+| `qdrant` | Qdrant Vector Database v1.12.0 | Semantic search, task embeddings storage, RAG retrieval engine |
+| `minio` | MinIO Object Storage | Secure persistent storage for attachments, OCR files, model snapshots |
+
 
 ## Repository Topology
 
