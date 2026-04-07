@@ -43,9 +43,24 @@ def create_app(
   store: TrainingStore | None = None,
   ai_service: QuadrantAIService | None = None,
 ) -> FastAPI:
+  from .store_qdrant_adapter import QdrantTrainingStoreAdapter
+  from .vector import QdrantVectorStore
+
   resolved_settings = settings or load_settings()
-  resolved_store = store or TrainingStore(resolved_settings.training_data_path)
-  resolved_ai_service = ai_service or QuadrantAIService(settings=resolved_settings, store=resolved_store)
+  
+  # Użycie adaptera Qdrant z zachowaniem pełnej kompatybilności interfejsu TrainingStore
+  native_store = TrainingStore(resolved_settings.training_data_path)
+  vector_store = QdrantVectorStore()
+  resolved_store = store or QdrantTrainingStoreAdapter(
+      path=resolved_settings.training_data_path,
+      vector_store=vector_store
+  )
+  
+  resolved_ai_service = ai_service or QuadrantAIService(
+      settings=resolved_settings,
+      store=resolved_store,
+      vector_store=vector_store
+  )
   resolved_settings.model_cache_dir.mkdir(parents=True, exist_ok=True)
 
   app = FastAPI(

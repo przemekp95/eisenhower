@@ -66,7 +66,12 @@ class QuadrantAIService:
     local_model: LocalMiniLMClassifier | None = None,
     ocr_runner: Any | None = None,
     provider_store: ProviderStateStore | None = None,
+    vector_store = None,
+    langchain_adapter = None,
   ):
+    from .vector import QdrantVectorStore, EisenhowerEmbeddings, LangChainQdrantAdapter
+    from .domain.events import event_publisher, VectorItemAddedEvent
+
     self.settings = settings
     self.store = store
     self.local_model = local_model or LocalMiniLMClassifier(settings=settings)
@@ -77,10 +82,34 @@ class QuadrantAIService:
     self.provider_flags = self.provider_store.load()
     self._startup_error: str | None = None
 
+    # Integracja LangChain + Qdrant - bez zmiany istniejących zależności
+    self.vector_store = vector_store or QdrantVectorStore()
+    self._embeddings = EisenhowerEmbeddings(self.local_model.encode_text)
+    self.langchain = langchain_adapter or LangChainQdrantAdapter(
+        native_store=self.vector_store,
+        embeddings=self._embeddings
+    )
+
+    # Subskrypcja zdarzeń domenowych - Event Driven Architecture
+    event_publisher.subscribe(self._handle_domain_event)
+
     try:
       self.local_model.ensure_ready(self.store.load())
     except Exception as issue:
       self._startup_error = str(issue)
+
+  def _handle_domain_event(self, event):
+    """Obsługa zdarzeń domenowych - brak bezpośrednich zależności między warstwami"""
+    from .domain.events import VectorItemAddedEvent, VectorCollectionClearedEvent
+
+    if isinstance(event, VectorItemAddedEvent):
+        # Automatyczne ponowne indeksowanie w tle po dodaniu przykładu
+        if hasattr(self.local_model, 'invalidate_cache'):
+            self.local_model.invalidate_cache()
+    elif isinstance(event, VectorCollectionClearedEvent):
+        # Czyszczenie cache po wyczyszczeniu kolekcji
+        self._embeddings._cache.clear()
+
 
   def capabilities(self) -> dict[str, Any]:
     model_status = dict(self.local_model.status())
