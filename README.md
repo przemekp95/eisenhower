@@ -133,6 +133,55 @@ The Expo mobile client now keeps a local task cache in AsyncStorage, refreshes a
 The Playwright suite starts an isolated Vite frontend plus a real Node API backed by an ephemeral `mongodb-memory-server` instance, so it does not depend on a manually running MongoDB container.
 
 The manual AI smoke does the opposite: it does not start any local test servers and instead expects the live frontend and AI runtime to already be available, by default on `http://127.0.0.1:5173` and `http://127.0.0.1:8000`.
+### Lokalny LLM RAG System
+
+Od wersji 1.9 backend AI obsługuje pełny system Retrieval Augmented Generation z lokalnymi modelami LLM działającymi bez połączenia internetowego.
+
+#### Wymagania:
+- Model w formacie GGUF (Llama 3.2, Mistral, Gemma itp.)
+- Minimalne wymagania:
+  - ✅ CPU: 8GB RAM dla Q4_K_M 8B
+  - ✅ NVIDIA GPU: 6GB VRAM
+  - ✅ Apple Silicon: 8GB jednolitej pamięci
+
+#### Instalacja modelu:
+1. Stwórz katalog dla modeli:
+   ```bash
+   mkdir -p backend-ai/data/runtime/llm_models
+   ```
+
+2. Pobierz rekomendowany model:
+   ```bash
+   cd backend-ai/data/runtime/llm_models
+   wget -c https://huggingface.co/lmstudio-community/Llama-3.2-8B-Instruct-GGUF/resolve/main/Llama-3.2-8B-Instruct-Q4_K_M.gguf -O llama-3.2-8b-instruct-q4_k_m.gguf
+   ```
+
+   Wymaga darmowego konta Hugging Face i zaakceptowania warunków licencyjnych Llama 3.
+
+3. Alternatywne modele obsługiwane:
+   - Mistral 7B Instruct v0.3
+   - Gemma 2 9B Instruct
+   - Llama 3 70B (wymaga 16GB RAM / 12GB VRAM)
+
+#### Konfiguracja:
+Wszystkie ustawienia dostępne w zmiennych środowiskowych:
+| Zmienna | Domyślna wartość | Opis |
+|---------|-------------------|------|
+| `LLM_ENABLED` | `true` | Włącza/wyłącza system LLM |
+| `LLM_MODEL_FILENAME` | `llama-3.2-8b-instruct-q4_k_m.gguf` | Nazwa pliku modelu |
+| `LLM_N_GPU_LAYERS` | automatycznie | Ilość warstw do załadowania na GPU. Ustaw `0` aby wymusić działanie na CPU. |
+| `LLM_TEMPERATURE` | `0.1` | Kreatywność modelu. Niższe wartości = bardziej stabilne klasyfikacje. |
+| `LLM_MAX_TOKENS` | `512` | Maksymalna długość odpowiedzi |
+
+#### Działanie systemu:
+System działa w trybie automatycznego failover:
+1. ✅ Najpierw próbuje użyć pełnego systemu RAG z lokalnym LLM
+2. ✅ Jeżeli LLM nie jest dostępny lub wystąpi błąd - automatycznie przełącza się na sprawdzony klasyfikator MiniLM
+3. ✅ W ostateczności używa domyślnej klasyfikacji
+
+Nigdy nie zwróci błędu. Wszystkie istniejące endpointy API działają dokładnie tak samo jak wcześniej.
+
+---
 
 ## Frontend Integration
 
