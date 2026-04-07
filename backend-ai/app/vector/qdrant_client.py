@@ -139,6 +139,11 @@ class QdrantVectorStore:
             with_payload=True
         )
 
+        try:
+            iter(results)
+        except TypeError:
+            return []
+
         return [
             {
                 "id": res.id,

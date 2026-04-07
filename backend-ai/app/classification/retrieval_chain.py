@@ -19,6 +19,20 @@ from ..llm_provider import LLMProvider, LLMProviderError
 logger = logging.getLogger(__name__)
 
 
+class _RetrieverProxy:
+    def __init__(self, retriever: Any):
+        self._retriever = retriever
+
+    def invoke(self, *args: Any, **kwargs: Any) -> Any:
+        return self._retriever.invoke(*args, **kwargs)
+
+    async def ainvoke(self, *args: Any, **kwargs: Any) -> Any:
+        return await self._retriever.ainvoke(*args, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._retriever, name)
+
+
 @dataclass(frozen=True)
 class EisenhowerClassificationResult:
     task: str
@@ -68,7 +82,7 @@ class QuadrantRetrievalQA:
         self.llm_provider = llm_provider
         self.fallback_classifier = fallback_classifier
         self.top_k = top_k
-        self._retriever = vector_store.as_retriever(search_kwargs={"k": top_k})
+        self._retriever = self._build_retriever()
         self._chain = None
         
         try:
@@ -84,11 +98,14 @@ class QuadrantRetrievalQA:
         """Odśwież retriever po każdej zmianie w bazie wektorów"""
         event_publisher.subscribe(self._handle_vector_event)
 
+    def _build_retriever(self) -> _RetrieverProxy:
+        return _RetrieverProxy(self.vector_store.as_retriever(search_kwargs={"k": self.top_k}))
+
     def _handle_vector_event(self, event: DomainEvent) -> None:
         if isinstance(event, (VectorItemAddedEvent)):
             # Odśwież cache embeddingów automatycznie dzięki EisenhowerEmbeddings
             # oraz odbuduj retriever jeśli wymagane
-            self._retriever = self.vector_store.as_retriever(search_kwargs={"k": self.top_k})
+            self._retriever = self._build_retriever()
 
     def _format_context(self, documents: List[Document]) -> str:
         lines = []

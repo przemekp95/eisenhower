@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .config import Settings, load_settings
+from .device import get_device
 from .defaults import QUADRANT_NAMES
 from .local_model import ModelNotReadyError
 from .service import ProviderDisabledError, QuadrantAIService
@@ -62,9 +63,6 @@ def create_app(
       vector_store=vector_store
   )
   resolved_settings.model_cache_dir.mkdir(parents=True, exist_ok=True)
-
-  # Wykrywanie urządzenia obliczeniowego przy starcie aplikacji
-  device_info = get_device()
 
   app = FastAPI(
     title=resolved_settings.app_name,

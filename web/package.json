@@ -6,6 +6,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "format": "npx prettier --write \"src/**/*.{ts,tsx,js,jsx,css}\" \"*.{js,ts,json}\"",
+    "format:check": "npx prettier --check \"src/**/*.{ts,tsx,js,jsx,css}\" \"*.{js,ts,json}\"",
     "test": "jest --runInBand",
     "test:coverage": "jest --coverage --runInBand",
     "test:integration": "jest --config jest.integration.config.js --runInBand",

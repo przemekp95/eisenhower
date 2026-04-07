@@ -65,15 +65,24 @@ class LangChainQdrantAdapter(VectorStore):
         self._native_store = native_store
         self._embeddings = embeddings
         self.config = config or QdrantConfig.from_env()
+        self._langchain_store: Optional[LangChainQdrantStore] = None
 
-        # Inicjalizacja oryginalnego klienta LangChain dla pełnej kompatybilności
-        self._langchain_store = LangChainQdrantStore(
-            client=self._native_store._client,
-            collection_name=self.config.collection_name,
-            embeddings=self._embeddings,
-            content_payload_key="text",
-            metadata_payload_key="metadata"
-        )
+        # Inicjalizacja klienta LangChain jest opcjonalna, bo podczas testów
+        # i startu aplikacji natywny klient może nie być jeszcze podłączony.
+        connect = getattr(self._native_store, "connect", None)
+        if callable(connect):
+            connect()
+
+        native_client = getattr(self._native_store, "_client", None)
+        if native_client is not None:
+            self._langchain_store = LangChainQdrantStore(
+                client=native_client,
+                collection_name=self.config.collection_name,
+                embedding=self._embeddings,
+                content_payload_key="text",
+                metadata_payload_key="metadata",
+                validate_collection_config=False,
+            )
 
     @property
     def embeddings(self) -> Embeddings:
@@ -170,6 +179,9 @@ class LangChainQdrantAdapter(VectorStore):
         filter: Optional[Dict[str, Any]] = None,
         **kwargs: Any
     ) -> List[Document]:
+        if self._langchain_store is None:
+            return self.similarity_search(query, k=k, filter=filter, **kwargs)
+
         return self._langchain_store.max_marginal_relevance_search(
             query, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, filter=filter, **kwargs
         )

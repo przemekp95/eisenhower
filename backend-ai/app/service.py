@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any
+import logging
 import mimetypes
 import re
 import shutil
@@ -25,6 +26,8 @@ from .store import TrainingStore
 from .vector import QdrantVectorStore, EisenhowerEmbeddings, LangChainQdrantAdapter
 from .classification import QuadrantRetrievalQA
 from .llm_provider import LLMProvider, LLMProviderError
+
+logger = logging.getLogger(__name__)
 
 
 def quadrant_to_flags(quadrant: int) -> tuple[bool, bool]:
@@ -85,11 +88,13 @@ class QuadrantAIService:
 
     # Integracja LangChain + Qdrant - bez zmiany istniejących zależności
     self.vector_store = vector_store or QdrantVectorStore()
-    self._embeddings = EisenhowerEmbeddings(self.local_model.encode_text)
+    self._embeddings = EisenhowerEmbeddings(self._embed_text)
     self.langchain = langchain_adapter or LangChainQdrantAdapter(
         native_store=self.vector_store,
         embeddings=self._embeddings
     )
+    self.llm_provider = None
+    self.rag_chain = None
 
     # Subskrypcja zdarzeń domenowych - Event Driven Architecture
     event_publisher.subscribe(self._handle_domain_event)
@@ -110,34 +115,6 @@ class QuadrantAIService:
     elif isinstance(event, VectorCollectionClearedEvent):
         # Czyszczenie cache po wyczyszczeniu kolekcji
         self._embeddings._cache.clear()
-
-    # Inicjalizacja LLM Provider i RAG Chain
-    self.llm_provider = None
-    self.rag_chain = None
-
-    try:
-      if self.settings.llm_enabled:
-        self.llm_provider = LLMProvider(settings=self.settings)
-        self.llm_provider.ensure_ready()
-
-        # Inicjalizacja Vector Store dla RAG
-        qdrant_store = QdrantVectorStore(settings=self.settings)
-        embeddings = EisenhowerEmbeddings(settings=self.settings)
-        langchain_store = LangChainQdrantAdapter(qdrant_store, embeddings)
-
-        self.rag_chain = QuadrantRetrievalQA(
-          vector_store=langchain_store,
-          embeddings=embeddings,
-          llm_provider=self.llm_provider,
-          fallback_classifier=self.local_model,
-          top_k=3
-        )
-    except LLMProviderError as e:
-      logger.warning(f"LLM Provider not available: {e}")
-      # Fallback jest już wbudowany w QuadrantRetrievalQA
-      # W przypadku braku LLM użyje automatycznie MiniLM
-    except Exception as e:
-      logger.warning(f"Failed to initialize RAG chain: {e}")
 
   def capabilities(self) -> dict[str, Any]:
     model_status = dict(self.local_model.status())
@@ -386,6 +363,18 @@ class QuadrantAIService:
         raise ModelNotReadyError(str(issue)) from issue
 
     return [self._predict(task, limit=limit) for task in tasks]
+
+  def _embed_text(self, text: str) -> list[float]:
+    encode_text = getattr(self.local_model, "encode_text", None)
+    if callable(encode_text):
+      return [float(value) for value in encode_text(text)]
+
+    batch_encode = getattr(self.local_model, "_encode", None)
+    if callable(batch_encode):
+      return [float(value) for value in batch_encode([text])[0]]
+
+    vector_size = getattr(getattr(self.vector_store, "config", None), "vector_size", 384)
+    return [0.0] * int(vector_size)
 
   def _serialize_analysis(
     self,
