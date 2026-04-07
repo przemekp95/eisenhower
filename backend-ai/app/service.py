@@ -22,6 +22,8 @@ from .local_model import (
 )
 from .provider_state import ProviderStateStore
 from .store import TrainingStore
+from .vector import QdrantVectorStore, EisenhowerEmbeddings, LangChainQdrantAdapter
+from .classification import QuadrantRetrievalQA
 
 
 def quadrant_to_flags(quadrant: int) -> tuple[bool, bool]:
