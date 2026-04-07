@@ -63,6 +63,14 @@ def create_app(
   )
   resolved_settings.model_cache_dir.mkdir(parents=True, exist_ok=True)
 
+  # Wykrywanie urządzenia obliczeniowego przy starcie aplikacji
+  device_info = get_device()
+
+  app = FastAPI(
+    title=resolved_settings.app_name,
+    description="Import-safe local task classifier with OCR support.",
+  )
+
   app = FastAPI(
     title=resolved_settings.app_name,
     description="Import-safe local task classifier with OCR support.",
@@ -94,10 +102,17 @@ def create_app(
 
   @app.get("/")
   def root():
+    device = get_device()
     return {
       "service": resolved_settings.app_name,
       "status": "ok",
       "timestamp": datetime.now(timezone.utc).isoformat(),
+      "device": {
+        "type": device.type,
+        "name": device.name,
+        "count": device.device_count,
+        "cuda_version": device.cuda_version
+      }
     }
 
   @app.get("/classify")
@@ -196,7 +211,16 @@ def create_app(
 
   @app.get("/capabilities")
   def get_capabilities():
-    return resolved_ai_service.capabilities()
+    caps = resolved_ai_service.capabilities()
+    device = get_device()
+    caps["device"] = {
+      "type": device.type,
+      "name": device.name,
+      "count": device.device_count,
+      "cuda_version": device.cuda_version,
+      "accelerated": device.type != "cpu"
+    }
+    return caps
 
   @app.put("/providers/{provider_name}")
   def update_provider(

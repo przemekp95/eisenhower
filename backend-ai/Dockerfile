@@ -1,4 +1,6 @@
-# Multi-stage build for Python AI service
+# Multi-stage build for Python AI service (CPU + CUDA targets)
+
+# Bazowy obraz wspólny dla wszystkich wersji
 FROM python:3.11-slim as base
 
 # Set environment variables
@@ -7,8 +9,8 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=on \
     PIP_DISABLE_PIP_VERSION_CHECK=on \
     PIP_DEFAULT_TIMEOUT=100 \
-    POETRY_VERSION=1.6.1 \
-    HF_HOME=/home/app/.cache/huggingface
+    HF_HOME=/home/app/.cache/huggingface \
+    TORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 WORKDIR /app
 
@@ -17,8 +19,10 @@ RUN useradd --create-home --shell /bin/bash app \
     && chown -R app:app /app
 USER app
 
-# Install system dependencies
-FROM base AS dependencies
+# ------------------------------------------------------------------------------
+# Target: Dependencies (CPU - domyślna wersja)
+# ------------------------------------------------------------------------------
+FROM base AS dependencies-cpu
 USER root
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -37,7 +41,57 @@ RUN apt-get update \
 
 USER app
 COPY --chown=app:app requirements.txt .
-RUN pip install --user -r requirements.txt
+RUN pip install --user --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
+RUN python - <<'PY'
+from sentence_transformers import SentenceTransformer
+SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+PY
+
+# ------------------------------------------------------------------------------
+# Target: Dependencies (CUDA 12.4 - wersja akcelerowana GPU)
+# ------------------------------------------------------------------------------
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04 AS base-cuda
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=on \
+    PIP_DISABLE_PIP_VERSION_CHECK=on \
+    PIP_DEFAULT_TIMEOUT=100 \
+    HF_HOME=/home/app/.cache/huggingface \
+    TORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+WORKDIR /app
+
+# Instalacja Pythona 3.11 na obrazie CUDA
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        python3.11 \
+        python3-pip \
+        python3.11-venv \
+        build-essential \
+        curl \
+        git \
+        libffi-dev \
+        libgomp1 \
+        tesseract-ocr \
+        tesseract-ocr-pol \
+        libtesseract-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /var/cache/apt/archives/* \
+    && rm -rf /tmp/* \
+    && ln -s /usr/bin/python3.11 /usr/bin/python
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash app \
+    && chown -R app:app /app
+USER app
+
+FROM base-cuda AS dependencies-cuda
+COPY --chown=app:app requirements.txt .
+RUN pip install --user --extra-index-url https://download.pytorch.org/whl/cu124 -r requirements.txt
 RUN python - <<'PY'
 from sentence_transformers import SentenceTransformer
 SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
