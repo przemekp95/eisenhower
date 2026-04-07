@@ -23,7 +23,7 @@ const LanguageSwitcher: React.FC = () => {
             ? 'bg-white text-blue-600 shadow-lg hover:bg-white/90'
             : 'text-white hover:bg-white/10 hover:text-white'
         }`}
-        >
+      >
         Polski
       </button>
     </div>

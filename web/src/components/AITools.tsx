@@ -158,7 +158,9 @@ export default function AITools({
             ) : null}
             {activeTab === 'ocr' ? <ImageUpload onTasksExtracted={handleOCR} /> : null}
             {activeTab === 'batch' ? <BatchAnalysis onBatchComplete={handleBatch} /> : null}
-            {activeTab === 'manage' ? <AIManagement onModelUpdated={() => setLastSummary(t('ai.summary.updated'))} /> : null}
+            {activeTab === 'manage' ? (
+              <AIManagement onModelUpdated={() => setLastSummary(t('ai.summary.updated'))} />
+            ) : null}
             {lastSummary ? <p className="mt-4 text-sm text-emerald-200">{lastSummary}</p> : null}
           </div>
         </div>

@@ -112,7 +112,9 @@ describe('App', () => {
 
     render(<App />);
 
-    await waitFor(() => expect(screen.getByText('Nie udało się pobrać zadań.')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText('Nie udało się pobrać zadań.')).toBeInTheDocument()
+    );
   });
 
   it('creates and removes tasks through the API layer', async () => {
@@ -169,7 +171,9 @@ describe('App', () => {
     });
     fireEvent.click(screen.getByText(/Dodaj zadanie/i));
 
-    await waitFor(() => expect(screen.getByText('Nie udało się zapisać zmian.')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText('Nie udało się zapisać zmian.')).toBeInTheDocument()
+    );
   });
 
   it('falls back to translated save errors for update and delete failures', async () => {
@@ -184,7 +188,9 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByText('Secondary task')).toBeInTheDocument());
 
     fireEvent.click(screen.getByLabelText('toggle urgent Existing task'));
-    await waitFor(() => expect(screen.getByText('Nie udało się zapisać zmian.')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText('Nie udało się zapisać zmian.')).toBeInTheDocument()
+    );
 
     fireEvent.click(screen.getAllByText(/Usuń/i)[0]);
     await waitFor(() => expect(mockedApi.deleteTask).toHaveBeenCalledWith('1'));

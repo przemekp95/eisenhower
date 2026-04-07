@@ -10,7 +10,11 @@ interface Props {
   onAddToMatrix?: (analysis: LangChainAnalysis) => Promise<void> | void;
 }
 
-export default function AdvancedAIAnalysis({ taskTitle, onAnalysisComplete, onAddToMatrix }: Props) {
+export default function AdvancedAIAnalysis({
+  taskTitle,
+  onAnalysisComplete,
+  onAddToMatrix,
+}: Props) {
   const [analysis, setAnalysis] = useState<LangChainAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -78,10 +82,8 @@ export default function AdvancedAIAnalysis({ taskTitle, onAnalysisComplete, onAd
           <p className="mt-2 text-white/70">
             {t('ai.analysis.suggestedQuadrant').replace(
               '{quadrant}',
-              resolveQuadrantLabel(
-                resolveSuggestedQuadrant(analysis),
-                quadrantLabels,
-                (quadrant) => t('ai.manage.quadrantUnknown').replace('{quadrant}', String(quadrant))
+              resolveQuadrantLabel(resolveSuggestedQuadrant(analysis), quadrantLabels, (quadrant) =>
+                t('ai.manage.quadrantUnknown').replace('{quadrant}', String(quadrant))
               )
             )}
           </p>

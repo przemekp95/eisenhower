@@ -29,7 +29,9 @@ describe('api service', () => {
       ok: true,
       status: 200,
       headers: new Headers({ 'content-type': 'application/json' }),
-      json: async () => [{ _id: '1', title: 'Task', description: '', urgent: false, important: false }],
+      json: async () => [
+        { _id: '1', title: 'Task', description: '', urgent: false, important: false },
+      ],
     });
 
     await getTasks();
@@ -88,13 +90,23 @@ describe('api service', () => {
     expect((global.fetch as jest.Mock).mock.calls[7][1].body).toBe(
       JSON.stringify({ tasks: [{ task: 'task', quadrant: 2 }], retrain: false })
     );
-    expect((global.fetch as jest.Mock).mock.calls[8][1].body.toString()).toContain('preserve_experience=false');
-    expect((global.fetch as jest.Mock).mock.calls[9][1].body.toString()).toContain('preserve_experience=true');
-    expect((global.fetch as jest.Mock).mock.calls[11][0]).toContain('/training-data?keep_defaults=false');
-    expect((global.fetch as jest.Mock).mock.calls[12][0]).toContain('/training-data?keep_defaults=true');
+    expect((global.fetch as jest.Mock).mock.calls[8][1].body.toString()).toContain(
+      'preserve_experience=false'
+    );
+    expect((global.fetch as jest.Mock).mock.calls[9][1].body.toString()).toContain(
+      'preserve_experience=true'
+    );
+    expect((global.fetch as jest.Mock).mock.calls[11][0]).toContain(
+      '/training-data?keep_defaults=false'
+    );
+    expect((global.fetch as jest.Mock).mock.calls[12][0]).toContain(
+      '/training-data?keep_defaults=true'
+    );
     expect((global.fetch as jest.Mock).mock.calls[13][0]).toContain('/examples/0?limit=10');
     expect((global.fetch as jest.Mock).mock.calls[16][0]).toContain('/providers/local_model');
-    expect((global.fetch as jest.Mock).mock.calls[16][1].body).toBe(JSON.stringify({ enabled: false }));
+    expect((global.fetch as jest.Mock).mock.calls[16][1].body).toBe(
+      JSON.stringify({ enabled: false })
+    );
     expect((global.fetch as jest.Mock).mock.calls[17][0]).toContain('/providers/tesseract');
   });
 
@@ -130,9 +142,9 @@ describe('api service', () => {
       json: async () => ({ error: 'Validation failed' }),
     });
 
-    await expect(createTask({ title: '', description: '', urgent: false, important: false })).rejects.toThrow(
-      'Validation failed'
-    );
+    await expect(
+      createTask({ title: '', description: '', urgent: false, important: false })
+    ).rejects.toThrow('Validation failed');
   });
 
   it('falls back to a generic JSON error when the payload has no message', async () => {
@@ -143,9 +155,9 @@ describe('api service', () => {
       json: async () => ({}),
     });
 
-    await expect(createTask({ title: '', description: '', urgent: false, important: false })).rejects.toThrow(
-      'Task request failed'
-    );
+    await expect(
+      createTask({ title: '', description: '', urgent: false, important: false })
+    ).rejects.toThrow('Task request failed');
   });
 
   it('throws a generic error for non-json failures', async () => {

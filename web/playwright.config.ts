@@ -19,10 +19,7 @@ export default defineConfig({
     timeout: 10_000,
   },
   outputDir: './output/playwright/test-results',
-  reporter: [
-    ['list'],
-    ['html', { open: 'never', outputFolder: './output/playwright/report' }],
-  ],
+  reporter: [['list'], ['html', { open: 'never', outputFolder: './output/playwright/report' }]],
   use: {
     ...devices['Desktop Chrome'],
     baseURL: frontendUrl,

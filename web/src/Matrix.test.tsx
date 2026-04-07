@@ -2,7 +2,11 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import Matrix from './components/Matrix';
 import { LanguageProvider } from './i18n/LanguageContext';
 import * as api from './services/api';
-import { quadrantToTaskState, resolveQuadrantLabel, resolveSuggestedQuadrant } from './components/matrixUtils';
+import {
+  quadrantToTaskState,
+  resolveQuadrantLabel,
+  resolveSuggestedQuadrant,
+} from './components/matrixUtils';
 
 jest.mock('./services/api');
 
@@ -13,7 +17,13 @@ jest.mock('@hello-pangea/dnd', () => {
   const React = require('react');
 
   return {
-    DragDropContext: ({ children, onDragEnd }: { children: React.ReactNode; onDragEnd: (result: unknown) => void }) => {
+    DragDropContext: ({
+      children,
+      onDragEnd,
+    }: {
+      children: React.ReactNode;
+      onDragEnd: (result: unknown) => void;
+    }) => {
       dragCallbacks.push(onDragEnd);
       return React.createElement('div', { 'data-testid': 'drag-context' }, children);
     },
@@ -250,7 +260,13 @@ describe('Matrix', () => {
 
     render(
       <LanguageProvider>
-        <Matrix tasks={[]} loading={false} onAddTask={onAddTask} onUpdateTask={jest.fn()} onDeleteTask={jest.fn()} />
+        <Matrix
+          tasks={[]}
+          loading={false}
+          onAddTask={onAddTask}
+          onUpdateTask={jest.fn()}
+          onDeleteTask={jest.fn()}
+        />
       </LanguageProvider>
     );
 
@@ -274,7 +290,13 @@ describe('Matrix', () => {
 
     render(
       <LanguageProvider>
-        <Matrix tasks={[]} loading={false} onAddTask={onAddTask} onUpdateTask={jest.fn()} onDeleteTask={jest.fn()} />
+        <Matrix
+          tasks={[]}
+          loading={false}
+          onAddTask={onAddTask}
+          onUpdateTask={jest.fn()}
+          onDeleteTask={jest.fn()}
+        />
       </LanguageProvider>
     );
 
@@ -341,7 +363,13 @@ describe('Matrix', () => {
 
     render(
       <LanguageProvider>
-        <Matrix tasks={[]} loading={false} onAddTask={jest.fn()} onUpdateTask={jest.fn()} onDeleteTask={jest.fn()} />
+        <Matrix
+          tasks={[]}
+          loading={false}
+          onAddTask={jest.fn()}
+          onUpdateTask={jest.fn()}
+          onDeleteTask={jest.fn()}
+        />
       </LanguageProvider>
     );
 
@@ -362,7 +390,13 @@ describe('Matrix', () => {
 
     render(
       <LanguageProvider>
-        <Matrix tasks={[]} loading={false} onAddTask={onAddTask} onUpdateTask={jest.fn()} onDeleteTask={jest.fn()} />
+        <Matrix
+          tasks={[]}
+          loading={false}
+          onAddTask={onAddTask}
+          onUpdateTask={jest.fn()}
+          onDeleteTask={jest.fn()}
+        />
       </LanguageProvider>
     );
 
@@ -374,12 +408,10 @@ describe('Matrix', () => {
 
     await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(2));
     await waitFor(() =>
-      expect(learnFromAcceptedOCRTasks).toHaveBeenCalledWith(
-        [
-          { text: 'Escalate outage', quadrant: 0 },
-          { text: 'Plan roadmap', quadrant: 2 },
-        ]
-      )
+      expect(learnFromAcceptedOCRTasks).toHaveBeenCalledWith([
+        { text: 'Escalate outage', quadrant: 0 },
+        { text: 'Plan roadmap', quadrant: 2 },
+      ])
     );
     expect(onAddTask).toHaveBeenNthCalledWith(1, {
       title: 'Escalate outage',
@@ -401,7 +433,13 @@ describe('Matrix', () => {
 
     render(
       <LanguageProvider>
-        <Matrix tasks={[]} loading={false} onAddTask={onAddTask} onUpdateTask={jest.fn()} onDeleteTask={jest.fn()} />
+        <Matrix
+          tasks={[]}
+          loading={false}
+          onAddTask={onAddTask}
+          onUpdateTask={jest.fn()}
+          onDeleteTask={jest.fn()}
+        />
       </LanguageProvider>
     );
 
@@ -420,7 +458,13 @@ describe('Matrix', () => {
 
     render(
       <LanguageProvider>
-        <Matrix tasks={[]} loading={false} onAddTask={onAddTask} onUpdateTask={jest.fn()} onDeleteTask={jest.fn()} />
+        <Matrix
+          tasks={[]}
+          loading={false}
+          onAddTask={onAddTask}
+          onUpdateTask={jest.fn()}
+          onDeleteTask={jest.fn()}
+        />
       </LanguageProvider>
     );
 
@@ -450,7 +494,13 @@ describe('Matrix', () => {
 
     render(
       <LanguageProvider>
-        <Matrix tasks={[]} loading={false} onAddTask={onAddTask} onUpdateTask={jest.fn()} onDeleteTask={jest.fn()} />
+        <Matrix
+          tasks={[]}
+          loading={false}
+          onAddTask={onAddTask}
+          onUpdateTask={jest.fn()}
+          onDeleteTask={jest.fn()}
+        />
       </LanguageProvider>
     );
 
@@ -475,11 +525,16 @@ describe('Matrix', () => {
     );
   });
 
-
   it('ignores empty AI suggestions', async () => {
     render(
       <LanguageProvider>
-        <Matrix tasks={[]} loading={false} onAddTask={jest.fn()} onUpdateTask={jest.fn()} onDeleteTask={jest.fn()} />
+        <Matrix
+          tasks={[]}
+          loading={false}
+          onAddTask={jest.fn()}
+          onUpdateTask={jest.fn()}
+          onDeleteTask={jest.fn()}
+        />
       </LanguageProvider>
     );
 
@@ -493,7 +548,13 @@ describe('Matrix', () => {
 
     render(
       <LanguageProvider>
-        <Matrix tasks={[]} loading={false} onAddTask={jest.fn()} onUpdateTask={jest.fn()} onDeleteTask={jest.fn()} />
+        <Matrix
+          tasks={[]}
+          loading={false}
+          onAddTask={jest.fn()}
+          onUpdateTask={jest.fn()}
+          onDeleteTask={jest.fn()}
+        />
       </LanguageProvider>
     );
 
@@ -510,7 +571,13 @@ describe('Matrix', () => {
 
     render(
       <LanguageProvider>
-        <Matrix tasks={[]} loading={false} onAddTask={jest.fn()} onUpdateTask={jest.fn()} onDeleteTask={jest.fn()} />
+        <Matrix
+          tasks={[]}
+          loading={false}
+          onAddTask={jest.fn()}
+          onUpdateTask={jest.fn()}
+          onDeleteTask={jest.fn()}
+        />
       </LanguageProvider>
     );
 
@@ -525,7 +592,13 @@ describe('Matrix', () => {
   it('opens lazy AI tools when a title exists', async () => {
     render(
       <LanguageProvider>
-        <Matrix tasks={[]} loading={false} onAddTask={jest.fn()} onUpdateTask={jest.fn()} onDeleteTask={jest.fn()} />
+        <Matrix
+          tasks={[]}
+          loading={false}
+          onAddTask={jest.fn()}
+          onUpdateTask={jest.fn()}
+          onDeleteTask={jest.fn()}
+        />
       </LanguageProvider>
     );
 
@@ -540,7 +613,13 @@ describe('Matrix', () => {
   it('applies AI analysis results back into the form and closes the drawer', async () => {
     render(
       <LanguageProvider>
-        <Matrix tasks={[]} loading={false} onAddTask={jest.fn()} onUpdateTask={jest.fn()} onDeleteTask={jest.fn()} />
+        <Matrix
+          tasks={[]}
+          loading={false}
+          onAddTask={jest.fn()}
+          onUpdateTask={jest.fn()}
+          onDeleteTask={jest.fn()}
+        />
       </LanguageProvider>
     );
 
@@ -607,25 +686,27 @@ describe('Matrix', () => {
       )
     ).toBe('Quadrant 9');
 
-    expect(resolveSuggestedQuadrant({
-      task: 'non-urgent',
-      langchain_analysis: {
-        quadrant: null,
-        reasoning: 'fallback',
-        confidence: 0.5,
-        method: 'langchain',
-      },
-      rag_classification: {
-        quadrant: 3,
-        quadrant_name: 'Delete',
-        confidence: 0.5,
-      },
-      comparison: {
-        methods_agree: true,
-        confidence_difference: 0,
-      },
-      timestamp: new Date().toISOString(),
-    })).toBe(3);
+    expect(
+      resolveSuggestedQuadrant({
+        task: 'non-urgent',
+        langchain_analysis: {
+          quadrant: null,
+          reasoning: 'fallback',
+          confidence: 0.5,
+          method: 'langchain',
+        },
+        rag_classification: {
+          quadrant: 3,
+          quadrant_name: 'Delete',
+          confidence: 0.5,
+        },
+        comparison: {
+          methods_agree: true,
+          confidence_difference: 0,
+        },
+        timestamp: new Date().toISOString(),
+      })
+    ).toBe(3);
   });
 
   it('handles drag guard clauses and maps valid destinations to task state', async () => {
@@ -697,9 +778,7 @@ describe('Matrix', () => {
 
     const { container } = renderMatrix();
 
-    await waitFor(() =>
-      expect(container.firstChild).toHaveAttribute('data-matrix-intro', 'ready')
-    );
+    await waitFor(() => expect(container.firstChild).toHaveAttribute('data-matrix-intro', 'ready'));
   });
 
   it('skips matrix motion setup when unmounted before gsap resolves', async () => {

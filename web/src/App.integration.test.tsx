@@ -182,7 +182,9 @@ describe('App integration', () => {
   it('creates, updates and deletes tasks against the live backend', async () => {
     render(<AppComponent />);
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Dodaj zadanie' })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Dodaj zadanie' })).toBeInTheDocument()
+    );
     const title = `Live integration task ${Date.now()}`;
 
     fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {

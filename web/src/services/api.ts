@@ -58,7 +58,10 @@ export async function classifyTask(title: string): Promise<ClassificationResult>
   return getAiApi().classifyTask(title, true);
 }
 
-export async function analyzeWithLangChain(task: string, language: Language = 'en'): Promise<LangChainAnalysis> {
+export async function analyzeWithLangChain(
+  task: string,
+  language: Language = 'en'
+): Promise<LangChainAnalysis> {
   return getAiApi().analyzeWithLangChain(task, language);
 }
 
@@ -103,7 +106,10 @@ export async function clearTrainingData(keepDefaults = true): Promise<TrainingDa
   return getAiApi().clearTrainingData(keepDefaults);
 }
 
-export async function getExamplesByQuadrant(quadrant: number, limit = 10): Promise<{ examples: Array<{ text: string; quadrant: number }> }> {
+export async function getExamplesByQuadrant(
+  quadrant: number,
+  limit = 10
+): Promise<{ examples: Array<{ text: string; quadrant: number }> }> {
   return getAiApi().getExamplesByQuadrant(quadrant, limit);
 }
 

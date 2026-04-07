@@ -42,10 +42,42 @@ const QUADRANTS = [
 ];
 
 const RIBBONS = [
-  { anchorY: 0.2, amplitude: 28, speed: 0.42, phase: 0.2, color: 0x67e8f9, thickness: 1.2, drag: 0.16 },
-  { anchorY: 0.34, amplitude: 22, speed: 0.36, phase: 1.4, color: 0x34d399, thickness: 1.4, drag: 0.12 },
-  { anchorY: 0.62, amplitude: 30, speed: 0.33, phase: 2.2, color: 0xf59e0b, thickness: 1.1, drag: 0.08 },
-  { anchorY: 0.78, amplitude: 20, speed: 0.46, phase: 3.1, color: 0xfb7185, thickness: 1.3, drag: 0.1 },
+  {
+    anchorY: 0.2,
+    amplitude: 28,
+    speed: 0.42,
+    phase: 0.2,
+    color: 0x67e8f9,
+    thickness: 1.2,
+    drag: 0.16,
+  },
+  {
+    anchorY: 0.34,
+    amplitude: 22,
+    speed: 0.36,
+    phase: 1.4,
+    color: 0x34d399,
+    thickness: 1.4,
+    drag: 0.12,
+  },
+  {
+    anchorY: 0.62,
+    amplitude: 30,
+    speed: 0.33,
+    phase: 2.2,
+    color: 0xf59e0b,
+    thickness: 1.1,
+    drag: 0.08,
+  },
+  {
+    anchorY: 0.78,
+    amplitude: 20,
+    speed: 0.46,
+    phase: 3.1,
+    color: 0xfb7185,
+    thickness: 1.3,
+    drag: 0.1,
+  },
 ];
 
 export default function MatrixScene() {
@@ -230,7 +262,9 @@ export default function MatrixScene() {
       stage.addChild(centerBeacon);
 
       QUADRANTS.forEach((quadrant, index) => {
-        const halo = new Graphics().ellipse(0, 0, 1, 1).fill({ color: quadrant.color, alpha: 0.16 });
+        const halo = new Graphics()
+          .ellipse(0, 0, 1, 1)
+          .fill({ color: quadrant.color, alpha: 0.16 });
 
         haloLayer.addChild(halo);
         halos.push({
@@ -305,7 +339,10 @@ export default function MatrixScene() {
             width * halo.anchorX + influenceX * halo.drift * width * 0.08,
             height * halo.anchorY + influenceY * halo.drift * height * 0.08
           );
-          halo.graphic.scale.set(baseRadius * halo.scaleX * pulse, baseRadius * halo.scaleY * pulse);
+          halo.graphic.scale.set(
+            baseRadius * halo.scaleX * pulse,
+            baseRadius * halo.scaleY * pulse
+          );
           halo.graphic.alpha = 0.07 + Math.sin(time * 1.1 + halo.pulse) * 0.025;
         });
 
@@ -320,9 +357,11 @@ export default function MatrixScene() {
             for (let step = 0; step <= segments; step += 1) {
               const progress = step / segments;
               const x = startX + (endX - startX) * progress;
-              const travel = time * ribbon.speed + ribbon.phase + progress * Math.PI * (pass === 0 ? 2.4 : 2.9);
+              const travel =
+                time * ribbon.speed + ribbon.phase + progress * Math.PI * (pass === 0 ? 2.4 : 2.9);
               const wave = Math.sin(travel) * ribbon.amplitude;
-              const crossWave = Math.cos(travel * 0.78 + progress * Math.PI * 3.5) * ribbon.amplitude * 0.38;
+              const crossWave =
+                Math.cos(travel * 0.78 + progress * Math.PI * 3.5) * ribbon.amplitude * 0.38;
               const pull = influenceY * height * ribbon.drag * (progress - 0.5) * 2;
               const y = height * ribbon.anchorY + wave + crossWave + pull + pass * 7 - 3;
 
@@ -345,7 +384,8 @@ export default function MatrixScene() {
           const baseX = width * particle.anchorX;
           const baseY = height * particle.anchorY;
           const angle = time * particle.speed + particle.phase;
-          const x = baseX + Math.cos(angle) * particle.orbit + influenceX * width * particle.pull * 10;
+          const x =
+            baseX + Math.cos(angle) * particle.orbit + influenceX * width * particle.pull * 10;
           const y =
             baseY +
             Math.sin(angle * particle.wobble) * particle.orbit * 0.72 +
@@ -399,5 +439,11 @@ export default function MatrixScene() {
     };
   }, []);
 
-  return <div ref={hostRef} className="pointer-events-none absolute inset-0 opacity-80" aria-hidden="true" />;
+  return (
+    <div
+      ref={hostRef}
+      className="pointer-events-none absolute inset-0 opacity-80"
+      aria-hidden="true"
+    />
+  );
 }

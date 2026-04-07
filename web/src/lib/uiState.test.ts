@@ -13,10 +13,7 @@ describe('uiState helpers', () => {
     ];
     const updated = { _id: '2', title: 'Updated', description: '', urgent: true, important: true };
 
-    expect(replaceTaskById(tasks, '2', updated)).toEqual([
-      tasks[0],
-      updated,
-    ]);
+    expect(replaceTaskById(tasks, '2', updated)).toEqual([tasks[0], updated]);
   });
 
   it('returns the original tasks when no id matches', () => {

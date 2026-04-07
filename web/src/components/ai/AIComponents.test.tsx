@@ -73,7 +73,9 @@ describe('AI component error paths', () => {
     renderWithLanguage(<AdvancedAIAnalysis taskTitle="task" onAnalysisComplete={jest.fn()} />);
     fireEvent.click(screen.getByText(/Uruchom analizę zaawansowaną/i));
 
-    await waitFor(() => expect(screen.getByText(/Sugerowany kwadrant: Zaplanuj/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Sugerowany kwadrant: Zaplanuj/i)).toBeInTheDocument()
+    );
     expect(mockedApi.analyzeWithLangChain).toHaveBeenCalledWith('task', 'pl');
   });
 
@@ -101,7 +103,9 @@ describe('AI component error paths', () => {
     renderWithLanguage(<AdvancedAIAnalysis taskTitle="task" onAnalysisComplete={jest.fn()} />);
     fireEvent.click(screen.getByText(/Run advanced analysis/i));
 
-    await waitFor(() => expect(screen.getByText(/Suggested quadrant: Quadrant 9/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Suggested quadrant: Quadrant 9/i)).toBeInTheDocument()
+    );
   });
 
   it('clears stale advanced analysis when the language changes', async () => {
@@ -141,7 +145,9 @@ describe('AI component error paths', () => {
     renderWithLanguage(<Harness />);
     fireEvent.click(screen.getByText(/Run advanced analysis/i));
 
-    await waitFor(() => expect(screen.getByText(/Suggested quadrant: Schedule/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Suggested quadrant: Schedule/i)).toBeInTheDocument()
+    );
 
     await act(async () => {
       fireEvent.click(screen.getByText('switch'));
@@ -331,7 +337,9 @@ describe('AI component error paths', () => {
   });
 
   it('ignores empty OCR selections, opens the file picker, and falls back on unknown OCR failures', async () => {
-    const inputClickSpy = jest.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined);
+    const inputClickSpy = jest
+      .spyOn(HTMLInputElement.prototype, 'click')
+      .mockImplementation(() => undefined);
     mockedApi.extractTasksFromImage.mockRejectedValueOnce('offline');
 
     renderWithLanguage(<ImageUpload onTasksExtracted={jest.fn()} />);
@@ -407,12 +415,19 @@ describe('AI component error paths', () => {
     mockedApi.addTrainingExample.mockResolvedValue(undefined);
     mockedApi.learnFromFeedback.mockResolvedValue(undefined);
     mockedApi.retrainModel.mockResolvedValue({ preserve_experience: false });
-    mockedApi.clearTrainingData.mockResolvedValue({ message: 'Training data cleared.', remaining_examples: 4 });
-    mockedApi.getExamplesByQuadrant.mockResolvedValue({ examples: [{ text: 'Inbox cleanup', quadrant: 3 }] });
+    mockedApi.clearTrainingData.mockResolvedValue({
+      message: 'Training data cleared.',
+      remaining_examples: 4,
+    });
+    mockedApi.getExamplesByQuadrant.mockResolvedValue({
+      examples: [{ text: 'Inbox cleanup', quadrant: 3 }],
+    });
 
     renderWithLanguage(<AIManagement onModelUpdated={onModelUpdated} />);
 
-    await waitFor(() => expect(screen.getByText(/Model: local-minilm-mlp \(on\)/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Model: local-minilm-mlp \(on\)/i)).toBeInTheDocument()
+    );
 
     fireEvent.change(screen.getByPlaceholderText(/Task text/i), {
       target: { value: 'Escalate outage' },
@@ -421,7 +436,9 @@ describe('AI component error paths', () => {
       target: { value: '0' },
     });
     fireEvent.click(screen.getByText(/Add example/i));
-    await waitFor(() => expect(mockedApi.addTrainingExample).toHaveBeenCalledWith('Escalate outage', 0));
+    await waitFor(() =>
+      expect(mockedApi.addTrainingExample).toHaveBeenCalledWith('Escalate outage', 0)
+    );
 
     fireEvent.change(screen.getByPlaceholderText(/Task corrected by the user/i), {
       target: { value: 'Prepare QBR' },
@@ -433,7 +450,9 @@ describe('AI component error paths', () => {
       target: { value: '2' },
     });
     fireEvent.click(screen.getByText(/Learn feedback/i));
-    await waitFor(() => expect(mockedApi.learnFromFeedback).toHaveBeenCalledWith('Prepare QBR', 3, 2));
+    await waitFor(() =>
+      expect(mockedApi.learnFromFeedback).toHaveBeenCalledWith('Prepare QBR', 3, 2)
+    );
 
     fireEvent.click(screen.getByLabelText(/Keep deprecated compatibility flag on retrain/i));
     fireEvent.click(screen.getByLabelText(/Keep seed examples when clearing training data/i));
@@ -448,7 +467,9 @@ describe('AI component error paths', () => {
     });
     fireEvent.click(screen.getByText(/Load examples/i));
     await waitFor(() => expect(screen.getByText('Inbox cleanup')).toBeInTheDocument());
-    expect(within(screen.getByText('Inbox cleanup').closest('li') as HTMLElement).getByText('Delete')).toBeInTheDocument();
+    expect(
+      within(screen.getByText('Inbox cleanup').closest('li') as HTMLElement).getByText('Delete')
+    ).toBeInTheDocument();
     expect(onModelUpdated).toHaveBeenCalledTimes(4);
   });
 
@@ -491,7 +512,9 @@ describe('AI component error paths', () => {
 
     renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
 
-    await waitFor(() => expect(screen.getByText(/Model: local-minilm-mlp \(off\)/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Model: local-minilm-mlp \(off\)/i)).toBeInTheDocument()
+    );
     expect(
       screen.getByText(/Encoder: sentence-transformers\/paraphrase-multilingual-MiniLM-L12-v2/i)
     ).toBeInTheDocument();
@@ -537,7 +560,12 @@ describe('AI component error paths', () => {
         ocr: true,
       },
       provider_controls: {
-        local_model: { enabled: false, available: true, active: false, reason: 'Disabled in AI management.' },
+        local_model: {
+          enabled: false,
+          available: true,
+          active: false,
+          reason: 'Disabled in AI management.',
+        },
         tesseract: { enabled: true, available: true, active: true, reason: null },
       },
     });
@@ -546,7 +574,9 @@ describe('AI component error paths', () => {
 
     renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
 
-    await waitFor(() => expect(screen.getByText(/Total examples in the experience store/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Total examples in the experience store/i)).toBeInTheDocument()
+    );
 
     fireEvent.change(screen.getByPlaceholderText(/Task text/i), {
       target: { value: 'Review docs' },
@@ -641,7 +671,12 @@ describe('AI component error paths', () => {
           ocr: true,
         },
         provider_controls: {
-          local_model: { enabled: false, available: true, active: false, reason: 'Disabled in AI management.' },
+          local_model: {
+            enabled: false,
+            available: true,
+            active: false,
+            reason: 'Disabled in AI management.',
+          },
           tesseract: { enabled: true, available: true, active: true, reason: null },
         },
       })
@@ -657,8 +692,18 @@ describe('AI component error paths', () => {
           ocr: false,
         },
         provider_controls: {
-          local_model: { enabled: false, available: true, active: false, reason: 'Disabled in AI management.' },
-          tesseract: { enabled: false, available: true, active: false, reason: 'Disabled in AI management.' },
+          local_model: {
+            enabled: false,
+            available: true,
+            active: false,
+            reason: 'Disabled in AI management.',
+          },
+          tesseract: {
+            enabled: false,
+            available: true,
+            active: false,
+            reason: 'Disabled in AI management.',
+          },
         },
       });
     mockedApi.setProviderEnabled
@@ -682,12 +727,16 @@ describe('AI component error paths', () => {
     await waitFor(() => expect(screen.getByText(/Local model/i)).toBeInTheDocument());
 
     fireEvent.click(screen.getByLabelText(/Toggle Local model/i));
-    await waitFor(() => expect(mockedApi.setProviderEnabled).toHaveBeenCalledWith('local_model', false));
+    await waitFor(() =>
+      expect(mockedApi.setProviderEnabled).toHaveBeenCalledWith('local_model', false)
+    );
     await waitFor(() => expect(screen.getByText(/Local model disabled\./i)).toBeInTheDocument());
     expect(screen.getAllByText(/Disabled in AI management/i).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByLabelText(/Toggle Tesseract/i));
-    await waitFor(() => expect(mockedApi.setProviderEnabled).toHaveBeenCalledWith('tesseract', false));
+    await waitFor(() =>
+      expect(mockedApi.setProviderEnabled).toHaveBeenCalledWith('tesseract', false)
+    );
     await waitFor(() => expect(screen.getByText(/Tesseract disabled\./i)).toBeInTheDocument());
   });
 
@@ -713,7 +762,12 @@ describe('AI component error paths', () => {
           ocr: true,
         },
         provider_controls: {
-          local_model: { enabled: false, available: true, active: false, reason: 'Disabled in AI management.' },
+          local_model: {
+            enabled: false,
+            available: true,
+            active: false,
+            reason: 'Disabled in AI management.',
+          },
           tesseract: { enabled: true, available: true, active: true, reason: null },
         },
       })
@@ -743,10 +797,14 @@ describe('AI component error paths', () => {
 
     renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
 
-    await waitFor(() => expect(screen.getAllByText(/Disabled in AI management/i).length).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(screen.getAllByText(/Disabled in AI management/i).length).toBeGreaterThan(0)
+    );
 
     fireEvent.click(screen.getByLabelText(/Toggle Local model/i));
-    await waitFor(() => expect(mockedApi.setProviderEnabled).toHaveBeenCalledWith('local_model', true));
+    await waitFor(() =>
+      expect(mockedApi.setProviderEnabled).toHaveBeenCalledWith('local_model', true)
+    );
     await waitFor(() => expect(screen.getByText(/Local model enabled\./i)).toBeInTheDocument());
   });
 
@@ -771,15 +829,27 @@ describe('AI component error paths', () => {
         ocr: false,
       },
       provider_controls: {
-        local_model: { enabled: true, available: false, active: false, reason: 'Model bootstrap failed.' },
-        tesseract: { enabled: true, available: false, active: false, reason: 'Tesseract binary is not available.' },
+        local_model: {
+          enabled: true,
+          available: false,
+          active: false,
+          reason: 'Model bootstrap failed.',
+        },
+        tesseract: {
+          enabled: true,
+          available: false,
+          active: false,
+          reason: 'Tesseract binary is not available.',
+        },
       },
     });
     mockedApi.setProviderEnabled.mockRejectedValueOnce(new Error('Provider switch failed'));
 
     renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
 
-    await waitFor(() => expect(screen.getAllByText(/Unavailable in this runtime/i)).toHaveLength(2));
+    await waitFor(() =>
+      expect(screen.getAllByText(/Unavailable in this runtime/i)).toHaveLength(2)
+    );
     expect(screen.getByText('Model bootstrap failed.')).toBeInTheDocument();
     expect(screen.getByText('Tesseract binary is not available.')).toBeInTheDocument();
 
