@@ -1,16 +1,22 @@
 from __future__ import annotations
 from typing import List, Dict, Optional, Any, Callable
 from dataclasses import dataclass
+import logging
 
 from langchain_core.vectorstores import VectorStore
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.documents import Document
+from langchain_core.language_models import BaseLLM
 
 from ..defaults import QUADRANT_NAMES
 from ..domain.events import event_publisher, VectorItemAddedEvent, DomainEvent
 from ..vector.langchain_adapter import EisenhowerEmbeddings
+from ..llm_provider import LLMProvider, LLMProviderError
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -53,13 +59,25 @@ class QuadrantRetrievalQA:
         self,
         vector_store: VectorStore,
         embeddings: EisenhowerEmbeddings,
+        llm_provider: Optional[LLMProvider] = None,
+        fallback_classifier: Optional[Any] = None,
         top_k: int = 3
     ):
         self.vector_store = vector_store
         self.embeddings = embeddings
+        self.llm_provider = llm_provider
+        self.fallback_classifier = fallback_classifier
         self.top_k = top_k
         self._retriever = vector_store.as_retriever(search_kwargs={"k": top_k})
-        self._chain = self._build_chain()
+        self._chain = None
+        
+        try:
+            if self.llm_provider:
+                self.llm_provider.ensure_ready()
+                self._chain = self._build_chain()
+        except LLMProviderError as e:
+            logger.warning(f"LLM not available, using fallback classifier: {e}")
+        
         self._subscribe_events()
 
     def _subscribe_events(self) -> None:
@@ -98,6 +116,7 @@ class QuadrantRetrievalQA:
     def classify(self, task: str) -> EisenhowerClassificationResult:
         """
         Klasyfikuje pojedyncze zadanie używając RAG z LangChain
+        W przypadku awarii LLM automatycznie używa fallback klasyfikatora
         """
         # Pobierz podobne przykłady bezpośrednio z VectorStore
         similar_docs = self.vector_store.similarity_search(task, k=self.top_k)
@@ -110,20 +129,51 @@ class QuadrantRetrievalQA:
             for doc in similar_docs
         ]
 
-        # Wykonaj łańcuch klasyfikacji
-        result = self._chain.invoke({"task": task})
+        # Próbuj użyć LLM RAG jeżeli dostępny
+        if self._chain is not None:
+            try:
+                result = self._chain.invoke({"task": task})
 
-        quadrant = int(result.get("quadrant", 3))
-        confidence = float(result.get("confidence", 0.0))
-        reasoning = str(result.get("reasoning", "Brak wyjaśnienia"))
+                quadrant = int(result.get("quadrant", 3))
+                confidence = float(result.get("confidence", 0.0))
+                reasoning = str(result.get("reasoning", "Brak wyjaśnienia"))
 
+                return EisenhowerClassificationResult(
+                    task=task,
+                    quadrant=quadrant,
+                    quadrant_name=QUADRANT_NAMES[quadrant],
+                    confidence=confidence,
+                    reasoning=reasoning,
+                    similar_examples=similar_examples,
+                    method="llm-rag-retrieval-qa"
+                )
+            except Exception as e:
+                logger.warning(f"LLM chain failed, falling back: {e}")
+
+        # Fallback na stary klasyfikator
+        if self.fallback_classifier:
+            prediction = self.fallback_classifier.predict(task, limit=3)
+            explanation = self.fallback_classifier.explain(task, prediction=prediction)
+            
+            return EisenhowerClassificationResult(
+                task=task,
+                quadrant=prediction.quadrant,
+                quadrant_name=QUADRANT_NAMES[prediction.quadrant],
+                confidence=prediction.confidence,
+                reasoning=explanation["reasoning"],
+                similar_examples=similar_examples,
+                method="fallback-minilm-classifier"
+            )
+
+        # Ostatni fallback: domyślny kwadrant
         return EisenhowerClassificationResult(
             task=task,
-            quadrant=quadrant,
-            quadrant_name=QUADRANT_NAMES[quadrant],
-            confidence=confidence,
-            reasoning=reasoning,
-            similar_examples=similar_examples
+            quadrant=3,
+            quadrant_name=QUADRANT_NAMES[3],
+            confidence=0.0,
+            reasoning="Brak dostępnych klasyfikatorów, użyto domyślnej klasyfikacji",
+            similar_examples=similar_examples,
+            method="default-fallback"
         )
 
     async def aclassify(self, task: str) -> EisenhowerClassificationResult:

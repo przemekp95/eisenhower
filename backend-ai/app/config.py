@@ -29,6 +29,15 @@ class Settings:
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
   )
+    # Lokalny LLM (llama.cpp)
+    llm_enabled: bool = True
+    llm_model_filename: str = "llama-3.2-8b-instruct-q4_k_m.gguf"
+    llm_quant_level: str = "Q4_K_M"
+    llm_n_ctx: int = 2048
+    llm_n_threads: int | None = None
+    llm_n_gpu_layers: int | None = None
+    llm_temperature: float = 0.1
+    llm_max_tokens: int = 512
 
 
 def load_settings(env: dict[str, str] | None = None) -> Settings:
