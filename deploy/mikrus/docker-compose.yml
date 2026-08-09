@@ -15,9 +15,12 @@ services:
       retries: 5
 
   ai-service:
-    image: ${DOCKER_HUB_USERNAME:?DOCKER_HUB_USERNAME is required}/eisenhower-ai:latest
+    image: ${DOCKER_HUB_USERNAME:?DOCKER_HUB_USERNAME is required}/eisenhower-ai:${IMAGE_TAG:?IMAGE_TAG is required}
     restart: unless-stopped
     environment:
+      APP_ENV: production
+      EISENHOWER_API_TOKEN: ${EISENHOWER_API_TOKEN:?EISENHOWER_API_TOKEN is required}
+      EISENHOWER_ADMIN_TOKEN: ${EISENHOWER_ADMIN_TOKEN:?EISENHOWER_ADMIN_TOKEN is required}
       TRAINING_DATA_PATH: /app/data/training_data.json
       MODEL_CACHE_DIR: /app/data/runtime
       LOCAL_MODEL_NAME: ${LOCAL_MODEL_NAME:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
@@ -27,11 +30,11 @@ services:
       LOCAL_MODEL_DROPOUT: ${LOCAL_MODEL_DROPOUT:-0.1}
       LOCAL_MODEL_LEARNING_RATE: ${LOCAL_MODEL_LEARNING_RATE:-0.01}
       TESSERACT_LANGUAGES: ${TESSERACT_LANGUAGES:-eng+pol}
-      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:8080}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:?CORS_ALLOW_ORIGINS is required}
     volumes:
       - ai_data:/app/data
-    ports:
-      - "${AI_PORT:-8000}:8000"
+    expose:
+      - "8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s
@@ -39,20 +42,22 @@ services:
       retries: 3
 
   api-service:
-    image: ${DOCKER_HUB_USERNAME:?DOCKER_HUB_USERNAME is required}/eisenhower-api:latest
+    image: ${DOCKER_HUB_USERNAME:?DOCKER_HUB_USERNAME is required}/eisenhower-api:${IMAGE_TAG:?IMAGE_TAG is required}
     restart: unless-stopped
     environment:
+      NODE_ENV: production
       PORT: 3001
       MONGODB_URI: mongodb://mongodb:27017/eisenhower
       AI_SERVICE_URL: http://ai-service:8000
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      EISENHOWER_API_TOKEN: ${EISENHOWER_API_TOKEN:?EISENHOWER_API_TOKEN is required}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:?CORS_ALLOW_ORIGINS is required}
     depends_on:
       mongodb:
         condition: service_healthy
       ai-service:
         condition: service_started
-    ports:
-      - "${API_PORT:-3001}:3001"
+    expose:
+      - "3001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:3001/health"]
       interval: 30s
@@ -60,7 +65,7 @@ services:
       retries: 3
 
   frontend:
-    image: ${DOCKER_HUB_USERNAME:?DOCKER_HUB_USERNAME is required}/eisenhower-web:latest
+    image: ${DOCKER_HUB_USERNAME:?DOCKER_HUB_USERNAME is required}/eisenhower-web:${IMAGE_TAG:?IMAGE_TAG is required}
     restart: unless-stopped
     environment:
       VITE_API_URL: ${VITE_API_URL:-/api}

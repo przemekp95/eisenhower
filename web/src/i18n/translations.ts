@@ -9,7 +9,8 @@ export const translations = {
     'hero.badges.ai': 'AI on demand',
     'hero.badges.motion': 'Guided motion',
     'hero.preview.title': 'Decision signal',
-    'hero.preview.description': 'Critical work stays hot, strategic work stays calm, and noise drifts to the edge.',
+    'hero.preview.description':
+      'Critical work stays hot, strategic work stays calm, and noise drifts to the edge.',
     'hero.metrics.total': 'Tasks',
     'hero.metrics.focus': 'Do now',
     'hero.metrics.leverage': 'Delegate',
@@ -18,7 +19,8 @@ export const translations = {
     'hero.bands.reserve': 'Noise floor',
     'hero.status': 'Live board synced with backend',
     'footer.kicker': 'Priority system',
-    'footer.summary': 'A live Eisenhower board with real CRUD, optional AI helpers, and motion that guides attention instead of stealing it.',
+    'footer.summary':
+      'A live Eisenhower board with real CRUD, optional AI helpers, and motion that guides attention instead of stealing it.',
     'footer.cards.board': 'Quadrants',
     'footer.cards.boardValue': '4 active quadrants',
     'footer.cards.sync': 'Backend state',
@@ -129,12 +131,14 @@ export const translations = {
   pl: {
     'app.eyebrow': 'Ustabilizowany workflow',
     'app.title': 'Eisenhower Matrix',
-    'app.subtitle': 'Pracuj na prawdziwym CRUD z backendem, a narzędzia AI uruchamiaj tylko wtedy, gdy są potrzebne.',
+    'app.subtitle':
+      'Pracuj na prawdziwym CRUD z backendem, a narzędzia AI uruchamiaj tylko wtedy, gdy są potrzebne.',
     'hero.badges.api': 'Połączone z API',
     'hero.badges.ai': 'AI na żądanie',
     'hero.badges.motion': 'Prowadzony motion',
     'hero.preview.title': 'Sygnał decyzji',
-    'hero.preview.description': 'Krytyczne zadania zostają gorące, strategiczne spokojne, a szum odpływa na krawędź.',
+    'hero.preview.description':
+      'Krytyczne zadania zostają gorące, strategiczne spokojne, a szum odpływa na krawędź.',
     'hero.metrics.total': 'Zadania',
     'hero.metrics.focus': 'Zrób teraz',
     'hero.metrics.leverage': 'Deleguj',
@@ -143,7 +147,8 @@ export const translations = {
     'hero.bands.reserve': 'Poziom szumu',
     'hero.status': 'Live board zsynchronizowany z backendem',
     'footer.kicker': 'System priorytetów',
-    'footer.summary': 'Live Eisenhower board z prawdziwym CRUD-em, opcjonalnymi narzędziami AI i motionem, który prowadzi uwagę zamiast ją kraść.',
+    'footer.summary':
+      'Live Eisenhower board z prawdziwym CRUD-em, opcjonalnymi narzędziami AI i motionem, który prowadzi uwagę zamiast ją kraść.',
     'footer.cards.board': 'Kwadranty',
     'footer.cards.boardValue': '4 aktywne kwadranty',
     'footer.cards.sync': 'Stan backendu',
@@ -250,7 +255,7 @@ export const translations = {
     'ai.manage.quadrantUnknown': 'Kwadrant {quadrant}',
     'ai.manage.provider.localModel': 'Model lokalny',
     'ai.manage.provider.tesseract': 'Tesseract',
-  }
+  },
 };
 
 export type TranslationKey = keyof typeof translations.en;

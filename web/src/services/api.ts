@@ -15,16 +15,34 @@ import apiClient, {
 } from '@eisenhower/api-client';
 import { runtimeConfig } from '../config';
 import type { Language } from '../i18n/translations';
+import {
+  clearApiToken,
+  getAdminToken,
+  getApiToken,
+  setAdminToken,
+  setApiToken,
+  setCredentials,
+} from '../authSession';
 
 const { createAiApi, createTaskApi } = apiClient;
 
 function getTaskApi() {
-  return createTaskApi(runtimeConfig.apiUrl);
+  return createTaskApi(runtimeConfig.apiUrl, {
+    accessToken: getApiToken,
+    onUnauthorized: clearApiToken,
+  });
 }
 
 function getAiApi() {
-  return createAiApi(runtimeConfig.aiApiUrl);
+  return createAiApi(runtimeConfig.aiApiUrl, {
+    accessToken: getApiToken,
+    adminToken: getAdminToken,
+    onUnauthorized: clearApiToken,
+    onAdminUnauthorized: clearApiToken,
+  });
 }
+
+export { clearApiToken, setAdminToken, setApiToken, setCredentials };
 
 export type ClassificationResult = ClassificationResultDto;
 export type SimilarExampleResult = SimilarExampleResultDto;
@@ -58,7 +76,10 @@ export async function classifyTask(title: string): Promise<ClassificationResult>
   return getAiApi().classifyTask(title, true);
 }
 
-export async function analyzeWithLangChain(task: string, language: Language = 'en'): Promise<LangChainAnalysis> {
+export async function analyzeWithLangChain(
+  task: string,
+  language: Language = 'en'
+): Promise<LangChainAnalysis> {
   return getAiApi().analyzeWithLangChain(task, language);
 }
 
@@ -103,7 +124,10 @@ export async function clearTrainingData(keepDefaults = true): Promise<TrainingDa
   return getAiApi().clearTrainingData(keepDefaults);
 }
 
-export async function getExamplesByQuadrant(quadrant: number, limit = 10): Promise<{ examples: Array<{ text: string; quadrant: number }> }> {
+export async function getExamplesByQuadrant(
+  quadrant: number,
+  limit = 10
+): Promise<{ examples: Array<{ text: string; quadrant: number }> }> {
   return getAiApi().getExamplesByQuadrant(quadrant, limit);
 }
 

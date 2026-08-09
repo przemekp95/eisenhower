@@ -1,9 +1,13 @@
 import { createTaskApi } from '@eisenhower/api-client';
 import { mobileConfig } from '../config';
 import { TASK_SYNC_STATE, isRemoteTaskId as isRemoteObjectId } from '../utils/taskSync';
+import { clearApiToken, getApiToken } from '../authSession';
 
 function getTaskApi() {
-  return createTaskApi(mobileConfig.apiUrl);
+  return createTaskApi(mobileConfig.apiUrl, {
+    accessToken: getApiToken,
+    onUnauthorized: clearApiToken,
+  });
 }
 
 export function isRemoteTaskId(id) {

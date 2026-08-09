@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Matrix from './components/Matrix';
 import LanguageSwitcher from './components/LanguageSwitcher';
 import useSmoothScroll from './hooks/useSmoothScroll';
@@ -7,6 +7,63 @@ import { shouldDisableMotion } from './lib/motion';
 import { replaceTaskById, restoreReadyState } from './lib/uiState';
 import { createTask, deleteTask, getTasks, updateTask } from './services/api';
 import { Task, TaskInput } from './types';
+import { getApiToken, setCredentials, subscribeToApiToken } from './authSession';
+
+function CredentialGate() {
+  const [token, setToken] = useState('');
+  const [adminToken, setAdminToken] = useState('');
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    setCredentials(token, adminToken);
+    setToken('');
+    setAdminToken('');
+  };
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#030816] px-4 text-white">
+      <form
+        onSubmit={submit}
+        className="w-full max-w-md rounded-[2rem] border border-white/10 bg-slate-950/80 p-8 shadow-2xl"
+      >
+        <h1 className="text-2xl font-semibold">Eisenhower Matrix</h1>
+        <p className="mt-3 text-sm leading-6 text-white/65">
+          Wpisz token dostępu i osobny token administratora AI. Pozostaną wyłącznie w pamięci tej
+          karty i zostaną usunięte po zamknięciu lub odrzuceniu autoryzacji.
+        </p>
+        <label htmlFor="api-token" className="mt-6 block text-sm font-medium">
+          Token dostępu
+        </label>
+        <input
+          id="api-token"
+          type="password"
+          autoComplete="off"
+          value={token}
+          onChange={(event) => setToken(event.target.value)}
+          className="mt-2 w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 outline-none focus:border-cyan-300"
+        />
+        <label htmlFor="admin-token" className="mt-4 block text-sm font-medium">
+          Token administratora AI
+        </label>
+        <input
+          id="admin-token"
+          type="password"
+          autoComplete="off"
+          value={adminToken}
+          onChange={(event) => setAdminToken(event.target.value)}
+          className="mt-2 w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 outline-none focus:border-cyan-300"
+        />
+        <button
+          type="submit"
+          disabled={!token.trim() || !adminToken.trim()}
+          className="mt-5 w-full rounded-xl bg-cyan-300 px-4 py-3 font-semibold text-slate-950 disabled:opacity-40"
+        >
+          Odblokuj
+        </button>
+      </form>
+    </main>
+  );
+}
 
 function AppContent() {
   const { t } = useLanguage();
@@ -27,14 +84,41 @@ function AppContent() {
 
     return {
       cards: [
-        { label: t('hero.metrics.total'), value: total, accent: 'from-emerald-300/70 to-cyan-300/60' },
-        { label: t('hero.metrics.focus'), value: critical, accent: 'from-cyan-300/80 to-sky-300/70' },
-        { label: t('hero.metrics.leverage'), value: leverage, accent: 'from-amber-300/80 to-orange-300/70' },
+        {
+          label: t('hero.metrics.total'),
+          value: total,
+          accent: 'from-emerald-300/70 to-cyan-300/60',
+        },
+        {
+          label: t('hero.metrics.focus'),
+          value: critical,
+          accent: 'from-cyan-300/80 to-sky-300/70',
+        },
+        {
+          label: t('hero.metrics.leverage'),
+          value: leverage,
+          accent: 'from-amber-300/80 to-orange-300/70',
+        },
       ],
       bands: [
-        { label: t('hero.bands.critical'), value: critical, width: 24 + (critical / safeTotal) * 76, tone: 'from-emerald-300 to-cyan-300' },
-        { label: t('hero.bands.depth'), value: leverage, width: 24 + (leverage / safeTotal) * 76, tone: 'from-cyan-300 to-blue-300' },
-        { label: t('hero.bands.reserve'), value: noise, width: 24 + (noise / safeTotal) * 76, tone: 'from-slate-300/70 to-slate-500/60' },
+        {
+          label: t('hero.bands.critical'),
+          value: critical,
+          width: 24 + (critical / safeTotal) * 76,
+          tone: 'from-emerald-300 to-cyan-300',
+        },
+        {
+          label: t('hero.bands.depth'),
+          value: leverage,
+          width: 24 + (leverage / safeTotal) * 76,
+          tone: 'from-cyan-300 to-blue-300',
+        },
+        {
+          label: t('hero.bands.reserve'),
+          value: noise,
+          width: 24 + (noise / safeTotal) * 76,
+          tone: 'from-slate-300/70 to-slate-500/60',
+        },
       ],
     };
   }, [tasks, t]);
@@ -290,7 +374,10 @@ function AppContent() {
                   >
                     {t('app.title')}
                   </h1>
-                  <p data-app-subtitle className="mt-4 max-w-2xl text-base leading-7 text-white/[0.68] sm:text-lg">
+                  <p
+                    data-app-subtitle
+                    className="mt-4 max-w-2xl text-base leading-7 text-white/[0.68] sm:text-lg"
+                  >
                     {t('app.subtitle')}
                   </p>
                 </div>
@@ -322,7 +409,10 @@ function AppContent() {
               </div>
             </div>
 
-            <aside data-app-preview className="hero-preview-mask relative overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/[0.55] p-5 backdrop-blur-md">
+            <aside
+              data-app-preview
+              className="hero-preview-mask relative overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/[0.55] p-5 backdrop-blur-md"
+            >
               <div
                 data-app-preview-layer
                 aria-hidden="true"
@@ -345,8 +435,12 @@ function AppContent() {
               <div className="relative z-10">
                 <div className="mb-5 flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.26em] text-white/45">{t('hero.preview.title')}</p>
-                    <p className="mt-3 max-w-xs text-sm leading-6 text-white/[0.72]">{t('hero.preview.description')}</p>
+                    <p className="text-xs uppercase tracking-[0.26em] text-white/45">
+                      {t('hero.preview.title')}
+                    </p>
+                    <p className="mt-3 max-w-xs text-sm leading-6 text-white/[0.72]">
+                      {t('hero.preview.description')}
+                    </p>
                   </div>
                   <span className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-emerald-200/80">
                     {t('hero.status')}
@@ -364,7 +458,9 @@ function AppContent() {
                       <p className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-white">
                         {String(metric.value).padStart(2, '0')}
                       </p>
-                      <p className="mt-1 text-xs uppercase tracking-[0.24em] text-white/45">{metric.label}</p>
+                      <p className="mt-1 text-xs uppercase tracking-[0.24em] text-white/45">
+                        {metric.label}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -422,7 +518,9 @@ function AppContent() {
 
           <div className="relative z-10 grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_24rem]">
             <div>
-              <p className="text-xs uppercase tracking-[0.28em] text-white/45">{t('footer.kicker')}</p>
+              <p className="text-xs uppercase tracking-[0.28em] text-white/45">
+                {t('footer.kicker')}
+              </p>
               <h2 className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-white sm:text-3xl">
                 {t('app.title')}
               </h2>
@@ -437,7 +535,9 @@ function AppContent() {
                   key={card.label}
                   className="rounded-[1.4rem] border border-white/10 bg-white/[0.05] px-4 py-3 backdrop-blur"
                 >
-                  <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">{card.label}</p>
+                  <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                    {card.label}
+                  </p>
                   <p className="mt-2 text-sm font-medium text-white/82">{card.value}</p>
                 </div>
               ))}
@@ -464,6 +564,12 @@ function AppContent() {
 }
 
 export default function App() {
+  const apiToken = useSyncExternalStore(subscribeToApiToken, getApiToken, getApiToken);
+
+  if (!apiToken) {
+    return <CredentialGate />;
+  }
+
   return (
     <LanguageProvider>
       <AppContent />

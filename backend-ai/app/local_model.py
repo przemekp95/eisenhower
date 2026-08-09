@@ -163,6 +163,12 @@ class LocalMiniLMClassifier:
     query_embedding = self._encode([task])[0]
     return self._find_similar_examples_for_embedding(query_embedding, limit=limit)
 
+  def encode_text(self, text: str) -> list[float]:
+    if not text.strip():
+      raise ValueError("Task must not be empty.")
+
+    return self._encode([text])[0]
+
   def _find_similar_examples_for_embedding(
     self,
     query_embedding: list[float],

@@ -1,5 +1,14 @@
 import { LangChainAnalysis } from '../services/api';
 
+export const QUADRANT_KEYS = ['do', 'delegate', 'schedule', 'delete'] as const;
+
+export const QUADRANT_LABEL_KEYS = {
+  0: 'matrix.do',
+  1: 'matrix.delegate',
+  2: 'matrix.schedule',
+  3: 'matrix.delete',
+} as const;
+
 export function quadrantToTaskState(quadrant: number) {
   return {
     urgent: quadrant === 0 || quadrant === 1,

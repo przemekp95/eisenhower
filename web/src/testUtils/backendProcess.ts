@@ -49,12 +49,19 @@ function requestHealth(url: string) {
   });
 }
 
-async function waitForHealth(url: string, child: ChildProcessWithoutNullStreams, getOutput: () => string) {
+async function waitForHealth(
+  url: string,
+  child: ChildProcessWithoutNullStreams,
+  getOutput: () => string
+) {
   const deadline = Date.now() + 90_000;
 
   while (Date.now() < deadline) {
     if (child.exitCode !== null) {
-      throw formatProcessError(`Backend integration server exited early with code ${child.exitCode}.`, getOutput());
+      throw formatProcessError(
+        `Backend integration server exited early with code ${child.exitCode}.`,
+        getOutput()
+      );
     }
 
     try {
@@ -69,7 +76,10 @@ async function waitForHealth(url: string, child: ChildProcessWithoutNullStreams,
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
 
-  throw formatProcessError('Timed out waiting for the backend integration server to become healthy.', getOutput());
+  throw formatProcessError(
+    'Timed out waiting for the backend integration server to become healthy.',
+    getOutput()
+  );
 }
 
 export async function startBackendProcess(): Promise<RunningBackendProcess> {
@@ -120,7 +130,9 @@ export async function startBackendProcess(): Promise<RunningBackendProcess> {
           new Promise((_, reject) => {
             timeoutId = setTimeout(() => {
               child.kill('SIGKILL');
-              reject(formatProcessError('Timed out stopping the backend integration server.', output));
+              reject(
+                formatProcessError('Timed out stopping the backend integration server.', output)
+              );
             }, 10_000);
           }),
         ]);

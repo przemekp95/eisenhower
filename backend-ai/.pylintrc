@@ -1,0 +1,58 @@
+[MASTER]
+ignore=venv,.venv,__pycache__
+ignore-patterns=object_storage\.py
+
+[MESSAGES CONTROL]
+disable=
+    arguments-differ,
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    broad-exception-caught,
+    broad-exception-raised,
+    bad-indentation,
+    consider-using-dict-items,
+    duplicate-code,
+    f-string-without-interpolation,
+    fixme,
+    global-statement,
+    import-outside-toplevel,
+    invalid-name,
+    line-too-long,
+    logging-fstring-interpolation,
+    protected-access,
+    redefined-builtin,
+    redefined-outer-name,
+    trailing-whitespace,
+    too-few-public-methods,
+    too-many-arguments,
+    too-many-branches,
+    too-many-instance-attributes,
+    too-many-lines,
+    too-many-locals,
+    too-many-positional-arguments,
+    too-many-return-statements,
+    too-many-statements,
+    unnecessary-lambda-assignment,
+    unused-import,
+    unused-variable,
+    wrong-import-position
+
+[FORMAT]
+max-line-length=120
+
+[DESIGN]
+max-args=10
+max-attributes=12
+max-branches=20
+max-locals=25
+max-returns=8
+max-statements=80
+
+[TYPECHECK]
+ignored-modules=
+    PIL,
+    pytesseract,
+    qdrant_client,
+    sentence_transformers,
+    torch

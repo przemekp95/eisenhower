@@ -10,7 +10,7 @@ declare global {
 }
 
 const browserRuntimeConfig: AppRuntimeConfig =
-  typeof window === 'undefined' ? {} : window.__APP_CONFIG__ ?? {};
+  typeof window === 'undefined' ? {} : (window.__APP_CONFIG__ ?? {});
 
 export const runtimeConfig = {
   apiUrl: browserRuntimeConfig.apiUrl ?? process.env.VITE_API_URL ?? 'http://localhost:3001',

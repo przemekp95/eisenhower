@@ -19,10 +19,7 @@ export default defineConfig({
     timeout: 10_000,
   },
   outputDir: './output/playwright/test-results',
-  reporter: [
-    ['list'],
-    ['html', { open: 'never', outputFolder: './output/playwright/report' }],
-  ],
+  reporter: [['list'], ['html', { open: 'never', outputFolder: './output/playwright/report' }]],
   use: {
     ...devices['Desktop Chrome'],
     baseURL: frontendUrl,
@@ -40,6 +37,9 @@ export default defineConfig({
         ...childEnv,
         HOST: '127.0.0.1',
         PORT: '3101',
+        NODE_ENV: 'test',
+        EISENHOWER_API_TOKEN: 'test-api-token',
+        CORS_ALLOW_ORIGINS: frontendUrl,
       },
       reuseExistingServer: false,
       timeout: 120_000,

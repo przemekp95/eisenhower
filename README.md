@@ -12,7 +12,7 @@ Monorepo for the Eisenhower Matrix application with a React web client, a Node/E
 - `dev` and `master` are protected with GitHub rulesets
 
 The automatic fast-forward uses a dedicated repository deploy key (`DEV_SYNC_DEPLOY_KEY`) so GitHub Actions can update the protected `dev` branch without broadening admin bypass access.
-That fast-forward waits only for the required gates (`branch-policy`, `security-lint`, `test-backend-node`, `test-frontend`, `test-backend-ai`, `test-mobile`), so optional long-running jobs such as the Android release build do not delay `dev` and `master` from reconverging on the same SHA.
+That fast-forward waits for the complete required gate set, including integration, browser E2E, and the native Android release build, before `dev` and `master` reconverge on the same SHA.
 When that post-release fast-forward lands on `dev`, the follow-up `push` run in `ci.yml` now stays in a lightweight mode check instead of replaying the full CI matrix for a commit SHA that already passed on `master`.
 
 Pull requests into `master` are allowed only from `dev`. While the repository has a single maintainer, the required approval count remains `0`, but pull requests and passing checks are mandatory.
@@ -23,6 +23,7 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 - `backend-node`: REST API for tasks and health checks
 - `backend-ai`: FastAPI service for classification, OCR, and batch analysis
 - `mobile/eisenhower-matrix`: Expo / React Native client
+- `qdrant` and `minio`: experimental local-profile services, not dependencies of the supported runtime
 
 ## Runtime Configuration
 
@@ -39,7 +40,8 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 - `PORT`: HTTP port, default `3001`
 - `MONGODB_URI`: MongoDB connection string
 - `AI_SERVICE_URL`: AI backend base URL
-- `JWT_SECRET`: required outside test environments
+- `EISENHOWER_API_TOKEN`: required Bearer token; production values must contain at least 32 characters
+- `CORS_ALLOW_ORIGINS`: comma-separated explicit browser origins; production requires the public frontend origin, including same-origin deployments
 
 ### Backend AI
 
@@ -53,6 +55,13 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 - `LOCAL_MODEL_LEARNING_RATE`: optimizer learning rate for the classification head, default `0.01`
 - `TESSERACT_LANGUAGES`: OCR language pack list for Tesseract fallback, default `eng+pol`
 - `CORS_ALLOW_ORIGINS`: comma-separated frontend origins allowed to call the AI API, defaults to local `localhost` and `127.0.0.1` dev hosts
+- `APP_ENV`: set to `production` in production; this makes both Bearer tokens and an explicit browser origin allowlist mandatory
+- `EISENHOWER_API_TOKEN`: user token shared with the Node API for ordinary task and AI operations
+- `EISENHOWER_ADMIN_TOKEN`: separate 32+ character token for all training-data writes (including feedback), retraining and AI provider management; it must differ from the user token
+
+Web and mobile ask for both tokens at runtime, keep them only in memory, and attach the appropriate value in the `Authorization` header. Do not put either token in `VITE_*`, `EXPO_PUBLIC_*`, runtime-config.js, URLs, localStorage, or AsyncStorage. Because authentication is header-based and cookies are not used, classical CSRF does not apply; unsafe browser requests are additionally rejected when their `Origin` is outside `CORS_ALLOW_ORIGINS`.
+
+---
 
 ### Mobile
 
@@ -75,6 +84,8 @@ Root commands:
 - `make dev-ai`
 - `make dev-mobile`
 
+Before starting the root Docker Compose stack, copy `.env.example` to `.env` and replace every placeholder with a unique local credential.
+
 `make verify` mirrors the local release-quality sweep used most often in CI: backend-node build + coverage, web build + coverage + integration, backend-ai pytest, and mobile coverage.
 
 Per-service fallback:
@@ -92,11 +103,19 @@ The Expo mobile client now keeps a local task cache in AsyncStorage, refreshes a
 
 - Install browsers once: `cd web && npm run test:e2e:install`
 - Run the smoke suite: `cd web && npm run test:e2e`
-- Run the live AI smoke manually: `cd web && npm run test:e2e:ai-smoke`
+- Run the live AI smoke manually with `PLAYWRIGHT_API_TOKEN` and `PLAYWRIGHT_ADMIN_TOKEN`: `cd web && npm run test:e2e:ai-smoke`
 
 The Playwright suite starts an isolated Vite frontend plus a real Node API backed by an ephemeral `mongodb-memory-server` instance, so it does not depend on a manually running MongoDB container.
 
 The manual AI smoke does the opposite: it does not start any local test servers and instead expects the live frontend and AI runtime to already be available, by default on `http://127.0.0.1:5173` and `http://127.0.0.1:8000`.
+
+### Production AI scope
+
+The supported production runtime is intentionally limited to the local multilingual MiniLM classifier, its local similarity index, deterministic explanations, and Tesseract OCR. Legacy endpoint and payload names containing `langchain` or `rag` are retained for client compatibility, but they do not claim an active LLM, LangChain retrieval chain, Qdrant dependency, or generative reasoning.
+
+Qdrant, LangChain, llama.cpp, and MinIO modules remain experimental code paths and tests. Their Python dependencies live in `requirements-experimental.txt`, while test/audit tools live in `requirements-dev.txt`; neither set is installed in the production image. Experimental modules are not initialized by `create_app()`, included in production coverage, deployed to Mikrus, or treated as production acceptance criteria.
+
+---
 
 ## Frontend Integration
 
@@ -107,41 +126,48 @@ The integration suite renders the React app in JSDOM, but talks to a real Expres
 
 ## Mikrus Deployment
 
-Pushes to `master` run `release.yml`, which can deploy to Mikrus over SSH when secrets are configured.
+A successful `CI` push run on `master` triggers `release.yml`, which builds immutable commit-SHA images and can deploy them to Mikrus over SSH when secrets are configured.
 
 - `DOCKER_HUB_USERNAME`: Docker Hub namespace used for images
-- `DOCKER_HUB_TOKEN`: Docker Hub token (optional for pull, required for image push in workflow)
+- `DOCKER_HUB_TOKEN`: Docker Hub token required for a publishable release and Mikrus deployment
 - `MIKRUS_HOST`: server host (IPv6 is supported)
 - `MIKRUS_USER`: SSH user (`root` supported)
 - `MIKRUS_SSH_KEY`: private key content used by GitHub Actions
 - `MIKRUS_ENV_FILE`: full `.env` content written on the server
-- `MIKRUS_APP_DIR`: optional deploy directory override
+- `MIKRUS_APP_DIR`: required absolute deploy directory
+- `MIKRUS_PUBLIC_URL`: public HTTPS origin used by post-deploy smoke checks
 
-Default deploy directory is `/home/<MIKRUS_USER>/apps/demo-fortis`, except `root` which defaults to `/root/apps/demo-fortis`.
-The example Mikrus env uses `WEB_PORT=8080` to avoid common `3000` collisions on shared hosts. If your target already listens on any configured host port, update `WEB_PORT`, `API_PORT`, `AI_PORT`, and matching URLs in `MIKRUS_ENV_FILE` before redeploying.
+The deploy script creates and verifies `.eisenhower-deployment`; it refuses a non-empty target without that ownership marker. Existing deployments must add a marker containing exactly `eisenhower` before the first hardened deployment.
+The example Mikrus env uses `WEB_PORT=8080` to avoid common `3000` collisions on shared hosts. Only the frontend publishes a host port; API and AI stay on the Compose network. If the frontend port is occupied, update `WEB_PORT` in `MIKRUS_ENV_FILE` before redeploying.
 For HTTPS deployments behind a public host, prefer `VITE_API_URL=/api` and `VITE_AI_API_URL=/ai`, and set `CORS_ALLOW_ORIGINS` to the public frontend origin.
 Reference files:
 
 - `deploy/mikrus/docker-compose.yml`
 - `deploy/mikrus/.env.example`
+- `deploy/mikrus/backup.sh` and `restore.sh` for checksum-verified data recovery; restore additionally requires `RESTORE_CONFIRM=restore-eisenhower-data`
 
 ## Quality Gates
 
-Required checks for both `dev` and `master`:
+Target required checks for both `dev` and `master`:
 
 - `branch-policy`
 - `security-lint`
 - `test-backend-node`
 - `test-frontend`
-- `test-backend-ai`
-- `test-mobile`
-
-Additional strong workflow checks that remain enabled, but are not required for branch protection in the current 1-2 sprint hardening phase:
-
 - `test-frontend-integration`
 - `test-frontend-e2e`
+- `test-backend-ai`
+- `test-mobile`
 - `test-mobile-native-android`
+
+The workflow implements these checks, but GitHub branch rules are external state and must be verified after the changes are published. See [`docs/PRODUCTION_ACCEPTANCE.md`](docs/PRODUCTION_ACCEPTANCE.md) for the exact separation between local, CI, and public-runtime evidence.
 
 Coverage thresholds remain service-specific. The web and backend services enforce `100%`, while the Expo mobile client currently enforces `95%` statements/functions/lines and `90%` branches.
 The `test-mobile-native-android` job now also uploads a downloadable release APK artifact from each successful run.
 The same `ci.yml` workflow can also be started manually with `workflow_dispatch`, so you can trigger an APK build from the GitHub Actions UI for a branch without merging it first.
+
+---
+
+## Experimental local profiles
+
+The root Compose file can still expose Qdrant and MinIO under the `experimental` profile for isolated research. These services are not consumed by the default application runtime and are outside the production support contract.

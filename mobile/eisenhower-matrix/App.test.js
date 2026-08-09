@@ -6,6 +6,7 @@ import * as media from './src/services/media';
 import * as storage from './src/services/storage';
 import * as tasksApi from './src/services/tasks';
 import { getSampleTasks } from './src/utils/taskUtils';
+import { clearApiToken, setAdminToken, setApiToken } from './src/authSession';
 
 jest.mock('./src/services/ai', () => ({
   suggestTaskQuadrant: jest.fn(),
@@ -86,9 +87,10 @@ function trainingStats(overrides = {}) {
 }
 
 describe('Mobile App', () => {
-  afterEach(() => {
-    cleanup();
-  });
+afterEach(() => {
+  cleanup();
+  clearApiToken();
+});
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -145,6 +147,23 @@ describe('Mobile App', () => {
     ai.clearTrainingData.mockResolvedValue({ remaining_examples: 4 });
     ai.getExamplesByQuadrant.mockResolvedValue({ examples: [{ text: 'urgent task', quadrant: 0 }] });
     media.scanTasksFromImage.mockResolvedValue([]);
+    setApiToken('runtime-only-test-token');
+    setAdminToken('runtime-only-admin-token');
+  });
+
+  it('keeps remote data locked until a runtime-only token is entered', async () => {
+    clearApiToken();
+
+    const { getByTestId, queryByText } = render(<App />);
+
+    expect(queryByText('Seed task')).toBeNull();
+    fireEvent.changeText(getByTestId('auth-token-input'), 'entered-at-runtime');
+    fireEvent.changeText(getByTestId('admin-token-input'), 'admin-entered-at-runtime');
+    fireEvent.press(getByTestId('auth-submit-button'));
+
+    await waitFor(() => expect(tasksApi.fetchRemoteTasks).toHaveBeenCalled(), {
+      timeout: ASYNC_TIMEOUT,
+    });
   });
 
   it('loads cached state, matrix and AI summary from the remote runtimes', async () => {

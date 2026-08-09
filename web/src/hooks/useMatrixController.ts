@@ -1,9 +1,19 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { DropResult } from '@hello-pangea/dnd';
-import { classifyTask, LangChainAnalysis, learnFromAcceptedOCRTasks, OCRResult } from '../services/api';
+import {
+  classifyTask,
+  LangChainAnalysis,
+  learnFromAcceptedOCRTasks,
+  OCRResult,
+} from '../services/api';
 import { TranslationKey } from '../i18n/translations';
 import { Task, TaskInput } from '../types';
-import { quadrantToTaskState, resolveSuggestedQuadrant } from '../components/matrixUtils';
+import {
+  QUADRANT_KEYS,
+  QUADRANT_LABEL_KEYS,
+  quadrantToTaskState,
+  resolveSuggestedQuadrant,
+} from '../components/matrixUtils';
 
 interface UseMatrixControllerOptions {
   tasks: Task[];
@@ -32,10 +42,26 @@ export function useMatrixController({
 
   const quadrants = useMemo(
     () => [
-      { key: 'do', label: translate('matrix.do'), filter: (task: Task) => task.urgent && task.important },
-      { key: 'schedule', label: translate('matrix.schedule'), filter: (task: Task) => task.urgent && !task.important },
-      { key: 'delegate', label: translate('matrix.delegate'), filter: (task: Task) => !task.urgent && task.important },
-      { key: 'delete', label: translate('matrix.delete'), filter: (task: Task) => !task.urgent && !task.important },
+      {
+        key: QUADRANT_KEYS[0],
+        label: translate(QUADRANT_LABEL_KEYS[0]),
+        filter: (task: Task) => task.urgent && task.important,
+      },
+      {
+        key: QUADRANT_KEYS[2],
+        label: translate(QUADRANT_LABEL_KEYS[2]),
+        filter: (task: Task) => !task.urgent && task.important,
+      },
+      {
+        key: QUADRANT_KEYS[1],
+        label: translate(QUADRANT_LABEL_KEYS[1]),
+        filter: (task: Task) => task.urgent && !task.important,
+      },
+      {
+        key: QUADRANT_KEYS[3],
+        label: translate(QUADRANT_LABEL_KEYS[3]),
+        filter: (task: Task) => !task.urgent && !task.important,
+      },
     ],
     [translate]
   );
@@ -157,7 +183,7 @@ export function useMatrixController({
     }
 
     const nextState = quadrantToTaskState(
-      ['do', 'schedule', 'delegate', 'delete'].indexOf(result.destination.droppableId)
+      QUADRANT_KEYS.indexOf(result.destination.droppableId as (typeof QUADRANT_KEYS)[number])
     );
     await onUpdateTask(result.draggableId, nextState);
   };

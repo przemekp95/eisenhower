@@ -73,18 +73,26 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
         });
 
         intro
-          .to('[data-matrix-form]', {
-            y: 0,
-            autoAlpha: 1,
-            duration: 0.78,
-          }, 0.2)
-          .to('[data-matrix-section]', {
-            y: 0,
-            autoAlpha: 1,
-            scale: 1,
-            duration: 0.82,
-            stagger: 0.08,
-          }, 0.32);
+          .to(
+            '[data-matrix-form]',
+            {
+              y: 0,
+              autoAlpha: 1,
+              duration: 0.78,
+            },
+            0.2
+          )
+          .to(
+            '[data-matrix-section]',
+            {
+              y: 0,
+              autoAlpha: 1,
+              scale: 1,
+              duration: 0.82,
+              stagger: 0.08,
+            },
+            0.32
+          );
 
         gsap.to('[data-matrix-float]', {
           y: -8,
@@ -138,7 +146,11 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
         className="pointer-events-none absolute inset-x-10 top-14 h-px bg-linear-to-r from-transparent via-cyan-200/65 to-transparent opacity-[0.12]"
       />
 
-      <Suspense fallback={<div className="absolute inset-0 bg-linear-to-br from-teal-500/20 to-cyan-500/10" />}>
+      <Suspense
+        fallback={
+          <div className="absolute inset-0 bg-linear-to-br from-teal-500/20 to-cyan-500/10" />
+        }
+      >
         <MatrixSceneComponent />
       </Suspense>
 
@@ -371,7 +383,13 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
       </div>
 
       {showAiTools ? (
-        <Suspense fallback={<div className="fixed inset-0 grid place-items-center bg-black/70 text-white">{t('ai.loading')}</div>}>
+        <Suspense
+          fallback={
+            <div className="fixed inset-0 grid place-items-center bg-black/70 text-white">
+              {t('ai.loading')}
+            </div>
+          }
+        >
           <AIToolsComponent
             taskTitle={newTask.title}
             onClose={closeAiTools}

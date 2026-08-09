@@ -27,11 +27,15 @@ function getExamplesByQuadrantPath(quadrant, limit = 10) {
 }
 
 function getClassifyPath(title, useRag = true) {
-  return `${AI_API_PATHS.classify}?title=${encodeURIComponent(title)}&use_rag=${useRag}`;
+  void title;
+  void useRag;
+  return AI_API_PATHS.classify;
 }
 
 function getAnalyzeWithLangChainPath(task, language = 'en') {
-  return `${AI_API_PATHS.analyzeWithLangChain}?task=${encodeURIComponent(task)}&language=${encodeURIComponent(language)}`;
+  void task;
+  void language;
+  return AI_API_PATHS.analyzeWithLangChain;
 }
 
 function getClearTrainingDataPath(keepDefaults = true) {
@@ -46,6 +50,46 @@ function resolveFetch(fetchImpl) {
   }
 
   return implementation;
+}
+
+function resolveClientOptions(optionsOrFetch) {
+  if (typeof optionsOrFetch === 'function' || optionsOrFetch === undefined) {
+    return { fetchImpl: optionsOrFetch };
+  }
+
+  return {
+    fetchImpl: optionsOrFetch.fetch,
+    accessToken: optionsOrFetch.accessToken,
+    adminToken: optionsOrFetch.adminToken,
+    onUnauthorized: optionsOrFetch.onUnauthorized,
+    onAdminUnauthorized: optionsOrFetch.onAdminUnauthorized,
+  };
+}
+
+function createAuthorizedRequest(optionsOrFetch, credential = 'access') {
+  const options = resolveClientOptions(optionsOrFetch);
+  const request = resolveFetch(options.fetchImpl);
+
+  return async (url, init = {}) => {
+    const configuredCredential = credential === 'admin' ? options.adminToken : options.accessToken;
+    const configuredToken =
+      typeof configuredCredential === 'function' ? configuredCredential() : configuredCredential;
+    const headers = { ...(init.headers || {}) };
+
+    if (configuredToken) {
+      headers.Authorization = `Bearer ${configuredToken}`;
+    }
+
+    const response = await request(url, { ...init, headers });
+    if (response.status === 401 || response.status === 403) {
+      if (credential === 'admin' && options.onAdminUnauthorized) {
+        options.onAdminUnauthorized();
+      } else if (credential === 'access' && options.onUnauthorized) {
+        options.onUnauthorized();
+      }
+    }
+    return response;
+  };
 }
 
 function createRequestError(message, details = {}) {
@@ -149,8 +193,8 @@ function toAcceptedOcrLearningPayload(tasks) {
   }));
 }
 
-function createTaskApi(baseUrl, fetchImpl) {
-  const request = resolveFetch(fetchImpl);
+function createTaskApi(baseUrl, optionsOrFetch) {
+  const request = createAuthorizedRequest(optionsOrFetch);
 
   return {
     paths: TASK_API_PATHS,
@@ -209,13 +253,18 @@ function createTaskApi(baseUrl, fetchImpl) {
   };
 }
 
-function createAiApi(baseUrl, fetchImpl) {
-  const request = resolveFetch(fetchImpl);
+function createAiApi(baseUrl, optionsOrFetch) {
+  const request = createAuthorizedRequest(optionsOrFetch);
+  const adminRequest = createAuthorizedRequest(optionsOrFetch, 'admin');
 
   return {
     paths: AI_API_PATHS,
     async classifyTask(title, useRag = true) {
-      const response = await request(buildUrl(baseUrl, getClassifyPath(title, useRag)));
+      const response = await request(buildUrl(baseUrl, getClassifyPath(title, useRag)), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, use_rag: useRag }),
+      });
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',
@@ -224,6 +273,8 @@ function createAiApi(baseUrl, fetchImpl) {
     async analyzeWithLangChain(task, language = 'en') {
       const response = await request(buildUrl(baseUrl, getAnalyzeWithLangChainPath(task, language)), {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task, language }),
       });
       return readJson(response, {
         defaultError: 'AI request failed',
@@ -262,14 +313,14 @@ function createAiApi(baseUrl, fetchImpl) {
       });
     },
     async fetchTrainingStats() {
-      const response = await request(buildUrl(baseUrl, AI_API_PATHS.trainingStats));
+      const response = await adminRequest(buildUrl(baseUrl, AI_API_PATHS.trainingStats));
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',
       });
     },
     async setProviderEnabled(provider, enabled) {
-      const response = await request(buildUrl(baseUrl, getProviderPath(provider)), {
+      const response = await adminRequest(buildUrl(baseUrl, getProviderPath(provider)), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: Boolean(enabled) }),
@@ -280,7 +331,7 @@ function createAiApi(baseUrl, fetchImpl) {
       });
     },
     async addTrainingExample(text, quadrant) {
-      const response = await request(buildUrl(baseUrl, AI_API_PATHS.addTrainingExample), {
+      const response = await adminRequest(buildUrl(baseUrl, AI_API_PATHS.addTrainingExample), {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -294,7 +345,7 @@ function createAiApi(baseUrl, fetchImpl) {
       });
     },
     async learnFromFeedback(task, predictedQuadrant, correctQuadrant) {
-      const response = await request(buildUrl(baseUrl, AI_API_PATHS.learnFromFeedback), {
+      const response = await adminRequest(buildUrl(baseUrl, AI_API_PATHS.learnFromFeedback), {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -313,7 +364,7 @@ function createAiApi(baseUrl, fetchImpl) {
         return { examples_added: 0, retrained: false };
       }
 
-      const response = await request(buildUrl(baseUrl, AI_API_PATHS.learnFromAcceptedOcrTasks), {
+      const response = await adminRequest(buildUrl(baseUrl, AI_API_PATHS.learnFromAcceptedOcrTasks), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -327,7 +378,7 @@ function createAiApi(baseUrl, fetchImpl) {
       });
     },
     async retrainModel(preserveExperience = true) {
-      const response = await request(buildUrl(baseUrl, AI_API_PATHS.retrainModel), {
+      const response = await adminRequest(buildUrl(baseUrl, AI_API_PATHS.retrainModel), {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -340,7 +391,7 @@ function createAiApi(baseUrl, fetchImpl) {
       });
     },
     async clearTrainingData(keepDefaults = true) {
-      const response = await request(buildUrl(baseUrl, getClearTrainingDataPath(keepDefaults)), {
+      const response = await adminRequest(buildUrl(baseUrl, getClearTrainingDataPath(keepDefaults)), {
         method: 'DELETE',
       });
       return readJson(response, {
@@ -349,7 +400,7 @@ function createAiApi(baseUrl, fetchImpl) {
       });
     },
     async getExamplesByQuadrant(quadrant, limit = 10) {
-      const response = await request(buildUrl(baseUrl, getExamplesByQuadrantPath(quadrant, limit)));
+      const response = await adminRequest(buildUrl(baseUrl, getExamplesByQuadrantPath(quadrant, limit)));
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',
@@ -374,12 +425,7 @@ function isHealthResponseDto(value) {
   return Boolean(
     value &&
     typeof value === 'object' &&
-    typeof value.status === 'string' &&
-    typeof value.timestamp === 'string' &&
-    value.services &&
-    typeof value.services === 'object' &&
-    typeof value.services.database === 'string' &&
-    typeof value.services.ai === 'string'
+    ['ok', 'ready', 'not_ready'].includes(value.status)
   );
 }
 

@@ -9,7 +9,9 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-export function resolveInitialLanguage(storage: Pick<Storage, 'getItem'> | null | undefined): Language {
+export function resolveInitialLanguage(
+  storage: Pick<Storage, 'getItem'> | null | undefined
+): Language {
   if (!storage) {
     return 'pl';
   }

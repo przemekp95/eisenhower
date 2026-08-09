@@ -93,8 +93,11 @@ jobs:
             security-lint
             test-backend-node
             test-frontend
+            test-frontend-integration
+            test-frontend-e2e
             test-backend-ai
             test-mobile
+            test-mobile-native-android
           )
 
           for _ in $(seq 1 120); do

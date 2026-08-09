@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any
+import logging
 import mimetypes
 import re
 import shutil
@@ -16,12 +16,13 @@ from .local_model import (
   LocalMiniLMClassifier,
   LocalPrediction,
   ModelNotReadyError,
-  SimilarExample,
   cosine_similarity,
   utc_now,
 )
 from .provider_state import ProviderStateStore
 from .store import TrainingStore
+
+logger = logging.getLogger(__name__)
 
 
 def quadrant_to_flags(quadrant: int) -> tuple[bool, bool]:

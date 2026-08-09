@@ -54,7 +54,9 @@ describe('LanguageContext', () => {
   });
 
   it('throws when used without a provider', () => {
-    expect(() => render(<ReadLanguage />)).toThrow('useLanguage must be used within a LanguageProvider');
+    expect(() => render(<ReadLanguage />)).toThrow(
+      'useLanguage must be used within a LanguageProvider'
+    );
   });
 
   it('defaults to polish when rendered without window access', () => {

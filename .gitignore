@@ -4,6 +4,7 @@ coverage/
 .DS_Store
 .env
 .env.*
+!.env.example
 !mobile/eisenhower-matrix/.env.production.example
 .venv/
 venv/
@@ -11,6 +12,7 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.pylint.d/
 .coverage
 htmlcov/
 *.py[cod]
@@ -22,6 +24,7 @@ htmlcov/
 .idea/
 .vscode/*
 !.vscode/settings.json
+.backups/
 
 # Web
 web/dist/

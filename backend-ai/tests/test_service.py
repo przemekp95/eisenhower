@@ -70,7 +70,11 @@ class FakeLocalModel:
     self.explain_calls.append((task, language, prediction.quadrant if prediction is not None else None))
     return {
       "quadrant": 0 if "urgent" in task else 2,
-      "quadrant_name": "Zrób teraz" if language == "pl" and "urgent" in task else "Deleguj",
+      "quadrant_name": (
+        "Zrób teraz" if language == "pl" else "Do Now"
+      ) if "urgent" in task else (
+        "Zaplanuj" if language == "pl" else "Schedule"
+      ),
       "confidence": 0.81,
       "reasoning": "Lokalny model wskazuje ten kwadrant." if language == "pl" else "Local model explanation.",
       "method": "local-analysis",
@@ -99,6 +103,15 @@ def build_service(tmp_path: Path, *, local_model=None, ocr_runner=None):
     local_model=local_model or FakeLocalModel(),
     ocr_runner=ocr_runner,
   )
+
+
+def test_production_service_does_not_initialize_experimental_qdrant_or_llm(tmp_path: Path):
+  service = build_service(tmp_path)
+
+  assert not hasattr(service, "vector_store")
+  assert not hasattr(service, "langchain")
+  assert not hasattr(service, "llm_provider")
+  assert not hasattr(service, "rag_chain")
 
 
 def build_real_service(real_model_bundle, *, ocr_runner=None):
@@ -191,7 +204,7 @@ def test_classify_analyze_and_batch_stay_local(real_model_bundle):
   assert classification["quadrant"] == 0
   assert classification["similar_examples_used"] >= 1
   assert analysis["langchain_analysis"]["method"] == "local-analysis"
-  assert analysis["rag_classification"]["quadrant_name"] == "Deleguj"
+  assert analysis["rag_classification"]["quadrant_name"] == "Zaplanuj"
   assert batch["summary"]["total_tasks"] == 2
   assert batch["summary"]["methods"]["rag"]["quadrant_distribution"]["0"] == 1
   assert batch["summary"]["methods"]["rag"]["quadrant_distribution"]["2"] == 1

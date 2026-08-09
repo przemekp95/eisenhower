@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { applyAdvancedAnalysisResult, runAdvancedTaskAnalysis } from '../../lib/uiState';
-import { resolveQuadrantLabel, resolveSuggestedQuadrant } from '../matrixUtils';
+import {
+  QUADRANT_LABEL_KEYS,
+  resolveQuadrantLabel,
+  resolveSuggestedQuadrant,
+} from '../matrixUtils';
 import { analyzeWithLangChain, LangChainAnalysis } from '../../services/api';
 import { useLanguage } from '../../i18n/LanguageContext';
 
@@ -10,7 +14,11 @@ interface Props {
   onAddToMatrix?: (analysis: LangChainAnalysis) => Promise<void> | void;
 }
 
-export default function AdvancedAIAnalysis({ taskTitle, onAnalysisComplete, onAddToMatrix }: Props) {
+export default function AdvancedAIAnalysis({
+  taskTitle,
+  onAnalysisComplete,
+  onAddToMatrix,
+}: Props) {
   const [analysis, setAnalysis] = useState<LangChainAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -18,10 +26,10 @@ export default function AdvancedAIAnalysis({ taskTitle, onAnalysisComplete, onAd
   const { language, t } = useLanguage();
 
   const quadrantLabels = {
-    0: t('matrix.do'),
-    1: t('matrix.schedule'),
-    2: t('matrix.delegate'),
-    3: t('matrix.delete'),
+    0: t(QUADRANT_LABEL_KEYS[0]),
+    1: t(QUADRANT_LABEL_KEYS[1]),
+    2: t(QUADRANT_LABEL_KEYS[2]),
+    3: t(QUADRANT_LABEL_KEYS[3]),
   };
 
   useEffect(() => {
@@ -78,10 +86,8 @@ export default function AdvancedAIAnalysis({ taskTitle, onAnalysisComplete, onAd
           <p className="mt-2 text-white/70">
             {t('ai.analysis.suggestedQuadrant').replace(
               '{quadrant}',
-              resolveQuadrantLabel(
-                resolveSuggestedQuadrant(analysis),
-                quadrantLabels,
-                (quadrant) => t('ai.manage.quadrantUnknown').replace('{quadrant}', String(quadrant))
+              resolveQuadrantLabel(resolveSuggestedQuadrant(analysis), quadrantLabels, (quadrant) =>
+                t('ai.manage.quadrantUnknown').replace('{quadrant}', String(quadrant))
               )
             )}
           </p>

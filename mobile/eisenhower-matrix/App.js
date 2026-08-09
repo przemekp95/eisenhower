@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AIStatusPanel from './src/components/AIStatusPanel';
@@ -22,8 +22,9 @@ import {
 import { scanTasksFromImage } from './src/services/media';
 import { getSuggestedQuadrant, resolveOCRNotice } from './src/utils/aiUi';
 import styles from './src/styles/appStyles';
+import { getApiToken, setCredentials, subscribeToApiToken } from './src/authSession';
 
-export default function App() {
+function AuthenticatedApp() {
   const {
     addAnalysisTaskToMatrix,
     aiCapabilities,
@@ -400,4 +401,62 @@ export default function App() {
       />
     </SafeAreaView>
   );
+}
+
+function CredentialGate() {
+  const [token, setToken] = useState('');
+  const [adminToken, setAdminToken] = useState('');
+
+  return (
+    <SafeAreaView style={{ flex: 1, justifyContent: 'center', padding: 24, backgroundColor: '#030816' }}>
+      <View style={{ padding: 24, borderRadius: 24, backgroundColor: '#0f172a' }}>
+        <Text style={{ color: '#fff', fontSize: 24, fontWeight: '700' }}>Eisenhower Matrix</Text>
+        <Text style={{ color: '#cbd5e1', marginTop: 12, lineHeight: 20 }}>
+          Wpisz token dostępu i osobny token administratora AI. Są przechowywane tylko w pamięci
+          aplikacji i znikają po jej zamknięciu.
+        </Text>
+        <TextInput
+          testID="auth-token-input"
+          accessibilityLabel="Token dostępu"
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+          value={token}
+          onChangeText={setToken}
+          style={{ marginTop: 20, borderRadius: 12, padding: 14, color: '#fff', backgroundColor: '#1e293b' }}
+        />
+        <TextInput
+          testID="admin-token-input"
+          accessibilityLabel="Token administratora AI"
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+          value={adminToken}
+          onChangeText={setAdminToken}
+          style={{ marginTop: 12, borderRadius: 12, padding: 14, color: '#fff', backgroundColor: '#1e293b' }}
+        />
+        <Pressable
+          testID="auth-submit-button"
+          accessibilityRole="button"
+          disabled={!token.trim() || !adminToken.trim()}
+          onPress={() => {
+            setCredentials(token, adminToken);
+            setToken('');
+            setAdminToken('');
+          }}
+          style={{ marginTop: 16, borderRadius: 12, padding: 14, backgroundColor: '#67e8f9', opacity: token.trim() && adminToken.trim() ? 1 : 0.4 }}
+        >
+          <Text style={{ textAlign: 'center', color: '#0f172a', fontWeight: '700' }}>Odblokuj</Text>
+        </Pressable>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+export default function App() {
+  const [apiToken, setTokenState] = useState(getApiToken());
+
+  useEffect(() => subscribeToApiToken(() => setTokenState(getApiToken())), []);
+
+  return apiToken ? <AuthenticatedApp /> : <CredentialGate />;
 }

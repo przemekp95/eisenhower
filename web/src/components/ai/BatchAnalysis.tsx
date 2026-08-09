@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { resolveQuadrantLabel } from '../matrixUtils';
+import { QUADRANT_LABEL_KEYS, resolveQuadrantLabel } from '../matrixUtils';
 import { BatchAnalysisResult, batchAnalyzeTasks } from '../../services/api';
 import { useLanguage } from '../../i18n/LanguageContext';
 
@@ -14,10 +14,10 @@ export default function BatchAnalysis({ onBatchComplete }: Props) {
   const [loading, setLoading] = useState(false);
   const { t } = useLanguage();
   const quadrantLabels = {
-    0: t('matrix.do'),
-    1: t('matrix.schedule'),
-    2: t('matrix.delegate'),
-    3: t('matrix.delete'),
+    0: t(QUADRANT_LABEL_KEYS[0]),
+    1: t(QUADRANT_LABEL_KEYS[1]),
+    2: t(QUADRANT_LABEL_KEYS[2]),
+    3: t(QUADRANT_LABEL_KEYS[3]),
   };
 
   const submit = async () => {
@@ -67,10 +67,8 @@ export default function BatchAnalysis({ onBatchComplete }: Props) {
           {result.batch_results.map((entry) => (
             <li key={entry.task} className="rounded-2xl border border-white/10 bg-black/20 p-3">
               {entry.task}:{' '}
-              {resolveQuadrantLabel(
-                entry.analyses.rag.quadrant,
-                quadrantLabels,
-                (quadrant) => t('ai.manage.quadrantUnknown').replace('{quadrant}', String(quadrant))
+              {resolveQuadrantLabel(entry.analyses.rag.quadrant, quadrantLabels, (quadrant) =>
+                t('ai.manage.quadrantUnknown').replace('{quadrant}', String(quadrant))
               )}
             </li>
           ))}

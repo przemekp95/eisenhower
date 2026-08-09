@@ -354,12 +354,12 @@ def test_local_model_real_minilm_smoke_predicts_stable_examples(real_model_bundl
 
   model.ensure_ready(real_model_bundle["records"])
   urgent_prediction = model.predict("critical production incident")
-  delegate_prediction = model.predict("exercise twice a week")
+  schedule_prediction = model.predict("exercise twice a week")
 
   assert urgent_prediction.quadrant == 0
-  assert delegate_prediction.quadrant == 2
+  assert schedule_prediction.quadrant == 2
   assert urgent_prediction.confidence > 0
-  assert delegate_prediction.confidence > 0
+  assert schedule_prediction.confidence > 0
 
 
 def test_split_indices_covers_validation_and_skip_paths():

@@ -9,11 +9,7 @@ export function needsPixiFirefoxWorkarounds(userAgent?: string) {
   return /firefox/i.test(resolvedUserAgent);
 }
 
-function createPixelTexture(
-  doc: Document,
-  fillStyle: string,
-  label: 'EMPTY' | 'WHITE'
-) {
+function createPixelTexture(doc: Document, fillStyle: string, label: 'EMPTY' | 'WHITE') {
   const canvas = doc.createElement('canvas');
   canvas.width = 1;
   canvas.height = 1;
@@ -40,10 +36,7 @@ function createPixelTexture(
   });
 }
 
-export function installPixiFirefoxWorkarounds(
-  userAgent?: string,
-  doc?: Document | null
-) {
+export function installPixiFirefoxWorkarounds(userAgent?: string, doc?: Document | null) {
   if (didInstall || !needsPixiFirefoxWorkarounds(userAgent)) {
     return false;
   }
@@ -55,11 +48,7 @@ export function installPixiFirefoxWorkarounds(
     return false;
   }
 
-  const emptyTexture = createPixelTexture(
-    resolvedDocument,
-    'rgba(0, 0, 0, 0)',
-    'EMPTY'
-  );
+  const emptyTexture = createPixelTexture(resolvedDocument, 'rgba(0, 0, 0, 0)', 'EMPTY');
   const whiteTexture = createPixelTexture(resolvedDocument, '#ffffff', 'WHITE');
 
   if (!emptyTexture || !whiteTexture) {

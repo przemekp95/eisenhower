@@ -40,7 +40,7 @@ function ocrPayload(count: number) {
       quadrant_distribution: {
         counts: { 0: count, 1: 0, 2: 0, 3: 0 },
         percentages: { 0: 100, 1: 0, 2: 0, 3: 0 },
-        quadrant_names: { 0: 'Do Now', 1: 'Schedule', 2: 'Delegate', 3: 'Delete' },
+        quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
       },
     },
     timestamp: new Date().toISOString(),
@@ -52,7 +52,12 @@ describe('AITools', () => {
     localStorage.setItem('eisenhower-language', 'en');
     mockedApi.analyzeWithLangChain.mockResolvedValue({
       task: 'urgent roadmap',
-      langchain_analysis: { quadrant: 0, reasoning: 'Critical path', confidence: 0.9, method: 'langchain' },
+      langchain_analysis: {
+        quadrant: 0,
+        reasoning: 'Critical path',
+        confidence: 0.9,
+        method: 'langchain',
+      },
       rag_classification: { quadrant: 0, quadrant_name: 'Do Now', confidence: 0.85 },
       comparison: { methods_agree: true, confidence_difference: 0.05 },
       timestamp: new Date().toISOString(),
@@ -74,13 +79,15 @@ describe('AITools', () => {
       filename: 'tasks.txt',
       image_info: { size_bytes: 12, shape: 'unknown' },
       ocr: { extracted_text: 'urgent outage', raw_tasks_detected: 1, method: 'lazy-ocr' },
-      classified_tasks: [{ text: 'urgent outage', quadrant: 0, quadrant_name: 'Do Now', confidence: 0.8 }],
+      classified_tasks: [
+        { text: 'urgent outage', quadrant: 0, quadrant_name: 'Do Now', confidence: 0.8 },
+      ],
       summary: {
         total_tasks: 1,
         quadrant_distribution: {
           counts: { 0: 1, 1: 0, 2: 0, 3: 0 },
           percentages: { 0: 100, 1: 0, 2: 0, 3: 0 },
-          quadrant_names: { 0: 'Do Now', 1: 'Schedule', 2: 'Delegate', 3: 'Delete' },
+          quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
         },
       },
       timestamp: new Date().toISOString(),
@@ -108,8 +115,13 @@ describe('AITools', () => {
     mockedApi.addTrainingExample.mockResolvedValue(undefined);
     mockedApi.learnFromFeedback.mockResolvedValue(undefined);
     mockedApi.retrainModel.mockResolvedValue({ preserve_experience: false });
-    mockedApi.clearTrainingData.mockResolvedValue({ message: 'Training data cleared.', remaining_examples: 8 });
-    mockedApi.getExamplesByQuadrant.mockResolvedValue({ examples: [{ text: 'urgent outage', quadrant: 0 }] });
+    mockedApi.clearTrainingData.mockResolvedValue({
+      message: 'Training data cleared.',
+      remaining_examples: 8,
+    });
+    mockedApi.getExamplesByQuadrant.mockResolvedValue({
+      examples: [{ text: 'urgent outage', quadrant: 0 }],
+    });
   });
 
   it('runs advanced analysis', async () => {
@@ -137,7 +149,10 @@ describe('AITools', () => {
     const originalClientWidth = document.documentElement.clientWidth;
 
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1200 });
-    Object.defineProperty(document.documentElement, 'clientWidth', { configurable: true, value: 1180 });
+    Object.defineProperty(document.documentElement, 'clientWidth', {
+      configurable: true,
+      value: 1180,
+    });
 
     const { unmount } = renderTools();
 
@@ -146,7 +161,10 @@ describe('AITools', () => {
     unmount();
 
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalInnerWidth });
-    Object.defineProperty(document.documentElement, 'clientWidth', { configurable: true, value: originalClientWidth });
+    Object.defineProperty(document.documentElement, 'clientWidth', {
+      configurable: true,
+      value: originalClientWidth,
+    });
   });
 
   it('does not add body padding when the viewport has no scrollbar gap', () => {
@@ -154,7 +172,10 @@ describe('AITools', () => {
     const originalClientWidth = document.documentElement.clientWidth;
 
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1200 });
-    Object.defineProperty(document.documentElement, 'clientWidth', { configurable: true, value: 1200 });
+    Object.defineProperty(document.documentElement, 'clientWidth', {
+      configurable: true,
+      value: 1200,
+    });
 
     const { unmount } = renderTools();
 
@@ -163,7 +184,10 @@ describe('AITools', () => {
     unmount();
 
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalInnerWidth });
-    Object.defineProperty(document.documentElement, 'clientWidth', { configurable: true, value: originalClientWidth });
+    Object.defineProperty(document.documentElement, 'clientWidth', {
+      configurable: true,
+      value: originalClientWidth,
+    });
   });
 
   it('closes the modal on Escape', () => {
@@ -227,7 +251,9 @@ describe('AITools', () => {
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [file] },
     });
-    await waitFor(() => expect(screen.getByText(/Extracted 1 task from tasks.txt/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Extracted 1 task from tasks.txt/i)).toBeInTheDocument()
+    );
     await waitFor(() => expect(onOCRTasksExtracted).toHaveBeenCalledTimes(1));
     expect(screen.getByText(/OCR added 1 task to the matrix/i)).toBeInTheDocument();
   });
@@ -245,7 +271,9 @@ describe('AITools', () => {
       target: { files: [file] },
     });
 
-    await waitFor(() => expect(screen.getByText(/OCR added 1 task to the matrix/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/OCR added 1 task to the matrix/i)).toBeInTheDocument()
+    );
   });
 
   it('uses the plural English OCR import summary', async () => {
@@ -259,7 +287,9 @@ describe('AITools', () => {
       target: { files: [file] },
     });
 
-    await waitFor(() => expect(screen.getByText(/OCR added 3 tasks to the matrix/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/OCR added 3 tasks to the matrix/i)).toBeInTheDocument()
+    );
   });
 
   it('uses the singular Polish OCR import summary', async () => {
@@ -274,7 +304,9 @@ describe('AITools', () => {
       target: { files: [file] },
     });
 
-    await waitFor(() => expect(screen.getByText(/OCR dodał 1 zadanie do macierzy/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/OCR dodał 1 zadanie do macierzy/i)).toBeInTheDocument()
+    );
   });
 
   it('uses the few-count Polish OCR import summary', async () => {
@@ -289,7 +321,9 @@ describe('AITools', () => {
       target: { files: [file] },
     });
 
-    await waitFor(() => expect(screen.getByText(/OCR dodał 2 zadania do macierzy/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/OCR dodał 2 zadania do macierzy/i)).toBeInTheDocument()
+    );
   });
 
   it('uses the many-count Polish OCR import summary', async () => {
@@ -304,7 +338,9 @@ describe('AITools', () => {
       target: { files: [file] },
     });
 
-    await waitFor(() => expect(screen.getByText(/OCR dodał 5 zadań do macierzy/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/OCR dodał 5 zadań do macierzy/i)).toBeInTheDocument()
+    );
   });
 
   it('uses the many-count Polish OCR import summary for teen values', async () => {
@@ -319,7 +355,9 @@ describe('AITools', () => {
       target: { files: [file] },
     });
 
-    await waitFor(() => expect(screen.getByText(/OCR dodał 12 zadań do macierzy/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/OCR dodał 12 zadań do macierzy/i)).toBeInTheDocument()
+    );
   });
 
   it('handles AI management actions', async () => {
@@ -327,18 +365,24 @@ describe('AITools', () => {
 
     fireEvent.click(screen.getByText('Manage'));
 
-    await waitFor(() => expect(screen.getByText(/Total examples in the experience store/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Total examples in the experience store/i)).toBeInTheDocument()
+    );
     fireEvent.change(screen.getByPlaceholderText(/Task text/i), {
       target: { value: 'Review architecture notes' },
     });
     fireEvent.click(screen.getByText(/Add example/i));
-    await waitFor(() => expect(mockedApi.addTrainingExample).toHaveBeenCalledWith('Review architecture notes', 2));
+    await waitFor(() =>
+      expect(mockedApi.addTrainingExample).toHaveBeenCalledWith('Review architecture notes', 2)
+    );
 
     fireEvent.change(screen.getByPlaceholderText(/Task corrected by the user/i), {
       target: { value: 'Escalate vendor issue' },
     });
     fireEvent.click(screen.getByText(/Learn feedback/i));
-    await waitFor(() => expect(mockedApi.learnFromFeedback).toHaveBeenCalledWith('Escalate vendor issue', 1, 0));
+    await waitFor(() =>
+      expect(mockedApi.learnFromFeedback).toHaveBeenCalledWith('Escalate vendor issue', 1, 0)
+    );
 
     fireEvent.click(screen.getByRole('button', { name: /^Retrain$/i }));
     await waitFor(() => expect(mockedApi.retrainModel).toHaveBeenCalledWith(true));
