@@ -9,26 +9,26 @@ logger = logging.getLogger(__name__)
 
 
 def log_vector_events(event: DomainEvent) -> None:
-    """Domyślny handler logujący wszystkie zdarzenia indeksu wektorowego"""
+    """Log vector-index events for the experimental integration."""
     match event.event_type:
         case VectorEventType.ITEM_ADDED:
-            logger.info(f"✅ Dodano wektor punkt={event.payload.get('point_id')}")
+            logger.info(f"Vector added, point={event.payload.get('point_id')}")
         case VectorEventType.COLLECTION_CREATED:
-            logger.info(f"🗂️  Utworzono kolekcję: {event.payload.get('collection_name')}")
+            logger.info(f"Vector collection created: {event.payload.get('collection_name')}")
         case VectorEventType.MIGRATION_COMPLETED:
-            logger.info(f"✅ Migracja zakończona: {event.payload.get('migrated_items')} elementów")
+            logger.info(f"Vector migration completed: {event.payload.get('migrated_items')} items")
         case _:
-            logger.debug(f"Zdarzenie wektorowe: {event.event_type.value}")
+            logger.debug(f"Vector event: {event.event_type.value}")
 
 
 def register_default_handlers() -> None:
-    """Rejestruje domyślne handlery zdarzeń"""
+    """Register the default vector-event handlers."""
     from app.domain.events import event_publisher
     event_publisher.subscribe(log_vector_events)
 
 
 def on_vector_item_added(callback: Callable[[DomainEvent], None]) -> None:
-    """Dekorator lub metoda do subskrypcji na dodawanie elementów"""
+    """Subscribe a callback to vector item-added events."""
     from app.domain.events import event_publisher
 
     def wrapper(event: DomainEvent):

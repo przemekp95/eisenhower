@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Matrix from './components/Matrix';
 import LanguageSwitcher from './components/LanguageSwitcher';
 import useSmoothScroll from './hooks/useSmoothScroll';
@@ -7,6 +7,63 @@ import { shouldDisableMotion } from './lib/motion';
 import { replaceTaskById, restoreReadyState } from './lib/uiState';
 import { createTask, deleteTask, getTasks, updateTask } from './services/api';
 import { Task, TaskInput } from './types';
+import { getApiToken, setCredentials, subscribeToApiToken } from './authSession';
+
+function CredentialGate() {
+  const [token, setToken] = useState('');
+  const [adminToken, setAdminToken] = useState('');
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    setCredentials(token, adminToken);
+    setToken('');
+    setAdminToken('');
+  };
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#030816] px-4 text-white">
+      <form
+        onSubmit={submit}
+        className="w-full max-w-md rounded-[2rem] border border-white/10 bg-slate-950/80 p-8 shadow-2xl"
+      >
+        <h1 className="text-2xl font-semibold">Eisenhower Matrix</h1>
+        <p className="mt-3 text-sm leading-6 text-white/65">
+          Wpisz token dostępu i osobny token administratora AI. Pozostaną wyłącznie w pamięci tej
+          karty i zostaną usunięte po zamknięciu lub odrzuceniu autoryzacji.
+        </p>
+        <label htmlFor="api-token" className="mt-6 block text-sm font-medium">
+          Token dostępu
+        </label>
+        <input
+          id="api-token"
+          type="password"
+          autoComplete="off"
+          value={token}
+          onChange={(event) => setToken(event.target.value)}
+          className="mt-2 w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 outline-none focus:border-cyan-300"
+        />
+        <label htmlFor="admin-token" className="mt-4 block text-sm font-medium">
+          Token administratora AI
+        </label>
+        <input
+          id="admin-token"
+          type="password"
+          autoComplete="off"
+          value={adminToken}
+          onChange={(event) => setAdminToken(event.target.value)}
+          className="mt-2 w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 outline-none focus:border-cyan-300"
+        />
+        <button
+          type="submit"
+          disabled={!token.trim() || !adminToken.trim()}
+          className="mt-5 w-full rounded-xl bg-cyan-300 px-4 py-3 font-semibold text-slate-950 disabled:opacity-40"
+        >
+          Odblokuj
+        </button>
+      </form>
+    </main>
+  );
+}
 
 function AppContent() {
   const { t } = useLanguage();
@@ -507,6 +564,12 @@ function AppContent() {
 }
 
 export default function App() {
+  const apiToken = useSyncExternalStore(subscribeToApiToken, getApiToken, getApiToken);
+
+  if (!apiToken) {
+    return <CredentialGate />;
+  }
+
   return (
     <LanguageProvider>
       <AppContent />

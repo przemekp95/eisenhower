@@ -4,6 +4,7 @@ coverage/
 .DS_Store
 .env
 .env.*
+!.env.example
 !mobile/eisenhower-matrix/.env.production.example
 .venv/
 venv/
@@ -23,6 +24,7 @@ htmlcov/
 .idea/
 .vscode/*
 !.vscode/settings.json
+.backups/
 
 # Web
 web/dist/

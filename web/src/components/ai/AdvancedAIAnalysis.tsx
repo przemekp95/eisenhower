@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { applyAdvancedAnalysisResult, runAdvancedTaskAnalysis } from '../../lib/uiState';
-import { resolveQuadrantLabel, resolveSuggestedQuadrant } from '../matrixUtils';
+import {
+  QUADRANT_LABEL_KEYS,
+  resolveQuadrantLabel,
+  resolveSuggestedQuadrant,
+} from '../matrixUtils';
 import { analyzeWithLangChain, LangChainAnalysis } from '../../services/api';
 import { useLanguage } from '../../i18n/LanguageContext';
 
@@ -22,10 +26,10 @@ export default function AdvancedAIAnalysis({
   const { language, t } = useLanguage();
 
   const quadrantLabels = {
-    0: t('matrix.do'),
-    1: t('matrix.schedule'),
-    2: t('matrix.delegate'),
-    3: t('matrix.delete'),
+    0: t(QUADRANT_LABEL_KEYS[0]),
+    1: t(QUADRANT_LABEL_KEYS[1]),
+    2: t(QUADRANT_LABEL_KEYS[2]),
+    3: t(QUADRANT_LABEL_KEYS[3]),
   };
 
   useEffect(() => {

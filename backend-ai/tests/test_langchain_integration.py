@@ -17,17 +17,17 @@ class TestEisenhowerEmbeddings:
         mock_fn = Mock(return_value=[0.1, 0.2, 0.3])
         embeddings = EisenhowerEmbeddings(mock_fn)
 
-        # Pierwsze wywołanie - powinno wywołać funkcję
+        # The first call computes the embedding.
         result1 = embeddings.embed_query("test task")
         assert mock_fn.call_count == 1
         assert result1 == [0.1, 0.2, 0.3]
 
-        # Drugie wywołanie tego samego tekstu - powinno użyć cache
+        # The second call for the same text uses the cache.
         result2 = embeddings.embed_query("test task")
         assert mock_fn.call_count == 1
         assert result2 == result1
 
-        # Inny tekst - nowe wywołanie
+        # A different text triggers another computation.
         embeddings.embed_query("other task")
         assert mock_fn.call_count == 2
 
@@ -39,13 +39,13 @@ class TestEisenhowerEmbeddings:
         assert mock_fn.call_count == 1
         assert len(embeddings._cache) == 1
 
-        # Wysłanie zdarzenia dodania elementu
+        # Publish an item-added event.
         event_publisher.publish(VectorItemAddedEvent(payload={"point_id": "test-id"}))
 
-        # Cache powinien być pusty
+        # The event invalidates the cache.
         assert len(embeddings._cache) == 0
 
-        # Ponowne wywołanie powinno ponownie wywołać funkcję
+        # The next call computes the embedding again.
         embeddings.embed_query("test task")
         assert mock_fn.call_count == 2
 
@@ -59,7 +59,7 @@ class TestLangChainQdrantAdapter:
 
         adapter = LangChainQdrantAdapter(native_store, embeddings)
 
-        # Test zgodności z interfejsem VectorStore
+        # Verify compatibility with the VectorStore interface.
         assert hasattr(adapter, "similarity_search")
         assert hasattr(adapter, "add_texts")
         assert hasattr(adapter, "from_texts")
@@ -112,9 +112,9 @@ class TestQuadrantRetrievalQA:
         chain = QuadrantRetrievalQA(vector_store, Mock())
         first_retriever = chain._retriever
 
-        # Wywołaj zdarzenie dodania wektora
+        # Publish a vector-added event.
         event_publisher.publish(VectorItemAddedEvent(payload={"point_id": "abc123"}))
 
-        # Powinien zostać utworzony nowy retriever
+        # The chain rebuilds its retriever.
         assert vector_store.as_retriever.call_count == 2
         assert chain._retriever is not first_retriever

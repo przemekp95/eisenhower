@@ -12,7 +12,7 @@ Monorepo for the Eisenhower Matrix application with a React web client, a Node/E
 - `dev` and `master` are protected with GitHub rulesets
 
 The automatic fast-forward uses a dedicated repository deploy key (`DEV_SYNC_DEPLOY_KEY`) so GitHub Actions can update the protected `dev` branch without broadening admin bypass access.
-That fast-forward waits only for the required gates (`branch-policy`, `security-lint`, `test-backend-node`, `test-frontend`, `test-backend-ai`, `test-mobile`), so optional long-running jobs such as the Android release build do not delay `dev` and `master` from reconverging on the same SHA.
+That fast-forward waits for the complete required gate set, including integration, browser E2E, and the native Android release build, before `dev` and `master` reconverge on the same SHA.
 When that post-release fast-forward lands on `dev`, the follow-up `push` run in `ci.yml` now stays in a lightweight mode check instead of replaying the full CI matrix for a commit SHA that already passed on `master`.
 
 Pull requests into `master` are allowed only from `dev`. While the repository has a single maintainer, the required approval count remains `0`, but pull requests and passing checks are mandatory.
@@ -23,7 +23,7 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 - `backend-node`: REST API for tasks and health checks
 - `backend-ai`: FastAPI service for classification, OCR, and batch analysis
 - `mobile/eisenhower-matrix`: Expo / React Native client
-- `qdrant`: Vector Database for task embeddings semantic search
+- `qdrant` and `minio`: experimental local-profile services, not dependencies of the supported runtime
 
 ## Runtime Configuration
 
@@ -40,7 +40,8 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 - `PORT`: HTTP port, default `3001`
 - `MONGODB_URI`: MongoDB connection string
 - `AI_SERVICE_URL`: AI backend base URL
-- `JWT_SECRET`: required outside test environments
+- `EISENHOWER_API_TOKEN`: required Bearer token; production values must contain at least 32 characters
+- `CORS_ALLOW_ORIGINS`: comma-separated explicit browser origins; production requires the public frontend origin, including same-origin deployments
 
 ### Backend AI
 
@@ -54,42 +55,14 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 - `LOCAL_MODEL_LEARNING_RATE`: optimizer learning rate for the classification head, default `0.01`
 - `TESSERACT_LANGUAGES`: OCR language pack list for Tesseract fallback, default `eng+pol`
 - `CORS_ALLOW_ORIGINS`: comma-separated frontend origins allowed to call the AI API, defaults to local `localhost` and `127.0.0.1` dev hosts
+- `APP_ENV`: set to `production` in production; this makes both Bearer tokens and an explicit browser origin allowlist mandatory
+- `EISENHOWER_API_TOKEN`: user token shared with the Node API for ordinary task and AI operations
+- `EISENHOWER_ADMIN_TOKEN`: separate 32+ character token for all training-data writes (including feedback), retraining and AI provider management; it must differ from the user token
+
+Web and mobile ask for both tokens at runtime, keep them only in memory, and attach the appropriate value in the `Authorization` header. Do not put either token in `VITE_*`, `EXPO_PUBLIC_*`, runtime-config.js, URLs, localStorage, or AsyncStorage. Because authentication is header-based and cookies are not used, classical CSRF does not apply; unsafe browser requests are additionally rejected when their `Origin` is outside `CORS_ALLOW_ORIGINS`.
 
 ---
 
-### 📊 Qdrant Vector Database
-Baza wektorowa do przechowywania i wyszukiwania osadzeń zadań dla klasyfikacji AI.
-
-#### Konfiguracja środowiskowa:
-| Zmienna | Opis | Domyślna wartość |
-|---------|------|------------------|
-| `QDRANT_HOST` | Adres hosta usługi Qdrant | `qdrant` |
-| `QDRANT_PORT` | Port gRPC API | `6334` |
-| `QDRANT_COLLECTION` | Nazwa kolekcji osadzeń | `eisenhower_task_embeddings` |
-| `QDRANT_VECTOR_SIZE` | Rozmiar wektora osadzenia | `384` |
-| `MIGRATION_MAX_RETRIES` | Maksymalna liczba prób połączenia | `5` |
-| `MIGRATION_RETRY_DELAY` | Opóźnienie między próbami (sekundy) | `2` |
-| `MIGRATION_BATCH_SIZE` | Rozmiar partii podczas migracji | `50` |
-
-#### Dostęp:
-- **Panel administracyjny**: http://localhost:6333/dashboard
-- **HTTP API**: `localhost:6333`
-- **gRPC API**: `localhost:6334`
-
-#### Migracja danych:
-```bash
-# Uruchom migrację istniejących zadań do Qdrant
-docker compose exec ai-service python scripts/migrate_to_qdrant.py
-```
-
-Skrypt migracji:
-✅ Event Driven - publikuje wszystkie zdarzenia statusu
-✅ Retry z wykładniczym opóźnieniem
-✅ Obsługa fallback przy awariach
-✅ Pełne metryki i logowanie strukturalne
-✅ Bezpieczne przetwarzanie wsadowe
-
----
 ### Mobile
 
 - `EXPO_PUBLIC_APP_ORIGIN_URL`: optional shared HTTPS origin for Expo, used to derive `/api` and `/ai`
@@ -111,6 +84,8 @@ Root commands:
 - `make dev-ai`
 - `make dev-mobile`
 
+Before starting the root Docker Compose stack, copy `.env.example` to `.env` and replace every placeholder with a unique local credential.
+
 `make verify` mirrors the local release-quality sweep used most often in CI: backend-node build + coverage, web build + coverage + integration, backend-ai pytest, and mobile coverage.
 
 Per-service fallback:
@@ -128,58 +103,17 @@ The Expo mobile client now keeps a local task cache in AsyncStorage, refreshes a
 
 - Install browsers once: `cd web && npm run test:e2e:install`
 - Run the smoke suite: `cd web && npm run test:e2e`
-- Run the live AI smoke manually: `cd web && npm run test:e2e:ai-smoke`
+- Run the live AI smoke manually with `PLAYWRIGHT_API_TOKEN` and `PLAYWRIGHT_ADMIN_TOKEN`: `cd web && npm run test:e2e:ai-smoke`
 
 The Playwright suite starts an isolated Vite frontend plus a real Node API backed by an ephemeral `mongodb-memory-server` instance, so it does not depend on a manually running MongoDB container.
 
 The manual AI smoke does the opposite: it does not start any local test servers and instead expects the live frontend and AI runtime to already be available, by default on `http://127.0.0.1:5173` and `http://127.0.0.1:8000`.
-### Lokalny LLM RAG System
 
-Od wersji 1.9 backend AI obsługuje pełny system Retrieval Augmented Generation z lokalnymi modelami LLM działającymi bez połączenia internetowego.
+### Production AI scope
 
-#### Wymagania:
-- Model w formacie GGUF (Llama 3.2, Mistral, Gemma itp.)
-- Minimalne wymagania:
-  - ✅ CPU: 8GB RAM dla Q4_K_M 8B
-  - ✅ NVIDIA GPU: 6GB VRAM
-  - ✅ Apple Silicon: 8GB jednolitej pamięci
+The supported production runtime is intentionally limited to the local multilingual MiniLM classifier, its local similarity index, deterministic explanations, and Tesseract OCR. Legacy endpoint and payload names containing `langchain` or `rag` are retained for client compatibility, but they do not claim an active LLM, LangChain retrieval chain, Qdrant dependency, or generative reasoning.
 
-#### Instalacja modelu:
-1. Stwórz katalog dla modeli:
-   ```bash
-   mkdir -p backend-ai/data/runtime/llm_models
-   ```
-
-2. Pobierz rekomendowany model:
-   ```bash
-   cd backend-ai/data/runtime/llm_models
-   wget -c https://huggingface.co/lmstudio-community/Llama-3.2-8B-Instruct-GGUF/resolve/main/Llama-3.2-8B-Instruct-Q4_K_M.gguf -O llama-3.2-8b-instruct-q4_k_m.gguf
-   ```
-
-   Wymaga darmowego konta Hugging Face i zaakceptowania warunków licencyjnych Llama 3.
-
-3. Alternatywne modele obsługiwane:
-   - Mistral 7B Instruct v0.3
-   - Gemma 2 9B Instruct
-   - Llama 3 70B (wymaga 16GB RAM / 12GB VRAM)
-
-#### Konfiguracja:
-Wszystkie ustawienia dostępne w zmiennych środowiskowych:
-| Zmienna | Domyślna wartość | Opis |
-|---------|-------------------|------|
-| `LLM_ENABLED` | `true` | Włącza/wyłącza system LLM |
-| `LLM_MODEL_FILENAME` | `llama-3.2-8b-instruct-q4_k_m.gguf` | Nazwa pliku modelu |
-| `LLM_N_GPU_LAYERS` | automatycznie | Ilość warstw do załadowania na GPU. Ustaw `0` aby wymusić działanie na CPU. |
-| `LLM_TEMPERATURE` | `0.1` | Kreatywność modelu. Niższe wartości = bardziej stabilne klasyfikacje. |
-| `LLM_MAX_TOKENS` | `512` | Maksymalna długość odpowiedzi |
-
-#### Działanie systemu:
-System działa w trybie automatycznego failover:
-1. ✅ Najpierw próbuje użyć pełnego systemu RAG z lokalnym LLM
-2. ✅ Jeżeli LLM nie jest dostępny lub wystąpi błąd - automatycznie przełącza się na sprawdzony klasyfikator MiniLM
-3. ✅ W ostateczności używa domyślnej klasyfikacji
-
-Nigdy nie zwróci błędu. Wszystkie istniejące endpointy API działają dokładnie tak samo jak wcześniej.
+Qdrant, LangChain, llama.cpp, and MinIO modules remain experimental code paths and tests. Their Python dependencies live in `requirements-experimental.txt`, while test/audit tools live in `requirements-dev.txt`; neither set is installed in the production image. Experimental modules are not initialized by `create_app()`, included in production coverage, deployed to Mikrus, or treated as production acceptance criteria.
 
 ---
 
@@ -192,40 +126,41 @@ The integration suite renders the React app in JSDOM, but talks to a real Expres
 
 ## Mikrus Deployment
 
-Pushes to `master` run `release.yml`, which can deploy to Mikrus over SSH when secrets are configured.
+A successful `CI` push run on `master` triggers `release.yml`, which builds immutable commit-SHA images and can deploy them to Mikrus over SSH when secrets are configured.
 
 - `DOCKER_HUB_USERNAME`: Docker Hub namespace used for images
-- `DOCKER_HUB_TOKEN`: Docker Hub token (optional for pull, required for image push in workflow)
+- `DOCKER_HUB_TOKEN`: Docker Hub token required for a publishable release and Mikrus deployment
 - `MIKRUS_HOST`: server host (IPv6 is supported)
 - `MIKRUS_USER`: SSH user (`root` supported)
 - `MIKRUS_SSH_KEY`: private key content used by GitHub Actions
 - `MIKRUS_ENV_FILE`: full `.env` content written on the server
-- `MIKRUS_APP_DIR`: optional deploy directory override
+- `MIKRUS_APP_DIR`: required absolute deploy directory
+- `MIKRUS_PUBLIC_URL`: public HTTPS origin used by post-deploy smoke checks
 
-Default deploy directory is `/home/<MIKRUS_USER>/apps/demo-fortis`, except `root` which defaults to `/root/apps/demo-fortis`.
-The example Mikrus env uses `WEB_PORT=8080` to avoid common `3000` collisions on shared hosts. If your target already listens on any configured host port, update `WEB_PORT`, `API_PORT`, `AI_PORT`, and matching URLs in `MIKRUS_ENV_FILE` before redeploying.
+The deploy script creates and verifies `.eisenhower-deployment`; it refuses a non-empty target without that ownership marker. Existing deployments must add a marker containing exactly `eisenhower` before the first hardened deployment.
+The example Mikrus env uses `WEB_PORT=8080` to avoid common `3000` collisions on shared hosts. Only the frontend publishes a host port; API and AI stay on the Compose network. If the frontend port is occupied, update `WEB_PORT` in `MIKRUS_ENV_FILE` before redeploying.
 For HTTPS deployments behind a public host, prefer `VITE_API_URL=/api` and `VITE_AI_API_URL=/ai`, and set `CORS_ALLOW_ORIGINS` to the public frontend origin.
 Reference files:
 
 - `deploy/mikrus/docker-compose.yml`
 - `deploy/mikrus/.env.example`
+- `deploy/mikrus/backup.sh` and `restore.sh` for checksum-verified data recovery; restore additionally requires `RESTORE_CONFIRM=restore-eisenhower-data`
 
 ## Quality Gates
 
-Required checks for both `dev` and `master`:
+Target required checks for both `dev` and `master`:
 
 - `branch-policy`
 - `security-lint`
 - `test-backend-node`
 - `test-frontend`
-- `test-backend-ai`
-- `test-mobile`
-
-Additional strong workflow checks that remain enabled, but are not required for branch protection in the current 1-2 sprint hardening phase:
-
 - `test-frontend-integration`
 - `test-frontend-e2e`
+- `test-backend-ai`
+- `test-mobile`
 - `test-mobile-native-android`
+
+The workflow implements these checks, but GitHub branch rules are external state and must be verified after the changes are published. See [`docs/PRODUCTION_ACCEPTANCE.md`](docs/PRODUCTION_ACCEPTANCE.md) for the exact separation between local, CI, and public-runtime evidence.
 
 Coverage thresholds remain service-specific. The web and backend services enforce `100%`, while the Expo mobile client currently enforces `95%` statements/functions/lines and `90%` branches.
 The `test-mobile-native-android` job now also uploads a downloadable release APK artifact from each successful run.
@@ -233,93 +168,6 @@ The same `ci.yml` workflow can also be started manually with `workflow_dispatch`
 
 ---
 
-## 🖥️ Running with NVIDIA GPU Acceleration
+## Experimental local profiles
 
-To enable hardware acceleration for AI service and local LLM:
-
-1. Install NVIDIA drivers and **NVIDIA Container Toolkit**:
-   ```bash
-   # Ubuntu / Debian
-   distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
-   curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
-   curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
-   sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
-   sudo systemctl restart docker
-   ```
-
-2. Start stack with GPU profile enabled:
-   ```bash
-   docker compose --profile gpu up --build
-   ```
-
-3. Verify acceleration status:
-   ```bash
-   docker compose exec ai-service python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
-   ```
-
-✅ For NVIDIA cards with >= 6GB VRAM the entire LLM system runs fully on GPU, providing ~10-20x speedup over CPU execution.
-
----
-
-## 📦 MinIO Object Storage Profile
-
-MinIO is included in the full stack for secure managed file storage:
-
-### Start with MinIO profile enabled:
-```bash
-docker compose --profile minio up --build
-```
-
-### Admin Web Console:
-- **URL**: http://localhost:9001
-- **Default credentials**:
-  - Username: `minioadmin`
-  - Password: `minioadmin123`
-
-### Environment Configuration:
-| Variable | Default Value | Description |
-|---------|---------------|-------------|
-| `MINIO_ENABLED` | `true` | Enable/disable MinIO integration |
-| `MINIO_ENDPOINT` | `minio:9000` | MinIO service endpoint address |
-| `MINIO_ACCESS_KEY` | `minioadmin` | API access key |
-| `MINIO_SECRET_KEY` | `minioadmin123` | API secret key |
-| `MINIO_BUCKET_NAME` | `eisenhower-attachments` | Default bucket name |
-
----
-
-## 🔄 Migration Instructions
-
-### Migration from version <= 1.8 to 1.9+ (Qdrant + LLM stack)
-
-1. Stop running containers:
-   ```bash
-   docker compose down
-   ```
-
-2. Pull latest images:
-   ```bash
-   docker compose pull
-   ```
-
-3. Start only database services first:
-   ```bash
-   docker compose up -d mongodb qdrant minio
-   ```
-
-4. Wait 30 seconds for full initialization, then run migration script:
-   ```bash
-   docker compose run --rm ai-service python scripts/migrate_to_qdrant.py
-   ```
-
-5. Start complete stack:
-   ```bash
-   docker compose up --build -d
-   ```
-
-### Migration verification:
-```bash
-# Check Qdrant collection status
-curl http://localhost:6333/collections/eisenhower_task_embeddings
-```
-
-✅ Migration script is idempotent - it can be safely run multiple times.
+The root Compose file can still expose Qdrant and MinIO under the `experimental` profile for isolated research. These services are not consumed by the default application runtime and are outside the production support contract.

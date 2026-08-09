@@ -12,11 +12,7 @@ describe('health routes', () => {
     const response = await request(app).get('/health');
 
     expect(response.status).toBe(200);
-    expect(response.body.status).toBe('ok');
-    expect(response.body.services).toEqual({
-      database: 'connected',
-      ai: 'unreachable',
-    });
+    expect(response.body).toEqual({ status: 'ok' });
   });
 
   it('returns ready only when both db and ai are healthy', async () => {
@@ -28,11 +24,7 @@ describe('health routes', () => {
     const response = await request(app).get('/health/ready');
 
     expect(response.status).toBe(200);
-    expect(response.body.status).toBe('ready');
-    expect(response.body.services).toEqual({
-      database: 'connected',
-      ai: 'healthy',
-    });
+    expect(response.body).toEqual({ status: 'ready' });
   });
 
   it('returns not_ready when the database is disconnected', async () => {
@@ -44,8 +36,7 @@ describe('health routes', () => {
     const response = await request(app).get('/health/ready');
 
     expect(response.status).toBe(503);
-    expect(response.body.status).toBe('not_ready');
-    expect(response.body.services.ai).toBe('unreachable');
+    expect(response.body).toEqual({ status: 'not_ready' });
   });
 
   it('returns not_ready when the ai dependency is unhealthy', async () => {
@@ -57,14 +48,10 @@ describe('health routes', () => {
     const response = await request(app).get('/health/ready');
 
     expect(response.status).toBe(503);
-    expect(response.body.status).toBe('not_ready');
-    expect(response.body.services).toEqual({
-      database: 'connected',
-      ai: 'unreachable',
-    });
+    expect(response.body).toEqual({ status: 'not_ready' });
   });
 
-  it('returns 500 on unexpected checker failures', async () => {
+  it('does not call dependency checkers during liveness', async () => {
     const app = createApp({
       aiHealthChecker: async () => {
         throw new Error('boom');
@@ -74,8 +61,8 @@ describe('health routes', () => {
 
     const response = await request(app).get('/health');
 
-    expect(response.status).toBe(500);
-    expect(response.body.error).toBe('boom');
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ status: 'ok' });
   });
 
   it('returns 500 from readiness when dependency checks throw unexpectedly', async () => {
@@ -128,13 +115,9 @@ describe('health routes', () => {
     jest.spyOn(dbModule, 'getDatabaseStatus').mockReturnValue('connected');
 
     const app = createApp();
-    const response = await request(app).get('/health');
+    const response = await request(app).get('/health/ready');
 
     expect(response.status).toBe(200);
-    expect(response.body.status).toBe('ok');
-    expect(response.body.services).toEqual({
-      database: 'connected',
-      ai: 'healthy',
-    });
+    expect(response.body).toEqual({ status: 'ready' });
   });
 });

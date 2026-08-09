@@ -2,7 +2,21 @@ import { NextFunction, Request, Response, Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import { TaskModel } from '../models/task';
 
+const taskFields = new Set(['title', 'description', 'urgent', 'important']);
+const rejectUnexpectedFields = body().custom((value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Request body must be an object');
+  }
+
+  if (Object.keys(value).some((field) => !taskFields.has(field))) {
+    throw new Error('Unexpected task field');
+  }
+
+  return true;
+});
+
 const createValidators = [
+  rejectUnexpectedFields,
   body('title').isString().trim().notEmpty().isLength({ max: 200 }),
   body('description').optional().isString().isLength({ max: 2000 }),
   body('urgent').optional().isBoolean(),
@@ -11,6 +25,7 @@ const createValidators = [
 
 const updateValidators = [
   param('id').isMongoId(),
+  rejectUnexpectedFields,
   body('title').optional().isString().trim().notEmpty().isLength({ max: 200 }),
   body('description').optional().isString().isLength({ max: 2000 }),
   body('urgent').optional().isBoolean(),

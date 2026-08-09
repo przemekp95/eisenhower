@@ -9,6 +9,12 @@ describe('task routes', () => {
     aiHealthChecker: async () => 'healthy',
     databaseStatusResolver: () => 'connected',
   });
+  const api = {
+    get: (path: string) => request(app).get(path).set('Authorization', 'Bearer test-api-token'),
+    post: (path: string) => request(app).post(path).set('Authorization', 'Bearer test-api-token'),
+    put: (path: string) => request(app).put(path).set('Authorization', 'Bearer test-api-token'),
+    delete: (path: string) => request(app).delete(path).set('Authorization', 'Bearer test-api-token'),
+  };
 
   beforeAll(async () => {
     await startMongo();
@@ -29,7 +35,7 @@ describe('task routes', () => {
       { title: 'second', urgent: false, important: true },
     ]);
 
-    const response = await request(app).get('/tasks');
+    const response = await api.get('/tasks');
 
     expect(response.status).toBe(200);
     expect(response.body).toHaveLength(2);
@@ -38,7 +44,7 @@ describe('task routes', () => {
   });
 
   it('creates a task with defaults', async () => {
-    const response = await request(app).post('/tasks').send({ title: 'Ship release' });
+    const response = await api.post('/tasks').send({ title: 'Ship release' });
 
     expect(response.status).toBe(201);
     expect(response.body).toMatchObject({
@@ -50,10 +56,28 @@ describe('task routes', () => {
   });
 
   it('rejects invalid payloads', async () => {
-    const response = await request(app).post('/tasks').send({ title: '' });
+    const response = await api.post('/tasks').send({ title: '' });
 
     expect(response.status).toBe(400);
     expect(response.body.error).toBe('Validation failed');
+  });
+
+  it('rejects unexpected task fields instead of mass assigning them', async () => {
+    const response = await api.post('/tasks').send({
+      title: 'Do not elevate',
+      role: 'admin',
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('Validation failed');
+  });
+
+  it('rejects a non-object request body', async () => {
+    const response = await api.post('/tasks').send(['not', 'an', 'object']);
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('Validation failed');
+    expect(response.body.details).toContain('Request body must be an object');
   });
 
   it('updates a task', async () => {
@@ -64,7 +88,7 @@ describe('task routes', () => {
       important: true,
     });
 
-    const response = await request(app)
+    const response = await api
       .put(`/tasks/${task.id}`)
       .send({ urgent: true, important: true });
 
@@ -75,7 +99,7 @@ describe('task routes', () => {
 
   it('returns 404 for a missing task on update', async () => {
     const id = new mongoose.Types.ObjectId().toString();
-    const response = await request(app).put(`/tasks/${id}`).send({ urgent: true });
+    const response = await api.put(`/tasks/${id}`).send({ urgent: true });
 
     expect(response.status).toBe(404);
     expect(response.body.error).toBe('Task not found');
@@ -83,7 +107,7 @@ describe('task routes', () => {
 
   it('rejects invalid payloads on update', async () => {
     const id = new mongoose.Types.ObjectId().toString();
-    const response = await request(app).put(`/tasks/${id}`).send({ title: '' });
+    const response = await api.put(`/tasks/${id}`).send({ title: '' });
 
     expect(response.status).toBe(400);
     expect(response.body.error).toBe('Validation failed');
@@ -91,7 +115,7 @@ describe('task routes', () => {
   });
 
   it('rejects malformed ids', async () => {
-    const response = await request(app).delete('/tasks/not-an-id');
+    const response = await api.delete('/tasks/not-an-id');
 
     expect(response.status).toBe(400);
     expect(response.body.error).toBe('Validation failed');
@@ -99,7 +123,7 @@ describe('task routes', () => {
 
   it('returns 404 for a missing task on delete', async () => {
     const id = new mongoose.Types.ObjectId().toString();
-    const response = await request(app).delete(`/tasks/${id}`);
+    const response = await api.delete(`/tasks/${id}`);
 
     expect(response.status).toBe(404);
     expect(response.body.error).toBe('Task not found');
@@ -112,14 +136,14 @@ describe('task routes', () => {
       important: false,
     });
 
-    const response = await request(app).delete(`/tasks/${task.id}`);
+    const response = await api.delete(`/tasks/${task.id}`);
 
     expect(response.status).toBe(204);
     await expect(TaskModel.findById(task.id)).resolves.toBeNull();
   });
 
   it('returns a JSON 404 for unknown routes', async () => {
-    const response = await request(app).get('/missing');
+    const response = await api.get('/missing');
 
     expect(response.status).toBe(404);
     expect(response.body.error).toBe('Route not found');
@@ -134,7 +158,7 @@ describe('task routes', () => {
       }),
     } as never);
 
-    const response = await request(app).get('/tasks');
+    const response = await api.get('/tasks');
 
     expect(response.status).toBe(500);
     expect(response.body.error).toBe('Internal server error');
@@ -143,7 +167,7 @@ describe('task routes', () => {
   it('returns 500 when creating a task fails', async () => {
     jest.spyOn(TaskModel, 'create').mockRejectedValue(new Error('create failure'));
 
-    const response = await request(app).post('/tasks').send({ title: 'Broken create' });
+    const response = await api.post('/tasks').send({ title: 'Broken create' });
 
     expect(response.status).toBe(500);
     expect(response.body.error).toBe('create failure');
@@ -153,7 +177,7 @@ describe('task routes', () => {
     jest.spyOn(TaskModel, 'findByIdAndUpdate').mockRejectedValue(new Error('update failure'));
     const id = new mongoose.Types.ObjectId().toString();
 
-    const response = await request(app).put(`/tasks/${id}`).send({ urgent: true });
+    const response = await api.put(`/tasks/${id}`).send({ urgent: true });
 
     expect(response.status).toBe(500);
     expect(response.body.error).toBe('update failure');
@@ -163,7 +187,7 @@ describe('task routes', () => {
     jest.spyOn(TaskModel, 'findByIdAndDelete').mockRejectedValue(new Error('delete failure'));
     const id = new mongoose.Types.ObjectId().toString();
 
-    const response = await request(app).delete(`/tasks/${id}`);
+    const response = await api.delete(`/tasks/${id}`);
 
     expect(response.status).toBe(500);
     expect(response.body.error).toBe('delete failure');

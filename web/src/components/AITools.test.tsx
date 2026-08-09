@@ -40,7 +40,7 @@ function ocrPayload(count: number) {
       quadrant_distribution: {
         counts: { 0: count, 1: 0, 2: 0, 3: 0 },
         percentages: { 0: 100, 1: 0, 2: 0, 3: 0 },
-        quadrant_names: { 0: 'Do Now', 1: 'Schedule', 2: 'Delegate', 3: 'Delete' },
+        quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
       },
     },
     timestamp: new Date().toISOString(),
@@ -87,7 +87,7 @@ describe('AITools', () => {
         quadrant_distribution: {
           counts: { 0: 1, 1: 0, 2: 0, 3: 0 },
           percentages: { 0: 100, 1: 0, 2: 0, 3: 0 },
-          quadrant_names: { 0: 'Do Now', 1: 'Schedule', 2: 'Delegate', 3: 'Delete' },
+          quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
         },
       },
       timestamp: new Date().toISOString(),

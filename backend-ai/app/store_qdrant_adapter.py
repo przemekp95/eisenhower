@@ -11,9 +11,8 @@ from .defaults import DEFAULT_TRAINING_DATA, QUADRANT_NAMES
 
 class QdrantTrainingStoreAdapter(TrainingStore):
     """
-    Adapter zachowujący pełną kompatybilność z interfejsem TrainingStore
-    ale używający Qdrant jako magazynu wektorowego.
-    Realizuje wzorzec Adapter z OOP.
+    Experimental adapter that preserves the TrainingStore interface while using Qdrant as the
+    vector backend.
     """
 
     def __init__(self, path: Path, vector_store: Optional[QdrantVectorStore] = None):
@@ -31,14 +30,14 @@ class QdrantTrainingStoreAdapter(TrainingStore):
         return self.embedding_model.encode(text).tolist()
 
     def load(self) -> List[dict]:
-        """Zachowuje kompatybilność - ładuje również lokalny plik JSON"""
+        """Preserve compatibility by loading the local JSON file."""
         return super().load()
 
     def save(self, items: List[dict]) -> None:
-        """Zapisuje zarówno do lokalnego pliku jak i do Qdrant"""
+        """Write to both the local file and Qdrant."""
         super().save(items)
 
-        # Indeksuj nowe elementy w Qdrant
+        # Index new items in Qdrant.
         for item in items:
             if "id" not in item:
                 vector = self.embed_text(item["text"])
@@ -79,7 +78,7 @@ class QdrantTrainingStoreAdapter(TrainingStore):
         return cleared
 
     def search_similar(self, text: str, quadrant: Optional[int] = None, limit: int = 10) -> List[dict]:
-        """Rozszerzenie interfejsu: wyszukiwanie podobnych zadań"""
+        """Extend the store interface with semantic task search."""
         vector = self.embed_text(text)
         return self.vector_store.search(vector, limit=limit, quadrant=quadrant)
 
@@ -90,5 +89,5 @@ class QdrantTrainingStoreAdapter(TrainingStore):
         return stats
 
     def migrate_existing_index(self) -> Dict[str, int]:
-        """Migracja całego istniejącego lokalnego indeksu do Qdrant"""
+        """Migrate the complete existing local index to Qdrant."""
         return self.vector_store.migrate_from_local_store(self, self.embed_text)

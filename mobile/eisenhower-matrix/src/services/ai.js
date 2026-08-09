@@ -1,8 +1,14 @@
 import { createAiApi } from '@eisenhower/api-client';
 import { mobileConfig } from '../config';
+import { clearApiToken, getAdminToken, getApiToken } from '../authSession';
 
 function getAiApi() {
-  return createAiApi(mobileConfig.aiApiUrl);
+  return createAiApi(mobileConfig.aiApiUrl, {
+    accessToken: getApiToken,
+    adminToken: getAdminToken,
+    onUnauthorized: clearApiToken,
+    onAdminUnauthorized: clearApiToken,
+  });
 }
 
 export async function suggestTaskQuadrant(title) {

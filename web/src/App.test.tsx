@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
 import * as api from './services/api';
+import { clearApiToken, setAdminToken, setApiToken } from './authSession';
 
 jest.mock('./services/api');
 
@@ -77,19 +78,40 @@ describe('App', () => {
       urgent: true,
       important: false,
       quadrant: 1,
-      quadrant_name: 'Schedule',
+      quadrant_name: 'Delegate',
       timestamp: new Date().toISOString(),
       method: 'local-minilm',
     });
+    setApiToken('runtime-only-test-token');
+    setAdminToken('runtime-only-admin-token');
   });
 
   afterEach(() => {
+    act(() => clearApiToken());
     window.requestAnimationFrame = originalRequestAnimationFrame;
     window.cancelAnimationFrame = originalCancelAnimationFrame;
     Object.defineProperty(window, 'scrollY', {
       configurable: true,
       value: originalScrollY,
     });
+  });
+
+  it('keeps the app locked until a runtime-only bearer token is entered', async () => {
+    clearApiToken();
+
+    render(<App />);
+
+    const tokenInput = screen.getByLabelText('Token dostępu');
+    const adminTokenInput = screen.getByLabelText('Token administratora AI');
+    expect(tokenInput).toHaveAttribute('type', 'password');
+    expect(adminTokenInput).toHaveAttribute('type', 'password');
+    expect(mockedApi.getTasks).not.toHaveBeenCalled();
+
+    fireEvent.change(tokenInput, { target: { value: 'entered-at-runtime' } });
+    fireEvent.change(adminTokenInput, { target: { value: 'admin-entered-at-runtime' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Odblokuj' }));
+
+    await waitFor(() => expect(mockedApi.getTasks).toHaveBeenCalled());
   });
 
   it('loads tasks and renders the header', async () => {

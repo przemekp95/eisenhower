@@ -7,6 +7,7 @@ import { getDatabaseStatus } from './db';
 import { createHealthRouter } from './routes/health';
 import { createTasksRouter } from './routes/tasks';
 import { HealthState } from './types';
+import { requireBearerToken, requireTrustedBrowserOrigin } from './auth';
 
 export interface CreateAppOptions {
   aiHealthChecker?: () => Promise<HealthState>;
@@ -68,10 +69,17 @@ export function createApp(options: CreateAppOptions = {}) {
       legacyHeaders: false,
     })
   );
-  app.use(cors());
-  app.use(express.json());
+  app.use(
+    cors({
+      origin: config.corsAllowOrigins,
+      credentials: false,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Authorization', 'Content-Type'],
+    })
+  );
+  app.use(requireTrustedBrowserOrigin(config.corsAllowOrigins));
+  app.use(express.json({ limit: '32kb' }));
 
-  app.use('/tasks', createTasksRouter());
   app.use(
     '/health',
     createHealthRouter({
@@ -80,13 +88,28 @@ export function createApp(options: CreateAppOptions = {}) {
     })
   );
 
+  app.use(requireBearerToken(config.apiToken));
+
+  app.use('/tasks', createTasksRouter());
+
   app.use((_req, res) => {
     res.status(404).json({ error: 'Route not found' });
   });
 
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    if (
+      error instanceof Error &&
+      'type' in error &&
+      error.type === 'entity.too.large'
+    ) {
+      res.status(413).json({ error: 'Request body too large' });
+      return;
+    }
+
     const message = error instanceof Error ? error.message : 'Internal server error';
-    res.status(500).json({ error: message });
+    res.status(500).json({
+      error: config.nodeEnv === 'production' ? 'Internal server error' : message,
+    });
   });
 
   return app;

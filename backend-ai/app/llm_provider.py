@@ -46,8 +46,8 @@ class LLMProviderError(RuntimeError):
 
 class LLMProvider:
     """
-    Obsługa lokalnych modeli LLM z llama.cpp / llama-cpp-python
-    Automatyczne wykrywanie urządzenia, obsługa kwantyzacji, fallback na CPU
+    Experimental local LLM provider for llama.cpp / llama-cpp-python.
+    Detects compute devices, supports quantization, and falls back to CPU.
     """
 
     def __init__(self, settings: Settings, config: Optional[LLMConfig] = None):

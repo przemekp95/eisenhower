@@ -20,8 +20,8 @@ from ..domain.events import (
 
 class EisenhowerEmbeddings(Embeddings):
     """
-    DDD Embedding wrapper spełniający interfejs LangChain Embeddings
-    Obsługuje cache i unieważnianie po zdarzeniach domenowych
+    Experimental embedding wrapper implementing the LangChain Embeddings interface.
+    Caches embeddings and invalidates them after vector-domain events.
     """
     def __init__(self, embedding_fn: Callable[[str], List[float]]):
         self._embedding_fn = embedding_fn
@@ -32,7 +32,7 @@ class EisenhowerEmbeddings(Embeddings):
         event_publisher.subscribe(self._handle_domain_event)
 
     def _handle_domain_event(self, event: DomainEvent) -> None:
-        """Unieważnia cache po każdej zmianie w kolekcji wektorów"""
+        """Invalidate cached embeddings after a vector collection change."""
         if isinstance(event, (VectorItemAddedEvent, VectorCollectionClearedEvent, VectorCollectionCreatedEvent)):
             self._cache.clear()
 
@@ -52,8 +52,8 @@ class EisenhowerEmbeddings(Embeddings):
 
 class LangChainQdrantAdapter(VectorStore):
     """
-    DDD Adapter łączący istniejący QdrantVectorStore z interfejsem LangChain VectorStore
-    Zachowuje wszystkie istniejące zdarzenia domenowe oraz logikę biznesową
+    Experimental adapter connecting the native Qdrant store to LangChain's VectorStore interface.
+    Preserves the existing domain events and store behavior.
     """
 
     def __init__(
@@ -67,8 +67,8 @@ class LangChainQdrantAdapter(VectorStore):
         self.config = config or QdrantConfig.from_env()
         self._langchain_store: Optional[LangChainQdrantStore] = None
 
-        # Inicjalizacja klienta LangChain jest opcjonalna, bo podczas testów
-        # i startu aplikacji natywny klient może nie być jeszcze podłączony.
+        # LangChain client initialization is optional because the native client might not be
+        # connected yet during tests or application startup.
         connect = getattr(self._native_store, "connect", None)
         if callable(connect):
             connect()
@@ -164,11 +164,11 @@ class LangChainQdrantAdapter(VectorStore):
         **kwargs: Any
     ) -> VectorStore:
         raise NotImplementedError(
-            "Użyj konstruktora z istniejącym native_store dla zgodności z DDD"
+            "Use the constructor with an existing native_store"
         )
 
     def delete(self, ids: Optional[List[str]] = None, **kwargs: Any) -> Optional[bool]:
-        raise NotImplementedError("Operacja usuwania zarządzana przez domenę")
+        raise NotImplementedError("Deletion is managed by the native store")
 
     def max_marginal_relevance_search(
         self,

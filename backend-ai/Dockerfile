@@ -1,6 +1,6 @@
 # Multi-stage build for Python AI service (CPU + CUDA targets)
 
-# Bazowy obraz wspólny dla wszystkich wersji
+# Shared base image for all build targets
 FROM python:3.11-slim as base
 
 # Set environment variables
@@ -20,7 +20,7 @@ RUN useradd --create-home --shell /bin/bash app \
 USER app
 
 # ------------------------------------------------------------------------------
-# Target: Dependencies (CPU - domyślna wersja)
+# Target: Dependencies (CPU - default build)
 # ------------------------------------------------------------------------------
 FROM base AS dependencies-cpu
 USER root
@@ -48,7 +48,7 @@ SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 PY
 
 # ------------------------------------------------------------------------------
-# Target: Dependencies (CUDA 12.4 - wersja akcelerowana GPU)
+# Target: Dependencies (CUDA 12.4 - GPU-accelerated build)
 # ------------------------------------------------------------------------------
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04 AS base-cuda
 
@@ -64,7 +64,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Instalacja Pythona 3.11 na obrazie CUDA
+# Install Python 3.11 in the CUDA image
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         python3.11 \
@@ -114,7 +114,7 @@ RUN apt-get update \
     && rm -rf /tmp/*
 USER app
 
-COPY --from=dependencies --chown=app:app /home/app/.local /home/app/.local
+COPY --from=dependencies-cpu --chown=app:app /home/app/.local /home/app/.local
 ENV PATH=/home/app/.local/bin:$PATH
 
 # Copy application code
@@ -134,7 +134,7 @@ EXPOSE 8000
 CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
 
 # Development stage (optional)
-FROM dependencies as development
+FROM dependencies-cpu AS development
 COPY --chown=app:app . .
 
 # Install dev dependencies

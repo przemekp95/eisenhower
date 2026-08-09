@@ -15,16 +15,34 @@ import apiClient, {
 } from '@eisenhower/api-client';
 import { runtimeConfig } from '../config';
 import type { Language } from '../i18n/translations';
+import {
+  clearApiToken,
+  getAdminToken,
+  getApiToken,
+  setAdminToken,
+  setApiToken,
+  setCredentials,
+} from '../authSession';
 
 const { createAiApi, createTaskApi } = apiClient;
 
 function getTaskApi() {
-  return createTaskApi(runtimeConfig.apiUrl);
+  return createTaskApi(runtimeConfig.apiUrl, {
+    accessToken: getApiToken,
+    onUnauthorized: clearApiToken,
+  });
 }
 
 function getAiApi() {
-  return createAiApi(runtimeConfig.aiApiUrl);
+  return createAiApi(runtimeConfig.aiApiUrl, {
+    accessToken: getApiToken,
+    adminToken: getAdminToken,
+    onUnauthorized: clearApiToken,
+    onAdminUnauthorized: clearApiToken,
+  });
 }
+
+export { clearApiToken, setAdminToken, setApiToken, setCredentials };
 
 export type ClassificationResult = ClassificationResultDto;
 export type SimilarExampleResult = SimilarExampleResultDto;

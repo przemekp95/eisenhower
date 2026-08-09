@@ -69,7 +69,7 @@ jest.mock('./components/matrixLazyComponents', () => ({
           void onAnalysisTaskAdd({
             task: 'critical task',
             langchain_analysis: {
-              quadrant: 1,
+              quadrant: 2,
               reasoning: 'Schedule this',
               confidence: 0.9,
               method: 'langchain',
@@ -95,7 +95,7 @@ jest.mock('./components/matrixLazyComponents', () => ({
           onAnalysisComplete({
             task: 'critical task',
             langchain_analysis: {
-              quadrant: 2,
+              quadrant: 1,
               reasoning: 'Delegate this',
               confidence: 0.9,
               method: 'langchain',
@@ -139,13 +139,13 @@ jest.mock('./components/matrixLazyComponents', () => ({
               {
                 text: '   ',
                 quadrant: 1,
-                quadrant_name: 'Schedule',
+                quadrant_name: 'Delegate',
                 confidence: 0.2,
               },
               {
                 text: 'Plan roadmap',
                 quadrant: 2,
-                quadrant_name: 'Delegate',
+                quadrant_name: 'Schedule',
                 confidence: 0.74,
               },
               {
@@ -160,7 +160,7 @@ jest.mock('./components/matrixLazyComponents', () => ({
               quadrant_distribution: {
                 counts: { 0: 2, 1: 0, 2: 1, 3: 0 },
                 percentages: { 0: 66.67, 1: 0, 2: 33.33, 3: 0 },
-                quadrant_names: { 0: 'Do Now', 1: 'Schedule', 2: 'Delegate', 3: 'Delete' },
+                quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
               },
             },
             timestamp: new Date().toISOString(),
@@ -481,8 +481,8 @@ describe('Matrix', () => {
       expect(onAddTask).toHaveBeenCalledWith({
         title: 'Przygotować plan kwartalny',
         description: 'Do omówienia z zarządem',
-        urgent: true,
-        important: false,
+        urgent: false,
+        important: true,
       })
     );
     await waitFor(() => expect(screen.getByPlaceholderText(/Tytuł zadania/i)).toHaveValue(''));
@@ -519,8 +519,8 @@ describe('Matrix', () => {
       expect(onAddTask).toHaveBeenCalledWith({
         title: 'critical task',
         description: '',
-        urgent: true,
-        important: false,
+        urgent: false,
+        important: true,
       })
     );
   });
@@ -634,8 +634,8 @@ describe('Matrix', () => {
 
     await waitFor(() => {
       const checkboxes = screen.getAllByRole('checkbox');
-      expect(checkboxes[0]).not.toBeChecked();
-      expect(checkboxes[1]).toBeChecked();
+      expect(checkboxes[0]).toBeChecked();
+      expect(checkboxes[1]).not.toBeChecked();
     });
 
     fireEvent.click(screen.getByText(/Close AI tools/i));
@@ -654,7 +654,7 @@ describe('Matrix', () => {
       },
       rag_classification: {
         quadrant: 2,
-        quadrant_name: 'Delegate',
+        quadrant_name: 'Schedule',
         confidence: 0.7,
       },
       comparison: {
@@ -674,14 +674,14 @@ describe('Matrix', () => {
     expect(
       resolveQuadrantLabel(
         2,
-        { 0: 'Do Now', 1: 'Schedule', 2: 'Delegate', 3: 'Delete' },
+        { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
         (quadrant) => `Quadrant ${quadrant}`
       )
-    ).toBe('Delegate');
+    ).toBe('Schedule');
     expect(
       resolveQuadrantLabel(
         9,
-        { 0: 'Do Now', 1: 'Schedule', 2: 'Delegate', 3: 'Delete' },
+        { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
         (quadrant) => `Quadrant ${quadrant}`
       )
     ).toBe('Quadrant 9');

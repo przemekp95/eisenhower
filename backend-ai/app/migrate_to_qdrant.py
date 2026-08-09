@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""
-Skrypt migracji istniejącego lokalnego indeksu do Qdrant
-Użycie: python3 -m app.migrate_to_qdrant
+"""Migrate an existing local training index to Qdrant.
+
+Usage: python3 -m app.migrate_to_qdrant
 """
 from __future__ import annotations
 from pathlib import Path
@@ -16,37 +16,37 @@ from app.store_qdrant_adapter import QdrantTrainingStoreAdapter
 
 
 def main():
-    print("🔄 Rozpoczynam migrację do Qdrant Vector Database")
+    print("Starting migration to Qdrant Vector Database")
     print("=" * 60)
 
     data_path = Path(os.getenv("TRAINING_DATA_PATH", "data/training.json"))
-    print(f"✅ Lokalny plik danych: {data_path}")
+    print(f"Local data file: {data_path}")
 
     vector_store = QdrantVectorStore()
-    print(f"✅ Konfiguracja Qdrant: {vector_store.config.to_dict()}")
+    print(f"Qdrant configuration: {vector_store.config.to_dict()}")
 
-    print("\n⚙️  Tworzenie kolekcji (jeśli nie istnieje)...")
+    print("\nCreating the collection if it does not exist...")
     created = vector_store.create_collection()
     if created:
-        print("✅ Utworzono nową kolekcję w Qdrant")
+        print("Created a new Qdrant collection")
     else:
-        print("ℹ️  Kolekcja już istnieje")
+        print("The Qdrant collection already exists")
 
     adapter = QdrantTrainingStoreAdapter(data_path, vector_store)
-    print("\n🚀 Uruchamiam migrację...")
+    print("\nRunning migration...")
 
     result = adapter.migrate_existing_index()
 
-    print("\n✅ Migracja zakończona pomyślnie!")
-    print(f"   Przeniesionych elementów: {result['migrated_items']}")
-    print(f"   Kolekcja w Qdrant: {result['collection_name']}")
+    print("\nMigration completed successfully")
+    print(f"   Migrated items: {result['migrated_items']}")
+    print(f"   Qdrant collection: {result['collection_name']}")
 
     stats = adapter.get_stats()
-    print(f"\n📊 Status końcowy:")
-    print(f"   Całkowita liczba przykładów: {stats['total_examples']}")
-    print(f"   Liczba wektorów w indeksie: {stats['vector_index_count']}")
+    print("\nFinal status:")
+    print(f"   Total examples: {stats['total_examples']}")
+    print(f"   Vectors in index: {stats['vector_index_count']}")
 
-    print("\n🎉 Gotowe!")
+    print("\nDone")
 
 
 if __name__ == "__main__":

@@ -21,6 +21,9 @@ test.beforeEach(async ({ page }) => {
   });
 
   await page.goto('/');
+  await page.getByLabel('Token dostępu').fill('test-api-token');
+  await page.getByLabel('Token administratora AI').fill('test-admin-token');
+  await page.getByRole('button', { name: 'Odblokuj' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Eisenhower Matrix' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Dodaj zadanie' })).toBeVisible();
 });
@@ -38,7 +41,7 @@ test('creates, reclassifies and deletes a task through the live API', async ({ p
   const description = 'flow through quadrants';
 
   const doNow = quadrant(page, 'Zrób teraz');
-  const schedule = quadrant(page, 'Zaplanuj');
+  const delegate = quadrant(page, 'Deleguj');
   const remove = quadrant(page, 'Usuń');
 
   await page.getByPlaceholder('Tytuł zadania').fill(title);
@@ -53,15 +56,15 @@ test('creates, reclassifies and deletes a task through the live API', async ({ p
 
   await createdCard.getByLabel(`toggle important ${title}`).click({ force: true });
 
-  const scheduledCard = taskCard(schedule, title);
-  await expect(scheduledCard).toBeVisible();
+  const delegatedCard = taskCard(delegate, title);
+  await expect(delegatedCard).toBeVisible();
   await expect(taskHeading(doNow, title)).toHaveCount(0);
 
-  await scheduledCard.getByLabel(`toggle urgent ${title}`).click({ force: true });
+  await delegatedCard.getByLabel(`toggle urgent ${title}`).click({ force: true });
 
   const removableCard = taskCard(remove, title);
   await expect(removableCard).toBeVisible();
-  await expect(taskHeading(schedule, title)).toHaveCount(0);
+  await expect(taskHeading(delegate, title)).toHaveCount(0);
 
   await removableCard.getByRole('button', { name: 'Usuń', exact: true }).click();
 

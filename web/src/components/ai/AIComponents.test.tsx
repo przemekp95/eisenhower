@@ -59,7 +59,7 @@ describe('AI component error paths', () => {
         method: 'langchain',
       },
       rag_classification: {
-        quadrant: 1,
+        quadrant: 2,
         quadrant_name: 'Schedule',
         confidence: 0.7,
       },
@@ -89,7 +89,7 @@ describe('AI component error paths', () => {
         method: 'langchain',
       },
       rag_classification: {
-        quadrant: 1,
+        quadrant: 2,
         quadrant_name: 'Schedule',
         confidence: 0.7,
       },
@@ -112,13 +112,13 @@ describe('AI component error paths', () => {
     mockedApi.analyzeWithLangChain.mockResolvedValueOnce({
       task: 'task',
       langchain_analysis: {
-        quadrant: 1,
+        quadrant: 2,
         reasoning: 'Needs scheduling.',
         confidence: 0.8,
         method: 'langchain',
       },
       rag_classification: {
-        quadrant: 1,
+        quadrant: 2,
         quadrant_name: 'Schedule',
         confidence: 0.7,
       },
@@ -168,7 +168,7 @@ describe('AI component error paths', () => {
         method: 'langchain',
       },
       rag_classification: {
-        quadrant: 1,
+        quadrant: 2,
         quadrant_name: 'Schedule',
         confidence: 0.7,
       },
@@ -207,7 +207,7 @@ describe('AI component error paths', () => {
         method: 'langchain',
       },
       rag_classification: {
-        quadrant: 1,
+        quadrant: 2,
         quadrant_name: 'Schedule',
         confidence: 0.7,
       },
@@ -246,7 +246,7 @@ describe('AI component error paths', () => {
         method: 'langchain',
       },
       rag_classification: {
-        quadrant: 1,
+        quadrant: 2,
         quadrant_name: 'Schedule',
         confidence: 0.7,
       },

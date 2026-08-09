@@ -20,11 +20,6 @@ export type DatabaseState = 'connected' | 'disconnected';
 
 export interface HealthResponseDto {
   status: 'ok' | 'ready' | 'not_ready';
-  timestamp: string;
-  services: {
-    database: DatabaseState;
-    ai: HealthState;
-  };
 }
 
 export interface ClassificationResultDto {
@@ -243,8 +238,16 @@ export function toTaskInputDto(task: Partial<TaskInputDto> & { title: string }):
 export function toTaskPatchDto(patch: Partial<TaskInputDto>): Partial<TaskInputDto>;
 export function resolveTaskQuadrant(task: AcceptedOcrLearningTaskLike): number;
 export function toAcceptedOcrLearningPayload(tasks: AcceptedOcrLearningTaskLike[]): Array<{ task: string; quadrant: number }>;
-export function createTaskApi(baseUrl: string, fetchImpl?: typeof fetch): TaskApiClient;
-export function createAiApi(baseUrl: string, fetchImpl?: typeof fetch): AiApiClient;
+export interface ApiClientOptions {
+  fetch?: typeof fetch;
+  accessToken?: string | (() => string | null);
+  adminToken?: string | (() => string | null);
+  onUnauthorized?: () => void;
+  onAdminUnauthorized?: () => void;
+}
+
+export function createTaskApi(baseUrl: string, optionsOrFetch?: typeof fetch | ApiClientOptions): TaskApiClient;
+export function createAiApi(baseUrl: string, optionsOrFetch?: typeof fetch | ApiClientOptions): AiApiClient;
 export function getProviderPath(provider: string): string;
 export function getExamplesByQuadrantPath(quadrant: number, limit?: number): string;
 export function getClassifyPath(title: string, useRag?: boolean): string;

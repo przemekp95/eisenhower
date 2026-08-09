@@ -1,4 +1,5 @@
 import { runtimeConfig } from '../config';
+import { getAdminToken, getApiToken, setAdminToken } from '../authSession';
 import {
   addTrainingExample,
   analyzeWithLangChain,
@@ -17,11 +18,70 @@ import {
   retrainModel,
   setProviderEnabled,
   updateTask,
+  clearApiToken,
+  setApiToken,
 } from './api';
 
 describe('api service', () => {
   beforeEach(() => {
     global.fetch = jest.fn();
+    setApiToken('runtime-only-test-token');
+    setAdminToken('runtime-only-admin-token');
+  });
+
+  afterEach(() => {
+    clearApiToken();
+  });
+
+  it('treats whitespace-only credentials as missing', () => {
+    setApiToken('   ');
+
+    expect(getApiToken()).toBeNull();
+  });
+
+  it('sends the runtime bearer token without putting it in URLs', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [],
+    });
+
+    await getTasks();
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${runtimeConfig.apiUrl}/tasks`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer runtime-only-test-token' }),
+      })
+    );
+    expect((global.fetch as jest.Mock).mock.calls[0][0]).not.toContain('runtime-only-test-token');
+  });
+
+  it('clears the in-memory token after an unauthorized response', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ error: 'Authentication required' }),
+    });
+
+    await expect(getTasks()).rejects.toThrow('Authentication required');
+
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: true, status: 200, json: async () => [] });
+    await getTasks();
+    expect((global.fetch as jest.Mock).mock.calls[1][1]?.headers?.Authorization).toBeUndefined();
+  });
+
+  it('returns to the credential gate after rejected administrator credentials', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ error: 'Administrator access required' }),
+    });
+
+    await expect(getTrainingStats()).rejects.toThrow('Administrator access required');
+
+    expect(getApiToken()).toBeNull();
+    expect(getAdminToken()).toBeNull();
   });
 
   it('uses runtime config for task CRUD', async () => {
@@ -45,7 +105,12 @@ describe('api service', () => {
     });
     await deleteTask('1');
 
-    expect(global.fetch).toHaveBeenCalledWith(`${runtimeConfig.apiUrl}/tasks`);
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${runtimeConfig.apiUrl}/tasks`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer runtime-only-test-token' }),
+      })
+    );
     expect(global.fetch).toHaveBeenCalledWith(
       `${runtimeConfig.apiUrl}/tasks`,
       expect.objectContaining({ method: 'POST' })
@@ -84,8 +149,19 @@ describe('api service', () => {
     await setProviderEnabled('tesseract', true);
 
     expect((global.fetch as jest.Mock).mock.calls[0][0]).toContain(runtimeConfig.aiApiUrl);
-    expect((global.fetch as jest.Mock).mock.calls[1][0]).toContain('language=en');
-    expect((global.fetch as jest.Mock).mock.calls[2][0]).toContain('language=pl');
+    expect((global.fetch as jest.Mock).mock.calls[0][0]).toBe(`${runtimeConfig.aiApiUrl}/classify`);
+    expect((global.fetch as jest.Mock).mock.calls[0][1].body).toBe(
+      JSON.stringify({ title: 'urgent', use_rag: true })
+    );
+    expect((global.fetch as jest.Mock).mock.calls[1][0]).toBe(
+      `${runtimeConfig.aiApiUrl}/analyze-langchain`
+    );
+    expect((global.fetch as jest.Mock).mock.calls[1][1].body).toBe(
+      JSON.stringify({ task: 'urgent', language: 'en' })
+    );
+    expect((global.fetch as jest.Mock).mock.calls[2][1].body).toBe(
+      JSON.stringify({ task: 'urgent', language: 'pl' })
+    );
     expect((global.fetch as jest.Mock).mock.calls[7][0]).toContain('/learn-ocr-feedback');
     expect((global.fetch as jest.Mock).mock.calls[7][1].body).toBe(
       JSON.stringify({ tasks: [{ task: 'task', quadrant: 2 }], retrain: false })
@@ -108,6 +184,18 @@ describe('api service', () => {
       JSON.stringify({ enabled: false })
     );
     expect((global.fetch as jest.Mock).mock.calls[17][0]).toContain('/providers/tesseract');
+    expect((global.fetch as jest.Mock).mock.calls[5][1].headers.Authorization).toBe(
+      'Bearer runtime-only-admin-token'
+    );
+    expect((global.fetch as jest.Mock).mock.calls[6][1].headers.Authorization).toBe(
+      'Bearer runtime-only-admin-token'
+    );
+    expect((global.fetch as jest.Mock).mock.calls[7][1].headers.Authorization).toBe(
+      'Bearer runtime-only-admin-token'
+    );
+    expect((global.fetch as jest.Mock).mock.calls[8][1].headers.Authorization).toBe(
+      'Bearer runtime-only-admin-token'
+    );
   });
 
   it('uses retrain=true by default for accepted OCR feedback', async () => {

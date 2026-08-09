@@ -18,7 +18,10 @@ required_vars=(
   MIKRUS_USER
   MIKRUS_SSH_KEY
   MIKRUS_ENV_FILE
+  MIKRUS_APP_DIR
+  MIKRUS_PUBLIC_URL
   DOCKER_HUB_USERNAME
+  IMAGE_TAG
 )
 
 for var_name in "${required_vars[@]}"; do
@@ -28,11 +31,22 @@ for var_name in "${required_vars[@]}"; do
   fi
 done
 
-default_app_dir="/home/${MIKRUS_USER}/apps/demo-fortis"
-if [[ "${MIKRUS_USER}" == "root" ]]; then
-  default_app_dir="/root/apps/demo-fortis"
+app_dir="$MIKRUS_APP_DIR"
+
+if [[ "$app_dir" != /* || "$app_dir" == "/" || ! "$app_dir" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
+  error "MIKRUS_APP_DIR must be a safe absolute path and must not be root."
+  exit 1
 fi
-app_dir="${MIKRUS_APP_DIR:-$default_app_dir}"
+
+if [[ ! "$MIKRUS_PUBLIC_URL" =~ ^https://[^/[:space:]]+(/.*)?$ ]]; then
+  error "MIKRUS_PUBLIC_URL must be a public HTTPS URL."
+  exit 1
+fi
+
+if [[ ! "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]]; then
+  error "IMAGE_TAG must be a full Git commit SHA."
+  exit 1
+fi
 
 mkdir -p "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
@@ -83,8 +97,44 @@ if ! ssh "${ssh_opts[@]}" "$ssh_target" "echo ssh-ok" >/dev/null; then
   exit 1
 fi
 
-log "Preparing application directory on target host."
-ssh "${ssh_opts[@]}" "$ssh_target" "mkdir -p '$app_dir'"
+log "Verifying deployment directory ownership."
+ssh "${ssh_opts[@]}" "$ssh_target" bash -s -- "$app_dir" <<'REMOTE_OWNERSHIP_CHECK'
+set -euo pipefail
+app_dir="$1"
+marker="$app_dir/.eisenhower-deployment"
+
+if [[ -d "$app_dir" && ! -f "$marker" ]] && find "$app_dir" -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
+  echo "Refusing to deploy into a non-empty directory without $marker." >&2
+  exit 1
+fi
+
+mkdir -p "$app_dir"
+if [[ -f "$marker" ]] && [[ "$(tr -d '\r\n' < "$marker")" != "eisenhower" ]]; then
+  echo "Deployment ownership marker does not belong to eisenhower." >&2
+  exit 1
+fi
+printf 'eisenhower\n' > "$marker"
+REMOTE_OWNERSHIP_CHECK
+
+log "Saving the currently deployed configuration for rollback."
+ssh "${ssh_opts[@]}" "$ssh_target" bash -s -- "$app_dir" <<'REMOTE_BACKUP'
+set -euo pipefail
+app_dir="$1"
+rm -f \
+  "$app_dir/docker-compose.rollback.yml" \
+  "$app_dir/.env.rollback" \
+  "$app_dir/.rollback-image-tag"
+if [[ -f "$app_dir/docker-compose.yml" ]]; then
+  cp "$app_dir/docker-compose.yml" "$app_dir/docker-compose.rollback.yml"
+fi
+if [[ -f "$app_dir/.env" ]]; then
+  cp "$app_dir/.env" "$app_dir/.env.rollback"
+  chmod 600 "$app_dir/.env.rollback"
+fi
+if [[ -f "$app_dir/.deployed-image-tag" ]]; then
+  cp "$app_dir/.deployed-image-tag" "$app_dir/.rollback-image-tag"
+fi
+REMOTE_BACKUP
 
 log "Uploading docker-compose.yml."
 scp "${ssh_opts[@]}" "deploy/mikrus/docker-compose.yml" "$scp_target"
@@ -95,10 +145,12 @@ printf '%s' "$MIKRUS_ENV_FILE" | ssh "${ssh_opts[@]}" "$ssh_target" "cat > '$app
 app_dir_q=$(printf '%q' "$app_dir")
 docker_hub_username_q=$(printf '%q' "$DOCKER_HUB_USERNAME")
 docker_hub_token_q=$(printf '%q' "${DOCKER_HUB_TOKEN:-}")
+image_tag_q=$(printf '%q' "$IMAGE_TAG")
+public_url_q=$(printf '%q' "${MIKRUS_PUBLIC_URL%/}")
 
 log "Running remote docker compose update."
 ssh "${ssh_opts[@]}" "$ssh_target" \
-  "APP_DIR=$app_dir_q DOCKER_HUB_USERNAME=$docker_hub_username_q DOCKER_HUB_TOKEN=$docker_hub_token_q bash -s" <<'REMOTE_SCRIPT'
+  "APP_DIR=$app_dir_q DOCKER_HUB_USERNAME=$docker_hub_username_q DOCKER_HUB_TOKEN=$docker_hub_token_q IMAGE_TAG=$image_tag_q MIKRUS_PUBLIC_URL=$public_url_q bash -s" <<'REMOTE_SCRIPT'
 set -euo pipefail
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -114,6 +166,28 @@ fi
 cd "$APP_DIR"
 
 compose_project="eisenhower"
+previous_tag=""
+if [[ -f .rollback-image-tag ]]; then
+  previous_tag="$(tr -d '\r\n' < .rollback-image-tag)"
+fi
+
+rollback_deployment() {
+  echo "Deployment failed; attempting rollback."
+  if [[ -z "$previous_tag" || ! -f docker-compose.rollback.yml || ! -f .env.rollback ]]; then
+    echo "No verified previous version is available for automatic rollback." >&2
+    return 1
+  fi
+
+  cp docker-compose.rollback.yml docker-compose.yml
+  cp .env.rollback .env
+  chmod 600 .env
+  export IMAGE_TAG="$previous_tag"
+  docker compose --env-file .env -f docker-compose.yml up -d --remove-orphans
+  printf '%s\n' "$previous_tag" > .deployed-image-tag
+  echo "Rolled back to image tag $previous_tag."
+}
+
+trap 'status=$?; trap - ERR; rollback_deployment || true; exit "$status"' ERR
 
 read_env_value() {
   local name="$1"
@@ -160,21 +234,63 @@ check_host_port() {
   fi
 }
 
-web_port="$(read_env_value WEB_PORT 8080)"
-api_port="$(read_env_value API_PORT 3001)"
-ai_port="$(read_env_value AI_PORT 8000)"
+if [[ ! -f .eisenhower-deployment ]] || [[ "$(tr -d '\r\n' < .eisenhower-deployment)" != "eisenhower" ]]; then
+  echo "Invalid or missing .eisenhower-deployment ownership marker."
+  exit 1
+fi
 
-echo "Preflight host ports: frontend=$web_port api=$api_port ai=$ai_port"
+web_port="$(read_env_value WEB_PORT 8080)"
+
+echo "Preflight host port: frontend=$web_port"
 check_host_port "frontend" "WEB_PORT" "$web_port"
-check_host_port "api-service" "API_PORT" "$api_port"
-check_host_port "ai-service" "AI_PORT" "$ai_port"
 
 if [ -n "$DOCKER_HUB_TOKEN" ]; then
   printf '%s' "$DOCKER_HUB_TOKEN" | docker login --username "$DOCKER_HUB_USERNAME" --password-stdin
 fi
 
 export DOCKER_HUB_USERNAME
+export IMAGE_TAG
 docker compose --env-file .env -f docker-compose.yml pull
 docker compose --env-file .env -f docker-compose.yml up -d --remove-orphans
 docker compose --env-file .env -f docker-compose.yml ps
+
+echo "Waiting for container readiness."
+deadline=$((SECONDS + 180))
+while (( SECONDS < deadline )); do
+  ready=true
+  for service in mongodb ai-service api-service frontend; do
+    container_id="$(docker compose --env-file .env -f docker-compose.yml ps -q "$service")"
+    if [[ -z "$container_id" ]]; then
+      ready=false
+      break
+    fi
+    state="$(docker inspect --format '{{.State.Status}}' "$container_id")"
+    health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_id")"
+    if [[ "$state" != "running" || ( "$health" != "none" && "$health" != "healthy" ) ]]; then
+      ready=false
+      break
+    fi
+  done
+  if [[ "$ready" == "true" ]]; then
+    break
+  fi
+  sleep 5
+done
+
+if [[ "$ready" != "true" ]]; then
+  docker compose --env-file .env -f docker-compose.yml ps
+  docker compose --env-file .env -f docker-compose.yml logs --tail=100
+  echo "Containers did not become ready within 180 seconds." >&2
+  false
+fi
+
+echo "Running public HTTPS smoke checks."
+curl --fail --silent --show-error --max-time 20 "$MIKRUS_PUBLIC_URL/health" >/dev/null
+curl --fail --silent --show-error --max-time 20 "$MIKRUS_PUBLIC_URL/api/health" >/dev/null
+curl --fail --silent --show-error --max-time 20 "$MIKRUS_PUBLIC_URL/ai/" >/dev/null
+
+printf '%s\n' "$IMAGE_TAG" > .deployed-image-tag
+rm -f docker-compose.rollback.yml .env.rollback .rollback-image-tag
+trap - ERR
+echo "Deployment $IMAGE_TAG passed readiness and public smoke checks."
 REMOTE_SCRIPT

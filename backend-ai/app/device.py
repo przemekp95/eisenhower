@@ -19,14 +19,14 @@ class DeviceInfo:
 
 def detect_device() -> DeviceInfo:
     """
-    Automatycznie wykrywa dostępne urządzenie obliczeniowe dla PyTorch.
-    Priorytet: CUDA > MPS (Apple Silicon) > CPU
-    Zawsze zwraca poprawne urządzenie z fallbackiem na CPU.
+    Detect the best available PyTorch compute device automatically.
+    Priority: CUDA > MPS (Apple Silicon) > CPU.
+    Always returns a valid device and falls back to CPU.
     """
     try:
         import torch
     except ImportError:
-        logger.warning("PyTorch nie jest zainstalowany, używam domyślnie CPU")
+        logger.warning("PyTorch is not installed; falling back to CPU")
         return DeviceInfo(
             name="cpu",
             type="cpu",
@@ -34,7 +34,7 @@ def detect_device() -> DeviceInfo:
             device_count=1
         )
 
-    # Wykrywanie CUDA
+    # Detect CUDA.
     if torch.cuda.is_available():
         cuda_devices = []
         for i in range(torch.cuda.device_count()):
@@ -46,7 +46,7 @@ def detect_device() -> DeviceInfo:
 
         cuda_version = torch.version.cuda
         logger.info(
-            f"✅ Wykryto GPU CUDA: {len(cuda_devices)} urządzenie(a), wersja CUDA: {cuda_version}"
+            f"CUDA GPUs detected: {len(cuda_devices)} device(s), CUDA version: {cuda_version}"
         )
         for idx, dev_name in enumerate(cuda_devices):
             logger.info(f"   GPU {idx}: {dev_name}")
@@ -60,9 +60,9 @@ def detect_device() -> DeviceInfo:
             device_names=cuda_devices
         )
 
-    # Wykrywanie MPS (Apple Silicon)
+    # Detect MPS (Apple Silicon).
     if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-        logger.info("✅ Wykryto akcelerator MPS (Apple Silicon)")
+        logger.info("MPS accelerator detected (Apple Silicon)")
         return DeviceInfo(
             name="mps",
             type="mps",
@@ -70,9 +70,9 @@ def detect_device() -> DeviceInfo:
             device_count=1
         )
 
-    # Fallback na CPU
+    # Fall back to CPU.
     cpu_count = torch.get_num_threads()
-    logger.info(f"ℹ️ Brak dostępnego akceleratora GPU, używam CPU z {cpu_count} wątkami")
+    logger.info(f"No GPU accelerator available; using CPU with {cpu_count} threads")
     return DeviceInfo(
         name="cpu",
         type="cpu",
@@ -82,7 +82,7 @@ def detect_device() -> DeviceInfo:
 
 
 def get_torch_device() -> Any:
-    """Zwraca obiekt urządzenia PyTorch do użycia w modelach"""
+    """Return the PyTorch device object used by model code."""
     device_info = detect_device()
     try:
         import torch
@@ -91,7 +91,7 @@ def get_torch_device() -> Any:
         return None
 
 
-# Globalny singleton wykrytego urządzenia (inicjowany raz przy starcie)
+# Process-wide detected-device singleton, initialized on first use.
 _global_device: DeviceInfo | None = None
 
 

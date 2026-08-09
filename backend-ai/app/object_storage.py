@@ -20,39 +20,39 @@ logger = logging.getLogger(__name__)
 
 @runtime_checkable
 class ObjectStorage(Protocol):
-    """Protokół wspólny dla wszystkich magazynów obiektów"""
+    """Common protocol implemented by every object-storage backend."""
     
     def exists(self, path: str) -> bool:
-        """Sprawdź czy obiekt istnieje"""
+        """Return whether an object exists."""
         ...
     
     def get(self, path: str) -> bytes | None:
-        """Pobierz obiekt jako bajty"""
+        """Read an object as bytes."""
         ...
     
     def get_json(self, path: str) -> Any | None:
-        """Pobierz obiekt jako JSON"""
+        """Read and decode a JSON object."""
         ...
     
     def put(self, path: str, data: bytes | BinaryIO, content_type: str = "application/octet-stream") -> bool:
-        """Zapisz obiekt do magazynu"""
+        """Write an object to storage."""
         ...
     
     def put_json(self, path: str, data: Any) -> bool:
-        """Zapisz obiekt jako JSON"""
+        """Encode and write a JSON object."""
         ...
     
     def delete(self, path: str) -> bool:
-        """Usuń obiekt"""
+        """Delete an object."""
         ...
     
     def list(self, prefix: str = "") -> list[str]:
-        """Wylistuj obiekty z danym prefiksem"""
+        """List objects under a prefix."""
         ...
 
 
 class FileSystemStorage:
-    """Implementacja magazynu na lokalnym systemie plików"""
+    """Filesystem-backed object storage."""
     
     def __init__(self, root_dir: Path | str):
         self.root = Path(root_dir).resolve()
@@ -60,9 +60,9 @@ class FileSystemStorage:
     
     def _resolve_path(self, path: str) -> Path:
         resolved = (self.root / path.lstrip("/")).resolve()
-        # Zabezpieczenie przed path traversal
+        # Prevent path traversal outside the configured root.
         if not resolved.is_relative_to(self.root):
-            raise ValueError(f"Nieprawidłowa ścieżka: {path}")
+            raise ValueError(f"Invalid storage path: {path}")
         return resolved
     
     def exists(self, path: str) -> bool:
@@ -121,7 +121,7 @@ class FileSystemStorage:
 
 
 class MinIOStorage:
-    """Implementacja magazynu MinIO (S3 kompatybilny)"""
+    """MinIO-backed, S3-compatible object storage."""
     
     def __init__(
         self,
@@ -133,7 +133,7 @@ class MinIOStorage:
         region: str = "us-east-1",
     ):
         if not MINIO_AVAILABLE:
-            raise RuntimeError("Biblioteka minio nie jest zainstalowana")
+            raise RuntimeError("The minio package is not installed")
         
         self.client = Minio(
             endpoint=endpoint,
@@ -144,9 +144,9 @@ class MinIOStorage:
         )
         self.bucket = bucket
         
-        # Automatyczne tworzenie bucketu jeżeli nie istnieje
+        # Create the bucket on first use when necessary.
         if not self.client.bucket_exists(self.bucket):
-            logger.info(f"Tworzenie brakującego bucketa: {self.bucket}")
+            logger.info(f"Creating missing MinIO bucket: {self.bucket}")
             self.client.make_bucket(self.bucket)
     
     def exists(self, path: str) -> bool:
@@ -156,7 +156,7 @@ class MinIOStorage:
         except S3Error as e:
             if e.code == "NoSuchKey":
                 return False
-            logger.warning(f"Błąd sprawdzania obiektu MinIO: {e}")
+            logger.warning(f"Failed to inspect MinIO object: {e}")
             return False
     
     def get(self, path: str) -> bytes | None:
@@ -169,7 +169,7 @@ class MinIOStorage:
                 response.release_conn()
         except S3Error as e:
             if e.code != "NoSuchKey":
-                logger.warning(f"Błąd pobierania obiektu MinIO: {e}")
+                logger.warning(f"Failed to read MinIO object: {e}")
             return None
     
     def get_json(self, path: str) -> Any | None:
@@ -197,10 +197,34 @@ class MinIOStorage:
                 object_name=path.lstrip("/"),
                 data=stream,
                 length=length,
+                content_type=content_type,
+            )
+            return True
+        except S3Error as e:
+            logger.warning(f"Failed to write MinIO object: {e}")
+            return False
 
+    def put_json(self, path: str, data: Any) -> bool:
+        return self.put(path, json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8"), "application/json")
+
+    def delete(self, path: str) -> bool:
+        try:
+            self.client.remove_object(self.bucket, path.lstrip("/"))
+            return True
+        except S3Error as e:
+            logger.warning(f"Failed to delete MinIO object: {e}")
+            return False
+
+    def list(self, prefix: str = "") -> list[str]:
+        try:
+            objects = self.client.list_objects(self.bucket, prefix=prefix.lstrip("/"), recursive=True)
+            return sorted(obj.object_name for obj in objects if not obj.is_dir)
+        except S3Error as e:
+            logger.warning(f"Failed to list MinIO objects: {e}")
+            return []
 
 class FallbackStorage:
-    """Magazyn z fallbackiem: najpierw próbuje MinIO, jeżeli nie działa używa lokalnego FS"""
+    """Use a primary backend when healthy and fall back to local storage."""
     
     def __init__(self, primary: ObjectStorage, fallback: ObjectStorage):
         self.primary = primary
@@ -209,7 +233,7 @@ class FallbackStorage:
     
     def _check_health(self) -> bool:
         try:
-            # Prosty test dostępności
+            # Lightweight availability check.
             self.primary.list("/")
             self._primary_healthy = True
             return True
@@ -265,14 +289,14 @@ def create_storage(
     fallback_root: Path | str | None = None,
 ) -> ObjectStorage:
     """
-    Fabryka tworząca magazyn obiektów.
-    Jeżeli wszystkie parametry MinIO są podane i dostępny, tworzy FallbackStorage z MinIO jako primary.
-    W przeciwnym wypadku zwraca tylko FileSystemStorage.
+    Create the configured object-storage backend.
+    When all MinIO settings are present and reachable, MinIO is the primary backend and the
+    filesystem is the fallback. Otherwise, only filesystem storage is returned.
     """
     fallback = FileSystemStorage(fallback_root or Path.cwd() / "data")
     
     if not MINIO_AVAILABLE or not all([minio_endpoint, minio_access_key, minio_secret_key, minio_bucket]):
-        logger.info("Używanie wyłącznie lokalnego magazynu plików")
+        logger.info("Using local filesystem storage only")
         return fallback
     
     try:
@@ -283,34 +307,8 @@ def create_storage(
             bucket=minio_bucket,
             secure=minio_secure,
         )
-        logger.info(f"Połączono z MinIO: {minio_endpoint}, bucket: {minio_bucket}. Włączono fallback na lokalny FS.")
+        logger.info(f"Connected to MinIO at {minio_endpoint}, bucket {minio_bucket}; local fallback enabled")
         return FallbackStorage(minio_storage, fallback)
     except Exception as e:
-        logger.warning(f"Nie udało się połączyć z MinIO: {e}. Używanie tylko lokalnego magazynu.")
+        logger.warning(f"Could not connect to MinIO: {e}; using local filesystem storage only")
         return fallback
-
-                content_type=content_type,
-            )
-            return True
-        except S3Error as e:
-            logger.warning(f"Błąd zapisu obiektu MinIO: {e}")
-            return False
-    
-    def put_json(self, path: str, data: Any) -> bool:
-        return self.put(path, json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8"), "application/json")
-    
-    def delete(self, path: str) -> bool:
-        try:
-            self.client.remove_object(self.bucket, path.lstrip("/"))
-            return True
-        except S3Error as e:
-            logger.warning(f"Błąd usuwania obiektu MinIO: {e}")
-            return False
-    
-    def list(self, prefix: str = "") -> list[str]:
-        try:
-            objects = self.client.list_objects(self.bucket, prefix=prefix.lstrip("/"), recursive=True)
-            return sorted(obj.object_name for obj in objects if not obj.is_dir)
-        except S3Error as e:
-            logger.warning(f"Błąd listowania obiektów MinIO: {e}")
-            return []

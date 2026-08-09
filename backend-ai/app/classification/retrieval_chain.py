@@ -45,15 +45,15 @@ class EisenhowerClassificationResult:
 
 class QuadrantRetrievalQA:
     """
-    DDD Retrieval QA Chain dla klasyfikacji zadań Eisenhowera
-    Implementuje wzorzec Chain of Responsibility, reaguje na zdarzenia domenowe
+    Experimental retrieval QA chain for Eisenhower task classification.
+    Rebuilds its retriever in response to vector-domain events.
     """
 
     SYSTEM_PROMPT = """
     Jesteś ekspertem od Macierzy Eisenhowera. Klasyfikuj zadanie do jednego z 4 kwadrantów:
     0 - PILNE I WAŻNE (wykonaj natychmiast)
-    1 - WAŻNE NIE PILNE (zaplanuj)
-    2 - PILNE NIE WAŻNE (zdeleguj)
+    1 - PILNE NIE WAŻNE (zdeleguj)
+    2 - WAŻNE NIE PILNE (zaplanuj)
     3 - ANI PILNE ANI WAŻNE (wyeliminuj)
 
     UżyJ TYLKO podanych podobnych przykładów aby określić klasyfikację.
@@ -94,7 +94,7 @@ class QuadrantRetrievalQA:
         self._subscribe_events()
 
     def _subscribe_events(self) -> None:
-        """Odśwież retriever po każdej zmianie w bazie wektorów"""
+        """Refresh the retriever after vector-store changes."""
         event_publisher.subscribe(self._handle_vector_event)
 
     def _build_retriever(self) -> _RetrieverProxy:
@@ -102,8 +102,7 @@ class QuadrantRetrievalQA:
 
     def _handle_vector_event(self, event: DomainEvent) -> None:
         if isinstance(event, (VectorItemAddedEvent)):
-            # Odśwież cache embeddingów automatycznie dzięki EisenhowerEmbeddings
-            # oraz odbuduj retriever jeśli wymagane
+            # EisenhowerEmbeddings invalidates its own cache; rebuild this retriever as well.
             self._retriever = self._build_retriever()
 
     def _format_context(self, documents: List[Document]) -> str:
@@ -131,10 +130,10 @@ class QuadrantRetrievalQA:
 
     def classify(self, task: str) -> EisenhowerClassificationResult:
         """
-        Klasyfikuje pojedyncze zadanie używając RAG z LangChain
-        W przypadku awarii LLM automatycznie używa fallback klasyfikatora
+        Classify one task through the experimental LangChain RAG path.
+        Fall back to the local classifier when the LLM path fails.
         """
-        # Pobierz podobne przykłady bezpośrednio z VectorStore
+        # Retrieve similar examples directly from VectorStore.
         similar_docs = self.vector_store.similarity_search(task, k=self.top_k)
         similar_examples = [
             {
@@ -145,7 +144,7 @@ class QuadrantRetrievalQA:
             for doc in similar_docs
         ]
 
-        # Próbuj użyć LLM RAG jeżeli dostępny
+        # Use the LLM RAG path when available.
         if self._chain is not None:
             try:
                 result = self._chain.invoke({"task": task})
@@ -166,7 +165,7 @@ class QuadrantRetrievalQA:
             except Exception as e:
                 logger.warning(f"LLM chain failed, falling back: {e}")
 
-        # Fallback na stary klasyfikator
+        # Fall back to the local classifier.
         if self.fallback_classifier:
             prediction = self.fallback_classifier.predict(task, limit=3)
             explanation = self.fallback_classifier.explain(task, prediction=prediction)
@@ -181,7 +180,7 @@ class QuadrantRetrievalQA:
                 method="fallback-minilm-classifier"
             )
 
-        # Ostatni fallback: domyślny kwadrant
+        # Final fallback: default quadrant.
         return EisenhowerClassificationResult(
             task=task,
             quadrant=3,
@@ -193,7 +192,7 @@ class QuadrantRetrievalQA:
         )
 
     async def aclassify(self, task: str) -> EisenhowerClassificationResult:
-        """Asynchroniczna wersja klasyfikacji"""
+        """Asynchronous classification variant."""
         similar_docs = await self.vector_store.asimilarity_search(task, k=self.top_k)
         similar_examples = [
             {

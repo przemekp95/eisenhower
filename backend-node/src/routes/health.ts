@@ -16,22 +16,8 @@ export function createHealthRouter({
 }: HealthDependencies) {
   const router = Router();
 
-  router.get('/', async (_req, res, next) => {
-    try {
-      const database = databaseStatusResolver();
-      const ai = await aiHealthChecker();
-
-      res.status(200).json({
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        services: {
-          database,
-          ai,
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
+  router.get('/', (_req, res) => {
+    res.status(200).json({ status: 'ok' });
   });
 
   router.get('/ready', async (_req, res, next) => {
@@ -40,14 +26,7 @@ export function createHealthRouter({
       const ai = await aiHealthChecker();
       const ready = resolveReadiness(database, ai);
 
-      res.status(ready ? 200 : 503).json({
-        status: ready ? 'ready' : 'not_ready',
-        timestamp: new Date().toISOString(),
-        services: {
-          database,
-          ai,
-        },
-      });
+      res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'not_ready' });
     } catch (error) {
       next(error);
     }

@@ -1,17 +1,21 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - master
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
 
 env:
   NODE_VERSION: "20"
   PYTHON_VERSION: "3.11"
+  RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
 
 jobs:
   docker-release:
     name: docker-release
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'master' }}
     runs-on: ubuntu-latest
     env:
       DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
@@ -35,6 +39,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_SHA }}
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -64,7 +70,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           target: production
           push: ${{ steps.docker-hub.outputs.enabled == 'true' }}
-          tags: ${{ steps.docker-hub.outputs.enabled == 'true' && format('{0}/{1}:latest', env.DOCKER_HUB_USERNAME, matrix.tag) || format('local/{0}:latest', matrix.tag) }}
+          tags: ${{ steps.docker-hub.outputs.enabled == 'true' && format('{0}/{1}:{2}', env.DOCKER_HUB_USERNAME, matrix.tag, env.RELEASE_SHA) || format('local/{0}:{1}', matrix.tag, env.RELEASE_SHA) }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -80,11 +86,15 @@ jobs:
       MIKRUS_SSH_KEY: ${{ secrets.MIKRUS_SSH_KEY }}
       MIKRUS_ENV_FILE: ${{ secrets.MIKRUS_ENV_FILE }}
       MIKRUS_APP_DIR: ${{ secrets.MIKRUS_APP_DIR }}
+      MIKRUS_PUBLIC_URL: ${{ secrets.MIKRUS_PUBLIC_URL }}
+      IMAGE_TAG: ${{ env.RELEASE_SHA }}
       DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
       DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_SHA }}
 
       - name: Check Mikrus configuration
         id: mikrus-config
@@ -92,7 +102,7 @@ jobs:
         run: |
           missing=0
 
-          for key in MIKRUS_HOST MIKRUS_USER MIKRUS_SSH_KEY MIKRUS_ENV_FILE DOCKER_HUB_USERNAME DOCKER_HUB_TOKEN; do
+          for key in MIKRUS_HOST MIKRUS_USER MIKRUS_SSH_KEY MIKRUS_ENV_FILE MIKRUS_APP_DIR MIKRUS_PUBLIC_URL DOCKER_HUB_USERNAME DOCKER_HUB_TOKEN; do
             if [ -z "${!key}" ]; then
               echo "$key is missing."
               missing=1

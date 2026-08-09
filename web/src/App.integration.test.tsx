@@ -3,6 +3,9 @@ import https from 'node:https';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { RunningBackendProcess } from './testUtils/backendProcess';
 import { startBackendProcess } from './testUtils/backendProcess';
+import { clearApiToken, setApiToken } from './authSession';
+
+const TEST_API_TOKEN = 'test-api-token';
 
 interface TaskPayload {
   _id: string;
@@ -99,6 +102,7 @@ async function createBackendTask(task: Omit<TaskPayload, '_id'>) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      Authorization: `Bearer ${TEST_API_TOKEN}`,
     },
     body: JSON.stringify(task),
   });
@@ -107,7 +111,9 @@ async function createBackendTask(task: Omit<TaskPayload, '_id'>) {
 }
 
 async function listBackendTasks() {
-  const response = await fetch(`${backend.url}/tasks`);
+  const response = await fetch(`${backend.url}/tasks`, {
+    headers: { Authorization: `Bearer ${TEST_API_TOKEN}` },
+  });
   return (await response.json()) as TaskPayload[];
 }
 
@@ -124,10 +130,12 @@ describe('App integration', () => {
 
   beforeEach(() => {
     localStorage.clear();
+    setApiToken(TEST_API_TOKEN);
   });
 
   afterEach(() => {
     cleanup();
+    clearApiToken();
   });
 
   afterAll(async () => {

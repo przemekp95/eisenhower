@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 
 const aiApiUrl = process.env.PLAYWRIGHT_AI_API_URL ?? 'http://127.0.0.1:8000';
+const apiToken = process.env.PLAYWRIGHT_API_TOKEN;
+const adminToken = process.env.PLAYWRIGHT_ADMIN_TOKEN;
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -15,7 +17,12 @@ test('opens AI tools and runs advanced analysis against the live AI service', as
 }) => {
   test.slow();
 
-  const capabilitiesResponse = await request.get(`${aiApiUrl}/capabilities`);
+  expect(apiToken, 'PLAYWRIGHT_API_TOKEN is required for the live AI smoke').toBeTruthy();
+  expect(adminToken, 'PLAYWRIGHT_ADMIN_TOKEN is required for the credential gate').toBeTruthy();
+
+  const capabilitiesResponse = await request.get(`${aiApiUrl}/capabilities`, {
+    headers: { Authorization: `Bearer ${apiToken}` },
+  });
   expect(capabilitiesResponse.ok()).toBeTruthy();
 
   const capabilities = await capabilitiesResponse.json();
@@ -27,6 +34,9 @@ test('opens AI tools and runs advanced analysis against the live AI service', as
   const taskTitle = `Prepare board meeting agenda for Q${new Date().getUTCMonth() + 1}`;
 
   await page.goto('/');
+  await page.getByLabel('Token dostępu').fill(apiToken!);
+  await page.getByLabel('Token administratora AI').fill(adminToken!);
+  await page.getByRole('button', { name: /odblokuj|unlock/i }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Eisenhower Matrix' })).toBeVisible();
 
   await page.getByPlaceholder('Task title').fill(taskTitle);
