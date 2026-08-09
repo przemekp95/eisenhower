@@ -87,7 +87,7 @@ jobs:
       MIKRUS_ENV_FILE: ${{ secrets.MIKRUS_ENV_FILE }}
       MIKRUS_APP_DIR: ${{ secrets.MIKRUS_APP_DIR }}
       MIKRUS_PUBLIC_URL: ${{ secrets.MIKRUS_PUBLIC_URL }}
-      IMAGE_TAG: ${{ env.RELEASE_SHA }}
+      IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
       DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
       DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
     steps:
