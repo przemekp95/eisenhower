@@ -152,7 +152,6 @@ jobs:
         working-directory: backend-node
         env:
           MONGODB_URI: mongodb://localhost:27017/eisenhower-test
-          EISENHOWER_API_TOKEN: ci-test-eisenhower-api-token
         run: npm run test:coverage
 
   test-frontend:

@@ -48,7 +48,7 @@ describe('production deployment boundaries', () => {
     expect(compose).toContain(':${IMAGE_TAG:?IMAGE_TAG is required}');
     expect(compose).not.toContain(':latest');
     expect(release).toContain("github.event.workflow_run.conclusion == 'success'");
-    expect(release).toContain('IMAGE_TAG: ${{ env.RELEASE_SHA }}');
+    expect(release).toContain('IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}');
     expect(release).toContain("format('{0}/{1}:{2}', env.DOCKER_HUB_USERNAME, matrix.tag, env.RELEASE_SHA)");
     expect(deployScript).toContain('MIKRUS_PUBLIC_URL');
     expect(deployScript).toContain('rollback_deployment');
