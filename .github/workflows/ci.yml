@@ -93,6 +93,7 @@ jobs:
             -v "$HOME/.cache/trivy:/root/.cache/" \
             aquasec/trivy:0.63.0 fs \
             --config /workdir/trivy.yaml \
+            --ignorefile /workdir/.trivyignore.yaml \
             --severity HIGH,CRITICAL \
             --exit-code 1 \
             --format sarif \
