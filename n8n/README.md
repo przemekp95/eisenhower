@@ -25,7 +25,7 @@ The internal API must derive tenant/user authorization from the verified credent
 
 ## Deterministic ingestion and reindexing
 
-The source connector emits normalized documents plus `source_version`, `content_checksum`, `embedding_version`, and `chunking_version`. The ingestion worker deterministically normalizes line endings/Unicode, chunks by the named chunking version, and derives stable chunk IDs from tenant, project, document, source version, and chunk ordinal. Reprocessing an identical event therefore produces identical IDs and no duplicate vectors.
+The source connector emits schema v2 envelopes with normalized documents plus an opaque `source_version`, a per-document monotonic integer `source_sequence`, `content_checksum`, `embedding_version`, and `chunking_version`. The ingestion worker ignores equal or lower sequences, deterministically normalizes line endings/Unicode, chunks by the named chunking version, and derives stable chunk IDs from tenant, project, document, source version, and chunk ordinal. Reprocessing an identical event therefore produces no duplicate vectors, and a delayed older event cannot replace a newer document or tombstone.
 
 Reindex into a new versioned Qdrant collection, validate document/chunk counts and retrieval goldens, then atomically move the alias. Retain the prior collection through the rollback window. An evaluation launch identifies an immutable `dataset_version`; it cannot execute arbitrary code or accept arbitrary remote sources.
 

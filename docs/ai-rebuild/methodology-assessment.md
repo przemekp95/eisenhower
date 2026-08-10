@@ -30,7 +30,7 @@ Retire or quarantine misleading language: `use_rag` for local similarity, `analy
 - **Infrastructure:** MiniLM, Qdrant, vLLM HTTP, document/job stores, OIDC, n8n and MCP transports.
 - **Delivery:** FastAPI routes, workflow/webhook adapters, MCP tools and client packages.
 
-Local `rag.models`, `ports`, `application`, `ingestion` and `adapters` move in this direction. Gaps include a canonical `Quadrant` value object shared across boundaries, a wired document/job transaction strategy, route-independent authorization policy, and explicit domain error/result types instead of broad runtime exceptions/dictionaries.
+Local `rag.models`, `ports`, `application`, `ingestion` and `adapters` move in this direction. Generation-provider failures now use explicit application-level error types; incremental ingestion replaces prior document chunks fail-closed and persists a monotonic source sequence that rejects stale upserts and tombstones. Remaining gaps include a canonical `Quadrant` value object shared across boundaries, a complete canonical document store and transaction/reconciliation strategy for a future multi-consumer topology, route-independent authorization policy, and typed results in the older classifier flow.
 
 ## Hexagonal / ports and adapters
 
@@ -42,9 +42,9 @@ Required contract refinements:
 | --- | --- | --- |
 | `Retriever` | query text, access scope, k/threshold -> ordered authorized hits | timeout/unavailable/configuration separated from empty result |
 | `EmbeddingProvider` | batch normalized text -> fixed-dimension vectors + immutable version | dimension/model errors explicit; no hidden remote fetch |
-| `GenerationProvider` | task + bounded retrieved context -> structured candidate | timeout/unavailable/invalid-output distinct; no fallback inside adapter |
+| `GenerationProvider` | task + bounded retrieved context -> structured candidate | unavailable and invalid-output are explicit; transport details do not escape the adapter |
 | `DocumentStore` | current canonical document/version/tombstone | optimistic version conflict and not-found explicit |
-| `IngestionPort` | idempotent versioned chunk/vector upsert/tombstone | partial failure/retry reconciliation explicit |
+| `IngestionPort` | fail-closed replacement of tenant/document chunks plus explicit tombstone | retries are idempotent; bulk transaction/reconciliation remains a production gate |
 
 Do not let Qdrant payload models or `httpx` exceptions leak into application/domain tests. Dependency construction belongs in composition/bootstrap. Cross-cutting auth/observability should decorate use cases/ports rather than be reimplemented in clients.
 

@@ -75,6 +75,7 @@ def build_chunk_records(
         position=position,
         checksum=checksum,
         content_version=document.content_version,
+        source_sequence=document.source_sequence,
         embedding_version=embedding_version,
         acl_subjects=document.acl_subjects,
         deleted=document.deleted,
@@ -105,7 +106,7 @@ class IngestionApplication:
       )
     ]
     vectors = self.embedding_provider.embed([chunk.text for chunk in chunks]) if chunks else []
-    self.ingestion_port.upsert(chunks, vectors)
+    self.ingestion_port.replace_documents(documents, chunks, vectors)
     return {
       "documents": len(documents),
       "chunks": len(chunks),

@@ -120,32 +120,6 @@ from sentence_transformers import SentenceTransformer
 SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 PY
 
-# Production stage
-FROM base AS production
-
-# Install only runtime dependencies
-USER root
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        curl \
-        libgomp1 \
-        tesseract-ocr \
-        tesseract-ocr-pol \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    && rm -rf /var/cache/apt/archives/* \
-    && rm -rf /tmp/*
-USER app
-
-COPY --from=dependencies-cpu --chown=app:app /home/app/.local /home/app/.local
-ENV PATH=/home/app/.local/bin:$PATH
-COPY --chown=app:app . .
-RUN mkdir -p /app/data /app/logs /home/app/.cache/huggingface
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health/ready || exit 1
-EXPOSE 8000
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
-
 # Optional CUDA target. Build only after the deployment GPU/driver/VRAM has
 # been verified against the selected PyTorch and vLLM versions.
 FROM dependencies-cuda AS production-cuda

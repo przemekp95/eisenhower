@@ -36,7 +36,12 @@ class DocumentStore(Protocol):
 
 
 class IngestionPort(Protocol):
-  def upsert(self, chunks: list[ChunkRecord], vectors: list[list[float]]) -> None: ...
+  def replace_documents(
+    self,
+    documents: list[SourceDocument],
+    chunks: list[ChunkRecord],
+    vectors: list[list[float]],
+  ) -> None: ...
 
   def tombstone(self, document_id: str, tenant_id: str, content_version: str) -> None: ...
 

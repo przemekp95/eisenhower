@@ -11,11 +11,11 @@ class Embedder:
 
 class Sink:
   def __init__(self):
-    self.upserts = []
+    self.replacements = []
     self.tombstones = []
 
-  def upsert(self, chunks, vectors):
-    self.upserts.append((chunks, vectors))
+  def replace_documents(self, documents, chunks, vectors):
+    self.replacements.append((documents, chunks, vectors))
 
   def tombstone(self, document_id, tenant_id, content_version):
     self.tombstones.append((document_id, tenant_id, content_version))
@@ -39,10 +39,31 @@ def test_ingestion_application_chunks_embeds_and_writes_acl_metadata():
 
   result = app.ingest([document])
 
-  chunks, vectors = sink.upserts[0]
+  documents, chunks, vectors = sink.replacements[0]
   assert result == {"documents": 1, "chunks": 1, "embedding_version": "minilm-v1"}
+  assert documents == [document]
   assert chunks[0].acl_subjects == ["user:user-1", "project:project-1"]
   assert vectors == [[27.0]]
+
+
+def test_ingestion_application_replaces_even_a_document_that_now_has_no_chunks():
+  sink = Sink()
+  app = IngestionApplication(Embedder(), sink)
+  document = SourceDocument(
+    document_id="doc-1",
+    tenant_id="tenant-a",
+    source_type="knowledge",
+    source_uri="knowledge://1",
+    title="Removed content",
+    text="   ",
+    content_version="v2",
+    acl_subjects=["user:user-1"],
+  )
+
+  result = app.ingest([document])
+
+  assert result == {"documents": 1, "chunks": 0, "embedding_version": "minilm-v1"}
+  assert sink.replacements == [([document], [], [])]
 
 
 def test_ingestion_application_creates_versioned_tombstones():

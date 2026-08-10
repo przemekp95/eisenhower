@@ -172,7 +172,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ event_id: $json.envelope.event_id, tenant_id: $json.envelope.tenant_id, project_id: $json.envelope.project_id, documents: $json.envelope.documents, source_version: $json.envelope.source_version, content_checksum: $json.envelope.content_checksum, embedding_version: $json.envelope.embedding_version, chunking_version: $json.envelope.chunking_version }) }}",
+        "body": "={{ JSON.stringify({ event_id: $json.envelope.event_id, tenant_id: $json.envelope.tenant_id, project_id: $json.envelope.project_id, documents: $json.envelope.documents, source_version: $json.envelope.source_version, source_sequence: $json.envelope.source_sequence, content_checksum: $json.envelope.content_checksum, embedding_version: $json.envelope.embedding_version, chunking_version: $json.envelope.chunking_version }) }}",
         "options": {"timeout": 15000}
       },
       "id": "dispatch-upsert",
@@ -199,7 +199,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ event_id: $json.envelope.event_id, tenant_id: $json.envelope.tenant_id, project_id: $json.envelope.project_id, document_ids: $json.envelope.document_ids, source_version: $json.envelope.source_version, content_checksum: $json.envelope.content_checksum, embedding_version: $json.envelope.embedding_version, chunking_version: $json.envelope.chunking_version }) }}",
+        "body": "={{ JSON.stringify({ event_id: $json.envelope.event_id, tenant_id: $json.envelope.tenant_id, project_id: $json.envelope.project_id, document_ids: $json.envelope.document_ids, source_version: $json.envelope.source_version, source_sequence: $json.envelope.source_sequence, content_checksum: $json.envelope.content_checksum, embedding_version: $json.envelope.embedding_version, chunking_version: $json.envelope.chunking_version }) }}",
         "options": {"timeout": 15000}
       },
       "id": "dispatch-tombstone",
@@ -226,7 +226,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ event_id: $json.envelope.event_id, tenant_id: $json.envelope.tenant_id, project_id: $json.envelope.project_id, source_version: $json.envelope.source_version, content_checksum: $json.envelope.content_checksum, embedding_version: $json.envelope.embedding_version, chunking_version: $json.envelope.chunking_version }) }}",
+        "body": "={{ JSON.stringify({ event_id: $json.envelope.event_id, tenant_id: $json.envelope.tenant_id, project_id: $json.envelope.project_id, source_version: $json.envelope.source_version, source_sequence: $json.envelope.source_sequence, content_checksum: $json.envelope.content_checksum, embedding_version: $json.envelope.embedding_version, chunking_version: $json.envelope.chunking_version }) }}",
         "options": {"timeout": 15000}
       },
       "id": "dispatch-reindex",
@@ -253,7 +253,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ event_id: $json.envelope.event_id, tenant_id: $json.envelope.tenant_id, project_id: $json.envelope.project_id, dataset_version: $json.envelope.dataset_version, source_version: $json.envelope.source_version, content_checksum: $json.envelope.content_checksum, embedding_version: $json.envelope.embedding_version, chunking_version: $json.envelope.chunking_version }) }}",
+        "body": "={{ JSON.stringify({ event_id: $json.envelope.event_id, tenant_id: $json.envelope.tenant_id, project_id: $json.envelope.project_id, dataset_version: $json.envelope.dataset_version, source_version: $json.envelope.source_version, source_sequence: $json.envelope.source_sequence, content_checksum: $json.envelope.content_checksum, embedding_version: $json.envelope.embedding_version, chunking_version: $json.envelope.chunking_version }) }}",
         "options": {"timeout": 15000}
       },
       "id": "dispatch-evaluation",

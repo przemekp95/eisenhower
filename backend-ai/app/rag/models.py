@@ -115,6 +115,7 @@ class SourceDocument(StrictModel):
   title: str
   text: str
   content_version: str
+  source_sequence: int = Field(default=0, ge=0, le=9_223_372_036_854_775_807)
   acl_subjects: list[str]
   deleted: bool = False
 
@@ -132,6 +133,7 @@ class ChunkRecord(StrictModel):
   position: int
   checksum: str
   content_version: str
+  source_sequence: int = Field(default=0, ge=0, le=9_223_372_036_854_775_807)
   embedding_version: str
   acl_subjects: list[str]
   deleted: bool = False

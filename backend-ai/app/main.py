@@ -67,6 +67,7 @@ class InternalJobRequest(StrictRequest):
   tenant_id: str = Field(..., min_length=1, max_length=128)
   project_id: str | None = Field(default=None, max_length=128)
   source_version: str = Field(..., min_length=1, max_length=128)
+  source_sequence: int = Field(..., ge=0, le=9_223_372_036_854_775_807)
   content_checksum: str = Field(..., pattern=r"^sha256:[a-f0-9]{64}$")
   embedding_version: str = Field(..., min_length=1, max_length=128)
   chunking_version: str = Field(..., min_length=1, max_length=128)
