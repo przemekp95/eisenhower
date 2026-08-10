@@ -4,8 +4,8 @@ export const AI_TABS = ['analysis', 'ocr', 'batch', 'manage'];
 export function getQuadrantOptions(t) {
   return [
     { value: 0, title: t.quadrantDoNow, hint: t.quadrantDoNowHint, accent: QUADRANT_ACCENTS[0] },
-    { value: 2, title: t.quadrantSchedule, hint: t.quadrantScheduleHint, accent: QUADRANT_ACCENTS[1] },
-    { value: 1, title: t.quadrantDelegate, hint: t.quadrantDelegateHint, accent: QUADRANT_ACCENTS[2] },
+    { value: 1, title: t.quadrantDelegate, hint: t.quadrantDelegateHint, accent: QUADRANT_ACCENTS[1] },
+    { value: 2, title: t.quadrantSchedule, hint: t.quadrantScheduleHint, accent: QUADRANT_ACCENTS[2] },
     { value: 3, title: t.quadrantEliminate, hint: t.quadrantEliminateHint, accent: QUADRANT_ACCENTS[3] },
   ];
 }

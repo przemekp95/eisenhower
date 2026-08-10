@@ -3,32 +3,39 @@ from __future__ import annotations
 import logging
 import time
 from hashlib import sha256
-from hmac import compare_digest
 from typing import Literal
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
+from .auth import AuthError, OIDCVerifier, ServiceTokenVerifier, StaticTokenVerifier, TokenVerifier
 from .config import Settings, load_settings
 from .device import get_device
 from .defaults import QUADRANT_NAMES
 from .local_model import ModelNotReadyError
+from .jobs import SqliteJobQueue
+from .metrics import MetricsRegistry
+from .rag.models import AccessScope, AnalyzeResult, RetrievalSummary
 from .service import ProviderDisabledError, QuadrantAIService
+from .security_controls import SlidingWindowRateLimiter
 from .store import TrainingStore
+from .webhooks import WebhookReplayVerifier
 
 request_logger = logging.getLogger("uvicorn.error")
-
-
+UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 MAX_TASK_LENGTH = 500
 MAX_BATCH_TASKS = 100
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
-UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
 class StrictRequest(BaseModel):
   model_config = ConfigDict(extra="forbid")
+
+
+class RagAnalyzeRequest(StrictRequest):
+  task: str = Field(..., min_length=1, max_length=MAX_TASK_LENGTH)
 
 
 class ClassifyRequest(StrictRequest):
@@ -39,6 +46,32 @@ class ClassifyRequest(StrictRequest):
 class AnalyzeRequest(StrictRequest):
   task: str = Field(..., min_length=1, max_length=MAX_TASK_LENGTH)
   language: Literal["en", "pl"] = "en"
+
+
+class KnowledgeSearchRequest(StrictRequest):
+  query: str = Field(..., min_length=1, max_length=2000)
+  project_id: str | None = Field(default=None, max_length=128)
+  limit: int = Field(default=5, ge=1, le=20)
+
+
+class WebhookVerificationRequest(StrictRequest):
+  timestamp: str
+  signature: str
+  event_id: str = Field(..., min_length=1, max_length=128)
+  body: dict
+
+
+class InternalJobRequest(StrictRequest):
+  event_id: str = Field(..., min_length=1, max_length=128)
+  tenant_id: str = Field(..., min_length=1, max_length=128)
+  project_id: str | None = Field(default=None, max_length=128)
+  source_version: str = Field(..., min_length=1, max_length=128)
+  content_checksum: str = Field(..., pattern=r"^sha256:[a-f0-9]{64}$")
+  embedding_version: str = Field(..., min_length=1, max_length=128)
+  chunking_version: str = Field(..., min_length=1, max_length=128)
+  documents: list[dict] | None = Field(default=None, max_length=500)
+  document_ids: list[str] | None = Field(default=None, max_length=5000)
+  dataset_version: str | None = Field(default=None, max_length=128)
 
 
 class BatchRequest(StrictRequest):
@@ -63,6 +96,9 @@ def create_app(
   settings: Settings | None = None,
   store: TrainingStore | None = None,
   ai_service: QuadrantAIService | None = None,
+  rag_service=None,
+  token_verifier: TokenVerifier | None = None,
+  metrics_registry: MetricsRegistry | None = None,
 ) -> FastAPI:
   resolved_settings = settings or load_settings()
   resolved_store = store or TrainingStore(resolved_settings.training_data_path)
@@ -71,7 +107,42 @@ def create_app(
       settings=resolved_settings,
       store=resolved_store,
   )
+  resolved_rag_service = rag_service
+  if resolved_rag_service is None and resolved_settings.rag_enabled:
+    from .rag.bootstrap import build_rag_service
+
+    resolved_rag_service = build_rag_service(resolved_settings, resolved_ai_service)
   resolved_settings.model_cache_dir.mkdir(parents=True, exist_ok=True)
+  resolved_verifier = token_verifier
+  if resolved_verifier is None:
+    if resolved_settings.auth_mode == "oidc":
+      resolved_verifier = OIDCVerifier(
+        issuer=str(resolved_settings.oidc_issuer),
+        audience=str(resolved_settings.oidc_audience),
+        jwks_url=resolved_settings.oidc_jwks_url,
+      )
+    else:
+      resolved_verifier = StaticTokenVerifier(
+        user_token=resolved_settings.api_token,
+        admin_token=resolved_settings.admin_token,
+      )
+  internal_verifier = None
+  webhook_verifier = None
+  job_queue = None
+  if resolved_settings.internal_api_token:
+    internal_verifier = ServiceTokenVerifier(
+      token=resolved_settings.internal_api_token,
+      service_id="n8n-ingestion",
+      scopes=["rag:ingest"],
+    )
+    job_queue = SqliteJobQueue(resolved_settings.jobs_database_path)
+  if resolved_settings.webhook_secret:
+    webhook_verifier = WebhookReplayVerifier(
+      resolved_settings.model_cache_dir / "webhook-replay.sqlite3",
+      secret=resolved_settings.webhook_secret,
+    )
+  ai_rate_limiter = SlidingWindowRateLimiter(limit=30, window_seconds=60)
+  metrics = metrics_registry or MetricsRegistry()
 
   app = FastAPI(
     title=resolved_settings.app_name,
@@ -82,59 +153,89 @@ def create_app(
     allow_origins=list(resolved_settings.cors_allow_origins),
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
   )
-
-  def token_matches(supplied_token: str, expected_token: str) -> bool:
-    if not expected_token:
-      return False
-    supplied_digest = sha256(supplied_token.encode("utf-8")).digest()
-    expected_digest = sha256(expected_token.encode("utf-8")).digest()
-    return compare_digest(supplied_digest, expected_digest)
-
-  def require_admin(request: Request) -> None:
-    if getattr(request.state, "auth_role", None) != "admin":
-      raise HTTPException(status_code=403, detail="Administrator access required")
 
   @app.middleware("http")
   async def authenticate_requests(request: Request, call_next):
-    if request.url.path == "/" or request.method == "OPTIONS":
+    if request.url.path in {"/", "/metrics"} or request.method == "OPTIONS":
       return await call_next(request)
-
     origin = request.headers.get("origin")
-    if (
-      origin
-      and request.method in UNSAFE_METHODS
-      and origin not in resolved_settings.cors_allow_origins
-    ):
+    if origin and request.method in UNSAFE_METHODS and origin not in resolved_settings.cors_allow_origins:
       return JSONResponse(status_code=403, content={"error": "Untrusted browser origin"})
-
-    authorization = request.headers.get("authorization")
-    if not authorization or not authorization.startswith("Bearer "):
+    authorization = request.headers.get("authorization", "")
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
       return JSONResponse(
         status_code=401,
         content={"error": "Authentication required"},
         headers={"WWW-Authenticate": "Bearer"},
       )
-
-    supplied_token = authorization.removeprefix("Bearer ")
-    if token_matches(supplied_token, resolved_settings.admin_token):
-      request.state.auth_role = "admin"
-    elif token_matches(supplied_token, resolved_settings.api_token):
-      request.state.auth_role = "user"
-    else:
+    try:
+      verifier = internal_verifier if request.url.path.startswith("/internal/") else resolved_verifier
+      if verifier is None:
+        raise AuthError("Internal API is disabled")
+      request.state.principal = verifier.verify(token)
+    except AuthError:
       return JSONResponse(status_code=403, content={"error": "Access denied"})
+    principal = request.state.principal
+    if request.url.path in {"/v2/ai/analyze", "/v2/knowledge/search"}:
+      rate_key = f"{principal.tenant_id}:{principal.user_id}:{request.url.path}"
+      if not ai_rate_limiter.allow(rate_key):
+        return JSONResponse(
+          status_code=429,
+          content={"error": "Rate limit exceeded"},
+          headers={"Retry-After": "60"},
+        )
+    response = await call_next(request)
+    if request.url.path.startswith(("/v2/", "/internal/")):
+      subject = sha256(
+        f"{principal.tenant_id}:{principal.user_id}".encode("utf-8")
+      ).hexdigest()[:16]
+      request_logger.info(
+        "audit path=%s method=%s status=%s subject=%s",
+        request.url.path,
+        request.method,
+        response.status_code,
+        subject,
+      )
+    return response
 
-    return await call_next(request)
+  def require_internal_dispatch(
+    request: Request,
+    envelope: InternalJobRequest,
+    operation: str,
+  ) -> None:
+    principal = request.state.principal
+    if "rag:ingest" not in principal.scopes or webhook_verifier is None:
+      raise HTTPException(status_code=403, detail="Internal ingestion is disabled.")
+    if envelope.tenant_id not in resolved_settings.internal_allowed_tenants:
+      raise HTTPException(status_code=403, detail="Tenant is outside the connector scope.")
+    signature = request.headers.get("x-eisenhower-signature", "")
+    if not webhook_verifier.verify_internal_dispatch(
+      signature,
+      envelope.event_id,
+      envelope.tenant_id,
+      operation,
+    ):
+      raise HTTPException(status_code=403, detail="Invalid internal dispatch signature.")
+
+  def require_admin(request: Request) -> None:
+    principal = request.state.principal
+    if "admin" not in principal.roles and "*" not in principal.scopes:
+      raise HTTPException(status_code=403, detail="Administrator access required.")
 
   @app.middleware("http")
   async def log_requests(request: Request, call_next):
-    if request.url.path == "/" or request.method == "OPTIONS":
+    if request.url.path in {"/", "/metrics"} or request.method == "OPTIONS":
       return await call_next(request)
 
     started_at = time.perf_counter()
     response = await call_next(request)
     duration_ms = int((time.perf_counter() - started_at) * 1000)
+    route = request.scope.get("route")
+    route_path = getattr(route, "path", request.url.path)
+    metrics.observe_http(request.method, route_path, response.status_code, duration_ms / 1000)
     message = f"backend-ai {request.method} {request.url.path} {response.status_code} {duration_ms}ms"
 
     if response.status_code >= 500:
@@ -146,16 +247,154 @@ def create_app(
 
   @app.get("/")
   def root():
-    return {"status": "ok"}
+    return {"service": resolved_settings.app_name, "status": "ok"}
+
+  @app.get("/metrics", include_in_schema=False)
+  def prometheus_metrics():
+    if job_queue is not None:
+      for status, count in job_queue.counts_by_status().items():
+        metrics.set_job_depth(status, count)
+    return Response(content=metrics.render(), media_type="text/plain; version=0.0.4")
+
+  @app.post("/v2/ai/analyze", response_model=AnalyzeResult)
+  def analyze_with_rag(request: RagAnalyzeRequest, http_request: Request):
+    principal = http_request.state.principal
+    if "*" not in principal.scopes and "ai:analyze" not in principal.scopes:
+      raise HTTPException(status_code=403, detail="Missing ai:analyze scope.")
+    scope = AccessScope(
+      tenant_id=principal.tenant_id,
+      user_id=principal.user_id,
+      project_ids=principal.project_ids,
+      roles=principal.roles,
+    )
+    tenant_enabled = (
+      not resolved_settings.rag_allowed_tenants
+      or principal.tenant_id in resolved_settings.rag_allowed_tenants
+    )
+    if resolved_rag_service is not None and resolved_settings.rag_response_enabled and tenant_enabled:
+      result = resolved_rag_service.analyze(request.task, scope)
+    else:
+      classification = resolved_ai_service.classify_task(request.task, use_rag=False)
+      if resolved_rag_service is None:
+        fallback_reason = "rag_disabled"
+      elif not resolved_settings.rag_response_enabled:
+        fallback_reason = "rag_response_disabled"
+      else:
+        fallback_reason = "tenant_not_enabled"
+      result = AnalyzeResult(
+        mode="fallback",
+        quadrant=classification["quadrant"],
+        quadrant_name=classification["quadrant_name"],
+        confidence=classification["confidence"],
+        explanation="The local MiniLM classifier produced this fallback result.",
+        retrieval=RetrievalSummary(),
+        fallback_reason=fallback_reason,
+      )
+    metrics.observe_rag_result(result.mode, result.fallback_reason)
+    return result
+
+  @app.post("/v2/knowledge/search")
+  def search_knowledge(request: KnowledgeSearchRequest, http_request: Request):
+    principal = http_request.state.principal
+    if "*" not in principal.scopes and not ({"knowledge:read", "ai:analyze"} & set(principal.scopes)):
+      raise HTTPException(status_code=403, detail="Missing knowledge:read scope.")
+    project_ids = list(principal.project_ids)
+    if request.project_id:
+      if "admin" not in principal.roles and request.project_id not in project_ids:
+        raise HTTPException(status_code=403, detail="Project is outside the authenticated scope.")
+      project_ids = [request.project_id]
+    scope = AccessScope(
+      tenant_id=principal.tenant_id,
+      user_id=principal.user_id,
+      project_ids=project_ids,
+      roles=principal.roles,
+    )
+    if resolved_rag_service is None:
+      return {
+        "query": request.query,
+        "answer": None,
+        "citations": [],
+        "retrieval": RetrievalSummary(),
+        "no_answer_reason": "rag_disabled",
+      }
+    return resolved_rag_service.search(request.query, scope, limit=request.limit)
+
+  @app.post("/internal/webhooks/n8n/verify")
+  def verify_n8n_webhook(request: WebhookVerificationRequest, http_request: Request):
+    if "rag:ingest" not in http_request.state.principal.scopes or webhook_verifier is None:
+      raise HTTPException(status_code=403, detail="Webhook ingestion is disabled.")
+    accepted = webhook_verifier.verify(
+      request.timestamp,
+      request.signature,
+      request.event_id,
+      request.body,
+    )
+    if not accepted:
+      return {"accepted": False}
+    tenant_id = str(request.body.get("tenant_id", ""))
+    operation = str(request.body.get("operation", ""))
+    if not tenant_id or operation not in {"upsert", "tombstone", "reindex_project", "start_rag_evaluation"}:
+      raise HTTPException(status_code=422, detail="Invalid ingestion envelope.")
+    return {
+      "accepted": True,
+      "envelope": request.body,
+      "internal_signature": webhook_verifier.sign_internal_dispatch(
+        request.event_id,
+        tenant_id,
+        operation,
+      ),
+    }
+
+  def enqueue_internal_job(
+    operation: str,
+    job_type: str,
+    envelope: InternalJobRequest,
+    http_request: Request,
+  ):
+    if job_queue is None:
+      raise HTTPException(status_code=503, detail="Durable job queue is disabled.")
+    require_internal_dispatch(http_request, envelope, operation)
+    idempotency_key = http_request.headers.get("idempotency-key", "")
+    if idempotency_key != envelope.event_id:
+      raise HTTPException(status_code=400, detail="Idempotency-Key must equal event_id.")
+    job = job_queue.enqueue(idempotency_key, job_type, envelope.model_dump(exclude_none=True))
+    return JSONResponse(
+      status_code=202,
+      content={"job_id": job.job_id, "status": job.status},
+    )
+
+  @app.post("/internal/rag/ingestion/upsert", status_code=202)
+  def enqueue_upsert(envelope: InternalJobRequest, http_request: Request):
+    if not envelope.documents:
+      raise HTTPException(status_code=422, detail="documents are required.")
+    return enqueue_internal_job("upsert", "rag.upsert", envelope, http_request)
+
+  @app.post("/internal/rag/ingestion/tombstone", status_code=202)
+  def enqueue_tombstone(envelope: InternalJobRequest, http_request: Request):
+    if not envelope.document_ids:
+      raise HTTPException(status_code=422, detail="document_ids are required.")
+    return enqueue_internal_job("tombstone", "rag.tombstone", envelope, http_request)
+
+  @app.post("/internal/rag/reindex", status_code=202)
+  def enqueue_reindex(envelope: InternalJobRequest, http_request: Request):
+    return enqueue_internal_job("reindex_project", "rag.reindex_project", envelope, http_request)
+
+  @app.post("/internal/rag/evaluations", status_code=202)
+  def enqueue_evaluation(envelope: InternalJobRequest, http_request: Request):
+    if not envelope.dataset_version:
+      raise HTTPException(status_code=422, detail="dataset_version is required.")
+    return enqueue_internal_job("start_rag_evaluation", "rag.evaluate", envelope, http_request)
 
   @app.post("/classify")
   def classify_text(request: ClassifyRequest):
     return resolved_ai_service.classify_task(request.title, use_rag=request.use_rag)
 
-  @app.post("/analyze-langchain")
-  def analyze_with_langchain(
-    request: AnalyzeRequest,
-  ):
+  @app.post("/analyze")
+  def analyze_with_langchain(request: AnalyzeRequest):
+    return resolved_ai_service.analyze_with_reasoning(request.task, language=request.language)
+
+  @app.post("/analyze-langchain", deprecated=True, include_in_schema=False)
+  def analyze_with_legacy_name(request: AnalyzeRequest):
     return resolved_ai_service.analyze_with_reasoning(request.task, language=request.language)
 
   @app.post("/extract-tasks-from-image")
@@ -176,7 +415,7 @@ def create_app(
 
   @app.post("/add-example")
   def add_training_example(
-    text: str = Form(..., min_length=1, max_length=MAX_TASK_LENGTH),
+    text: str = Form(..., min_length=1),
     quadrant: int = Form(..., ge=0, le=3),
     _admin: None = Depends(require_admin),
   ):
@@ -187,15 +426,12 @@ def create_app(
     }
 
   @app.post("/retrain")
-  def retrain_model(
-    preserve_experience: bool = Form(True),
-    _admin: None = Depends(require_admin),
-  ):
+  def retrain_model(preserve_experience: bool = Form(True), _admin: None = Depends(require_admin)):
     return resolved_ai_service.retrain(preserve_experience=preserve_experience)
 
   @app.post("/learn-feedback")
   def learn_from_feedback(
-    task: str = Form(..., min_length=1, max_length=MAX_TASK_LENGTH),
+    task: str = Form(..., min_length=1),
     predicted_quadrant: int = Form(..., ge=0, le=3),
     correct_quadrant: int = Form(..., ge=0, le=3),
     _admin: None = Depends(require_admin),
@@ -208,10 +444,7 @@ def create_app(
     )
 
   @app.post("/learn-ocr-feedback")
-  def learn_from_ocr_feedback(
-    request: OCRFeedbackRequest,
-    _admin: None = Depends(require_admin),
-  ):
+  def learn_from_ocr_feedback(request: OCRFeedbackRequest, _admin: None = Depends(require_admin)):
     if not request.tasks:
       raise HTTPException(status_code=400, detail="At least one accepted OCR task is required.")
 
@@ -233,10 +466,7 @@ def create_app(
     return resolved_ai_service.get_training_stats()
 
   @app.delete("/training-data")
-  def clear_training_data(
-    keep_defaults: bool = Query(True),
-    _admin: None = Depends(require_admin),
-  ):
+  def clear_training_data(keep_defaults: bool = Query(True), _admin: None = Depends(require_admin)):
     records = resolved_store.clear(keep_defaults=keep_defaults)
     return {
       "message": "Training data cleared.",

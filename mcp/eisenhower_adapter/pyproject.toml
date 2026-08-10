@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "eisenhower-mcp-adapter"
+version = "0.1.0"
+description = "Read-only MCP adapter for the Eisenhower Matrix HTTP API"
+requires-python = ">=3.11"
+dependencies = ["mcp==2.0.0"]
+
+[project.scripts]
+eisenhower-mcp = "eisenhower_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["eisenhower_mcp"]

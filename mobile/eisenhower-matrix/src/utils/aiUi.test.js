@@ -20,10 +20,11 @@ describe('aiUi helpers', () => {
 
     expect(AI_TABS).toEqual(['analysis', 'ocr', 'batch', 'manage']);
     expect(options).toHaveLength(4);
-    expect(options.map((entry) => entry.value)).toEqual([0, 2, 1, 3]);
+    expect(options.map((entry) => entry.value)).toEqual([0, 1, 2, 3]);
     expect(options.map((entry) => entry.accent)).toEqual(QUADRANT_ACCENTS);
     expect(options[0].title).toBe('Zrób teraz');
-    expect(options[1].hint).toBe('Ważne, ale niepilne');
+    expect(options[1].title).toBe('Deleguj');
+    expect(options[1].hint).toBe('Pilne, ale nieważne');
   });
 
   it('resolves provider labels, tones and statuses', () => {

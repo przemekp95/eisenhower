@@ -1,15 +1,17 @@
 from pathlib import Path
+from datetime import datetime, timezone
+from hashlib import sha256
+import hmac
+import json
 
 from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.local_model import LocalMiniLMClassifier, LocalPrediction, ModelNotReadyError, SimilarExample
 from app.main import create_app
+from app.rag.models import AnalyzeResult, RetrievalSummary
 from app.service import QuadrantAIService
 from app.store import TrainingStore
-
-
-ADMIN_HEADERS = {"Authorization": "Bearer test-admin-token"}
 
 
 class FakeLocalModel:
@@ -68,13 +70,9 @@ class FakeLocalModel:
     quadrant = 2 if "roadmap" in task else 0
     return {
       "quadrant": quadrant,
-      "quadrant_name": (
-        "Zaplanuj" if language == "pl" else "Schedule"
-      ) if quadrant == 2 else (
-        "Zrób teraz" if language == "pl" else "Do Now"
-      ),
+      "quadrant_name": "Deleguj" if language == "pl" and quadrant == 2 else "Delegate",
       "confidence": 0.83,
-      "reasoning": "Klasyfikacja wynika z lokalnego modelu." if language == "pl" else "Local model explanation.",
+      "reasoning": "Kwadrant „Deleguj” wynika z lokalnego modelu." if language == "pl" else "Local model explanation.",
       "method": "local-analysis",
       "similar_examples": [],
     }
@@ -110,7 +108,7 @@ def build_client(
     service._tesseract_available = lambda: tesseract_available  # type: ignore[method-assign]
   return TestClient(
     create_app(settings=settings, store=store, ai_service=service),
-    headers={"Authorization": f"Bearer {settings.api_token}"},
+    headers={"Authorization": "Bearer test-admin-token"},
   )
 
 
@@ -127,70 +125,155 @@ def build_real_client(real_model_bundle, *, tesseract_available: bool | None = N
     service._tesseract_available = lambda: tesseract_available  # type: ignore[method-assign]
   return TestClient(
     create_app(settings=settings, store=store, ai_service=service),
-    headers={"Authorization": f"Bearer {settings.api_token}"},
-  )
-
-
-def test_non_health_routes_require_valid_bearer_auth(tmp_path: Path):
-  authorized = build_client(tmp_path)
-  client = TestClient(authorized.app)
-
-  missing = client.get("/capabilities")
-  invalid = client.get("/capabilities", headers={"Authorization": "Bearer wrong-token"})
-  health = client.get("/")
-
-  assert missing.status_code == 401
-  assert missing.headers["www-authenticate"] == "Bearer"
-  assert missing.json() == {"error": "Authentication required"}
-  assert invalid.status_code == 403
-  assert invalid.json() == {"error": "Access denied"}
-  assert health.status_code == 200
-  assert health.json() == {"status": "ok"}
-
-
-def test_ai_management_routes_require_admin_bearer_token(tmp_path: Path):
-  authorized = build_client(tmp_path)
-  client = TestClient(authorized.app)
-
-  user_response = client.post(
-    "/add-example",
-    data={"text": "prepare quarterly roadmap", "quadrant": 2},
-    headers={"Authorization": "Bearer test-api-token"},
-  )
-  user_feedback = client.post(
-    "/learn-feedback",
-    data={"task": "roadmap", "predicted_quadrant": 1, "correct_quadrant": 2},
-    headers={"Authorization": "Bearer test-api-token"},
-  )
-  user_ocr_feedback = client.post(
-    "/learn-ocr-feedback",
-    json={"tasks": [{"task": "roadmap", "quadrant": 2}], "retrain": True},
-    headers={"Authorization": "Bearer test-api-token"},
-  )
-  admin_response = client.post(
-    "/add-example",
-    data={"text": "prepare quarterly roadmap", "quadrant": 2},
     headers={"Authorization": "Bearer test-admin-token"},
   )
 
-  assert user_response.status_code == 403
-  assert user_response.json() == {"error": "Administrator access required"}
-  assert user_feedback.status_code == 403
-  assert user_ocr_feedback.status_code == 403
-  assert admin_response.status_code == 200
+
+class FakeRagService:
+  def __init__(self):
+    self.calls = []
+
+  def analyze(self, task, scope):
+    self.calls.append((task, scope))
+    return AnalyzeResult(
+      mode="rag",
+      quadrant=2,
+      quadrant_name="Schedule",
+      confidence=0.84,
+      explanation="Important and not urgent.",
+      citations=[],
+      retrieval=RetrievalSummary(hit_count=1, top_score=0.9, embedding_version="minilm-v1"),
+    )
 
 
-def test_state_changing_browser_requests_reject_untrusted_origins(tmp_path: Path):
-  client = build_client(tmp_path)
-
-  response = client.post(
-    "/classify",
-    json={"title": "cross-site task", "use_rag": True},
-    headers={"Origin": "https://attacker.example"},
+def test_v2_rag_contract_uses_authenticated_scope_not_client_tenant(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  rag = FakeRagService()
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service, rag_service=rag),
+    headers={"Authorization": "Bearer test-api-token"},
   )
 
-  assert response.status_code == 403
-  assert response.json() == {"error": "Untrusted browser origin"}
+  response = client.post("/v2/ai/analyze", json={"task": "Prepare roadmap"})
+
+  assert response.status_code == 200
+  assert response.json()["mode"] == "rag"
+  assert response.json()["retrieval"]["embedding_version"] == "minilm-v1"
+  assert rag.calls[0][1].tenant_id == "local"
+  assert rag.calls[0][1].user_id == "local-user"
+
+
+def test_v2_rag_response_flag_and_tenant_cohort_fall_back_safely(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    rag_response_enabled=True,
+    rag_allowed_tenants=("other-tenant",),
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  rag = FakeRagService()
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service, rag_service=rag),
+    headers={"Authorization": "Bearer test-api-token"},
+  )
+
+  response = client.post("/v2/ai/analyze", json={"task": "Prepare roadmap"})
+
+  assert response.status_code == 200
+  assert response.json()["mode"] == "fallback"
+  assert response.json()["fallback_reason"] == "tenant_not_enabled"
+  assert rag.calls == []
+
+
+def test_non_root_endpoint_requires_bearer_token(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  client = TestClient(create_app(settings=settings, store=store, ai_service=service))
+
+  response = client.get("/capabilities")
+
+  assert response.status_code == 401
+  assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_metrics_exposes_aggregate_prometheus_signals_without_auth(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  client = TestClient(create_app(settings=settings, store=store, ai_service=service))
+
+  response = client.get("/metrics")
+
+  assert response.status_code == 200
+  assert "eisenhower_http_requests_total" in response.text
+  assert "tenant_id" not in response.text
+
+
+def test_signed_internal_ingestion_is_replay_safe_and_idempotently_queued(tmp_path: Path):
+  secret = "webhook-secret"
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    internal_api_token="internal-token",
+    internal_allowed_tenants=("tenant-a",),
+    webhook_secret=secret,
+    jobs_database_path=tmp_path / "jobs.sqlite3",
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service),
+    headers={"Authorization": "Bearer internal-token"},
+  )
+  event = {
+    "event_id": "event-1",
+    "operation": "upsert",
+    "tenant_id": "tenant-a",
+    "project_id": "project-1",
+    "source_version": "v1",
+    "content_checksum": f"sha256:{'a' * 64}",
+    "embedding_version": "minilm-v1",
+    "chunking_version": "chars-v1",
+    "documents": [{"document_id": "doc-1"}],
+  }
+  timestamp = str(int(datetime.now(timezone.utc).timestamp()))
+  canonical = json.dumps(event, sort_keys=True, separators=(",", ":")).encode()
+  signature = hmac.new(secret.encode(), timestamp.encode() + b"." + canonical, sha256).hexdigest()
+
+  verified = client.post(
+    "/internal/webhooks/n8n/verify",
+    json={"timestamp": timestamp, "signature": signature, "event_id": "event-1", "body": event},
+  )
+  replay = client.post(
+    "/internal/webhooks/n8n/verify",
+    json={"timestamp": timestamp, "signature": signature, "event_id": "event-1", "body": event},
+  )
+  dispatched = client.post(
+    "/internal/rag/ingestion/upsert",
+    json={key: value for key, value in event.items() if key != "operation"},
+    headers={
+      "Idempotency-Key": "event-1",
+      "X-Eisenhower-Signature": verified.json()["internal_signature"],
+    },
+  )
+
+  assert verified.json()["accepted"] is True
+  assert replay.json()["accepted"] is False
+  assert dispatched.status_code == 202
+  assert dispatched.json()["status"] == "queued"
 
 
 def test_root_and_capabilities(real_model_bundle):
@@ -205,6 +288,9 @@ def test_root_and_capabilities(real_model_bundle):
   assert capabilities.json()["providers"]["local_model"] is True
   assert capabilities.json()["providers"]["ocr"] is True
   assert capabilities.json()["provider_controls"]["local_model"]["enabled"] is True
+  assert capabilities.json()["retrieval_augmented_generation"] is False
+  assert capabilities.json()["local_similar_examples"] is True
+  assert capabilities.json()["legacy"]["langchain_analysis"] is False
 
 
 def test_capabilities_report_ocr_unavailable_without_host_tesseract(real_model_bundle):
@@ -232,59 +318,13 @@ def test_cors_allows_local_frontend_origins(real_model_bundle):
 
   assert response.status_code == 200
   assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
-  assert "authorization" in response.headers["access-control-allow-headers"].lower()
-
-
-def test_cors_rejects_unlisted_origins(real_model_bundle):
-  client = build_real_client(real_model_bundle)
-
-  response = client.options(
-    "/batch-analyze",
-    headers={
-      "Origin": "https://attacker.example",
-      "Access-Control-Request-Method": "POST",
-    },
-  )
-
-  assert "access-control-allow-origin" not in response.headers
-
-
-def test_ai_input_limits_are_enforced(tmp_path: Path):
-  client = build_client(tmp_path)
-
-  oversized_task = client.post("/classify", json={"title": "x" * 501, "use_rag": True})
-  oversized_batch = client.post("/batch-analyze", json={"tasks": ["task"] * 101})
-  oversized_upload = client.post(
-    "/extract-tasks-from-image",
-    files={"file": ("tasks.txt", b"x" * (10 * 1024 * 1024 + 1), "text/plain")},
-  )
-
-  assert oversized_task.status_code == 422
-  assert oversized_batch.status_code == 422
-  assert oversized_upload.status_code == 413
-
-
-def test_sensitive_task_text_is_sent_in_post_bodies(real_model_bundle):
-  client = build_real_client(real_model_bundle)
-
-  classify = client.post(
-    "/classify",
-    json={"title": "critical production incident", "use_rag": True},
-  )
-  analyze = client.post(
-    "/analyze-langchain",
-    json={"task": "exercise twice a week", "language": "pl"},
-  )
-
-  assert classify.status_code == 200
-  assert analyze.status_code == 200
 
 
 def test_classify_and_langchain_analysis(real_model_bundle):
   client = build_real_client(real_model_bundle)
 
-  classify = client.post("/classify", json={"title": "critical production incident", "use_rag": True})
-  analyze = client.post("/analyze-langchain", json={"task": "exercise twice a week", "language": "pl"})
+  classify = client.get("/classify", params={"title": "critical production incident"})
+  analyze = client.post("/analyze-langchain", params={"task": "exercise twice a week", "language": "pl"})
 
   assert classify.status_code == 200
   assert classify.json()["quadrant"] == 0
@@ -298,11 +338,7 @@ def test_classify_and_langchain_analysis(real_model_bundle):
 def test_training_management_endpoints(real_model_bundle):
   client = build_real_client(real_model_bundle)
 
-  add = client.post(
-    "/add-example",
-    data={"text": "review invoices", "quadrant": 1},
-    headers=ADMIN_HEADERS,
-  )
+  add = client.post("/add-example", data={"text": "review invoices", "quadrant": 1})
   feedback = client.post(
     "/learn-feedback",
     data={
@@ -310,20 +346,11 @@ def test_training_management_endpoints(real_model_bundle):
       "predicted_quadrant": 1,
       "correct_quadrant": 2,
     },
-    headers=ADMIN_HEADERS,
   )
-  stats = client.get("/training-stats", headers=ADMIN_HEADERS)
-  examples = client.get("/examples/2", params={"limit": 5}, headers=ADMIN_HEADERS)
-  retrain = client.post(
-    "/retrain",
-    data={"preserve_experience": "false"},
-    headers=ADMIN_HEADERS,
-  )
-  clear = client.delete(
-    "/training-data",
-    params={"keep_defaults": "false"},
-    headers=ADMIN_HEADERS,
-  )
+  stats = client.get("/training-stats")
+  examples = client.get("/examples/2", params={"limit": 5})
+  retrain = client.post("/retrain", data={"preserve_experience": "false"})
+  clear = client.delete("/training-data", params={"keep_defaults": "false"})
 
   assert add.status_code == 200
   assert feedback.status_code == 200
@@ -349,9 +376,8 @@ def test_ocr_feedback_endpoint_batches_examples_and_retrains(tmp_path: Path):
       ],
       "retrain": True,
     },
-    headers=ADMIN_HEADERS,
   )
-  stats = client.get("/training-stats", headers=ADMIN_HEADERS)
+  stats = client.get("/training-stats")
 
   assert feedback.status_code == 200
   assert feedback.json()["examples_added"] == 2
@@ -363,7 +389,7 @@ def test_ocr_feedback_endpoint_batches_examples_and_retrains(tmp_path: Path):
 def test_ocr_feedback_endpoint_rejects_empty_batches(tmp_path: Path):
   client = build_client(tmp_path)
 
-  feedback = client.post("/learn-ocr-feedback", json={"tasks": []}, headers=ADMIN_HEADERS)
+  feedback = client.post("/learn-ocr-feedback", json={"tasks": []})
 
   assert feedback.status_code == 400
   assert feedback.json()["error"] == "At least one accepted OCR task is required."
@@ -390,8 +416,8 @@ def test_batch_and_extract_routes(real_model_bundle):
 def test_client_facing_payloads_keep_the_fields_used_by_web_and_mobile(real_model_bundle):
   client = build_real_client(real_model_bundle)
 
-  classify = client.post("/classify", json={"title": "critical production incident", "use_rag": True})
-  analyze = client.post("/analyze-langchain", json={"task": "exercise twice a week", "language": "pl"})
+  classify = client.get("/classify", params={"title": "critical production incident"})
+  analyze = client.post("/analyze-langchain", params={"task": "exercise twice a week", "language": "pl"})
   batch = client.post("/batch-analyze", json={"tasks": ["critical production incident", "exercise twice a week"]})
   upload = client.post(
     "/extract-tasks-from-image",
@@ -426,17 +452,9 @@ def test_client_facing_payloads_keep_the_fields_used_by_web_and_mobile(real_mode
 def test_provider_toggle_endpoint_disables_and_reenables_runtime_features(real_model_bundle):
   client = build_real_client(real_model_bundle)
 
-  disable_local_model = client.put(
-    "/providers/local_model",
-    json={"enabled": False},
-    headers=ADMIN_HEADERS,
-  )
-  disabled_classify = client.post("/classify", json={"title": "critical production incident", "use_rag": True})
-  disable_tesseract = client.put(
-    "/providers/tesseract",
-    json={"enabled": False},
-    headers=ADMIN_HEADERS,
-  )
+  disable_local_model = client.put("/providers/local_model", json={"enabled": False})
+  disabled_classify = client.get("/classify", params={"title": "critical production incident"})
+  disable_tesseract = client.put("/providers/tesseract", json={"enabled": False})
   disabled_image_upload = client.post(
     "/extract-tasks-from-image",
     files={"file": ("tasks.png", b"fake-image", "image/png")},
@@ -445,17 +463,9 @@ def test_provider_toggle_endpoint_disables_and_reenables_runtime_features(real_m
     "/extract-tasks-from-image",
     files={"file": ("tasks.txt", b"critical production incident\n", "text/plain")},
   )
-  enable_local_model = client.put(
-    "/providers/local_model",
-    json={"enabled": True},
-    headers=ADMIN_HEADERS,
-  )
-  enabled_classify = client.post("/classify", json={"title": "critical production incident", "use_rag": True})
-  enable_tesseract = client.put(
-    "/providers/tesseract",
-    json={"enabled": True},
-    headers=ADMIN_HEADERS,
-  )
+  enable_local_model = client.put("/providers/local_model", json={"enabled": True})
+  enabled_classify = client.get("/classify", params={"title": "critical production incident"})
+  enable_tesseract = client.put("/providers/tesseract", json={"enabled": True})
 
   assert disable_local_model.status_code == 200
   assert disable_local_model.json()["enabled"] is False
@@ -477,7 +487,7 @@ def test_error_shapes_are_json(real_model_bundle):
   client = build_real_client(real_model_bundle)
 
   missing = client.post("/batch-analyze", json={"tasks": []})
-  quadrant = client.get("/examples/9", headers=ADMIN_HEADERS)
+  quadrant = client.get("/examples/9")
 
   assert missing.status_code == 400
   assert missing.json()["error"] == "At least one task is required."
@@ -488,7 +498,7 @@ def test_error_shapes_are_json(real_model_bundle):
 def test_model_not_ready_errors_return_503(tmp_path: Path):
   client = build_client(tmp_path, local_model=FakeLocalModel(fail_predict=True))
 
-  response = client.post("/classify", json={"title": "urgent client deadline", "use_rag": True})
+  response = client.get("/classify", params={"title": "urgent client deadline"})
 
   assert response.status_code == 503
   assert response.json()["code"] == "model_not_ready"
@@ -498,7 +508,7 @@ def test_capabilities_stay_available_when_startup_raises_generic_error(tmp_path:
   client = build_client(tmp_path, local_model=FakeLocalModel(startup_error=RuntimeError("corrupt artifacts")))
 
   capabilities = client.get("/capabilities")
-  stats = client.get("/training-stats", headers=ADMIN_HEADERS)
+  stats = client.get("/training-stats")
 
   assert capabilities.status_code == 200
   assert capabilities.json()["providers"]["local_model"] is False

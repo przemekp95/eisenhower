@@ -2,7 +2,7 @@ import { runtimeConfig } from '../config';
 import { getAdminToken, getApiToken, setAdminToken } from '../authSession';
 import {
   addTrainingExample,
-  analyzeWithLangChain,
+  analyzeTask,
   batchAnalyzeTasks,
   clearTrainingData,
   classifyTask,
@@ -130,8 +130,8 @@ describe('api service', () => {
     });
 
     await classifyTask('urgent');
-    await analyzeWithLangChain('urgent');
-    await analyzeWithLangChain('urgent', 'pl');
+    await analyzeTask('urgent');
+    await analyzeTask('urgent', 'pl');
     await batchAnalyzeTasks(['one']);
     await extractTasksFromImage(new File(['task'], 'tasks.txt', { type: 'text/plain' }));
     await addTrainingExample('task', 1);

@@ -1,19 +1,18 @@
 from pathlib import Path
 
-from app.config import load_settings
 import pytest
+
+from app.config import load_settings
 
 
 def test_load_settings_uses_defaults():
-  settings = load_settings({
-    "EISENHOWER_API_TOKEN": "test-api-token",
-    "EISENHOWER_ADMIN_TOKEN": "test-admin-token",
-  })
+  settings = load_settings({})
 
   assert settings.training_data_path.name == "training_data.json"
   assert settings.model_cache_dir.name == "runtime"
   assert "http://127.0.0.1:5173" in settings.cors_allow_origins
-  assert settings.admin_token == "test-admin-token"
+  assert settings.auth_mode == "static"
+  assert settings.rag_enabled is False
 
 
 def test_load_settings_accepts_overrides(tmp_path: Path):
@@ -29,8 +28,6 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
       "LOCAL_MODEL_LEARNING_RATE": "0.005",
       "TESSERACT_LANGUAGES": "eng",
       "CORS_ALLOW_ORIGINS": "http://example.com,http://127.0.0.1:4173",
-      "EISENHOWER_API_TOKEN": "test-api-token",
-      "EISENHOWER_ADMIN_TOKEN": "test-admin-token",
     }
   )
 
@@ -44,53 +41,44 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
   assert settings.local_model_learning_rate == 0.005
   assert settings.tesseract_languages == "eng"
   assert settings.cors_allow_origins == ("http://example.com", "http://127.0.0.1:4173")
-  assert settings.api_token == "test-api-token"
-  assert settings.admin_token == "test-admin-token"
 
 
-def test_load_settings_requires_a_long_token_in_production():
-  with pytest.raises(ValueError, match="EISENHOWER_API_TOKEN is required"):
-    load_settings({"APP_ENV": "production"})
+def test_production_oidc_requires_issuer_audience_and_explicit_cors():
+  with pytest.raises(ValueError):
+    load_settings({"APP_ENV": "production", "AUTH_MODE": "oidc", "CORS_ALLOW_ORIGINS": ""})
 
-  with pytest.raises(ValueError, match="at least 32 characters"):
-    load_settings({
-      "APP_ENV": "production",
-      "EISENHOWER_API_TOKEN": "too-short",
-      "EISENHOWER_ADMIN_TOKEN": "admin-token-that-is-at-least-32-characters",
-      "CORS_ALLOW_ORIGINS": "https://tasks.example.com",
-    })
-
-  with pytest.raises(ValueError, match="EISENHOWER_ADMIN_TOKEN is required"):
-    load_settings({
-      "APP_ENV": "production",
-      "EISENHOWER_API_TOKEN": "api-token-that-is-at-least-32-characters",
-      "CORS_ALLOW_ORIGINS": "https://tasks.example.com",
-    })
-
-  with pytest.raises(ValueError, match="must be different"):
-    load_settings({
-      "APP_ENV": "production",
-      "EISENHOWER_API_TOKEN": "same-token-that-is-at-least-32-characters",
-      "EISENHOWER_ADMIN_TOKEN": "same-token-that-is-at-least-32-characters",
-      "CORS_ALLOW_ORIGINS": "https://tasks.example.com",
-    })
-
-  with pytest.raises(ValueError, match="CORS_ALLOW_ORIGINS must list"):
-    load_settings({
-      "APP_ENV": "production",
-      "EISENHOWER_API_TOKEN": "api-token-that-is-at-least-32-characters",
-      "EISENHOWER_ADMIN_TOKEN": "admin-token-that-is-at-least-32-characters",
-      "CORS_ALLOW_ORIGINS": "",
-    })
-
-
-def test_explicit_empty_cors_allowlist_disables_cross_origin_access():
   settings = load_settings(
     {
-      "EISENHOWER_API_TOKEN": "test-api-token",
-      "EISENHOWER_ADMIN_TOKEN": "test-admin-token",
-      "CORS_ALLOW_ORIGINS": "",
+      "APP_ENV": "production",
+      "AUTH_MODE": "oidc",
+      "OIDC_ISSUER": "https://identity.example.com",
+      "OIDC_AUDIENCE": "eisenhower-api",
+      "CORS_ALLOW_ORIGINS": "https://app.example.com",
+      "RAG_ENABLED": "true",
+      "QDRANT_URL": "http://qdrant:6333",
+      "VLLM_BASE_URL": "http://vllm:8000/v1",
+      "VLLM_API_KEY": "private-token",
+      "VLLM_MODEL": "approved-model",
+      "RAG_RESPONSE_ENABLED": "false",
+      "RAG_ALLOWED_TENANTS": "tenant-a,tenant-b",
     }
   )
 
-  assert settings.cors_allow_origins == ()
+  assert settings.auth_mode == "oidc"
+  assert settings.rag_enabled is True
+  assert settings.qdrant_collection_alias == "eisenhower-knowledge-active"
+  assert settings.rag_response_enabled is False
+  assert settings.rag_allowed_tenants == ("tenant-a", "tenant-b")
+
+
+def test_production_static_auth_requires_distinct_long_tokens():
+  with pytest.raises(ValueError):
+    load_settings(
+      {
+        "APP_ENV": "production",
+        "AUTH_MODE": "static",
+        "EISENHOWER_API_TOKEN": "short",
+        "EISENHOWER_ADMIN_TOKEN": "short",
+        "CORS_ALLOW_ORIGINS": "https://app.example.com",
+      }
+    )

@@ -1,7 +1,6 @@
 -r requirements.txt
 
-# Research-only modules. These packages are not installed in the production image.
-qdrant-client==1.12.0
+# Research-only modules; never imported by the production application factory.
 minio==7.2.11
 langchain-core==0.3.83
 langchain-qdrant==0.2.1

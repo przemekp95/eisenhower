@@ -15,6 +15,16 @@ export interface TaskInputDto {
   important: boolean;
 }
 
+export interface QuadrantDefinition {
+  readonly value: 0 | 1 | 2 | 3;
+  readonly key: 'do' | 'delegate' | 'schedule' | 'delete';
+  readonly name: 'Do Now' | 'Delegate' | 'Schedule' | 'Delete';
+  readonly urgent: boolean;
+  readonly important: boolean;
+}
+
+export const QUADRANT_DEFINITIONS: readonly QuadrantDefinition[];
+
 export type HealthState = 'healthy' | 'unhealthy' | 'unreachable';
 export type DatabaseState = 'connected' | 'disconnected';
 
@@ -41,14 +51,16 @@ export interface SimilarExampleResultDto {
   score: number;
 }
 
-export interface LangChainAnalysisDto {
+export interface TaskAnalysisDto {
   task: string;
+  /** Legacy wire key retained until the server contract is versioned. */
   langchain_analysis: {
     quadrant: number | null;
     reasoning: string;
     confidence: number;
     method: string;
   };
+  /** Legacy wire key retained until the server contract is versioned. */
   rag_classification: {
     quadrant: number;
     quadrant_name: string;
@@ -59,6 +71,42 @@ export interface LangChainAnalysisDto {
     confidence_difference: number;
   };
   timestamp?: string;
+}
+
+/** @deprecated Use TaskAnalysisDto. The endpoint does not guarantee LangChain execution. */
+export type LangChainAnalysisDto = TaskAnalysisDto;
+
+export interface CitationDto {
+  chunk_id: string;
+  document_id: string;
+  source_uri: string;
+  title: string;
+  excerpt: string;
+  score: number;
+  content_version: string;
+}
+
+export interface GroundedAnalysisDto {
+  mode: 'rag' | 'fallback' | 'no_answer';
+  quadrant: number | null;
+  quadrant_name: string | null;
+  confidence: number | null;
+  explanation: string;
+  citations: CitationDto[];
+  retrieval: {
+    hit_count: number;
+    top_score: number | null;
+    embedding_version: string | null;
+  };
+  fallback_reason?: string | null;
+}
+
+export interface KnowledgeSearchDto {
+  query: string;
+  answer: string | null;
+  citations: CitationDto[];
+  retrieval: GroundedAnalysisDto['retrieval'];
+  no_answer_reason?: string;
 }
 
 export interface OcrResultDto {
@@ -140,6 +188,10 @@ export type AIProviderName = 'local_model' | 'tesseract';
 
 export interface AICapabilitiesDto {
   classification: boolean;
+  reasoned_local_analysis?: boolean;
+  retrieval_augmented_generation?: boolean;
+  local_similar_examples?: boolean;
+  /** @deprecated Always false; no production LangChain analysis provider exists. */
   langchain_analysis: boolean;
   ocr: boolean;
   batch_analysis: boolean;
@@ -152,6 +204,11 @@ export interface AICapabilitiesDto {
   provider_controls?: {
     local_model: AIProviderControlDto;
     tesseract: AIProviderControlDto;
+  };
+  legacy?: {
+    langchain_analysis: false;
+    analyze_langchain_route: 'deprecated_alias';
+    use_rag_parameter: 'deprecated_alias_for_similar_examples';
   };
   model?: {
     ready: boolean;
@@ -194,7 +251,11 @@ export const AI_API_PATHS: {
   readonly capabilities: '/capabilities';
   readonly trainingStats: '/training-stats';
   readonly classify: '/classify';
+  readonly analyzeTask: '/analyze';
+  /** @deprecated Use analyzeTask. */
   readonly analyzeWithLangChain: '/analyze-langchain';
+  readonly analyzeTaskWithRag: '/v2/ai/analyze';
+  readonly knowledgeSearch: '/v2/knowledge/search';
   readonly extractTasksFromImage: '/extract-tasks-from-image';
   readonly batchAnalyzeTasks: '/batch-analyze';
   readonly addTrainingExample: '/add-example';
@@ -216,8 +277,12 @@ export interface TaskApiClient {
 
 export interface AiApiClient {
   paths: typeof AI_API_PATHS;
-  classifyTask(title: string, useRag?: boolean): Promise<ClassificationResultDto>;
+  classifyTask(title: string, includeSimilarExamples?: boolean): Promise<ClassificationResultDto>;
+  analyzeTask(task: string, language?: string): Promise<TaskAnalysisDto>;
+  /** @deprecated Use analyzeTask. Retained for compatibility with older clients. */
   analyzeWithLangChain(task: string, language?: string): Promise<LangChainAnalysisDto>;
+  analyzeTaskWithRag(task: string): Promise<GroundedAnalysisDto>;
+  searchKnowledge(query: string, projectId?: string | null, limit?: number): Promise<KnowledgeSearchDto>;
   extractTasksFromImage(file: unknown): Promise<OcrResultDto>;
   batchAnalyzeTasks(tasks: string[]): Promise<BatchAnalysisResultDto>;
   fetchCapabilities(): Promise<AICapabilitiesDto>;
@@ -250,12 +315,16 @@ export function createTaskApi(baseUrl: string, optionsOrFetch?: typeof fetch | A
 export function createAiApi(baseUrl: string, optionsOrFetch?: typeof fetch | ApiClientOptions): AiApiClient;
 export function getProviderPath(provider: string): string;
 export function getExamplesByQuadrantPath(quadrant: number, limit?: number): string;
-export function getClassifyPath(title: string, useRag?: boolean): string;
+export function getClassifyPath(title: string, includeSimilarExamples?: boolean): string;
+export function getAnalyzeTaskPath(task: string, language?: string): string;
+/** @deprecated Use getAnalyzeTaskPath. */
 export function getAnalyzeWithLangChainPath(task: string, language?: string): string;
 export function getClearTrainingDataPath(keepDefaults?: boolean): string;
 export function isTaskDto(value: unknown): value is TaskDto;
 export function isHealthResponseDto(value: unknown): value is HealthResponseDto;
 export function isClassificationResultDto(value: unknown): value is ClassificationResultDto;
+export function isTaskAnalysisDto(value: unknown): value is TaskAnalysisDto;
+/** @deprecated Use isTaskAnalysisDto. */
 export function isLangChainAnalysisDto(value: unknown): value is LangChainAnalysisDto;
 export function isBatchAnalysisResultDto(value: unknown): value is BatchAnalysisResultDto;
 export function isOcrResultDto(value: unknown): value is OcrResultDto;

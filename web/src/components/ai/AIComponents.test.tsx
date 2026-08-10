@@ -22,12 +22,12 @@ describe('AI component error paths', () => {
   });
 
   it('renders analysis errors', async () => {
-    mockedApi.analyzeWithLangChain.mockRejectedValueOnce(new Error('LangChain offline'));
+    mockedApi.analyzeTask.mockRejectedValueOnce(new Error('Local analysis offline'));
 
     renderWithLanguage(<AdvancedAIAnalysis taskTitle="task" onAnalysisComplete={jest.fn()} />);
     fireEvent.click(screen.getByText(/Run advanced analysis/i));
 
-    await waitFor(() => expect(screen.getByText('LangChain offline')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Local analysis offline')).toBeInTheDocument());
   });
 
   it('ignores empty advanced-analysis titles and falls back on unknown failures', async () => {
@@ -38,9 +38,9 @@ describe('AI component error paths', () => {
     disabledButton.disabled = false;
     fireEvent.click(disabledButton);
 
-    expect(mockedApi.analyzeWithLangChain).not.toHaveBeenCalled();
+    expect(mockedApi.analyzeTask).not.toHaveBeenCalled();
 
-    mockedApi.analyzeWithLangChain.mockRejectedValueOnce('offline');
+    mockedApi.analyzeTask.mockRejectedValueOnce('offline');
 
     renderWithLanguage(<AdvancedAIAnalysis taskTitle="task" onAnalysisComplete={jest.fn()} />);
     fireEvent.click(screen.getAllByText(/Run advanced analysis/i)[1]);
@@ -50,7 +50,7 @@ describe('AI component error paths', () => {
 
   it('renders the fallback suggested quadrant when langchain does not return one', async () => {
     localStorage.setItem('eisenhower-language', 'pl');
-    mockedApi.analyzeWithLangChain.mockResolvedValueOnce({
+    mockedApi.analyzeTask.mockResolvedValueOnce({
       task: 'task',
       langchain_analysis: {
         quadrant: null,
@@ -59,8 +59,8 @@ describe('AI component error paths', () => {
         method: 'langchain',
       },
       rag_classification: {
-        quadrant: 2,
-        quadrant_name: 'Schedule',
+        quadrant: 1,
+        quadrant_name: 'Delegate',
         confidence: 0.7,
       },
       comparison: {
@@ -74,13 +74,13 @@ describe('AI component error paths', () => {
     fireEvent.click(screen.getByText(/Uruchom analizę zaawansowaną/i));
 
     await waitFor(() =>
-      expect(screen.getByText(/Sugerowany kwadrant: Zaplanuj/i)).toBeInTheDocument()
+      expect(screen.getByText(/Sugerowany kwadrant: Deleguj/i)).toBeInTheDocument()
     );
-    expect(mockedApi.analyzeWithLangChain).toHaveBeenCalledWith('task', 'pl');
+    expect(mockedApi.analyzeTask).toHaveBeenCalledWith('task', 'pl');
   });
 
   it('falls back to an unknown quadrant label in advanced analysis', async () => {
-    mockedApi.analyzeWithLangChain.mockResolvedValueOnce({
+    mockedApi.analyzeTask.mockResolvedValueOnce({
       task: 'task',
       langchain_analysis: {
         quadrant: 9,
@@ -89,8 +89,8 @@ describe('AI component error paths', () => {
         method: 'langchain',
       },
       rag_classification: {
-        quadrant: 2,
-        quadrant_name: 'Schedule',
+        quadrant: 1,
+        quadrant_name: 'Delegate',
         confidence: 0.7,
       },
       comparison: {
@@ -109,17 +109,17 @@ describe('AI component error paths', () => {
   });
 
   it('clears stale advanced analysis when the language changes', async () => {
-    mockedApi.analyzeWithLangChain.mockResolvedValueOnce({
+    mockedApi.analyzeTask.mockResolvedValueOnce({
       task: 'task',
       langchain_analysis: {
-        quadrant: 2,
-        reasoning: 'Needs scheduling.',
+        quadrant: 1,
+        reasoning: 'Needs delegation.',
         confidence: 0.8,
         method: 'langchain',
       },
       rag_classification: {
-        quadrant: 2,
-        quadrant_name: 'Schedule',
+        quadrant: 1,
+        quadrant_name: 'Delegate',
         confidence: 0.7,
       },
       comparison: {
@@ -146,7 +146,7 @@ describe('AI component error paths', () => {
     fireEvent.click(screen.getByText(/Run advanced analysis/i));
 
     await waitFor(() =>
-      expect(screen.getByText(/Suggested quadrant: Schedule/i)).toBeInTheDocument()
+      expect(screen.getByText(/Suggested quadrant: Delegate/i)).toBeInTheDocument()
     );
 
     await act(async () => {
@@ -159,17 +159,17 @@ describe('AI component error paths', () => {
   it('adds the advanced-analysis result to the matrix when requested', async () => {
     const onAddToMatrix = jest.fn().mockResolvedValue(undefined);
 
-    mockedApi.analyzeWithLangChain.mockResolvedValueOnce({
+    mockedApi.analyzeTask.mockResolvedValueOnce({
       task: 'task',
       langchain_analysis: {
         quadrant: 1,
-        reasoning: 'Needs scheduling.',
+        reasoning: 'Needs delegation.',
         confidence: 0.8,
         method: 'langchain',
       },
       rag_classification: {
-        quadrant: 2,
-        quadrant_name: 'Schedule',
+        quadrant: 1,
+        quadrant_name: 'Delegate',
         confidence: 0.7,
       },
       comparison: {
@@ -198,17 +198,17 @@ describe('AI component error paths', () => {
   it('surfaces failures when adding the advanced-analysis result to the matrix', async () => {
     const onAddToMatrix = jest.fn().mockRejectedValue('offline');
 
-    mockedApi.analyzeWithLangChain.mockResolvedValueOnce({
+    mockedApi.analyzeTask.mockResolvedValueOnce({
       task: 'task',
       langchain_analysis: {
         quadrant: 1,
-        reasoning: 'Needs scheduling.',
+        reasoning: 'Needs delegation.',
         confidence: 0.8,
         method: 'langchain',
       },
       rag_classification: {
-        quadrant: 2,
-        quadrant_name: 'Schedule',
+        quadrant: 1,
+        quadrant_name: 'Delegate',
         confidence: 0.7,
       },
       comparison: {
@@ -237,17 +237,17 @@ describe('AI component error paths', () => {
   it('surfaces Error instances when adding the advanced-analysis result to the matrix', async () => {
     const onAddToMatrix = jest.fn().mockRejectedValue(new Error('Matrix unavailable'));
 
-    mockedApi.analyzeWithLangChain.mockResolvedValueOnce({
+    mockedApi.analyzeTask.mockResolvedValueOnce({
       task: 'task',
       langchain_analysis: {
         quadrant: 1,
-        reasoning: 'Needs scheduling.',
+        reasoning: 'Needs delegation.',
         confidence: 0.8,
         method: 'langchain',
       },
       rag_classification: {
-        quadrant: 2,
-        quadrant_name: 'Schedule',
+        quadrant: 1,
+        quadrant_name: 'Delegate',
         confidence: 0.7,
       },
       comparison: {

@@ -7,7 +7,12 @@ import { getDatabaseStatus } from './db';
 import { createHealthRouter } from './routes/health';
 import { createTasksRouter } from './routes/tasks';
 import { HealthState } from './types';
-import { requireBearerToken, requireTrustedBrowserOrigin } from './auth';
+import {
+  createOidcTokenVerifier,
+  requireBearerToken,
+  requireOidcToken,
+  requireTrustedBrowserOrigin,
+} from './auth';
 
 export interface CreateAppOptions {
   aiHealthChecker?: () => Promise<HealthState>;
@@ -88,7 +93,15 @@ export function createApp(options: CreateAppOptions = {}) {
     })
   );
 
-  app.use(requireBearerToken(config.apiToken));
+  if (config.authMode === 'oidc') {
+    app.use(requireOidcToken(createOidcTokenVerifier({
+      issuer: config.oidcIssuer!,
+      audience: config.oidcAudience!,
+      jwksUrl: config.oidcJwksUrl!,
+    })));
+  } else {
+    app.use(requireBearerToken(config.apiToken));
+  }
 
   app.use('/tasks', createTasksRouter());
 
@@ -107,9 +120,7 @@ export function createApp(options: CreateAppOptions = {}) {
     }
 
     const message = error instanceof Error ? error.message : 'Internal server error';
-    res.status(500).json({
-      error: config.nodeEnv === 'production' ? 'Internal server error' : message,
-    });
+    res.status(500).json({ error: config.nodeEnv === 'production' ? 'Internal server error' : message });
   });
 
   return app;

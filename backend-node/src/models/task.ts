@@ -1,6 +1,9 @@
 import { HydratedDocument, Model, Schema, model, models } from 'mongoose';
 
 export interface Task {
+  tenantId: string;
+  ownerId: string;
+  projectId?: string;
   title: string;
   description?: string;
   urgent: boolean;
@@ -14,6 +17,9 @@ export type TaskModelType = Model<Task>;
 
 const taskSchema = new Schema<Task>(
   {
+    tenantId: { type: String, required: true, index: true, default: 'local' },
+    ownerId: { type: String, required: true, index: true, default: 'local-user' },
+    projectId: { type: String, index: true },
     title: {
       type: String,
       required: true,

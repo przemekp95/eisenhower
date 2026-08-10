@@ -14,7 +14,6 @@ import {
   setProviderEnabled,
 } from '../../services/api';
 import { useLanguage } from '../../i18n/LanguageContext';
-import { QUADRANT_LABEL_KEYS } from '../matrixUtils';
 
 interface Props {
   onModelUpdated: () => void;
@@ -53,10 +52,10 @@ export default function AIManagement({ onModelUpdated }: Props) {
   const [keepDefaults, setKeepDefaults] = useState(true);
 
   const quadrants = [
-    { value: 0, label: t(QUADRANT_LABEL_KEYS[0]) },
-    { value: 1, label: t(QUADRANT_LABEL_KEYS[1]) },
-    { value: 2, label: t(QUADRANT_LABEL_KEYS[2]) },
-    { value: 3, label: t(QUADRANT_LABEL_KEYS[3]) },
+    { value: 0, label: t('matrix.do') },
+    { value: 1, label: t('matrix.delegate') },
+    { value: 2, label: t('matrix.schedule') },
+    { value: 3, label: t('matrix.delete') },
   ];
 
   const format = (template: string, values: Record<string, string | number>) =>

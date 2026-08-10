@@ -8,3 +8,6 @@ pytesseract==0.3.13
 torch==2.13.0
 sentence-transformers==5.7.0
 transformers==5.14.1
+qdrant-client==1.12.0
+httpx==0.28.1
+PyJWT[crypto]==2.10.1

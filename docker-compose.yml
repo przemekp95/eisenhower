@@ -12,8 +12,12 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - APP_ENV=development
+      - AUTH_MODE=${AUTH_MODE:-static}
       - EISENHOWER_API_TOKEN=${EISENHOWER_API_TOKEN:?EISENHOWER_API_TOKEN is required}
       - EISENHOWER_ADMIN_TOKEN=${EISENHOWER_ADMIN_TOKEN:?EISENHOWER_ADMIN_TOKEN is required}
+      - OIDC_ISSUER=${OIDC_ISSUER:-}
+      - OIDC_AUDIENCE=${OIDC_AUDIENCE:-}
+      - OIDC_JWKS_URL=${OIDC_JWKS_URL:-}
       - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://localhost,http://127.0.0.1,http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173}
       - LOCAL_MODEL_NAME=${LOCAL_MODEL_NAME:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
       - LOCAL_MODEL_EPOCHS=${LOCAL_MODEL_EPOCHS:-60}
@@ -22,6 +26,20 @@ services:
       - LOCAL_MODEL_DROPOUT=${LOCAL_MODEL_DROPOUT:-0.1}
       - LOCAL_MODEL_LEARNING_RATE=${LOCAL_MODEL_LEARNING_RATE:-0.01}
       - HF_HOME=/home/app/.cache/huggingface
+      - RAG_ENABLED=${RAG_ENABLED:-false}
+      - RAG_RESPONSE_ENABLED=${RAG_RESPONSE_ENABLED:-false}
+      - RAG_ALLOWED_TENANTS=${RAG_ALLOWED_TENANTS:-}
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+      - QDRANT_COLLECTION_ALIAS=${QDRANT_COLLECTION_ALIAS:-eisenhower-knowledge-active}
+      - EMBEDDING_VERSION=${EMBEDDING_VERSION:-minilm-v1}
+      - CHUNKING_VERSION=${CHUNKING_VERSION:-chars-1200-overlap-160-v1}
+      - VLLM_BASE_URL=http://vllm:8000/v1
+      - VLLM_API_KEY=${VLLM_API_KEY:-}
+      - VLLM_MODEL=${VLLM_MODEL:-}
+      - EISENHOWER_INTERNAL_API_TOKEN=${EISENHOWER_INTERNAL_API_TOKEN:-}
+      - EISENHOWER_WEBHOOK_SECRET=${EISENHOWER_WEBHOOK_SECRET:-}
+      - INTERNAL_ALLOWED_TENANTS=${INTERNAL_ALLOWED_TENANTS:-}
     volumes:
       - ./backend-ai:/app
     restart: unless-stopped
@@ -42,8 +60,12 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - APP_ENV=development
+      - AUTH_MODE=${AUTH_MODE:-static}
       - EISENHOWER_API_TOKEN=${EISENHOWER_API_TOKEN:?EISENHOWER_API_TOKEN is required}
       - EISENHOWER_ADMIN_TOKEN=${EISENHOWER_ADMIN_TOKEN:?EISENHOWER_ADMIN_TOKEN is required}
+      - OIDC_ISSUER=${OIDC_ISSUER:-}
+      - OIDC_AUDIENCE=${OIDC_AUDIENCE:-}
+      - OIDC_JWKS_URL=${OIDC_JWKS_URL:-}
       - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://localhost,http://127.0.0.1,http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173}
       - LOCAL_MODEL_NAME=${LOCAL_MODEL_NAME:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
       - LOCAL_MODEL_EPOCHS=${LOCAL_MODEL_EPOCHS:-60}
@@ -52,6 +74,15 @@ services:
       - LOCAL_MODEL_DROPOUT=${LOCAL_MODEL_DROPOUT:-0.1}
       - LOCAL_MODEL_LEARNING_RATE=${LOCAL_MODEL_LEARNING_RATE:-0.01}
       - HF_HOME=/home/app/.cache/huggingface
+      - RAG_ENABLED=${RAG_ENABLED:-false}
+      - RAG_RESPONSE_ENABLED=${RAG_RESPONSE_ENABLED:-false}
+      - RAG_ALLOWED_TENANTS=${RAG_ALLOWED_TENANTS:-}
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+      - QDRANT_COLLECTION_ALIAS=${QDRANT_COLLECTION_ALIAS:-eisenhower-knowledge-active}
+      - VLLM_BASE_URL=http://vllm:8000/v1
+      - VLLM_API_KEY=${VLLM_API_KEY:-}
+      - VLLM_MODEL=${VLLM_MODEL:-}
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     volumes:
@@ -72,6 +103,32 @@ services:
     profiles:
       - gpu
 
+  # Durable asynchronous consumer for validated ingestion commands.
+  rag-worker:
+    build:
+      context: ./backend-ai
+      dockerfile: Dockerfile
+      target: production
+    command: ["python", "-m", "app.worker_runtime"]
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOCAL_MODEL_NAME=${LOCAL_MODEL_NAME:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
+      - HF_HOME=/home/app/.cache/huggingface
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+      - QDRANT_COLLECTION_ALIAS=${QDRANT_COLLECTION_ALIAS:-eisenhower-knowledge-active}
+      - EMBEDDING_VERSION=${EMBEDDING_VERSION:-minilm-v1}
+      - CHUNKING_VERSION=${CHUNKING_VERSION:-chars-1200-overlap-160-v1}
+      - JOBS_DATABASE_PATH=/app/data/jobs.sqlite3
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    volumes:
+      - ./backend-ai:/app
+    restart: unless-stopped
+    profiles:
+      - rag
+
   # Node.js API Service with MongoDB
   api-service:
     build:
@@ -82,7 +139,12 @@ services:
     environment:
       - MONGODB_URI=mongodb://mongodb:27017/eisenhower
       - AI_SERVICE_URL=http://ai-service:8000
+      - NODE_ENV=${APP_ENV:-development}
+      - AUTH_MODE=${AUTH_MODE:-static}
       - EISENHOWER_API_TOKEN=${EISENHOWER_API_TOKEN:?EISENHOWER_API_TOKEN is required}
+      - OIDC_ISSUER=${OIDC_ISSUER:-}
+      - OIDC_AUDIENCE=${OIDC_AUDIENCE:-}
+      - OIDC_JWKS_URL=${OIDC_JWKS_URL:-}
       - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://localhost,http://127.0.0.1,http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173}
     depends_on:
       mongodb:
@@ -168,6 +230,7 @@ services:
       start_period: 30s
     profiles:
       - experimental
+      - rag
 
   # MinIO object storage (S3-compatible)
   minio:
@@ -191,6 +254,56 @@ services:
       start_period: 20s
     profiles:
       - experimental
+
+  # Private OpenAI-compatible inference adapter; no host port is published.
+  vllm:
+    image: vllm/vllm-openai:v0.20.0
+    expose:
+      - "8000"
+    command:
+      - --model
+      - ${VLLM_MODEL:-MODEL_REQUIRED_AFTER_GPU_VALIDATION}
+      - --api-key
+      - ${VLLM_API_KEY:-local-development-only}
+      - --enable-log-requests
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    profiles:
+      - rag-gpu
+
+  # Private asynchronous orchestration only; never part of online analysis.
+  n8n:
+    image: n8nio/n8n:2.4.6
+    expose:
+      - "5678"
+    environment:
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-}
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=none
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=168
+      - EISENHOWER_INTERNAL_API_URL=http://ai-service:8000
+      - EISENHOWER_INTERNAL_API_TOKEN=${EISENHOWER_INTERNAL_API_TOKEN:-}
+      - INTERNAL_ALLOWED_TENANTS=${INTERNAL_ALLOWED_TENANTS:-}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/workflows:ro
+    restart: unless-stopped
+    profiles:
+      - automation
 
   # Nginx Reverse Proxy (production)
   nginx:
@@ -256,6 +369,7 @@ volumes:
   qdrant_snapshots:
     driver: local
   minio_data:
+  n8n_data:
 
 networks:
   default:

@@ -43,6 +43,25 @@ describe('task routes', () => {
     expect(response.body[1].title).toBe('first');
   });
 
+  it('does not list, update, or delete another tenant task', async () => {
+    const foreign = await TaskModel.create({
+      tenantId: 'tenant-b',
+      ownerId: 'foreign-user',
+      title: 'Foreign task',
+      urgent: true,
+      important: true,
+    });
+
+    const listed = await request(app).get('/tasks');
+    const updated = await request(app).put(`/tasks/${foreign.id}`).send({ urgent: false });
+    const deleted = await request(app).delete(`/tasks/${foreign.id}`);
+
+    expect(listed.body).toEqual([]);
+    expect(updated.status).toBe(404);
+    expect(deleted.status).toBe(404);
+    await expect(TaskModel.findById(foreign.id)).resolves.not.toBeNull();
+  });
+
   it('creates a task with defaults', async () => {
     const response = await api.post('/tasks').send({ title: 'Ship release' });
 
@@ -174,7 +193,7 @@ describe('task routes', () => {
   });
 
   it('returns 500 when updating a task fails', async () => {
-    jest.spyOn(TaskModel, 'findByIdAndUpdate').mockRejectedValue(new Error('update failure'));
+    jest.spyOn(TaskModel, 'findOneAndUpdate').mockRejectedValue(new Error('update failure'));
     const id = new mongoose.Types.ObjectId().toString();
 
     const response = await api.put(`/tasks/${id}`).send({ urgent: true });
@@ -184,7 +203,7 @@ describe('task routes', () => {
   });
 
   it('returns 500 when deleting a task fails', async () => {
-    jest.spyOn(TaskModel, 'findByIdAndDelete').mockRejectedValue(new Error('delete failure'));
+    jest.spyOn(TaskModel, 'findOneAndDelete').mockRejectedValue(new Error('delete failure'));
     const id = new mongoose.Types.ObjectId().toString();
 
     const response = await api.delete(`/tasks/${id}`);

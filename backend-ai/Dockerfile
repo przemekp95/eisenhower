@@ -1,6 +1,6 @@
 # Multi-stage build for Python AI service (CPU + CUDA targets)
 
-# Shared base image for all build targets
+# Bazowy obraz wspólny dla wszystkich wersji
 FROM python:3.11-slim as base
 
 # Set environment variables
@@ -20,7 +20,7 @@ RUN useradd --create-home --shell /bin/bash app \
 USER app
 
 # ------------------------------------------------------------------------------
-# Target: Dependencies (CPU - default build)
+# Target: Dependencies (CPU - domyślna wersja)
 # ------------------------------------------------------------------------------
 FROM base AS dependencies-cpu
 USER root
@@ -48,7 +48,7 @@ SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 PY
 
 # ------------------------------------------------------------------------------
-# Target: Dependencies (CUDA 12.4 - GPU-accelerated build)
+# Target: Dependencies (CUDA 12.4 - wersja akcelerowana GPU)
 # ------------------------------------------------------------------------------
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04 AS base-cuda
 
@@ -64,7 +64,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Install Python 3.11 in the CUDA image
+# Instalacja Pythona 3.11 na obrazie CUDA
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         python3.11 \
@@ -133,8 +133,19 @@ EXPOSE 8000
 # Start the application with multiple workers for production
 CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
 
+# Optional CUDA target. Build only after the deployment GPU/driver/VRAM has
+# been verified against the selected PyTorch and vLLM versions.
+FROM dependencies-cuda AS production-cuda
+ENV PATH=/home/app/.local/bin:$PATH
+COPY --chown=app:app . .
+RUN mkdir -p /app/data /app/logs /home/app/.cache/huggingface
+HEALTHCHECK --interval=30s --timeout=30s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/ || exit 1
+EXPOSE 8000
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+
 # Development stage (optional)
-FROM dependencies-cpu AS development
+FROM dependencies-cpu as development
 COPY --chown=app:app . .
 
 # Install dev dependencies

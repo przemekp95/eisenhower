@@ -50,7 +50,7 @@ function ocrPayload(count: number) {
 describe('AITools', () => {
   beforeEach(() => {
     localStorage.setItem('eisenhower-language', 'en');
-    mockedApi.analyzeWithLangChain.mockResolvedValue({
+    mockedApi.analyzeTask.mockResolvedValue({
       task: 'urgent roadmap',
       langchain_analysis: {
         quadrant: 0,

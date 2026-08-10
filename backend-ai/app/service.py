@@ -94,7 +94,10 @@ class QuadrantAIService:
 
     return {
       "classification": model_ready,
-      "langchain_analysis": model_ready,
+      "reasoned_local_analysis": model_ready,
+      "retrieval_augmented_generation": bool(self.settings.rag_enabled and model_ready),
+      "local_similar_examples": model_ready,
+      "langchain_analysis": False,
       "ocr": tesseract_active,
       "batch_analysis": model_ready,
       "training_management": True,
@@ -105,6 +108,11 @@ class QuadrantAIService:
       },
       "provider_controls": provider_controls,
       "model": model_status,
+      "legacy": {
+        "langchain_analysis": False,
+        "analyze_langchain_route": "deprecated_alias",
+        "use_rag_parameter": "deprecated_alias_for_similar_examples",
+      },
     }
 
   def classify_task(self, task: str, use_rag: bool = True) -> dict[str, Any]:
