@@ -23,6 +23,11 @@ services:
       EISENHOWER_ADMIN_TOKEN: ${EISENHOWER_ADMIN_TOKEN:?EISENHOWER_ADMIN_TOKEN is required}
       TRAINING_DATA_PATH: /app/data/training_data.json
       MODEL_CACHE_DIR: /app/data/runtime
+      EVALUATION_DATA_PATH: /app/evaluation/production.json
+      LOCAL_MODEL_REQUIRE_EVALUATION: "true"
+      LOCAL_MODEL_EVALUATION_PROFILE: production
+      LOCAL_MODEL_APPROVED_EVALUATION_SHA256: ${LOCAL_MODEL_APPROVED_EVALUATION_SHA256:?approved production evaluation digest is required}
+      AI_MANAGEMENT_ENABLED: "false"
       LOCAL_MODEL_NAME: ${LOCAL_MODEL_NAME:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
       LOCAL_MODEL_EPOCHS: ${LOCAL_MODEL_EPOCHS:-60}
       LOCAL_MODEL_PATIENCE: ${LOCAL_MODEL_PATIENCE:-8}
@@ -33,10 +38,11 @@ services:
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:?CORS_ALLOW_ORIGINS is required}
     volumes:
       - ai_data:/app/data
+      - ${AI_EVALUATION_FILE:?approved production evaluation file is required}:/app/evaluation/production.json:ro
     expose:
       - "8000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -55,7 +61,7 @@ services:
       mongodb:
         condition: service_healthy
       ai-service:
-        condition: service_started
+        condition: service_healthy
     expose:
       - "3001"
     healthcheck:
@@ -74,7 +80,7 @@ services:
       api-service:
         condition: service_started
       ai-service:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "${WEB_PORT:-8080}:3000"
     healthcheck:

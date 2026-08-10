@@ -44,12 +44,7 @@ class QdrantTrainingStoreAdapter(TrainingStore):
                 self.vector_store.add_vector(vector, item)
 
     def add_example(self, text: str, quadrant: int, source: str = "user") -> dict:
-        record = super().add_example(text, quadrant, source)
-
-        vector = self.embed_text(text)
-        self.vector_store.add_vector(vector, record)
-
-        return record
+        return super().add_example(text, quadrant, source)
 
     def add_examples(self, records: List[dict]) -> List[dict]:
         saved = super().add_examples(records)

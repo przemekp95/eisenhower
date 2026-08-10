@@ -83,7 +83,7 @@ describe('AI component error paths', () => {
     mockedApi.analyzeTask.mockResolvedValueOnce({
       task: 'task',
       langchain_analysis: {
-        quadrant: 9,
+        quadrant: 9 as unknown as 0,
         reasoning: 'Unexpected quadrant.',
         confidence: 0.8,
         method: 'langchain',
