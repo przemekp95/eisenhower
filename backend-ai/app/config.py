@@ -3,6 +3,9 @@ from pathlib import Path
 import os
 
 
+DEFAULT_PROMPT_ARTIFACT_DIR = Path(__file__).resolve().parent.parent / "prompts"
+
+
 def parse_csv_list(value: str | None, default: tuple[str, ...]) -> tuple[str, ...]:
   if value is None:
     return default
@@ -33,6 +36,11 @@ class Settings:
   vllm_base_url: str = "http://vllm:8000/v1"
   vllm_api_key: str | None = None
   vllm_model: str | None = None
+  prompt_artifact_dir: Path = DEFAULT_PROMPT_ARTIFACT_DIR
+  prompt_id: str = "eisenhower-classifier"
+  prompt_version: str = "1.0.0"
+  retrieval_version: str = "retrieval-v1"
+  index_version: str = "index-v1"
   internal_api_token: str | None = None
   internal_allowed_tenants: tuple[str, ...] = ()
   webhook_secret: str | None = None
@@ -57,15 +65,6 @@ class Settings:
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
   )
-  # Lokalny LLM (llama.cpp)
-  llm_enabled: bool = True
-  llm_model_filename: str = "llama-3.2-8b-instruct-q4_k_m.gguf"
-  llm_quant_level: str = "Q4_K_M"
-  llm_n_ctx: int = 2048
-  llm_n_threads: int | None = None
-  llm_n_gpu_layers: int | None = None
-  llm_temperature: float = 0.1
-  llm_max_tokens: int = 512
 
 
 def load_settings(env: dict[str, str] | None = None) -> Settings:
@@ -130,6 +129,13 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     vllm_base_url=source.get("VLLM_BASE_URL", "http://vllm:8000/v1"),
     vllm_api_key=source.get("VLLM_API_KEY") or None,
     vllm_model=source.get("VLLM_MODEL") or None,
+    prompt_artifact_dir=Path(
+      source.get("PROMPT_ARTIFACT_DIR", str(DEFAULT_PROMPT_ARTIFACT_DIR))
+    ),
+    prompt_id=source.get("PROMPT_ID", "eisenhower-classifier"),
+    prompt_version=source.get("PROMPT_VERSION", "1.0.0"),
+    retrieval_version=source.get("RETRIEVAL_VERSION", "retrieval-v1"),
+    index_version=source.get("INDEX_VERSION", "index-v1"),
     internal_api_token=internal_api_token,
     internal_allowed_tenants=internal_allowed_tenants,
     webhook_secret=source.get("EISENHOWER_WEBHOOK_SECRET") or None,

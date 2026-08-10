@@ -45,4 +45,28 @@ describe('loadConfig', () => {
 
     expect(config.authMode).toBe('static');
   });
+
+  it('rejects an unknown authentication mode', () => {
+    expect(() => loadConfig({ AUTH_MODE: 'disabled' })).toThrow(
+      'AUTH_MODE must be static or oidc.'
+    );
+  });
+
+  it('rejects a weak production static token', () => {
+    expect(() => loadConfig({
+      NODE_ENV: 'production',
+      AUTH_MODE: 'static',
+      EISENHOWER_API_TOKEN: 'too-short',
+      CORS_ALLOW_ORIGINS: 'https://app.example.com',
+    })).toThrow('EISENHOWER_API_TOKEN must be at least 32 characters in production.');
+  });
+
+  it('rejects an empty production CORS allowlist', () => {
+    expect(() => loadConfig({
+      NODE_ENV: 'production',
+      AUTH_MODE: 'static',
+      EISENHOWER_API_TOKEN: 'production-api-token-at-least-32-characters',
+      CORS_ALLOW_ORIGINS: ' , ',
+    })).toThrow('CORS_ALLOW_ORIGINS is required in production.');
+  });
 });

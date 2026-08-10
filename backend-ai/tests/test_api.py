@@ -133,8 +133,8 @@ class FakeRagService:
   def __init__(self):
     self.calls = []
 
-  def analyze(self, task, scope):
-    self.calls.append((task, scope))
+  def analyze(self, task, scope, *, language="en"):
+    self.calls.append((task, scope, language))
     return AnalyzeResult(
       mode="rag",
       quadrant=2,
@@ -323,8 +323,8 @@ def test_cors_allows_local_frontend_origins(real_model_bundle):
 def test_classify_and_langchain_analysis(real_model_bundle):
   client = build_real_client(real_model_bundle)
 
-  classify = client.get("/classify", params={"title": "critical production incident"})
-  analyze = client.post("/analyze-langchain", params={"task": "exercise twice a week", "language": "pl"})
+  classify = client.post("/classify", json={"title": "critical production incident"})
+  analyze = client.post("/analyze-langchain", json={"task": "exercise twice a week", "language": "pl"})
 
   assert classify.status_code == 200
   assert classify.json()["quadrant"] == 0
@@ -416,8 +416,8 @@ def test_batch_and_extract_routes(real_model_bundle):
 def test_client_facing_payloads_keep_the_fields_used_by_web_and_mobile(real_model_bundle):
   client = build_real_client(real_model_bundle)
 
-  classify = client.get("/classify", params={"title": "critical production incident"})
-  analyze = client.post("/analyze-langchain", params={"task": "exercise twice a week", "language": "pl"})
+  classify = client.post("/classify", json={"title": "critical production incident"})
+  analyze = client.post("/analyze-langchain", json={"task": "exercise twice a week", "language": "pl"})
   batch = client.post("/batch-analyze", json={"tasks": ["critical production incident", "exercise twice a week"]})
   upload = client.post(
     "/extract-tasks-from-image",
@@ -453,7 +453,7 @@ def test_provider_toggle_endpoint_disables_and_reenables_runtime_features(real_m
   client = build_real_client(real_model_bundle)
 
   disable_local_model = client.put("/providers/local_model", json={"enabled": False})
-  disabled_classify = client.get("/classify", params={"title": "critical production incident"})
+  disabled_classify = client.post("/classify", json={"title": "critical production incident"})
   disable_tesseract = client.put("/providers/tesseract", json={"enabled": False})
   disabled_image_upload = client.post(
     "/extract-tasks-from-image",
@@ -464,7 +464,7 @@ def test_provider_toggle_endpoint_disables_and_reenables_runtime_features(real_m
     files={"file": ("tasks.txt", b"critical production incident\n", "text/plain")},
   )
   enable_local_model = client.put("/providers/local_model", json={"enabled": True})
-  enabled_classify = client.get("/classify", params={"title": "critical production incident"})
+  enabled_classify = client.post("/classify", json={"title": "critical production incident"})
   enable_tesseract = client.put("/providers/tesseract", json={"enabled": True})
 
   assert disable_local_model.status_code == 200
@@ -498,7 +498,7 @@ def test_error_shapes_are_json(real_model_bundle):
 def test_model_not_ready_errors_return_503(tmp_path: Path):
   client = build_client(tmp_path, local_model=FakeLocalModel(fail_predict=True))
 
-  response = client.get("/classify", params={"title": "urgent client deadline"})
+  response = client.post("/classify", json={"title": "urgent client deadline"})
 
   assert response.status_code == 503
   assert response.json()["code"] == "model_not_ready"

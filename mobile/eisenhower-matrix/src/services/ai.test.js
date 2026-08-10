@@ -34,8 +34,10 @@ describe('ai service', () => {
       source: 'central',
     });
     expect(global.fetch).toHaveBeenCalledWith(
-      `${mobileConfig.aiApiUrl}/classify?title=urgent&include_similar_examples=true`,
+      `${mobileConfig.aiApiUrl}/classify`,
       expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ title: 'urgent', use_rag: true }),
         headers: expect.objectContaining({ Authorization: 'Bearer test-api-token' }),
       })
     );
@@ -81,9 +83,10 @@ describe('ai service', () => {
       langchain_analysis: { reasoning: 'Because', quadrant: 2 },
     });
     expect(global.fetch).toHaveBeenCalledWith(
-      `${mobileConfig.aiApiUrl}/analyze?task=Prepare%20roadmap&language=pl`,
+      `${mobileConfig.aiApiUrl}/analyze`,
       expect.objectContaining({
         method: 'POST',
+        body: JSON.stringify({ task: 'Prepare roadmap', language: 'pl' }),
         headers: expect.objectContaining({ Authorization: 'Bearer test-api-token' }),
       })
     );
@@ -103,9 +106,10 @@ describe('ai service', () => {
 
     expect(global.fetch).toHaveBeenNthCalledWith(
       1,
-      `${mobileConfig.aiApiUrl}/analyze?task=Przygotowa%C4%87%20plan&language=pl`,
+      `${mobileConfig.aiApiUrl}/analyze`,
       expect.objectContaining({
         method: 'POST',
+        body: JSON.stringify({ task: 'Przygotować plan', language: 'pl' }),
         headers: expect.objectContaining({ Authorization: 'Bearer test-api-token' }),
       })
     );

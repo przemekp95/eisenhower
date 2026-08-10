@@ -1,4 +1,5 @@
 import { mobileConfig } from '../config';
+import { setAccessToken } from '../authSession';
 import {
   createRemoteTask,
   deleteRemoteTask,
@@ -11,6 +12,7 @@ import {
 describe('tasks service', () => {
   beforeEach(() => {
     global.fetch = jest.fn();
+    setAccessToken('test-api-token');
   });
 
   it('normalizes remote tasks and loads the task list', async () => {

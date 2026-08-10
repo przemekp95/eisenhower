@@ -3,6 +3,12 @@ import json
 import httpx
 import pytest
 
+from test_generation_contract import _prompt_spec
+from test_prompt_renderer import WordCounter
+
+from app.generation.models import ClassificationOutput
+from app.generation.registry import PromptRegistry
+from app.generation.renderer import PromptRenderer
 from app.rag.adapters import (
   CircuitBreakerGenerationProvider,
   QdrantIngestionAdapter,
@@ -86,10 +92,22 @@ def test_vllm_adapter_uses_private_fixed_base_url_api_key_timeout_and_json_schem
             "message": {
               "content": json.dumps(
                 {
+                  "status": "classified",
+                  "urgent": False,
+                  "important": True,
                   "quadrant": 2,
+                  "facts": [{"statement": "The task is a roadmap.", "source": "task"}],
+                  "evidence": [
+                    {
+                      "statement": "The roadmap affects long-term goals.",
+                      "source": "retrieved_context",
+                      "chunk_id": "chunk-1",
+                    }
+                  ],
+                  "citations": ["chunk-1"],
                   "confidence": 0.8,
                   "explanation": "Important, not urgent.",
-                  "cited_chunk_ids": ["chunk-1"],
+                  "no_answer_reason": None,
                 }
               )
             }
@@ -102,7 +120,10 @@ def test_vllm_adapter_uses_private_fixed_base_url_api_key_timeout_and_json_schem
   provider = VLLMGenerationProvider(
     base_url="http://vllm.internal:8000/v1",
     api_key="test-token",
-    model="approved-model",
+    prompt_registry=PromptRegistry([_prompt_spec(model_id="approved-model")]),
+    prompt_renderer=PromptRenderer(WordCounter()),
+    prompt_id="eisenhower-classifier",
+    prompt_version="1.0.0",
     client=client,
   )
   hit = RetrievalHit(
@@ -117,14 +138,31 @@ def test_vllm_adapter_uses_private_fixed_base_url_api_key_timeout_and_json_schem
     content_version="v1",
   )
 
-  result = provider.generate(GenerationRequest(task="roadmap", context=[hit]))
+  result = provider.generate(
+    GenerationRequest(
+      task="roadmap",
+      context=[hit],
+      language="pl",
+      retrieval_version="retrieval-v1",
+      index_version="index-v1",
+    )
+  )
 
-  assert result.cited_chunk_ids == ["chunk-1"]
+  assert result.output.citations == ["chunk-1"]
+  assert result.prompt_version == "1.0.0"
+  assert result.context_chunk_ids == ["chunk-1"]
   assert seen["request"].url.host == "vllm.internal"
   assert seen["request"].headers["authorization"] == "Bearer test-token"
   payload = json.loads(seen["request"].content)
   assert payload["response_format"]["type"] == "json_schema"
+  assert payload["response_format"]["json_schema"]["schema"] == ClassificationOutput.model_json_schema()
   assert payload["temperature"] == 0
+  assert payload["top_p"] == 1
+  assert payload["n"] == 1
+  assert payload["seed"] == 17
+  assert payload["max_tokens"] == 512
+  assert payload["model"] == "approved-model"
+  assert "ignore previous instructions" in payload["messages"][0]["content"]
 
 
 def test_vllm_adapter_rejects_public_or_mutable_endpoints():
@@ -132,8 +170,81 @@ def test_vllm_adapter_rejects_public_or_mutable_endpoints():
     VLLMGenerationProvider(
       base_url="https://api.example.com/v1",
       api_key="token",
-      model="model",
+      prompt_registry=PromptRegistry([_prompt_spec()]),
+      prompt_renderer=PromptRenderer(WordCounter()),
+      prompt_id="eisenhower-classifier",
+      prompt_version="1.0.0",
     )
+
+
+@pytest.mark.parametrize(
+  "content",
+  [
+    "",
+    "{",
+    json.dumps(
+      {
+        "status": "classified",
+        "urgent": True,
+        "important": False,
+        "quadrant": 2,
+        "facts": [],
+        "evidence": [],
+        "citations": [],
+        "explanation": "Wrong mapping.",
+        "confidence": 0.5,
+        "no_answer_reason": None,
+      }
+    ),
+    json.dumps(
+      {
+        "status": "classified",
+        "urgent": False,
+        "important": True,
+        "quadrant": 2,
+        "facts": [],
+        "evidence": [],
+        "citations": ["invented"],
+        "explanation": "Invented citation.",
+        "confidence": 0.5,
+        "no_answer_reason": None,
+      }
+    ),
+  ],
+)
+def test_vllm_adapter_rejects_empty_truncated_semantically_invalid_or_foreign_output(content):
+  def handler(_request):
+    return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
+
+  provider = VLLMGenerationProvider(
+    base_url="http://vllm.internal:8000/v1",
+    api_key="token",
+    prompt_registry=PromptRegistry([_prompt_spec()]),
+    prompt_renderer=PromptRenderer(WordCounter()),
+    prompt_id="eisenhower-classifier",
+    prompt_version="1.0.0",
+    client=httpx.Client(transport=httpx.MockTransport(handler)),
+  )
+  request = GenerationRequest(
+    task="roadmap",
+    context=[
+      RetrievalHit(
+        chunk_id="chunk-1",
+        document_id="doc",
+        text="Known context",
+        score=0.8,
+        source_uri="task://1",
+        title="Task",
+        tenant_id="tenant-a",
+        embedding_version="minilm-v1",
+        content_version="v1",
+      )
+    ],
+    language="pl",
+  )
+
+  with pytest.raises(RuntimeError, match="vLLM generation failed"):
+    provider.generate(request)
 
 
 def test_qdrant_ingestion_upserts_versioned_acl_payload_and_tombstones_by_tenant():
@@ -183,7 +294,7 @@ def test_generation_circuit_breaker_opens_after_bounded_failures():
     def __init__(self):
       self.calls = 0
 
-    def generate(self, request):
+    def generate(self, _request):
       self.calls += 1
       raise RuntimeError("offline")
 

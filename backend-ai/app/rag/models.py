@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..generation.models import GenerationResult
+
 
 class StrictModel(BaseModel):
   model_config = ConfigDict(extra="forbid")
@@ -48,14 +50,10 @@ class RetrievalHit(StrictModel):
 class GenerationRequest(StrictModel):
   task: str
   context: list[RetrievalHit]
+  language: Literal["pl", "en"] = "en"
+  retrieval_version: str = "retrieval-v1"
+  index_version: str = "index-v1"
   allowed_quadrants: list[int] = [0, 1, 2, 3]
-
-
-class GenerationResult(StrictModel):
-  quadrant: int = Field(..., ge=0, le=3)
-  confidence: float = Field(..., ge=0.0, le=1.0)
-  explanation: str = Field(..., min_length=1, max_length=2000)
-  cited_chunk_ids: list[str] = Field(default_factory=list, max_length=20)
 
 
 class Citation(StrictModel):
@@ -74,6 +72,17 @@ class RetrievalSummary(StrictModel):
   embedding_version: str | None = None
 
 
+class GenerationMetadata(StrictModel):
+  execution_id: str = Field(..., pattern=r"^[a-f0-9]{64}$")
+  prompt_id: str
+  prompt_version: str
+  model_id: str
+  model_revision: str
+  schema_version: str
+  language: Literal["pl", "en"]
+  input_tokens: int = Field(..., ge=0)
+
+
 class AnalyzeResult(StrictModel):
   mode: Literal["rag", "fallback", "no_answer"]
   quadrant: int | None = Field(default=None, ge=0, le=3)
@@ -82,6 +91,7 @@ class AnalyzeResult(StrictModel):
   explanation: str
   citations: list[Citation] = Field(default_factory=list)
   retrieval: RetrievalSummary = Field(default_factory=RetrievalSummary)
+  generation: GenerationMetadata | None = None
   fallback_reason: str | None = None
 
 

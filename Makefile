@@ -16,7 +16,7 @@ setup:
 test:
 	cd backend-node && $(NPM) test
 	cd web && $(NPM) test
-	COVERAGE_RCFILE=backend-ai/.coveragerc $(BACKEND_AI_PYTHON) -m pytest backend-ai
+	COVERAGE_RCFILE=backend-ai/.coveragerc $(BACKEND_AI_PYTHON) -m pytest backend-ai/tests
 	cd mobile/eisenhower-matrix && $(NPM) test
 
 test-ai:
@@ -56,7 +56,7 @@ verify:
 	$(MAKE) lint-ai
 	cd backend-node && $(NPM) run build && $(NPM) run test:coverage
 	cd web && $(NPM) run format:check && $(NPM) run build && $(NPM) run test:coverage && $(NPM) run test:integration
-	COVERAGE_RCFILE=backend-ai/.coveragerc $(BACKEND_AI_PYTHON) -m pytest backend-ai
+	COVERAGE_RCFILE=backend-ai/.coveragerc $(BACKEND_AI_PYTHON) -m pytest backend-ai/tests
 	cd mobile/eisenhower-matrix && $(NPM) run test:coverage
 
 dev-web:

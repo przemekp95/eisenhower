@@ -5,6 +5,8 @@ import re
 from qdrant_client import QdrantClient
 
 from ..config import Settings
+from ..generation.registry import PromptRegistry
+from ..generation.renderer import HuggingFaceTokenCounter, PromptRenderer
 from .adapters import (
   CircuitBreakerGenerationProvider,
   MiniLMEmbeddingProvider,
@@ -25,6 +27,34 @@ def build_rag_service(settings: Settings, fallback_classifier) -> RagAnalysisSer
     raise ValueError("VLLM_API_KEY and VLLM_MODEL are required when RAG is enabled")
   if not is_private_service_url(settings.qdrant_url):
     raise ValueError("Qdrant must use a private-network endpoint")
+  prompt_registry = PromptRegistry.load_directory(settings.prompt_artifact_dir)
+  prompt_specs = [
+    prompt_registry.get(settings.prompt_id, settings.prompt_version, language)
+    for language in ("pl", "en")
+  ]
+  if any(
+    "_SELECTION_REQUIRED__" in spec.model_id
+    or "_SELECTION_REQUIRED__" in spec.tokenizer_id
+    or spec.chat_template_hash == "0" * 64
+    for spec in prompt_specs
+  ):
+    raise ValueError("PromptSpec model selection is incomplete; RAG remains fail-closed")
+  if any(spec.model_id != settings.vllm_model for spec in prompt_specs):
+    raise ValueError("VLLM_MODEL must match the immutable PromptSpec model_id")
+  reference = prompt_specs[0]
+  if any(
+    (spec.model_id, spec.model_revision, spec.tokenizer_id, spec.tokenizer_revision, spec.chat_template_hash)
+    != (
+      reference.model_id,
+      reference.model_revision,
+      reference.tokenizer_id,
+      reference.tokenizer_revision,
+      reference.chat_template_hash,
+    )
+    for spec in prompt_specs[1:]
+  ):
+    raise ValueError("PL and EN PromptSpec variants must pin the same model and tokenizer matrix")
+  prompt_renderer = PromptRenderer(HuggingFaceTokenCounter.from_prompt_spec(reference))
   embedding = MiniLMEmbeddingProvider(
     fallback_classifier.local_model,
     version=settings.embedding_version,
@@ -43,12 +73,21 @@ def build_rag_service(settings: Settings, fallback_classifier) -> RagAnalysisSer
     VLLMGenerationProvider(
       base_url=settings.vllm_base_url,
       api_key=settings.vllm_api_key,
-      model=settings.vllm_model,
+      prompt_registry=prompt_registry,
+      prompt_renderer=prompt_renderer,
+      prompt_id=settings.prompt_id,
+      prompt_version=settings.prompt_version,
     ),
     failure_threshold=3,
     reset_seconds=30,
   )
-  return RagAnalysisService(retriever, generator, fallback_classifier)
+  return RagAnalysisService(
+    retriever,
+    generator,
+    fallback_classifier,
+    retrieval_version=settings.retrieval_version,
+    index_version=settings.index_version,
+  )
 
 
 def build_ingestion_application(settings: Settings, ai_service) -> IngestionApplication:

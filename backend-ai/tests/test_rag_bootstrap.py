@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from app.config import Settings
@@ -37,4 +39,20 @@ def test_rag_bootstrap_rejects_public_qdrant_endpoint(tmp_path):
   )
 
   with pytest.raises(ValueError):
+    build_rag_service(settings, Fallback())
+
+
+def test_rag_bootstrap_fails_closed_for_unselected_candidate_model(tmp_path):
+  prompt_dir = Path(__file__).resolve().parent.parent / "prompts"
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    rag_enabled=True,
+    qdrant_url="http://qdrant:6333",
+    vllm_api_key="token",
+    vllm_model="__MODEL_SELECTION_REQUIRED__",
+    prompt_artifact_dir=prompt_dir,
+  )
+
+  with pytest.raises(ValueError, match="model selection"):
     build_rag_service(settings, Fallback())

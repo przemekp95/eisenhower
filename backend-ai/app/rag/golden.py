@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class GoldenCase(BaseModel):
@@ -17,12 +17,36 @@ class GoldenCase(BaseModel):
   roles: list[str] = Field(default_factory=list)
   language: Literal["pl", "en"] = "pl"
   task: str
+  corpus_version: str = "synthetic-corpus-v1"
+  index_version: str = "synthetic-index-v1"
+  expected_urgent: bool | None = None
+  expected_important: bool | None = None
   expected_quadrant: int | None = Field(default=None, ge=0, le=3)
   answerability: Literal["answerable", "no_answer"]
   relevant_document_ids: list[str] = Field(default_factory=list)
   forbidden_document_ids: list[str] = Field(default_factory=list)
   allowed_citation_ids: list[str] = Field(default_factory=list)
+  forbidden_citation_ids: list[str] = Field(default_factory=list)
+  allowed_facts: list[str] = Field(default_factory=list)
+  allowed_evidence: list[str] = Field(default_factory=list)
+  difficulty: Literal["basic", "edge", "adversarial"] = "edge"
   tags: list[str] = Field(min_length=1)
+
+  @model_validator(mode="before")
+  @classmethod
+  def derive_expected_axes(cls, values):
+    if isinstance(values, dict) and values.get("expected_quadrant") is not None:
+      mapping = {
+        0: (True, True),
+        1: (True, False),
+        2: (False, True),
+        3: (False, False),
+      }
+      urgent, important = mapping[int(values["expected_quadrant"])]
+      values = dict(values)
+      values.setdefault("expected_urgent", urgent)
+      values.setdefault("expected_important", important)
+    return values
 
 
 def load_golden_dataset(path: str | Path) -> list[GoldenCase]:

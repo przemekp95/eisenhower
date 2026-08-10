@@ -37,12 +37,14 @@ test('offers truthful task-analysis names while preserving the legacy endpoint',
 
   const result = await api.analyzeTask('triage incident', 'en');
 
-  assert.equal(
-    calls[0][0],
-    'http://ai.internal/analyze?task=triage%20incident&language=en'
-  );
+  assert.equal(calls[0][0], 'http://ai.internal/analyze');
+  assert.equal(calls[0][1].method, 'POST');
+  assert.deepEqual(JSON.parse(calls[0][1].body), {
+    task: 'triage incident',
+    language: 'en',
+  });
   assert.equal(AI_API_PATHS.analyzeTask, '/analyze');
-  assert.equal(getAnalyzeTaskPath('triage incident'), '/analyze?task=triage%20incident&language=en');
+  assert.equal(getAnalyzeTaskPath('triage incident'), '/analyze');
   assert.equal(isTaskAnalysisDto(result), true);
   assert.equal(api.analyzeWithLangChain, api.analyzeTask);
 });

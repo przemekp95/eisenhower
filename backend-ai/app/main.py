@@ -36,6 +36,7 @@ class StrictRequest(BaseModel):
 
 class RagAnalyzeRequest(StrictRequest):
   task: str = Field(..., min_length=1, max_length=MAX_TASK_LENGTH)
+  language: Literal["en", "pl"] = "en"
 
 
 class ClassifyRequest(StrictRequest):
@@ -272,7 +273,7 @@ def create_app(
       or principal.tenant_id in resolved_settings.rag_allowed_tenants
     )
     if resolved_rag_service is not None and resolved_settings.rag_response_enabled and tenant_enabled:
-      result = resolved_rag_service.analyze(request.task, scope)
+      result = resolved_rag_service.analyze(request.task, scope, language=request.language)
     else:
       classification = resolved_ai_service.classify_task(request.task, use_rag=False)
       if resolved_rag_service is None:

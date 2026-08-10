@@ -73,6 +73,8 @@ FastAPI owns online authorization, ACL filters, retrieval, optional later rerank
 | RAG ports and application service | Implemented locally | Live Qdrant/vLLM path is unverified |
 | Qdrant retriever and ingestion adapter | Implemented locally | Collection creation, indexes, alias switching, backup/restore not automated end to end |
 | vLLM generation adapter and circuit breaker | Implemented locally | Target model/GPU/VRAM and live contract are unknown |
+| Immutable PromptSpec, PL/EN registry, token-aware renderer and structured schema | Implemented locally as candidate artifacts | Model/tokenizer/chat-template selection is fail-closed; no champion exists |
+| Offline prompt evaluation and regression policy | Implemented locally | Live selected-model run, shadow/canary and rollback automation remain unverified |
 | Deterministic chunking and version metadata | Implemented locally | Source-specific normalization and canonical document store remain incomplete |
 | Signed n8n webhook verification and replay protection | Implemented and wired locally at `/internal/webhooks/n8n/verify` | Uses a private service token and SQLite replay state; no deployed ingress is claimed |
 | Durable idempotent SQLite command queue and worker | Implemented locally with leases, crash reclaim, bounded retry/jitter, dead-letter and allowlisted handlers; Compose `rag` profile includes the consumer | Not activated; SQLite remains a single-site topology and project reindex still needs a chosen source connector |
@@ -86,7 +88,7 @@ FastAPI owns online authorization, ACL filters, retrieval, optional later rerank
 `POST /v2/ai/analyze` accepts a strict body:
 
 ```json
-{"task":"Prepare the incident review before 15:00"}
+{"task":"Prepare the incident review before 15:00","language":"en"}
 ```
 
 The response is validated and makes its mode explicit:
@@ -110,6 +112,16 @@ The response is validated and makes its mode explicit:
     }
   ],
   "retrieval": {"hit_count": 3, "top_score": 0.82, "embedding_version": "minilm-v1"},
+  "generation": {
+    "execution_id": "sha256-without-prefix",
+    "prompt_id": "eisenhower-classifier",
+    "prompt_version": "1.0.0",
+    "model_id": "selected-model",
+    "model_revision": "pinned-revision",
+    "schema_version": "1.0.0",
+    "language": "en",
+    "input_tokens": 1240
+  },
   "fallback_reason": null
 }
 ```
@@ -123,6 +135,7 @@ Every cited ID must be among the retrieved chunks for that request. Missing hits
 - [Security review](security-review.md)
 - [Operations, observability and rollout](operations.md)
 - [Testing and evaluation](testing-evaluation.md)
+- [Prompt engineering, versioning and evaluation](prompt-engineering.md)
 - [DDD, hexagonal, TDD and BDD assessment](methodology-assessment.md)
 - [Phases, gates and smallest vertical slice](delivery-roadmap.md)
 

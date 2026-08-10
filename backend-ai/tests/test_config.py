@@ -13,6 +13,9 @@ def test_load_settings_uses_defaults():
   assert "http://127.0.0.1:5173" in settings.cors_allow_origins
   assert settings.auth_mode == "static"
   assert settings.rag_enabled is False
+  assert settings.prompt_artifact_dir.name == "prompts"
+  assert settings.prompt_id == "eisenhower-classifier"
+  assert settings.prompt_version == "1.0.0"
 
 
 def test_load_settings_accepts_overrides(tmp_path: Path):
@@ -28,6 +31,11 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
       "LOCAL_MODEL_LEARNING_RATE": "0.005",
       "TESSERACT_LANGUAGES": "eng",
       "CORS_ALLOW_ORIGINS": "http://example.com,http://127.0.0.1:4173",
+      "PROMPT_ARTIFACT_DIR": str(tmp_path / "prompts"),
+      "PROMPT_ID": "custom-classifier",
+      "PROMPT_VERSION": "2.1.0",
+      "RETRIEVAL_VERSION": "retrieval-v2",
+      "INDEX_VERSION": "index-v3",
     }
   )
 
@@ -41,6 +49,11 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
   assert settings.local_model_learning_rate == 0.005
   assert settings.tesseract_languages == "eng"
   assert settings.cors_allow_origins == ("http://example.com", "http://127.0.0.1:4173")
+  assert settings.prompt_artifact_dir == tmp_path / "prompts"
+  assert settings.prompt_id == "custom-classifier"
+  assert settings.prompt_version == "2.1.0"
+  assert settings.retrieval_version == "retrieval-v2"
+  assert settings.index_version == "index-v3"
 
 
 def test_production_oidc_requires_issuer_audience_and_explicit_cors():

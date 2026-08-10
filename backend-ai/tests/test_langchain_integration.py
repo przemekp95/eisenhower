@@ -1,14 +1,12 @@
 from __future__ import annotations
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 import pytest
 
 from langchain_core.documents import Document
 
 from app.vector.langchain_adapter import EisenhowerEmbeddings, LangChainQdrantAdapter
-from app.classification.retrieval_chain import QuadrantRetrievalQA, EisenhowerClassificationResult
-from app.domain.events import event_publisher, VectorItemAddedEvent, VectorCollectionClearedEvent
+from app.domain.events import event_publisher, VectorItemAddedEvent
 from app.vector.qdrant_client import QdrantVectorStore
-from app.defaults import QUADRANT_NAMES
 
 
 @pytest.mark.unit
@@ -85,36 +83,3 @@ class TestLangChainQdrantAdapter:
         assert results[0].page_content == "Kupić mleko"
         assert results[0].metadata["quadrant"] == 2
         native_store.search.assert_called_once_with([0.5, 0.5, 0.5], limit=1, quadrant=None)
-
-
-@pytest.mark.unit
-class TestQuadrantRetrievalQA:
-    def test_chain_build_success(self):
-        vector_store = Mock()
-        vector_store.similarity_search = Mock(return_value=[
-            Document(page_content="Napisz raport", metadata={"quadrant": 0}),
-            Document(page_content="Spotkanie z klientem", metadata={"quadrant": 1}),
-        ])
-        vector_store.as_retriever = Mock(return_value=Mock())
-
-        embeddings = Mock()
-        chain = QuadrantRetrievalQA(vector_store, embeddings, top_k=2)
-
-        assert chain is not None
-        assert chain.top_k == 2
-        assert hasattr(chain, "classify")
-
-    def test_retriever_refresh_on_vector_events(self):
-        vector_store = Mock()
-        initial_retriever = Mock()
-        vector_store.as_retriever = Mock(return_value=initial_retriever)
-
-        chain = QuadrantRetrievalQA(vector_store, Mock())
-        first_retriever = chain._retriever
-
-        # Publish a vector-added event.
-        event_publisher.publish(VectorItemAddedEvent(payload={"point_id": "abc123"}))
-
-        # The chain rebuilds its retriever.
-        assert vector_store.as_retriever.call_count == 2
-        assert chain._retriever is not first_retriever

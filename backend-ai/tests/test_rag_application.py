@@ -1,5 +1,6 @@
+from app.generation.models import ClassificationOutput, GenerationResult
 from app.rag.application import RagAnalysisService
-from app.rag.models import AccessScope, GenerationResult, RetrievalHit
+from app.rag.models import AccessScope, RetrievalHit
 
 
 class StubRetriever:
@@ -26,8 +27,38 @@ class StubGenerator:
 
 
 class StubFallback:
-  def classify_task(self, task, use_rag=False):
+  def classify_task(self, _task, **_kwargs):
     return {"quadrant": 1, "quadrant_name": "Delegate", "confidence": 0.61}
+
+
+def generation_result(output):
+  return GenerationResult(
+    output=output,
+    execution_id="a" * 64,
+    prompt_id="eisenhower-classifier",
+    prompt_version="1.0.0",
+    language="en",
+    model_id="org/model",
+    model_revision="model-revision",
+    schema_version="1.0.0",
+    input_tokens=100,
+    context_chunk_ids=["chunk-1"],
+  )
+
+
+def classified_output(*, quadrant, urgent, important, citations):
+  return ClassificationOutput(
+    status="classified",
+    urgent=urgent,
+    important=important,
+    quadrant=quadrant,
+    facts=[],
+    evidence=[],
+    citations=citations,
+    explanation="Grounded classification.",
+    confidence=0.82,
+    no_answer_reason=None,
+  )
 
 
 def test_rag_analysis_returns_only_acl_scoped_citations():
@@ -46,11 +77,8 @@ def test_rag_analysis_returns_only_acl_scoped_citations():
     )
   ]
   generator = StubGenerator(
-    GenerationResult(
-      quadrant=2,
-      confidence=0.82,
-      explanation="The task is important and not urgent.",
-      cited_chunk_ids=["chunk-1"],
+    generation_result(
+      classified_output(quadrant=2, urgent=False, important=True, citations=["chunk-1"])
     )
   )
   service = RagAnalysisService(StubRetriever(hits), generator, StubFallback())
@@ -64,7 +92,9 @@ def test_rag_analysis_returns_only_acl_scoped_citations():
   assert result.quadrant == 2
   assert result.citations[0].chunk_id == "chunk-1"
   assert result.citations[0].source_uri == "task://roadmap"
-  assert result.retrieval.hit_count == 1
+  assert result.model_dump()["retrieval"]["hit_count"] == 1
+  assert result.generation.execution_id == "a" * 64
+  assert generator.requests[0].language == "en"
 
 
 def test_rag_analysis_rejects_generator_citations_not_present_in_context():
@@ -80,11 +110,8 @@ def test_rag_analysis_rejects_generator_citations_not_present_in_context():
     content_version="v1",
   )
   generator = StubGenerator(
-    GenerationResult(
-      quadrant=0,
-      confidence=0.9,
-      explanation="Unsupported claim",
-      cited_chunk_ids=["invented"],
+    generation_result(
+      classified_output(quadrant=0, urgent=True, important=True, citations=["invented"])
     )
   )
   service = RagAnalysisService(StubRetriever([hit]), generator, StubFallback())
@@ -94,6 +121,47 @@ def test_rag_analysis_rejects_generator_citations_not_present_in_context():
   assert result.mode == "fallback"
   assert result.fallback_reason == "invalid_citations"
   assert result.citations == []
+
+
+def test_rag_analysis_returns_no_answer_for_valid_insufficient_evidence():
+  hit = RetrievalHit(
+    chunk_id="chunk-1",
+    document_id="doc-1",
+    text="Context without urgency or importance evidence.",
+    score=0.8,
+    source_uri="knowledge://1",
+    title="Known",
+    tenant_id="tenant-a",
+    embedding_version="minilm-v1",
+    content_version="v1",
+  )
+  output = ClassificationOutput(
+    status="insufficient_evidence",
+    urgent=None,
+    important=None,
+    quadrant=None,
+    facts=[],
+    evidence=[],
+    citations=[],
+    explanation="Missing evidence for both axes.",
+    confidence=None,
+    no_answer_reason="missing_urgency_and_importance",
+  )
+  service = RagAnalysisService(
+    StubRetriever([hit]),
+    StubGenerator(generation_result(output)),
+    StubFallback(),
+  )
+
+  result = service.analyze(
+    "Ambiguous task",
+    AccessScope(tenant_id="tenant-a", user_id="user-1"),
+    language="pl",
+  )
+
+  assert result.mode == "no_answer"
+  assert result.quadrant is None
+  assert result.fallback_reason == "missing_urgency_and_importance"
 
 
 def test_rag_analysis_falls_back_when_retrieval_has_no_grounding():

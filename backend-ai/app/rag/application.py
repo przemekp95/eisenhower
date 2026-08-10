@@ -4,6 +4,7 @@ from .models import (
   AccessScope,
   AnalyzeResult,
   Citation,
+  GenerationMetadata,
   GenerationRequest,
   RetrievalQuery,
   RetrievalSummary,
@@ -23,14 +24,18 @@ class RagAnalysisService:
     *,
     retrieval_limit: int = 6,
     score_threshold: float = 0.2,
+    retrieval_version: str = "retrieval-v1",
+    index_version: str = "index-v1",
   ):
     self.retriever = retriever
     self.generator = generator
     self.fallback_classifier = fallback_classifier
     self.retrieval_limit = retrieval_limit
     self.score_threshold = score_threshold
+    self.retrieval_version = retrieval_version
+    self.index_version = index_version
 
-  def analyze(self, task: str, scope: AccessScope) -> AnalyzeResult:
+  def analyze(self, task: str, scope: AccessScope, *, language: str = "en") -> AnalyzeResult:
     hits = self.retriever.retrieve(
       RetrievalQuery(
         text=task,
@@ -48,13 +53,42 @@ class RagAnalysisService:
       return self._fallback(task, retrieval, "no_retrieval_hits")
 
     try:
-      generated = self.generator.generate(GenerationRequest(task=task, context=hits))
+      generated = self.generator.generate(
+        GenerationRequest(
+          task=task,
+          context=hits,
+          language=language,
+          retrieval_version=self.retrieval_version,
+          index_version=self.index_version,
+        )
+      )
     except (TimeoutError, ConnectionError, RuntimeError):
       return self._fallback(task, retrieval, "generation_unavailable")
 
+    output = generated.output
+    generation = GenerationMetadata(
+      execution_id=generated.execution_id,
+      prompt_id=generated.prompt_id,
+      prompt_version=generated.prompt_version,
+      model_id=generated.model_id,
+      model_revision=generated.model_revision,
+      schema_version=generated.schema_version,
+      language=generated.language,
+      input_tokens=generated.input_tokens,
+    )
+    if output.status == "insufficient_evidence":
+      return AnalyzeResult(
+        mode="no_answer",
+        explanation=output.explanation,
+        citations=[],
+        retrieval=retrieval,
+        generation=generation,
+        fallback_reason=output.no_answer_reason,
+      )
+
     hit_by_id = {hit.chunk_id: hit for hit in hits}
-    if not generated.cited_chunk_ids or any(
-      chunk_id not in hit_by_id for chunk_id in generated.cited_chunk_ids
+    if not output.citations or any(
+      chunk_id not in hit_by_id for chunk_id in output.citations
     ):
       return self._fallback(task, retrieval, "invalid_citations")
 
@@ -68,16 +102,17 @@ class RagAnalysisService:
         score=hit.score,
         content_version=hit.content_version,
       )
-      for hit in (hit_by_id[chunk_id] for chunk_id in generated.cited_chunk_ids)
+      for hit in (hit_by_id[chunk_id] for chunk_id in output.citations)
     ]
     return AnalyzeResult(
       mode="rag",
-      quadrant=generated.quadrant,
-      quadrant_name=QUADRANT_NAMES[generated.quadrant],
-      confidence=generated.confidence,
-      explanation=generated.explanation,
+      quadrant=output.quadrant,
+      quadrant_name=QUADRANT_NAMES[output.quadrant],
+      confidence=output.confidence,
+      explanation=output.explanation,
       citations=citations,
       retrieval=retrieval,
+      generation=generation,
     )
 
   def search(self, query: str, scope: AccessScope, *, limit: int = 5) -> dict:

@@ -41,7 +41,7 @@ function getAiApi() {
     accessToken: getAccessToken,
     adminToken: getAdminToken,
     onUnauthorized: clearTokens,
-    onAdminUnauthorized: () => undefined,
+    onAdminUnauthorized: clearTokens,
   });
 }
 

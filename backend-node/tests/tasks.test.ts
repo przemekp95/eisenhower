@@ -52,9 +52,9 @@ describe('task routes', () => {
       important: true,
     });
 
-    const listed = await request(app).get('/tasks');
-    const updated = await request(app).put(`/tasks/${foreign.id}`).send({ urgent: false });
-    const deleted = await request(app).delete(`/tasks/${foreign.id}`);
+    const listed = await api.get('/tasks');
+    const updated = await api.put(`/tasks/${foreign.id}`).send({ urgent: false });
+    const deleted = await api.delete(`/tasks/${foreign.id}`);
 
     expect(listed.body).toEqual([]);
     expect(updated.status).toBe(404);

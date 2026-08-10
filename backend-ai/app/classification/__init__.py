@@ -1,6 +1,1 @@
-from .retrieval_chain import QuadrantRetrievalQA, EisenhowerClassificationResult
-
-__all__ = [
-    "QuadrantRetrievalQA",
-    "EisenhowerClassificationResult"
-]
+"""Task-classification package; generative analysis lives behind app.rag.GenerationProvider."""

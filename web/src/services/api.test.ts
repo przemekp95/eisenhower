@@ -153,9 +153,7 @@ describe('api service', () => {
     expect((global.fetch as jest.Mock).mock.calls[0][1].body).toBe(
       JSON.stringify({ title: 'urgent', use_rag: true })
     );
-    expect((global.fetch as jest.Mock).mock.calls[1][0]).toBe(
-      `${runtimeConfig.aiApiUrl}/analyze-langchain`
-    );
+    expect((global.fetch as jest.Mock).mock.calls[1][0]).toBe(`${runtimeConfig.aiApiUrl}/analyze`);
     expect((global.fetch as jest.Mock).mock.calls[1][1].body).toBe(
       JSON.stringify({ task: 'urgent', language: 'en' })
     );

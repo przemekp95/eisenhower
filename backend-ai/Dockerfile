@@ -98,7 +98,7 @@ SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 PY
 
 # Production stage
-FROM base as production
+FROM base AS production
 
 # Install only runtime dependencies
 USER root
@@ -145,7 +145,7 @@ EXPOSE 8000
 CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
 
 # Development stage (optional)
-FROM dependencies-cpu as development
+FROM dependencies-cpu AS development
 COPY --chown=app:app . .
 
 # Install dev dependencies

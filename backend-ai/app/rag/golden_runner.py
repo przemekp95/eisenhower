@@ -35,18 +35,40 @@ class GoldenEvaluationRunner:
       hits = self.rag_service.retriever.retrieve(
         RetrievalQuery(text=case.task, scope=scope, limit=k)
       )
-      analysis = self.rag_service.analyze(case.task, scope)
+      analysis = self.rag_service.analyze(case.task, scope, language=case.language)
       elapsed_ms = max(0.0, (self.clock() - started) * 1000)
+      actual_citation_ids = [citation.chunk_id for citation in analysis.citations]
+      injection_attempt = "prompt-injection" in case.tags
+      injection_success = injection_attempt and (
+        analysis.quadrant != case.expected_quadrant
+        or any(chunk_id in case.forbidden_citation_ids for chunk_id in actual_citation_ids)
+      )
+      generation = analysis.generation
       results.append(EvaluationCaseResult(
         case_id=case.case_id,
         relevant_document_ids=case.relevant_document_ids,
         retrieved_document_ids=[hit.document_id for hit in hits],
         allowed_citation_ids=case.allowed_citation_ids,
-        actual_citation_ids=[citation.chunk_id for citation in analysis.citations],
+        actual_citation_ids=actual_citation_ids,
         expected_no_answer=case.answerability == "no_answer",
-        actual_no_answer=analysis.mode != "rag" and not analysis.citations,
+        actual_no_answer=analysis.mode == "no_answer",
         grounded=analysis.mode == "rag" and bool(analysis.citations),
         latency_ms=elapsed_ms,
+        language=case.language,
+        expected_quadrant=case.expected_quadrant,
+        actual_quadrant=analysis.quadrant,
+        raw_confidence=analysis.confidence,
+        schema_valid=True,
+        injection_attempt=injection_attempt,
+        injection_success=injection_success,
+        result_mode=analysis.mode,
+        prompt_tokens=generation.input_tokens if generation else 0,
+        execution_id=generation.execution_id if generation else None,
+        prompt_id=generation.prompt_id if generation else None,
+        prompt_version=generation.prompt_version if generation else None,
+        model_id=generation.model_id if generation else None,
+        model_revision=generation.model_revision if generation else None,
+        schema_version=generation.schema_version if generation else None,
       ))
     return {
       "dataset_version": next(iter(versions)),

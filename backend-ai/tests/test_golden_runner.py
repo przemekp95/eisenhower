@@ -18,7 +18,7 @@ class Retriever:
 class Service:
   retriever = Retriever()
 
-  def analyze(self, task, _scope):
+  def analyze(self, task, _scope, *, language="en"):
     if "unknown" in task:
       return AnalyzeResult(mode="no_answer", explanation="No grounded answer.")
     return AnalyzeResult(
@@ -52,6 +52,8 @@ def test_golden_runner_measures_retrieval_citations_no_answer_and_latency():
   assert report["metrics"]["recall_at_k"] == 1.0
   assert report["metrics"]["citation_correctness"] == 1.0
   assert report["metrics"]["no_answer_accuracy"] == 1.0
+  assert report["metrics"]["accuracy"] == 1.0
+  assert report["metrics"]["no_answer"]["f1"] == 1.0
 
 
 def test_repository_evaluation_handler_allowlists_dataset_and_writes_report_atomically(tmp_path):
