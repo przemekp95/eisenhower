@@ -279,7 +279,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('backend-ai/requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend-ai/requirements.txt', 'backend-ai/requirements-dev.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 

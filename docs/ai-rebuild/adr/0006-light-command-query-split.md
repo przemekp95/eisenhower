@@ -1,6 +1,6 @@
 # ADR 0006: light command/query separation, not full CQRS
 
-Status: accepted; local durable command intake exists, but the command consumer lifecycle is not implemented.
+Status: accepted; durable command intake and the local consumer lifecycle are implemented, but the runtime has not been activated in production.
 
 ## Decision
 

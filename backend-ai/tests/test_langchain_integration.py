@@ -2,6 +2,9 @@ from __future__ import annotations
 from unittest.mock import Mock
 import pytest
 
+pytest.importorskip("langchain_core", reason="LangChain integration is an opt-in experiment")
+pytest.importorskip("langchain_qdrant", reason="LangChain integration is an opt-in experiment")
+
 from langchain_core.documents import Document
 
 from app.vector.langchain_adapter import EisenhowerEmbeddings, LangChainQdrantAdapter

@@ -1,6 +1,6 @@
 from app.rag.application import RagAnalysisService
 from app.rag.adapters import QdrantIngestionAdapter
-from app.rag.models import AccessScope, ChunkRecord, GenerationResult, RetrievalHit
+from app.rag.models import AccessScope, ChunkRecord, GenerationResult, RetrievalHit, SourceDocument
 from haystack import Document
 from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 
@@ -132,12 +132,28 @@ def test_native_qdrant_store_schema_is_not_the_existing_flat_payload_schema():
   )[0][0].payload
 
   class RecordingClient:
+    def set_payload(self, **_kwargs):
+      pass
+
     def upsert(self, **kwargs):
       self.points = kwargs["points"]
 
   client = RecordingClient()
   direct = QdrantIngestionAdapter(client, collection_name="direct_spike")
-  direct.upsert(
+  source = SourceDocument(
+    document_id="document-1",
+    tenant_id="tenant-a",
+    project_id="alpha",
+    owner_id="user-a",
+    source_type="project_context",
+    source_uri="eisenhower://project/alpha/context",
+    title="Project alpha",
+    text="Roadmap",
+    content_version="v1",
+    acl_subjects=["tenant:tenant-a"],
+  )
+  direct.replace_documents(
+    [source],
     [
       ChunkRecord(
         chunk_id="chunk-direct",
