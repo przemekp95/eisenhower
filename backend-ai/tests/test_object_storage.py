@@ -51,7 +51,7 @@ def test_filesystem_storage_round_trips_json_and_blocks_path_traversal(tmp_path)
     assert storage.list("models") == ["models/meta.json"]
     assert storage.delete("models/meta.json") is True
     assert storage.get("models/meta.json") is None
-    with pytest.raises(ValueError, match="Nieprawidłowa ścieżka"):
+    with pytest.raises(ValueError, match="Invalid storage path"):
         storage.get("../outside.json")
 
 

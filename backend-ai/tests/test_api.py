@@ -373,7 +373,10 @@ def test_production_can_disable_mutating_training_endpoints(tmp_path: Path):
   )
   store = TrainingStore(settings.training_data_path)
   service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
-  client = TestClient(create_app(settings=settings, store=store, ai_service=service))
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service),
+    headers={"Authorization": "Bearer test-admin-token"},
+  )
   original_records = store.load()
 
   response = client.post("/add-example", data={"text": "poison", "quadrant": 0})
