@@ -1,5 +1,22 @@
 # Done
 
+## TASK-016: Promote retrieval-first RAG package to green dev
+**Priority:** P0 | **Tags:** rag, delivery, dev, ci
+
+Publish the completed retrieval-first RAG package through a pull request to `dev`, require the repository checks to pass, merge only after green CI, and verify the resulting remote `dev` commit. Do not modify `master` or deploy production.
+
+### Plan
+
+- Audit the intended diff and refresh the remote branch relationship.
+- Run release-level local verification, commit the scoped changes, push the feature branch, and open a PR to `dev`.
+- Resolve only failures caused by this package, merge after green CI, and verify the remote `dev` SHA.
+
+### Outcome
+
+Integrated the package with the latest `origin/dev`, passed the full local `make verify` gate, and merged green PR #148. GitHub checks passed for branch policy, run-mode resolution, Trivy/security lint, backend AI, backend Node, frontend unit/integration/E2E, mobile, and native Android APK. Remote `dev` was independently fetched and verified at merge commit `8a2277be524bed5ceeb8c089b64e6a239f9a2fff`. `master` and production were not changed; real corpus approval, live Qdrant recovery/evaluation, production shadow traffic, vLLM/model/GPU selection, and advanced RAG remain in TASK-010 through TASK-015.
+
+---
+
 ## TASK-009: Establish the retrieval-first RAG delivery path
 **Priority:** P1 | **Tags:** rag, qdrant, shadow, architecture
 
