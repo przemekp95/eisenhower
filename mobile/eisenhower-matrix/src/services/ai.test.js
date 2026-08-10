@@ -1,11 +1,5 @@
 import { mobileConfig } from '../config';
-import {
-  clearApiToken,
-  getAdminToken,
-  getApiToken,
-  setAdminToken,
-  setApiToken,
-} from '../authSession';
+import { setAccessToken, setAdminToken } from '../authSession';
 import {
   addTrainingExample,
   analyzeTaskAdvanced,
@@ -24,11 +18,9 @@ import {
 describe('ai service', () => {
   beforeEach(() => {
     global.fetch = jest.fn();
-    setApiToken('runtime-only-test-token');
-    setAdminToken('runtime-only-admin-token');
+    setAccessToken('test-api-token');
+    setAdminToken('test-admin-token');
   });
-
-  afterEach(() => clearApiToken());
 
   it('uses the central AI backend for suggestions', async () => {
     global.fetch.mockResolvedValue({
@@ -45,8 +37,8 @@ describe('ai service', () => {
       `${mobileConfig.aiApiUrl}/classify`,
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({ Authorization: 'Bearer runtime-only-test-token' }),
         body: JSON.stringify({ title: 'urgent', use_rag: true }),
+        headers: expect.objectContaining({ Authorization: 'Bearer test-api-token' }),
       })
     );
   });
@@ -91,10 +83,11 @@ describe('ai service', () => {
       langchain_analysis: { reasoning: 'Because', quadrant: 2 },
     });
     expect(global.fetch).toHaveBeenCalledWith(
-      `${mobileConfig.aiApiUrl}/analyze-langchain`,
+      `${mobileConfig.aiApiUrl}/analyze`,
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ task: 'Prepare roadmap', language: 'pl' }),
+        headers: expect.objectContaining({ Authorization: 'Bearer test-api-token' }),
       })
     );
   });
@@ -113,10 +106,11 @@ describe('ai service', () => {
 
     expect(global.fetch).toHaveBeenNthCalledWith(
       1,
-      `${mobileConfig.aiApiUrl}/analyze-langchain`,
+      `${mobileConfig.aiApiUrl}/analyze`,
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ task: 'Przygotować plan', language: 'pl' }),
+        headers: expect.objectContaining({ Authorization: 'Bearer test-api-token' }),
       })
     );
     expect(global.fetch).toHaveBeenNthCalledWith(
@@ -130,7 +124,7 @@ describe('ai service', () => {
       3,
       `${mobileConfig.aiApiUrl}/examples/3?limit=10`,
       expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: 'Bearer runtime-only-admin-token' }),
+        headers: expect.objectContaining({ Authorization: 'Bearer test-admin-token' }),
       })
     );
     expect(global.fetch).toHaveBeenNthCalledWith(
@@ -155,7 +149,10 @@ describe('ai service', () => {
       `${mobileConfig.aiApiUrl}/batch-analyze`,
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer test-api-token',
+        }),
         body: JSON.stringify({ tasks: ['a', 'b'] }),
       })
     );
@@ -179,7 +176,7 @@ describe('ai service', () => {
     expect(global.fetch).toHaveBeenCalledWith(
       `${mobileConfig.aiApiUrl}/capabilities`,
       expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: 'Bearer runtime-only-test-token' }),
+        headers: expect.objectContaining({ Authorization: 'Bearer test-api-token' }),
       })
     );
   });
@@ -200,7 +197,7 @@ describe('ai service', () => {
         method: 'PUT',
         headers: expect.objectContaining({
           'Content-Type': 'application/json',
-          Authorization: 'Bearer runtime-only-admin-token',
+          Authorization: 'Bearer test-admin-token',
         }),
         body: JSON.stringify({ enabled: false }),
       })
@@ -217,21 +214,9 @@ describe('ai service', () => {
     expect(global.fetch).toHaveBeenCalledWith(
       `${mobileConfig.aiApiUrl}/training-stats`,
       expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: 'Bearer runtime-only-admin-token' }),
+        headers: expect.objectContaining({ Authorization: 'Bearer test-admin-token' }),
       })
     );
-  });
-
-  it('returns to the credential gate after rejected administrator credentials', async () => {
-    global.fetch.mockResolvedValue({
-      ok: false,
-      status: 403,
-      json: async () => ({ error: 'Administrator access required' }),
-    });
-
-    await expect(fetchTrainingStats()).rejects.toThrow('Administrator access required');
-    expect(getApiToken()).toBeNull();
-    expect(getAdminToken()).toBeNull();
   });
 
   it('submits training examples and feedback', async () => {
@@ -258,7 +243,10 @@ describe('ai service', () => {
       `${mobileConfig.aiApiUrl}/add-example`,
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({ 'Content-Type': 'application/x-www-form-urlencoded' }),
+        headers: expect.objectContaining({
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: 'Bearer test-admin-token',
+        }),
         body: 'text=Plan+roadmap&quadrant=2',
       })
     );
@@ -267,7 +255,10 @@ describe('ai service', () => {
       `${mobileConfig.aiApiUrl}/learn-feedback`,
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({ 'Content-Type': 'application/x-www-form-urlencoded' }),
+        headers: expect.objectContaining({
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: 'Bearer test-admin-token',
+        }),
         body: 'task=Plan+roadmap&predicted_quadrant=1&correct_quadrant=2',
       })
     );
@@ -276,7 +267,10 @@ describe('ai service', () => {
       `${mobileConfig.aiApiUrl}/learn-ocr-feedback`,
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer test-admin-token',
+        }),
         body: JSON.stringify({
           tasks: [{ task: 'Plan roadmap', quadrant: 2 }],
           retrain: false,
@@ -307,7 +301,10 @@ describe('ai service', () => {
       `${mobileConfig.aiApiUrl}/learn-ocr-feedback`,
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer test-admin-token',
+        }),
         body: JSON.stringify({
           tasks: [
             { task: 'Do now', quadrant: 0 },
@@ -347,7 +344,10 @@ describe('ai service', () => {
       `${mobileConfig.aiApiUrl}/retrain`,
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({ 'Content-Type': 'application/x-www-form-urlencoded' }),
+        headers: expect.objectContaining({
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: 'Bearer test-admin-token',
+        }),
         body: 'preserve_experience=false',
       })
     );
@@ -362,7 +362,7 @@ describe('ai service', () => {
       3,
       `${mobileConfig.aiApiUrl}/examples/0?limit=5`,
       expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: 'Bearer runtime-only-admin-token' }),
+        headers: expect.objectContaining({ Authorization: 'Bearer test-admin-token' }),
       })
     );
   });

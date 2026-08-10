@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import Matrix from './components/Matrix';
 import { LanguageProvider } from './i18n/LanguageContext';
 import * as api from './services/api';
@@ -69,8 +69,8 @@ jest.mock('./components/matrixLazyComponents', () => ({
           void onAnalysisTaskAdd({
             task: 'critical task',
             langchain_analysis: {
-              quadrant: 2,
-              reasoning: 'Schedule this',
+              quadrant: 1,
+              reasoning: 'Delegate this',
               confidence: 0.9,
               method: 'langchain',
             },
@@ -95,8 +95,8 @@ jest.mock('./components/matrixLazyComponents', () => ({
           onAnalysisComplete({
             task: 'critical task',
             langchain_analysis: {
-              quadrant: 1,
-              reasoning: 'Delegate this',
+              quadrant: 2,
+              reasoning: 'Schedule this',
               confidence: 0.9,
               method: 'langchain',
             },
@@ -253,6 +253,34 @@ describe('Matrix', () => {
     expect(screen.getByText(/Zrób teraz/i)).toBeInTheDocument();
     expect(screen.getByText('Urgent task')).toBeInTheDocument();
     expect(screen.getByText('Later task')).toBeInTheDocument();
+  });
+
+  it('places delegate and schedule tasks under their canonical quadrant labels', () => {
+    render(
+      <LanguageProvider>
+        <Matrix
+          tasks={[
+            { _id: '1', title: 'Hand off alert', description: '', urgent: true, important: false },
+            { _id: '2', title: 'Plan roadmap', description: '', urgent: false, important: true },
+          ]}
+          loading={false}
+          onAddTask={jest.fn()}
+          onUpdateTask={jest.fn()}
+          onDeleteTask={jest.fn()}
+        />
+      </LanguageProvider>
+    );
+
+    expect(
+      within(screen.getByText('Deleguj').closest('section') as HTMLElement).getByText(
+        'Hand off alert'
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByText('Zaplanuj').closest('section') as HTMLElement).getByText(
+        'Plan roadmap'
+      )
+    ).toBeInTheDocument();
   });
 
   it('submits a new task', async () => {
@@ -481,8 +509,8 @@ describe('Matrix', () => {
       expect(onAddTask).toHaveBeenCalledWith({
         title: 'Przygotować plan kwartalny',
         description: 'Do omówienia z zarządem',
-        urgent: false,
-        important: true,
+        urgent: true,
+        important: false,
       })
     );
     await waitFor(() => expect(screen.getByPlaceholderText(/Tytuł zadania/i)).toHaveValue(''));
@@ -519,8 +547,8 @@ describe('Matrix', () => {
       expect(onAddTask).toHaveBeenCalledWith({
         title: 'critical task',
         description: '',
-        urgent: false,
-        important: true,
+        urgent: true,
+        important: false,
       })
     );
   });
@@ -634,8 +662,8 @@ describe('Matrix', () => {
 
     await waitFor(() => {
       const checkboxes = screen.getAllByRole('checkbox');
-      expect(checkboxes[0]).toBeChecked();
-      expect(checkboxes[1]).not.toBeChecked();
+      expect(checkboxes[0]).not.toBeChecked();
+      expect(checkboxes[1]).toBeChecked();
     });
 
     fireEvent.click(screen.getByText(/Close AI tools/i));
@@ -654,7 +682,7 @@ describe('Matrix', () => {
       },
       rag_classification: {
         quadrant: 2,
-        quadrant_name: 'Schedule',
+        quadrant_name: 'Delegate',
         confidence: 0.7,
       },
       comparison: {
@@ -754,6 +782,24 @@ describe('Matrix', () => {
     });
 
     expect(onUpdateTask).toHaveBeenCalledWith('1', { urgent: false, important: false });
+
+    await act(async () => {
+      await onDragEnd?.({
+        destination: { droppableId: 'delegate' },
+        source: { droppableId: 'do' },
+        draggableId: '1',
+      });
+    });
+    expect(onUpdateTask).toHaveBeenLastCalledWith('1', { urgent: true, important: false });
+
+    await act(async () => {
+      await onDragEnd?.({
+        destination: { droppableId: 'schedule' },
+        source: { droppableId: 'do' },
+        draggableId: '1',
+      });
+    });
+    expect(onUpdateTask).toHaveBeenLastCalledWith('1', { urgent: false, important: true });
   });
 
   it('initializes and cleans up matrix motion when enabled', async () => {

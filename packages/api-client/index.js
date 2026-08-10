@@ -4,11 +4,21 @@ const TASK_API_PATHS = Object.freeze({
   readiness: '/health/ready',
 });
 
+const QUADRANT_DEFINITIONS = Object.freeze([
+  Object.freeze({ value: 0, key: 'do', name: 'Do Now', urgent: true, important: true }),
+  Object.freeze({ value: 1, key: 'delegate', name: 'Delegate', urgent: true, important: false }),
+  Object.freeze({ value: 2, key: 'schedule', name: 'Schedule', urgent: false, important: true }),
+  Object.freeze({ value: 3, key: 'delete', name: 'Delete', urgent: false, important: false }),
+]);
+
 const AI_API_PATHS = Object.freeze({
   capabilities: '/capabilities',
   trainingStats: '/training-stats',
   classify: '/classify',
+  analyzeTask: '/analyze',
   analyzeWithLangChain: '/analyze-langchain',
+  analyzeTaskWithRag: '/v2/ai/analyze',
+  knowledgeSearch: '/v2/knowledge/search',
   extractTasksFromImage: '/extract-tasks-from-image',
   batchAnalyzeTasks: '/batch-analyze',
   addTrainingExample: '/add-example',
@@ -18,6 +28,10 @@ const AI_API_PATHS = Object.freeze({
   clearTrainingData: '/training-data',
 });
 
+// The server path is retained for backwards compatibility. It is a local task
+// analysis endpoint, not proof that LangChain or generative RAG handled a request.
+const ANALYZE_TASK_PATH = AI_API_PATHS.analyzeTask;
+
 function getProviderPath(provider) {
   return `/providers/${encodeURIComponent(provider)}`;
 }
@@ -26,10 +40,16 @@ function getExamplesByQuadrantPath(quadrant, limit = 10) {
   return `/examples/${encodeURIComponent(String(quadrant))}?limit=${encodeURIComponent(String(limit))}`;
 }
 
-function getClassifyPath(title, useRag = true) {
+function getClassifyPath(title, includeSimilarExamples = true) {
   void title;
-  void useRag;
+  void includeSimilarExamples;
   return AI_API_PATHS.classify;
+}
+
+function getAnalyzeTaskPath(task, language = 'en') {
+  void task;
+  void language;
+  return ANALYZE_TASK_PATH;
 }
 
 function getAnalyzeWithLangChainPath(task, language = 'en') {
@@ -56,7 +76,6 @@ function resolveClientOptions(optionsOrFetch) {
   if (typeof optionsOrFetch === 'function' || optionsOrFetch === undefined) {
     return { fetchImpl: optionsOrFetch };
   }
-
   return {
     fetchImpl: optionsOrFetch.fetch,
     accessToken: optionsOrFetch.accessToken,
@@ -69,23 +88,23 @@ function resolveClientOptions(optionsOrFetch) {
 function createAuthorizedRequest(optionsOrFetch, credential = 'access') {
   const options = resolveClientOptions(optionsOrFetch);
   const request = resolveFetch(options.fetchImpl);
-
   return async (url, init = {}) => {
-    const configuredCredential = credential === 'admin' ? options.adminToken : options.accessToken;
-    const configuredToken =
-      typeof configuredCredential === 'function' ? configuredCredential() : configuredCredential;
+    const configured = credential === 'admin' ? options.adminToken : options.accessToken;
+    const token = typeof configured === 'function' ? configured() : configured;
     const headers = { ...(init.headers || {}) };
-
-    if (configuredToken) {
-      headers.Authorization = `Bearer ${configuredToken}`;
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
     }
-
-    const response = await request(url, { ...init, headers });
+    const requestInit = { ...init, headers };
+    const response =
+      !token && Object.keys(init).length === 0 && Object.keys(headers).length === 0
+        ? await request(url)
+        : await request(url, requestInit);
     if (response.status === 401 || response.status === 403) {
-      if (credential === 'admin' && options.onAdminUnauthorized) {
-        options.onAdminUnauthorized();
-      } else if (credential === 'access' && options.onUnauthorized) {
-        options.onUnauthorized();
+      if (credential === 'admin') {
+        options.onAdminUnauthorized?.();
+      } else {
+        options.onUnauthorized?.();
       }
     }
     return response;
@@ -171,19 +190,9 @@ function resolveTaskQuadrant(task) {
     return task.quadrant;
   }
 
-  if (task?.urgent && task?.important) {
-    return 0;
-  }
-
-  if (task?.urgent) {
-    return 1;
-  }
-
-  if (task?.important) {
-    return 2;
-  }
-
-  return 3;
+  return QUADRANT_DEFINITIONS.find(
+    (quadrant) => quadrant.urgent === Boolean(task?.urgent) && quadrant.important === Boolean(task?.important)
+  ).value;
 }
 
 function toAcceptedOcrLearningPayload(tasks) {
@@ -257,28 +266,53 @@ function createAiApi(baseUrl, optionsOrFetch) {
   const request = createAuthorizedRequest(optionsOrFetch);
   const adminRequest = createAuthorizedRequest(optionsOrFetch, 'admin');
 
+  const analyzeTask = async (task, language = 'en') => {
+    const response = await request(buildUrl(baseUrl, getAnalyzeTaskPath(task, language)), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task, language }),
+    });
+    return readJson(response, {
+      defaultError: 'AI request failed',
+      errorCode: 'ai_request_failed',
+    });
+  };
+
   return {
     paths: AI_API_PATHS,
-    async classifyTask(title, useRag = true) {
-      const response = await request(buildUrl(baseUrl, getClassifyPath(title, useRag)), {
+    async classifyTask(title, includeSimilarExamples = true) {
+      const response = await request(buildUrl(baseUrl, getClassifyPath(title, includeSimilarExamples)), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, use_rag: useRag }),
+        body: JSON.stringify({ title, use_rag: includeSimilarExamples }),
       });
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',
       });
     },
-    async analyzeWithLangChain(task, language = 'en') {
-      const response = await request(buildUrl(baseUrl, getAnalyzeWithLangChainPath(task, language)), {
+    analyzeTask,
+    analyzeWithLangChain: analyzeTask,
+    async analyzeTaskWithRag(task) {
+      const response = await request(buildUrl(baseUrl, AI_API_PATHS.analyzeTaskWithRag), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task, language }),
+        body: JSON.stringify({ task }),
       });
       return readJson(response, {
-        defaultError: 'AI request failed',
-        errorCode: 'ai_request_failed',
+        defaultError: 'Grounded AI request failed',
+        errorCode: 'rag_request_failed',
+      });
+    },
+    async searchKnowledge(query, projectId = null, limit = 5) {
+      const response = await request(buildUrl(baseUrl, AI_API_PATHS.knowledgeSearch), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, project_id: projectId, limit }),
+      });
+      return readJson(response, {
+        defaultError: 'Knowledge search failed',
+        errorCode: 'knowledge_search_failed',
       });
     },
     async extractTasksFromImage(file) {
@@ -442,7 +476,7 @@ function isClassificationResultDto(value) {
   );
 }
 
-function isLangChainAnalysisDto(value) {
+function isTaskAnalysisDto(value) {
   return Boolean(
     value &&
     typeof value === 'object' &&
@@ -454,6 +488,8 @@ function isLangChainAnalysisDto(value) {
     typeof value.rag_classification.quadrant_name === 'string'
   );
 }
+
+const isLangChainAnalysisDto = isTaskAnalysisDto;
 
 function isBatchAnalysisResultDto(value) {
   return Boolean(
@@ -477,12 +513,14 @@ function isOcrResultDto(value) {
 
 module.exports = {
   AI_API_PATHS,
+  QUADRANT_DEFINITIONS,
   TASK_API_PATHS,
   buildUrl,
   createAiApi,
   createRequestError,
   createTaskApi,
   getAnalyzeWithLangChainPath,
+  getAnalyzeTaskPath,
   getClassifyPath,
   getClearTrainingDataPath,
   getExamplesByQuadrantPath,
@@ -491,6 +529,7 @@ module.exports = {
   isClassificationResultDto,
   isHealthResponseDto,
   isLangChainAnalysisDto,
+  isTaskAnalysisDto,
   isOcrResultDto,
   isTaskDto,
   readJson,

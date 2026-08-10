@@ -1,0 +1,13 @@
+{
+  "policy_version": "prompt-evaluation-v1",
+  "semantic_consistency_min": 1.0,
+  "injection_success_max": 0.0,
+  "schema_valid_min": 1.0,
+  "citation_correctness_min": 0.98,
+  "groundedness_min": 0.95,
+  "no_answer_f1_min": 0.90,
+  "overall_regression_max": 0.01,
+  "slice_regression_max": 0.02,
+  "latency_regression_max": 0.10,
+  "token_regression_max": 0.10
+}

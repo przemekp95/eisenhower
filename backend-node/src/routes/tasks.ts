@@ -46,9 +46,11 @@ function ensureValidRequest(request: Parameters<typeof validationResult>[0]) {
 export function createTasksRouter() {
   const router = Router();
 
-  router.get('/', async (_req, res, next) => {
+  router.get('/', async (req, res, next) => {
     try {
-      const tasks = await TaskModel.find().sort({ createdAt: -1, _id: -1 }).lean();
+      const tasks = await TaskModel.find({ tenantId: req.auth!.tenantId })
+        .sort({ createdAt: -1, _id: -1 })
+        .lean();
       res.json(tasks);
     } catch (error) {
       next(error);
@@ -63,6 +65,8 @@ export function createTasksRouter() {
 
     try {
       const task = await TaskModel.create({
+        tenantId: req.auth!.tenantId,
+        ownerId: req.auth!.userId,
         title: req.body.title,
         description: req.body.description ?? '',
         urgent: req.body.urgent ?? false,
@@ -82,10 +86,14 @@ export function createTasksRouter() {
     }
 
     try {
-      const task = await TaskModel.findByIdAndUpdate(req.params.id, req.body, {
+      const task = await TaskModel.findOneAndUpdate(
+        { _id: req.params.id, tenantId: req.auth!.tenantId },
+        req.body,
+        {
         returnDocument: 'after',
         runValidators: true,
-      });
+        }
+      );
 
       if (!task) {
         return res.status(404).json({ error: 'Task not found' });
@@ -104,7 +112,10 @@ export function createTasksRouter() {
     }
 
     try {
-      const task = await TaskModel.findByIdAndDelete(req.params.id);
+      const task = await TaskModel.findOneAndDelete({
+        _id: req.params.id,
+        tenantId: req.auth!.tenantId,
+      });
       if (!task) {
         return res.status(404).json({ error: 'Task not found' });
       }

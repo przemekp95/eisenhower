@@ -1,0 +1,70 @@
+{
+  "name": "Eisenhower - RAG ingestion error handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Workflow Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [-300, 0]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {"id": "workflow", "name": "workflow", "value": "={{ $json.workflow.name }}", "type": "string"},
+            {"id": "execution", "name": "execution_id", "value": "={{ $json.execution.id }}", "type": "string"},
+            {"id": "severity", "name": "severity", "value": "error", "type": "string"},
+            {"id": "message", "name": "message", "value": "RAG ingestion automation failed; inspect the private n8n execution log.", "type": "string"}
+          ]
+        },
+        "options": {}
+      },
+      "id": "sanitize-error",
+      "name": "Build Sanitized Error Envelope",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-60, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_INGESTION_ALERT_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "={{ 'Bearer ' + $env.N8N_INGESTION_ALERT_TOKEN }}"}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json) }}",
+        "options": {"timeout": 5000}
+      },
+      "id": "send-alert",
+      "name": "Send Sanitized Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [180, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {
+    "Workflow Error": {"main": [[{"node": "Build Sanitized Error Envelope", "type": "main", "index": 0}]]},
+    "Build Sanitized Error Envelope": {"main": [[{"node": "Send Sanitized Alert", "type": "main", "index": 0}]]}
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none"
+  },
+  "active": false,
+  "versionId": "replace-after-import",
+  "meta": {},
+  "tags": []
+}

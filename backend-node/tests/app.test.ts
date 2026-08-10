@@ -13,6 +13,10 @@ describe('app middleware', () => {
   afterEach(() => {
     process.env.NODE_ENV = originalNodeEnv;
     delete process.env.EISENHOWER_API_TOKEN;
+    delete process.env.AUTH_MODE;
+    delete process.env.OIDC_ISSUER;
+    delete process.env.OIDC_AUDIENCE;
+    delete process.env.OIDC_JWKS_URL;
     delete process.env.CORS_ALLOW_ORIGINS;
   });
 
@@ -147,6 +151,7 @@ describe('app middleware', () => {
 
   it('does not expose exception details in production', async () => {
     process.env.NODE_ENV = 'production';
+    process.env.AUTH_MODE = 'static';
     process.env.EISENHOWER_API_TOKEN = 'production-api-token-at-least-32-characters';
     process.env.CORS_ALLOW_ORIGINS = 'https://tasks.example.com';
     jest.spyOn(TaskModel, 'find').mockReturnValue({
@@ -167,6 +172,17 @@ describe('app middleware', () => {
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({ error: 'Internal server error' });
+  });
+
+  it('constructs the OIDC middleware for a valid production configuration', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.AUTH_MODE = 'oidc';
+    process.env.OIDC_ISSUER = 'https://identity.example.com';
+    process.env.OIDC_AUDIENCE = 'eisenhower-api';
+    process.env.OIDC_JWKS_URL = 'https://identity.example.com/.well-known/jwks.json';
+    process.env.CORS_ALLOW_ORIGINS = 'https://tasks.example.com';
+
+    expect(() => createApp()).not.toThrow();
   });
 
   it('skips request logging for health checks', async () => {

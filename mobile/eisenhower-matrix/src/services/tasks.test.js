@@ -1,5 +1,5 @@
 import { mobileConfig } from '../config';
-import { clearApiToken, setApiToken } from '../authSession';
+import { setAccessToken } from '../authSession';
 import {
   createRemoteTask,
   deleteRemoteTask,
@@ -12,10 +12,8 @@ import {
 describe('tasks service', () => {
   beforeEach(() => {
     global.fetch = jest.fn();
-    setApiToken('runtime-only-test-token');
+    setAccessToken('test-api-token');
   });
-
-  afterEach(() => clearApiToken());
 
   it('normalizes remote tasks and loads the task list', async () => {
     global.fetch.mockResolvedValue({
@@ -42,7 +40,7 @@ describe('tasks service', () => {
     expect(global.fetch).toHaveBeenCalledWith(
       `${mobileConfig.apiUrl}/tasks`,
       expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: 'Bearer runtime-only-test-token' }),
+        headers: expect.objectContaining({ Authorization: 'Bearer test-api-token' }),
       })
     );
   });

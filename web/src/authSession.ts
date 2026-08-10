@@ -6,6 +6,8 @@ export function getApiToken() {
   return apiToken;
 }
 
+export const getAccessToken = getApiToken;
+
 export function getAdminToken() {
   return adminToken;
 }
@@ -14,6 +16,8 @@ export function setApiToken(token: string) {
   apiToken = token.trim() || null;
   listeners.forEach((listener) => listener());
 }
+
+export const setAccessToken = setApiToken;
 
 export function setAdminToken(token: string) {
   adminToken = token.trim() || null;
@@ -31,6 +35,8 @@ export function clearApiToken() {
   adminToken = null;
   listeners.forEach((listener) => listener());
 }
+
+export const clearTokens = clearApiToken;
 
 export function clearAdminToken() {
   adminToken = null;

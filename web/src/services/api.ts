@@ -5,7 +5,7 @@ import apiClient, {
   type AIProviderName,
   type BatchAnalysisResultDto,
   type ClassificationResultDto,
-  type LangChainAnalysisDto,
+  type TaskAnalysisDto,
   type OcrResultDto,
   type SimilarExampleResultDto,
   type TaskDto,
@@ -17,8 +17,9 @@ import { runtimeConfig } from '../config';
 import type { Language } from '../i18n/translations';
 import {
   clearApiToken,
+  clearTokens,
+  getAccessToken,
   getAdminToken,
-  getApiToken,
   setAdminToken,
   setApiToken,
   setCredentials,
@@ -26,27 +27,29 @@ import {
 
 const { createAiApi, createTaskApi } = apiClient;
 
+export { clearApiToken, setAdminToken, setApiToken, setCredentials };
+
 function getTaskApi() {
   return createTaskApi(runtimeConfig.apiUrl, {
-    accessToken: getApiToken,
-    onUnauthorized: clearApiToken,
+    accessToken: getAccessToken,
+    onUnauthorized: clearTokens,
   });
 }
 
 function getAiApi() {
   return createAiApi(runtimeConfig.aiApiUrl, {
-    accessToken: getApiToken,
+    accessToken: getAccessToken,
     adminToken: getAdminToken,
-    onUnauthorized: clearApiToken,
-    onAdminUnauthorized: clearApiToken,
+    onUnauthorized: clearTokens,
+    onAdminUnauthorized: clearTokens,
   });
 }
 
-export { clearApiToken, setAdminToken, setApiToken, setCredentials };
-
 export type ClassificationResult = ClassificationResultDto;
 export type SimilarExampleResult = SimilarExampleResultDto;
-export type LangChainAnalysis = LangChainAnalysisDto;
+export type TaskAnalysis = TaskAnalysisDto;
+/** @deprecated Use TaskAnalysis. */
+export type LangChainAnalysis = TaskAnalysis;
 export type OCRResult = OcrResultDto;
 export type BatchAnalysisResult = BatchAnalysisResultDto;
 export type TrainingStats = TrainingStatsDto;
@@ -76,12 +79,12 @@ export async function classifyTask(title: string): Promise<ClassificationResult>
   return getAiApi().classifyTask(title, true);
 }
 
-export async function analyzeWithLangChain(
-  task: string,
-  language: Language = 'en'
-): Promise<LangChainAnalysis> {
-  return getAiApi().analyzeWithLangChain(task, language);
+export async function analyzeTask(task: string, language: Language = 'en'): Promise<TaskAnalysis> {
+  return getAiApi().analyzeTask(task, language);
 }
+
+/** @deprecated Use analyzeTask. */
+export const analyzeWithLangChain = analyzeTask;
 
 export async function extractTasksFromImage(file: File): Promise<OCRResult> {
   return getAiApi().extractTasksFromImage(file);

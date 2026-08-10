@@ -1,13 +1,13 @@
 import { createAiApi } from '@eisenhower/api-client';
 import { mobileConfig } from '../config';
-import { clearApiToken, getAdminToken, getApiToken } from '../authSession';
+import { clearTokens, getAccessToken, getAdminToken } from '../authSession';
 
 function getAiApi() {
   return createAiApi(mobileConfig.aiApiUrl, {
-    accessToken: getApiToken,
+    accessToken: getAccessToken,
     adminToken: getAdminToken,
-    onUnauthorized: clearApiToken,
-    onAdminUnauthorized: clearApiToken,
+    onUnauthorized: clearTokens,
+    onAdminUnauthorized: clearTokens,
   });
 }
 
@@ -22,7 +22,7 @@ export async function suggestTaskQuadrant(title) {
 }
 
 export async function analyzeTaskAdvanced(task, language = 'pl') {
-  return getAiApi().analyzeWithLangChain(task, language);
+  return getAiApi().analyzeTask(task, language);
 }
 
 export async function batchAnalyzeTasks(tasks) {

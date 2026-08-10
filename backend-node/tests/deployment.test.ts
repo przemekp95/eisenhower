@@ -64,9 +64,10 @@ describe('production deployment boundaries', () => {
     const qdrantBlock = compose.slice(compose.indexOf('  qdrant:'), compose.indexOf('  minio:'));
     const minioBlock = compose.slice(compose.indexOf('  minio:'), compose.indexOf('  nginx:'));
 
-    expect(aiBlock).not.toContain('QDRANT_');
+    expect(aiBlock).toContain('RAG_ENABLED=${RAG_ENABLED:-false}');
+    expect(aiBlock).toContain('QDRANT_URL=http://qdrant:6333');
     expect(aiBlock).not.toContain('MINIO_');
-    expect(qdrantBlock).toMatch(/profiles:\n\s+- experimental/);
+    expect(qdrantBlock).toMatch(/profiles:\n\s+- experimental\n\s+- rag/);
     expect(minioBlock).toMatch(/profiles:\n\s+- experimental/);
     expect(compose).toContain('${GRAFANA_ADMIN_USER:?GRAFANA_ADMIN_USER is required}');
     expect(compose).toContain('${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}');
@@ -93,7 +94,8 @@ describe('production deployment boundaries', () => {
     expect(dockerfile).toContain('COPY --from=dependencies-cpu');
     expect(dockerfile).toContain('FROM dependencies-cpu AS development');
     expect(dockerfile).not.toMatch(/(?:FROM|--from=) dependencies(?:\s|$)/);
-    expect(productionRequirements).not.toMatch(/qdrant|minio|langchain/);
+    expect(productionRequirements).toContain('qdrant-client');
+    expect(productionRequirements).not.toMatch(/minio|langchain/);
     expect(productionRequirements).not.toMatch(/pytest|pylint|pip-audit/);
     expect(experimentalRequirements).toContain('-r requirements.txt');
     expect(experimentalRequirements).toMatch(/qdrant|minio|langchain/);

@@ -121,6 +121,21 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByText('Existing task')).toBeInTheDocument());
   });
 
+  it('labels the important non-urgent hero metric as Schedule', async () => {
+    mockedApi.getTasks.mockResolvedValueOnce([
+      { _id: '2', title: 'Plan roadmap', description: '', urgent: false, important: true },
+    ]);
+
+    const { container } = render(<App />);
+
+    await waitFor(() => expect(screen.getByText('Plan roadmap')).toBeInTheDocument());
+    const metricLabels = Array.from(container.querySelectorAll('[data-app-stat]')).map(
+      (element) => element.textContent
+    );
+    expect(metricLabels).toContain('01Zaplanuj');
+    expect(metricLabels).not.toContain('01Deleguj');
+  });
+
   it('surfaces fetch errors', async () => {
     mockedApi.getTasks.mockRejectedValueOnce(new Error('Network down'));
 

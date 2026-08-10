@@ -4,6 +4,9 @@
   "private": true,
   "main": "index.js",
   "types": "index.d.ts",
+  "scripts": {
+    "test": "node --test index.test.js"
+  },
   "files": [
     "index.js",
     "index.d.ts"
