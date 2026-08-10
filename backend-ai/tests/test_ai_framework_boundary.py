@@ -13,6 +13,14 @@ def test_production_dependencies_do_not_install_experimental_frameworks():
   assert "llama-index" not in requirements.lower()
 
 
+def test_standard_dev_dependencies_do_not_install_experimental_frameworks():
+  requirements = ROOT.joinpath("requirements-dev.txt").read_text(encoding="utf-8").lower()
+
+  assert "requirements-experimental.txt" not in requirements
+  assert "langchain" not in requirements
+  assert "haystack" not in requirements
+
+
 def test_application_contracts_do_not_import_ai_framework_types():
   forbidden = ("haystack", "langchain", "llama_index", "langgraph")
   boundary_files = [
@@ -24,3 +32,17 @@ def test_application_contracts_do_not_import_ai_framework_types():
   for path in boundary_files:
     source = path.read_text(encoding="utf-8").lower()
     assert all(name not in source for name in forbidden), path
+
+
+def test_core_vector_package_does_not_eagerly_import_optional_langchain_adapter():
+  package_init = ROOT.joinpath("app/vector/__init__.py").read_text(encoding="utf-8").lower()
+
+  assert "langchain_adapter" not in package_init
+  assert "eisenhowerembeddings" not in package_init
+  assert "langchainqdrantadapter" not in package_init
+
+
+def test_dockerfile_has_one_unambiguous_cpu_production_stage():
+  dockerfile = ROOT.joinpath("Dockerfile").read_text(encoding="utf-8").lower()
+
+  assert dockerfile.count(" as production\n") == 1

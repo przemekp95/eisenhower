@@ -1,5 +1,8 @@
+import pytest
+
 from app.generation.models import ClassificationOutput, GenerationResult
 from app.rag.application import RagAnalysisService
+from app.rag.errors import GenerationProviderUnavailable, InvalidGenerationOutput
 from app.rag.models import AccessScope, RetrievalHit
 
 
@@ -188,7 +191,7 @@ def test_rag_analysis_falls_back_when_generation_provider_is_unavailable():
   )
   service = RagAnalysisService(
     StubRetriever([hit]),
-    StubGenerator(error=TimeoutError("vLLM timeout")),
+    StubGenerator(error=GenerationProviderUnavailable("vLLM timeout")),
     StubFallback(),
   )
 
@@ -196,6 +199,52 @@ def test_rag_analysis_falls_back_when_generation_provider_is_unavailable():
 
   assert result.mode == "fallback"
   assert result.fallback_reason == "generation_unavailable"
+
+
+def test_rag_analysis_falls_back_when_generation_output_is_invalid():
+  hit = RetrievalHit(
+    chunk_id="chunk-1",
+    document_id="doc-1",
+    text="Known context",
+    score=0.8,
+    source_uri="knowledge://1",
+    title="Known",
+    tenant_id="tenant-a",
+    embedding_version="minilm-v1",
+    content_version="v1",
+  )
+  service = RagAnalysisService(
+    StubRetriever([hit]),
+    StubGenerator(error=InvalidGenerationOutput("malformed schema")),
+    StubFallback(),
+  )
+
+  result = service.analyze("Task", AccessScope(tenant_id="tenant-a", user_id="user-1"))
+
+  assert result.mode == "fallback"
+  assert result.fallback_reason == "generation_unavailable"
+
+
+def test_rag_analysis_does_not_hide_unexpected_programming_errors():
+  hit = RetrievalHit(
+    chunk_id="chunk-1",
+    document_id="doc-1",
+    text="Known context",
+    score=0.8,
+    source_uri="knowledge://1",
+    title="Known",
+    tenant_id="tenant-a",
+    embedding_version="minilm-v1",
+    content_version="v1",
+  )
+  service = RagAnalysisService(
+    StubRetriever([hit]),
+    StubGenerator(error=ValueError("programming error")),
+    StubFallback(),
+  )
+
+  with pytest.raises(ValueError, match="programming error"):
+    service.analyze("Task", AccessScope(tenant_id="tenant-a", user_id="user-1"))
 
 
 def test_knowledge_search_returns_retrieval_citations_without_generation():

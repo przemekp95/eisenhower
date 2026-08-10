@@ -11,7 +11,8 @@ from qdrant_client import models as qmodels
 from ..generation.models import ClassificationOutput, GenerationResult
 from ..generation.registry import PromptRegistry
 from ..generation.renderer import PromptRenderer
-from .models import ChunkRecord, GenerationRequest, RetrievalHit, RetrievalQuery
+from .errors import GenerationProviderError, GenerationProviderUnavailable, InvalidGenerationOutput
+from .models import ChunkRecord, GenerationRequest, RetrievalHit, RetrievalQuery, SourceDocument
 from .ports import EmbeddingProvider
 
 
@@ -94,9 +95,26 @@ class QdrantIngestionAdapter:
     self.client = client
     self.collection_name = collection_name
 
-  def upsert(self, chunks: list[ChunkRecord], vectors: list[list[float]]) -> None:
+  def replace_documents(
+    self,
+    documents: list[SourceDocument],
+    chunks: list[ChunkRecord],
+    vectors: list[list[float]],
+  ) -> None:
     if len(chunks) != len(vectors):
       raise ValueError("Every chunk must have exactly one embedding vector")
+    document_keys = {(document.tenant_id, document.document_id) for document in documents}
+    if len(document_keys) != len(documents):
+      raise ValueError("Every replacement document must be unique within its tenant")
+    if any((chunk.tenant_id, chunk.document_id) not in document_keys for chunk in chunks):
+      raise ValueError("Every replacement chunk must belong to a supplied document")
+    for document in documents:
+      self.client.set_payload(
+        collection_name=self.collection_name,
+        payload={"deleted": True},
+        points=self._document_selector(document.document_id, document.tenant_id),
+        wait=True,
+      )
     points = [
       qmodels.PointStruct(
         id=str(uuid5(NAMESPACE_URL, chunk.chunk_id)),
@@ -113,7 +131,16 @@ class QdrantIngestionAdapter:
       )
 
   def tombstone(self, document_id: str, tenant_id: str, content_version: str) -> None:
-    selector = qmodels.FilterSelector(
+    self.client.set_payload(
+      collection_name=self.collection_name,
+      payload={"deleted": True, "content_version": content_version},
+      points=self._document_selector(document_id, tenant_id),
+      wait=True,
+    )
+
+  @staticmethod
+  def _document_selector(document_id: str, tenant_id: str) -> qmodels.FilterSelector:
+    return qmodels.FilterSelector(
       filter=qmodels.Filter(
         must=[
           qmodels.FieldCondition(
@@ -126,12 +153,6 @@ class QdrantIngestionAdapter:
           ),
         ]
       )
-    )
-    self.client.set_payload(
-      collection_name=self.collection_name,
-      payload={"deleted": True, "content_version": content_version},
-      points=selector,
-      wait=True,
     )
 
 
@@ -202,6 +223,15 @@ class VLLMGenerationProvider:
         json=payload,
       )
       response.raise_for_status()
+    except httpx.TimeoutException as error:
+      raise GenerationProviderUnavailable("vLLM request timed out") from error
+    except httpx.RequestError as error:
+      raise GenerationProviderUnavailable("vLLM request failed") from error
+    except httpx.HTTPStatusError as error:
+      if error.response.status_code == 429 or error.response.status_code >= 500:
+        raise GenerationProviderUnavailable("vLLM request failed") from error
+      raise InvalidGenerationOutput("vLLM rejected the generation contract") from error
+    try:
       body = response.json()
       content = body["choices"][0]["message"]["content"]
       output = ClassificationOutput.model_validate_json(content)
@@ -222,8 +252,8 @@ class VLLMGenerationProvider:
         input_tokens=rendered.input_tokens,
         context_chunk_ids=list(rendered.allowed_chunk_ids),
       )
-    except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as error:
-      raise RuntimeError("vLLM generation failed") from error
+    except (KeyError, IndexError, TypeError, ValueError) as error:
+      raise InvalidGenerationOutput("invalid vLLM output") from error
 
 
 class CircuitBreakerGenerationProvider:
@@ -239,14 +269,14 @@ class CircuitBreakerGenerationProvider:
   def generate(self, request: GenerationRequest) -> GenerationResult:
     if self.opened_at is not None:
       if monotonic() - self.opened_at < self.reset_seconds:
-        raise RuntimeError("generation circuit breaker is open")
+        raise GenerationProviderUnavailable("generation circuit breaker is open")
       self.opened_at = None
       self.failures = 0
     try:
       result = self.provider.generate(request)
       self.failures = 0
       return result
-    except Exception:
+    except GenerationProviderError:
       self.failures += 1
       if self.failures >= self.failure_threshold:
         self.opened_at = monotonic()

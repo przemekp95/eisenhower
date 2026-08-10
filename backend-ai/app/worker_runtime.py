@@ -7,6 +7,7 @@ from socket import gethostname
 from threading import Event
 
 from .config import load_settings
+from .document_versions import SqliteDocumentVersionStore
 from .job_worker import JobWorker
 from .jobs import SqliteJobQueue
 from .rag.bootstrap import build_ingestion_application, build_rag_service
@@ -29,6 +30,7 @@ def build_worker():
   )
   handlers = RagJobHandlers(
     ingestion,
+    SqliteDocumentVersionStore(settings.jobs_database_path),
     chunking_version=settings.chunking_version,
     evaluate=evaluation_handler,
   )

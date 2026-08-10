@@ -21,7 +21,7 @@ Do not blindly index complete chat history, raw email archives, binary attachmen
 
 ```json
 {
-  "schema_version": "1",
+  "schema_version": "2",
   "document_id": "stable-source-id",
   "tenant_id": "tenant-42",
   "project_id": "project-17",
@@ -31,6 +31,7 @@ Do not blindly index complete chat history, raw email archives, binary attachmen
   "title": "Incident procedure",
   "text": "Normalized source text",
   "source_version": "source-etag-or-revision",
+  "source_sequence": 42,
   "content_version": "2026-08-09T12:00:00Z",
   "content_checksum": "sha256-hex",
   "acl_subjects": ["tenant:tenant-42", "project:project-17", "role:on-call"],
@@ -71,6 +72,7 @@ An administrator role is not an implicit cross-tenant wildcard. Cross-tenant sup
 
 - `schema_version`: envelope compatibility.
 - `source_version`: source-system revision/ETag.
+- `source_sequence`: connector-provided monotonic integer for one canonical document; stale or replayed lower sequences are ignored.
 - `content_version`: immutable logical document revision or tombstone.
 - `chunking_version`: normalization/chunk algorithm and parameters.
 - `embedding_version`: model name, revision, preprocessing and vector dimension as one immutable identifier.
@@ -81,13 +83,13 @@ Changing the embedding model/revision, dimension, normalization or chunker creat
 
 ## Ingestion commands and idempotency
 
-Allowed commands are `rag.upsert`, `rag.tombstone`, `rag.reindex_project`, and `rag.evaluate`. An idempotency key should bind tenant, source, operation, source version and checksum. The command endpoint returns the existing job for an exact duplicate; a reused key with a different body is a conflict.
+Allowed commands are `rag.upsert`, `rag.tombstone`, `rag.reindex_project`, and `rag.evaluate`. Schema v2 requires a monotonic `source_sequence`; connectors must advance it for every document revision or tombstone. The single-consumer worker persists the highest accepted sequence per tenant/document and ignores equal or lower updates, so a delayed upsert cannot resurrect newer content or a tombstone. An idempotency key should bind tenant, source, operation, source version and checksum. The command endpoint returns the existing job for an exact duplicate; a reused key with a different body is a conflict.
 
 The application stores the normalized document in the canonical document store, builds chunks, embeds, then writes Qdrant. Production needs an outbox or equivalent atomic reconciliation because a canonical-store commit and vector upsert cannot be one database transaction. Reconciliation compares expected document/version/chunk counts with Qdrant.
 
 ## Tombstones and deletion
 
-A source deletion creates a versioned tombstone. Retrieval excludes tombstoned payloads immediately. Reindex omits them from the new collection. Physical purge follows the applicable retention/privacy policy and is audited. A delete retry is idempotent; an older upsert cannot resurrect a newer tombstone.
+A source deletion creates a versioned tombstone with a higher `source_sequence`. Retrieval excludes tombstoned payloads immediately. Reindex omits them from the new collection. Physical purge follows the applicable retention/privacy policy and is audited. A delete retry is idempotent; an older upsert cannot resurrect a newer tombstone.
 
 ## Zero-downtime reindex
 

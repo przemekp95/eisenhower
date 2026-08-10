@@ -27,7 +27,8 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 - `backend-node`: REST API for tasks and health checks
 - `backend-ai`: FastAPI service for classification, OCR, and batch analysis
 - `mobile/eisenhower-matrix`: Expo / React Native client
-- `qdrant` and `minio`: experimental local-profile services, not dependencies of the supported runtime
+- `qdrant`: opt-in vector store for the canonical local RAG profile; not enabled in the current Mikrus runtime
+- `minio`: experimental local-profile service, not a dependency of the supported runtime
 
 ## Runtime Configuration
 
@@ -100,6 +101,16 @@ Before starting the root Docker Compose stack, copy `.env.example` to `.env` and
 
 `make verify` mirrors the local release-quality sweep used most often in CI: backend-node build + coverage, web build + coverage + integration, backend-ai pytest, and mobile coverage.
 
+The standard backend AI development environment installs `requirements-dev.txt`, which includes core runtime and test/audit tools but excludes research frameworks. Install `requirements-experimental.txt` separately only to run the opt-in LangChain/MinIO experiments.
+
+The complete local RAG topology is opt-in and requires both profiles:
+
+```bash
+docker compose --profile rag --profile rag-gpu up qdrant vllm rag-worker ai-service
+```
+
+This command is a local integration topology, not production evidence. It remains fail-closed until a concrete model, tokenizer, prompt artifacts, credentials and suitable GPU have passed the documented gates.
+
 Per-service fallback:
 
 1. `backend-node`: `cd backend-node && npm ci && npm run dev`
@@ -138,9 +149,9 @@ The manual AI smoke does the opposite: it does not start any local test servers 
 
 ### Production AI scope
 
-The supported production runtime is intentionally limited to the local multilingual MiniLM classifier, its local similarity index, deterministic explanations, and Tesseract OCR. Legacy endpoint and payload names containing `langchain` or `rag` are retained for client compatibility, but they do not claim an active LLM, LangChain retrieval chain, Qdrant dependency, or generative reasoning.
+The current Mikrus production runtime is intentionally limited to the local multilingual MiniLM classifier, its local similarity index, deterministic explanations, and Tesseract OCR. Legacy endpoint and payload names containing `langchain` or `rag` are retained for client compatibility, but they do not claim an active LLM, LangChain retrieval chain, Qdrant dependency, or generative reasoning.
 
-Qdrant, LangChain, llama.cpp, and MinIO modules remain experimental code paths and tests. Their Python dependencies live in `requirements-experimental.txt`, while test/audit tools live in `requirements-dev.txt`; neither set is installed in the production image. Experimental modules are not initialized by `create_app()`, included in production coverage, deployed to Mikrus, or treated as production acceptance criteria.
+Qdrant is the selected vector store behind the opt-in canonical RAG ports and its client is a core dependency, but Qdrant/vLLM/RAG are not enabled by the current Mikrus Compose file. LangChain and MinIO remain research-only integrations whose dependencies live in `requirements-experimental.txt`; they are not installed by the production image or standard dev setup and are never eagerly imported by the core vector package. None of these opt-in paths is production acceptance evidence without the separate runtime gates.
 
 ---
 
@@ -197,4 +208,4 @@ The same `ci.yml` workflow can also be started manually with `workflow_dispatch`
 
 ## Experimental local profiles
 
-The root Compose file can still expose Qdrant and MinIO under the `experimental` profile for isolated research. These services are not consumed by the default application runtime and are outside the production support contract.
+The root Compose file exposes Qdrant under the `rag` profile for the canonical local RAG topology and under `experimental` for isolated vector research. MinIO remains experimental. None of these services is consumed by the default classifier runtime or enabled by the current Mikrus deployment.

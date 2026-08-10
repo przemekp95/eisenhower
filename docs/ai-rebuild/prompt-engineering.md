@@ -21,7 +21,9 @@ POST /v2/ai/analyze
 The false `QuadrantRetrievalQA` and unused llama.cpp provider were removed. The
 legacy `/analyze-langchain` route remains a hidden deprecated compatibility alias
 for the local non-generative analysis response; it is not described as LLM or RAG.
-The research-only LangChain vector adapter remains outside the production image.
+The research-only LangChain vector adapter source remains quarantined from core imports.
+Its dependencies are installed only from `requirements-experimental.txt`; neither the
+production image nor the standard dev environment can load it accidentally.
 
 ## Immutable prompt artifacts
 

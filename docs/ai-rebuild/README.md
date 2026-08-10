@@ -71,13 +71,13 @@ FastAPI owns online authorization, ACL filters, retrieval, optional later rerank
 | `POST /v2/ai/analyze` and `POST /v2/knowledge/search` | Implemented locally | No deployed public API is claimed |
 | Bearer auth, static dev verifier, OIDC verifier | Implemented and wired locally | IdP integration and production token lifecycle are unverified |
 | RAG ports and application service | Implemented locally | Live Qdrant/vLLM path is unverified |
-| Qdrant retriever and ingestion adapter | Implemented locally | Collection creation, indexes, alias switching, backup/restore not automated end to end |
-| vLLM generation adapter and circuit breaker | Implemented locally | Target model/GPU/VRAM and live contract are unknown |
+| Qdrant retriever and ingestion adapter | Implemented locally with fail-closed per-document replacement | Canonical document transactions, reconciliation, backup/restore and live isolation remain unverified |
+| vLLM generation adapter and circuit breaker | Implemented locally with typed provider failures | Target model/GPU/VRAM and live contract are unknown |
 | Immutable PromptSpec, PL/EN registry, token-aware renderer and structured schema | Implemented locally as candidate artifacts | Model/tokenizer/chat-template selection is fail-closed; no champion exists |
 | Offline prompt evaluation and regression policy | Implemented locally | Live selected-model run, shadow/canary and rollback automation remain unverified |
 | Deterministic chunking and version metadata | Implemented locally | Source-specific normalization and canonical document store remain incomplete |
 | Signed n8n webhook verification and replay protection | Implemented and wired locally at `/internal/webhooks/n8n/verify` | Uses a private service token and SQLite replay state; no deployed ingress is claimed |
-| Durable idempotent SQLite command queue and worker | Implemented locally with leases, crash reclaim, bounded retry/jitter, dead-letter and allowlisted handlers; Compose `rag` profile includes the consumer | Not activated; SQLite remains a single-site topology and project reindex still needs a chosen source connector |
+| Durable idempotent SQLite command queue and worker | Implemented locally with leases, crash reclaim, bounded retry/jitter, dead-letter, allowlisted handlers and monotonic per-document source sequences; Compose `rag` profile includes the consumer | Not activated; SQLite remains a single-consumer topology and project reindex still needs a chosen source connector |
 | n8n workflow JSON and schema | Importable local workflow artifacts | Workflows, credentials, gateway and error destination are not imported or activated |
 | Per-principal AI rate limit and hashed request audit events | Implemented locally | In-memory limiter is not distributed; no production audit sink/retention is verified |
 | Six read-only MCP tools | Implemented locally | MCP SDK/runtime and upstream endpoint compatibility must be verified |

@@ -116,8 +116,10 @@ Dlatego:
   execution, persistence/checkpoints i human-in-the-loop nie są potrzebne dla
   obecnego 2-step RAG. Jest no-go na MVP.
   [LangGraph overview](https://docs.langchain.com/oss/python/langgraph/overview).
-- LlamaIndex, LangChain i LangGraph pozostają nieinstalowane. Nie uruchamiamy
-  równolegle wielu frameworków.
+- LlamaIndex, LangChain i LangGraph pozostają nieinstalowane w produkcji i w
+  standardowym środowisku developerskim. LangChain można doinstalować wyłącznie
+  z `requirements-experimental.txt` dla izolowanych testów badawczych. Nie
+  uruchamiamy równolegle wielu frameworków w kanonicznym runtime.
 
 ## MCP v2
 
@@ -144,7 +146,8 @@ audience/confused-deputy. Domyślnym transportem jest lokalne `stdio`.
 ## Supply chain i ponowne otwarcie decyzji
 
 Produkcja instaluje tylko core. `requirements-experimental.txt` i requirements
-spike'a nie mogą być kopiowane przez Dockerfile. Przed wydaniem wymagane są:
+spike'a mogą istnieć jako nieaktywne pliki źródłowe w kontekście obrazu, ale nie
+mogą być instalowane ani importowane przez produkcyjny entrypoint. Przed wydaniem wymagane są:
 
 - pełny lock z hashami dla wybranego wariantu i aktualizacja pinu MCP kontrolowanym PR-em;
 - SBOM CycloneDX albo SPDX dla obrazu, skan High/Critical i polityka licencji/notices;

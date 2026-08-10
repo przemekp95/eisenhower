@@ -244,6 +244,7 @@ def test_signed_internal_ingestion_is_replay_safe_and_idempotently_queued(tmp_pa
     "tenant_id": "tenant-a",
     "project_id": "project-1",
     "source_version": "v1",
+    "source_sequence": 1,
     "content_checksum": f"sha256:{'a' * 64}",
     "embedding_version": "minilm-v1",
     "chunking_version": "chars-v1",

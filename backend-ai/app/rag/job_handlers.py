@@ -6,6 +6,7 @@ from typing import Callable
 
 from pydantic import ValidationError
 
+from ..document_versions import DocumentVersionStore
 from ..job_worker import PermanentJobError
 from .models import SourceDocument
 
@@ -26,12 +27,14 @@ class RagJobHandlers:
   def __init__(
     self,
     ingestion_application,
+    version_store: DocumentVersionStore,
     *,
     chunking_version: str,
     reindex_project: Callable[[dict], None] | None = None,
     evaluate: Callable[[dict], None] | None = None,
   ):
     self.ingestion = ingestion_application
+    self.versions = version_store
     self.chunking_version = chunking_version
     self._reindex_project = reindex_project
     self._evaluate = evaluate
@@ -60,7 +63,16 @@ class RagJobHandlers:
       normalized = [self._source_document(payload, document) for document in documents]
     except (KeyError, TypeError, ValidationError) as error:
       raise PermanentJobError("invalid source document") from error
-    self.ingestion.ingest(normalized)
+    source_sequence = self._source_sequence(payload)
+    accepted = [
+      document for document in normalized
+      if self._is_newer(document.tenant_id, document.document_id, source_sequence)
+    ]
+    if not accepted:
+      return
+    self.ingestion.ingest(accepted)
+    for document in accepted:
+      self.versions.record(document.tenant_id, document.document_id, source_sequence)
 
   def tombstone(self, payload: dict) -> None:
     document_ids = payload.get("document_ids")
@@ -68,11 +80,20 @@ class RagJobHandlers:
     content_version = payload.get("source_version")
     if not isinstance(document_ids, list) or not document_ids or not tenant_id or not content_version:
       raise PermanentJobError("invalid tenant-scoped tombstone")
+    source_sequence = self._source_sequence(payload)
+    accepted = [
+      str(document_id) for document_id in document_ids
+      if self._is_newer(str(tenant_id), str(document_id), source_sequence)
+    ]
+    if not accepted:
+      return
     self.ingestion.tombstone(
-      [str(document_id) for document_id in document_ids],
+      accepted,
       tenant_id=str(tenant_id),
       content_version=str(content_version),
     )
+    for document_id in accepted:
+      self.versions.record(str(tenant_id), document_id, source_sequence)
 
   def reindex_project(self, payload: dict) -> None:
     if self._reindex_project is None:
@@ -106,5 +127,22 @@ class RagJobHandlers:
       title=str(raw.get("title") or ""),
       text=str(raw["content"]),
       content_version=str(raw.get("updated_at") or envelope["source_version"]),
+      source_sequence=RagJobHandlers._source_sequence(envelope),
       acl_subjects=list(dict.fromkeys(acl_subjects)),
     )
+
+  @staticmethod
+  def _source_sequence(payload: dict) -> int:
+    value = payload.get("source_sequence")
+    if (
+      isinstance(value, bool)
+      or not isinstance(value, int)
+      or value < 0
+      or value > 9_223_372_036_854_775_807
+    ):
+      raise PermanentJobError("source_sequence must fit a non-negative SQLite integer")
+    return value
+
+  def _is_newer(self, tenant_id: str, document_id: str, source_sequence: int) -> bool:
+    current = self.versions.current(tenant_id, document_id)
+    return current is None or source_sequence > current

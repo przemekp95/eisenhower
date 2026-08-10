@@ -9,6 +9,7 @@ from .models import (
   RetrievalQuery,
   RetrievalSummary,
 )
+from .errors import GenerationProviderError
 from .ports import FallbackClassifier, GenerationProvider, Retriever
 
 
@@ -62,7 +63,7 @@ class RagAnalysisService:
           index_version=self.index_version,
         )
       )
-    except (TimeoutError, ConnectionError, RuntimeError):
+    except GenerationProviderError:
       return self._fallback(task, retrieval, "generation_unavailable")
 
     output = generated.output

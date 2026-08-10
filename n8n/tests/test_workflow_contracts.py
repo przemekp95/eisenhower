@@ -11,6 +11,15 @@ def load_workflow(name: str) -> dict:
 
 
 class IngestionWorkflowContractTest(unittest.TestCase):
+    def test_schema_requires_monotonic_source_sequence(self) -> None:
+        schema = json.loads(
+            ROOT.joinpath("contracts/ingestion-event.schema.json").read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(schema["properties"]["schema_version"]["const"], "2")
+        self.assertIn("source_sequence", schema["required"])
+        self.assertEqual(schema["properties"]["source_sequence"]["minimum"], 0)
+
     def test_ingestion_is_authenticated_async_and_never_on_analyze_path(self) -> None:
         workflow = load_workflow("async-rag-ingestion.json")
         serialized = json.dumps(workflow)
@@ -47,6 +56,7 @@ class IngestionWorkflowContractTest(unittest.TestCase):
             self.assertIn("Idempotency-Key", rendered)
             self.assertIn("X-Eisenhower-Signature", rendered)
             self.assertIn("source_version", rendered)
+            self.assertIn("source_sequence", rendered)
             self.assertIn("embedding_version", rendered)
             self.assertIn("chunking_version", rendered)
 
