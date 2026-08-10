@@ -1,7 +1,11 @@
 import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 const repositoryRoot = path.resolve(__dirname, '../..');
+const execFileAsync = promisify(execFile);
 
 describe('production deployment boundaries', () => {
   it('does not publish backend service ports from the Mikrus compose file', () => {
@@ -50,10 +54,43 @@ describe('production deployment boundaries', () => {
     expect(release).toContain("github.event.workflow_run.conclusion == 'success'");
     expect(release).toContain('IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}');
     expect(release).toContain("format('{0}/{1}:{2}', env.DOCKER_HUB_USERNAME, matrix.tag, env.RELEASE_SHA)");
+    expect(release).toMatch(/deploy-mikrus:[\s\S]*?needs:\s*\[docker-release, android-release\]/);
     expect(deployScript).toContain('MIKRUS_PUBLIC_URL');
     expect(deployScript).toContain('rollback_deployment');
     expect(deployScript).toContain('/health');
     expect(deployScript).toContain('/api/health');
+    expect(deployScript).toContain('./assert-http-status.sh "$MIKRUS_PUBLIC_URL/health" 200');
+    expect(deployScript).toContain('./assert-http-status.sh "$MIKRUS_PUBLIC_URL/ai/health/ready" 200');
+    expect(deployScript).not.toMatch(/curl --fail[^\n]*MIKRUS_PUBLIC_URL/);
+  });
+
+  it('accepts only the exact public HTTP status and rejects a redirect to a success page', async () => {
+    const server = http.createServer((request, response) => {
+      if (request.url === '/redirect') {
+        response.writeHead(301, { Location: '/ok' });
+        response.end();
+        return;
+      }
+      response.writeHead(200, { 'Content-Type': 'text/plain' });
+      response.end('ok');
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('test server did not bind');
+    const checkScript = path.join(repositoryRoot, '.github/scripts/assert-http-status.sh');
+    const environment = { ...process.env, ALLOW_INSECURE_HTTP_FOR_TESTS: '1' };
+
+    try {
+      await expect(execFileAsync(checkScript, [`http://127.0.0.1:${address.port}/ok`, '200'], {
+        env: environment,
+      })).resolves.toBeDefined();
+      await expect(execFileAsync(checkScript, [`http://127.0.0.1:${address.port}/redirect`, '200'], {
+        env: environment,
+      })).rejects.toMatchObject({ code: 1 });
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
   });
 
   it('keeps experimental infrastructure isolated from the supported runtime', () => {
