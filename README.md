@@ -118,6 +118,23 @@ docker compose --profile rag --profile rag-gpu up qdrant vllm rag-worker ai-serv
 
 This command is a local integration topology, not production evidence. It remains fail-closed until a concrete model, tokenizer, prompt artifacts, credentials and suitable GPU have passed the documented gates.
 
+RAG rollout uses independent server-side flags. Start with
+`RAG_RETRIEVAL_ENABLED=true`, `RAG_GENERATION_ENABLED=false`, and
+`RAG_RESPONSE_ENABLED=false` to exercise Qdrant retrieval and aggregate shadow metrics without
+calling vLLM or exposing retrieved content in analysis responses. Enable generation only after the
+retrieval gates pass, and enable responses only for an approved tenant cohort. `RAG_ENABLED` is a
+legacy compatibility switch that enables both retrieval and generation when the explicit flags are
+absent; new environments should use the phase-specific flags.
+
+The retrieval-only local topology does not require the GPU profile:
+
+```bash
+docker compose --profile rag up qdrant rag-worker ai-service
+```
+
+This still requires an approved synthetic or real corpus command path before a search can return
+useful hits; starting empty services is not a corpus, quality, privacy, or production gate.
+
 Per-service fallback:
 
 1. `backend-node`: `cd backend-node && npm ci && npm run dev`

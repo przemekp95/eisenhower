@@ -28,6 +28,7 @@ class AccessScope(StrictModel):
 class RetrievalQuery(StrictModel):
   text: str = Field(..., min_length=1, max_length=2000)
   scope: AccessScope
+  project_id: str | None = Field(default=None, min_length=1, max_length=128)
   limit: int = Field(default=6, ge=1, le=20)
   score_threshold: float = Field(default=0.2, ge=-1.0, le=1.0)
 

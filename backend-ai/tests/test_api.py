@@ -132,6 +132,9 @@ def build_real_client(real_model_bundle, *, tesseract_available: bool | None = N
 class FakeRagService:
   def __init__(self):
     self.calls = []
+    self.shadow_calls = []
+    self.search_calls = []
+    self.generation_enabled = True
 
   def analyze(self, task, scope, *, language="en"):
     self.calls.append((task, scope, language))
@@ -144,6 +147,19 @@ class FakeRagService:
       citations=[],
       retrieval=RetrievalSummary(hit_count=1, top_score=0.9, embedding_version="minilm-v1"),
     )
+
+  def retrieve_summary(self, task, scope):
+    self.shadow_calls.append((task, scope))
+    return RetrievalSummary(hit_count=2, top_score=0.9, embedding_version="minilm-v1")
+
+  def search(self, query, scope, *, limit=5, project_id=None):
+    self.search_calls.append((query, scope, limit, project_id))
+    return {
+      "query": query,
+      "answer": None,
+      "citations": [],
+      "retrieval": RetrievalSummary(hit_count=1, top_score=0.8, embedding_version="minilm-v1"),
+    }
 
 
 def test_v2_rag_contract_uses_authenticated_scope_not_client_tenant(tmp_path: Path):
@@ -189,6 +205,65 @@ def test_v2_rag_response_flag_and_tenant_cohort_fall_back_safely(tmp_path: Path)
   assert response.json()["mode"] == "fallback"
   assert response.json()["fallback_reason"] == "tenant_not_enabled"
   assert rag.calls == []
+  assert rag.shadow_calls == []
+
+
+def test_v2_shadow_retrieval_runs_without_exposing_hits_or_calling_generation(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    rag_retrieval_enabled=True,
+    rag_generation_enabled=False,
+    rag_response_enabled=False,
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  rag = FakeRagService()
+  rag.generation_enabled = False
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service, rag_service=rag),
+    headers={"Authorization": "Bearer test-api-token"},
+  )
+
+  response = client.post("/v2/ai/analyze", json={"task": "Prepare roadmap"})
+  metrics = client.get("/metrics")
+
+  assert response.status_code == 200
+  assert response.json()["mode"] == "fallback"
+  assert response.json()["fallback_reason"] == "rag_response_disabled"
+  assert response.json()["retrieval"] == {
+    "hit_count": 0,
+    "top_score": None,
+    "embedding_version": None,
+  }
+  assert rag.calls == []
+  assert len(rag.shadow_calls) == 1
+  assert 'eisenhower_rag_retrieval_total{stage="shadow",outcome="hit"} 1' in metrics.text
+
+
+def test_v2_knowledge_search_forwards_the_authorized_project_filter(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    rag_retrieval_enabled=True,
+    rag_generation_enabled=False,
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  rag = FakeRagService()
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service, rag_service=rag),
+    headers={"Authorization": "Bearer test-admin-token"},
+  )
+
+  response = client.post(
+    "/v2/knowledge/search",
+    json={"query": "roadmap", "project_id": "local-project", "limit": 3},
+  )
+
+  assert response.status_code == 200
+  assert rag.search_calls[0][2:] == (3, "local-project")
+  assert rag.search_calls[0][1].project_ids == ["local-project"]
 
 
 def test_non_root_endpoint_requires_bearer_token(tmp_path: Path):

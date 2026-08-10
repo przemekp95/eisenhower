@@ -70,7 +70,7 @@ FastAPI owns online authorization, ACL filters, retrieval, optional later rerank
 | Canonical quadrant mapping | Implemented locally in backend/client/MCP changes | Cross-client and migration tests remain the acceptance evidence |
 | `POST /v2/ai/analyze` and `POST /v2/knowledge/search` | Implemented locally | No deployed public API is claimed |
 | Bearer auth, static dev verifier, OIDC verifier | Implemented and wired locally | IdP integration and production token lifecycle are unverified |
-| RAG ports and application service | Implemented locally | Live Qdrant/vLLM path is unverified |
+| Retrieval-first RAG ports and application service | Implemented locally with independent retrieval/generation flags and aggregate shadow retrieval | Live Qdrant/shadow traffic remains unverified; user responses stay on fallback unless the response gate is explicitly enabled |
 | Qdrant retriever and ingestion adapter | Implemented locally with fail-closed per-document replacement | Canonical document transactions, reconciliation, backup/restore and live isolation remain unverified |
 | vLLM generation adapter and circuit breaker | Implemented locally with typed provider failures | Target model/GPU/VRAM and live contract are unknown |
 | Immutable PromptSpec, PL/EN registry, token-aware renderer and structured schema | Implemented locally as candidate artifacts | Model/tokenizer/chat-template selection is fail-closed; no champion exists |
@@ -82,6 +82,12 @@ FastAPI owns online authorization, ACL filters, retrieval, optional later rerank
 | Per-principal AI rate limit and hashed request audit events | Implemented locally | In-memory limiter is not distributed; no production audit sink/retention is verified |
 | Six read-only MCP tools | Implemented locally | MCP SDK/runtime and upstream endpoint compatibility must be verified |
 | Metrics, traces, dashboards and SLO alerting | Target | Existing generic monitoring services do not prove AI telemetry |
+
+The local control sequence now matches the rollout plan: Qdrant retrieval can start without any
+vLLM model or credential, `/v2/knowledge/search` uses that retrieval-only service, and
+`/v2/ai/analyze` can exercise retrieval in shadow while returning the unchanged MiniLM fallback.
+An explicitly requested `project_id` is included in the server-side Qdrant filter after API scope
+validation. These are source-level capabilities, not evidence of a running corpus or deployment.
 
 ## HTTP response contract
 

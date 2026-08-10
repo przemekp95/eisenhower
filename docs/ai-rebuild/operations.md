@@ -34,14 +34,25 @@ Final numbers require product traffic and hardware evidence. Establish separate 
 
 Flags are server-side and tenant-aware:
 
-- `rag_enabled`: master switch; off means classifier fallback.
-- `rag_retrieval_enabled`: shadow retrieval without generation.
-- `rag_generation_enabled`: enables vLLM after retrieval gates.
-- `rag_response_enabled`: controls whether generated output is returned or shadow-evaluated.
+- `RAG_ENABLED`: legacy compatibility switch; when the two explicit phase flags are absent, it
+  sets both retrieval and generation to the same value. New environments should leave it `false`
+  and use the explicit flags below.
+- `RAG_RETRIEVAL_ENABLED`: constructs the private Qdrant retriever. With response disabled, the
+  analyze endpoint records only aggregate hit/no-hit/error shadow metrics and returns the existing
+  classifier fallback without retrieval metadata or citations.
+- `RAG_GENERATION_ENABLED`: constructs vLLM only after retrieval gates; it is invalid without
+  retrieval and remains fail-closed when model, prompt or credential selection is incomplete.
+- `RAG_RESPONSE_ENABLED`: allows generated output only when retrieval and generation are active;
+  otherwise the user-visible response remains the classifier fallback.
 - corpus/index version allowlist and per-tenant rollout cohort.
 - `mcp_remote_enabled`: false initially; does not affect local stdio.
 
 Log flag versions and decisions, not sensitive inputs. Default every new environment/tenant to fallback.
+
+Recommended progression is `retrieval=false/generation=false/response=false`, then retrieval-only
+shadow, then retrieval plus generation with response still false, and finally an allowlisted
+response cohort. Do not enable the next flag merely because the prior mode starts successfully;
+its quality, isolation, latency and rollback gate must pass first.
 
 ## Zero-downtime rollout
 

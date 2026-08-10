@@ -13,6 +13,8 @@ def test_load_settings_uses_defaults():
   assert "http://127.0.0.1:5173" in settings.cors_allow_origins
   assert settings.auth_mode == "static"
   assert settings.rag_enabled is False
+  assert settings.rag_retrieval_enabled is False
+  assert settings.rag_generation_enabled is False
   assert settings.prompt_artifact_dir.name == "prompts"
   assert settings.prompt_id == "eisenhower-classifier"
   assert settings.prompt_version == "1.0.0"
@@ -38,6 +40,8 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
       "PROMPT_VERSION": "2.1.0",
       "RETRIEVAL_VERSION": "retrieval-v2",
       "INDEX_VERSION": "index-v3",
+      "RAG_RETRIEVAL_ENABLED": "true",
+      "RAG_GENERATION_ENABLED": "false",
     }
   )
 
@@ -57,6 +61,8 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
   assert settings.prompt_version == "2.1.0"
   assert settings.retrieval_version == "retrieval-v2"
   assert settings.index_version == "index-v3"
+  assert settings.rag_retrieval_enabled is True
+  assert settings.rag_generation_enabled is False
 
 
 def test_production_oidc_requires_issuer_audience_and_explicit_cors():
@@ -82,9 +88,20 @@ def test_production_oidc_requires_issuer_audience_and_explicit_cors():
 
   assert settings.auth_mode == "oidc"
   assert settings.rag_enabled is True
+  assert settings.rag_retrieval_enabled is True
+  assert settings.rag_generation_enabled is True
   assert settings.qdrant_collection_alias == "eisenhower-knowledge-active"
   assert settings.rag_response_enabled is False
   assert settings.rag_allowed_tenants == ("tenant-a", "tenant-b")
+
+
+def test_generation_cannot_be_enabled_without_retrieval(tmp_path: Path):
+  with pytest.raises(ValueError, match="retrieval"):
+    Settings(
+      training_data_path=tmp_path / "training.json",
+      model_cache_dir=tmp_path / "runtime",
+      rag_generation_enabled=True,
+    )
 
 
 def test_production_static_auth_requires_distinct_long_tokens():

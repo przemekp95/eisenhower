@@ -21,12 +21,37 @@ from .ingestion import DeterministicChunker, IngestionApplication
 
 
 def build_rag_service(settings: Settings, fallback_classifier) -> RagAnalysisService:
-  if not settings.rag_enabled:
-    raise ValueError("RAG is disabled")
-  if not settings.vllm_api_key or not settings.vllm_model:
-    raise ValueError("VLLM_API_KEY and VLLM_MODEL are required when RAG is enabled")
+  if not settings.rag_retrieval_enabled:
+    raise ValueError("RAG retrieval is disabled")
   if not is_private_service_url(settings.qdrant_url):
     raise ValueError("Qdrant must use a private-network endpoint")
+  embedding = MiniLMEmbeddingProvider(
+    fallback_classifier.local_model,
+    version=settings.embedding_version,
+  )
+  qdrant = QdrantClient(
+    url=settings.qdrant_url,
+    api_key=settings.qdrant_api_key,
+    timeout=5,
+  )
+  retriever = QdrantRetriever(
+    qdrant,
+    embedding,
+    collection_alias=settings.qdrant_collection_alias,
+  )
+  generator = _build_generation_provider(settings) if settings.rag_generation_enabled else None
+  return RagAnalysisService(
+    retriever,
+    generator,
+    fallback_classifier,
+    retrieval_version=settings.retrieval_version,
+    index_version=settings.index_version,
+  )
+
+
+def _build_generation_provider(settings: Settings):
+  if not settings.vllm_api_key or not settings.vllm_model:
+    raise ValueError("VLLM_API_KEY and VLLM_MODEL are required when RAG generation is enabled")
   prompt_registry = PromptRegistry.load_directory(settings.prompt_artifact_dir)
   prompt_specs = [
     prompt_registry.get(settings.prompt_id, settings.prompt_version, language)
@@ -55,21 +80,7 @@ def build_rag_service(settings: Settings, fallback_classifier) -> RagAnalysisSer
   ):
     raise ValueError("PL and EN PromptSpec variants must pin the same model and tokenizer matrix")
   prompt_renderer = PromptRenderer(HuggingFaceTokenCounter.from_prompt_spec(reference))
-  embedding = MiniLMEmbeddingProvider(
-    fallback_classifier.local_model,
-    version=settings.embedding_version,
-  )
-  qdrant = QdrantClient(
-    url=settings.qdrant_url,
-    api_key=settings.qdrant_api_key,
-    timeout=5,
-  )
-  retriever = QdrantRetriever(
-    qdrant,
-    embedding,
-    collection_alias=settings.qdrant_collection_alias,
-  )
-  generator = CircuitBreakerGenerationProvider(
+  return CircuitBreakerGenerationProvider(
     VLLMGenerationProvider(
       base_url=settings.vllm_base_url,
       api_key=settings.vllm_api_key,
@@ -80,13 +91,6 @@ def build_rag_service(settings: Settings, fallback_classifier) -> RagAnalysisSer
     ),
     failure_threshold=3,
     reset_seconds=30,
-  )
-  return RagAnalysisService(
-    retriever,
-    generator,
-    fallback_classifier,
-    retrieval_version=settings.retrieval_version,
-    index_version=settings.index_version,
   )
 
 

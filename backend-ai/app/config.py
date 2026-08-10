@@ -27,6 +27,8 @@ class Settings:
   oidc_audience: str | None = None
   oidc_jwks_url: str | None = None
   rag_enabled: bool = False
+  rag_retrieval_enabled: bool | None = None
+  rag_generation_enabled: bool | None = None
   rag_response_enabled: bool = True
   rag_allowed_tenants: tuple[str, ...] = ()
   qdrant_url: str = "http://qdrant:6333"
@@ -88,6 +90,12 @@ class Settings:
   )
 
   def __post_init__(self) -> None:
+    retrieval_enabled = self.rag_enabled if self.rag_retrieval_enabled is None else self.rag_retrieval_enabled
+    generation_enabled = self.rag_enabled if self.rag_generation_enabled is None else self.rag_generation_enabled
+    object.__setattr__(self, "rag_retrieval_enabled", retrieval_enabled)
+    object.__setattr__(self, "rag_generation_enabled", generation_enabled)
+    if generation_enabled and not retrieval_enabled:
+      raise ValueError("RAG generation requires RAG retrieval to be enabled.")
     bounded_thresholds = (
       self.local_model_confidence_threshold,
       self.local_model_minimum_macro_f1,
@@ -172,6 +180,16 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     oidc_audience=oidc_audience,
     oidc_jwks_url=source.get("OIDC_JWKS_URL") or None,
     rag_enabled=source.get("RAG_ENABLED", "false").lower() in ("true", "1", "yes"),
+    rag_retrieval_enabled=(
+      source["RAG_RETRIEVAL_ENABLED"].lower() in ("true", "1", "yes")
+      if "RAG_RETRIEVAL_ENABLED" in source
+      else None
+    ),
+    rag_generation_enabled=(
+      source["RAG_GENERATION_ENABLED"].lower() in ("true", "1", "yes")
+      if "RAG_GENERATION_ENABLED" in source
+      else None
+    ),
     rag_response_enabled=source.get("RAG_RESPONSE_ENABLED", "true").lower() in ("true", "1", "yes"),
     rag_allowed_tenants=parse_csv_list(source.get("RAG_ALLOWED_TENANTS"), ()),
     qdrant_url=source.get("QDRANT_URL", "http://qdrant:6333"),

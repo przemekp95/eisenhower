@@ -20,7 +20,7 @@ class RagAnalysisService:
   def __init__(
     self,
     retriever: Retriever,
-    generator: GenerationProvider,
+    generator: GenerationProvider | None,
     fallback_classifier: FallbackClassifier,
     *,
     retrieval_limit: int = 6,
@@ -36,22 +36,16 @@ class RagAnalysisService:
     self.retrieval_version = retrieval_version
     self.index_version = index_version
 
+  @property
+  def generation_enabled(self) -> bool:
+    return self.generator is not None
+
   def analyze(self, task: str, scope: AccessScope, *, language: str = "en") -> AnalyzeResult:
-    hits = self.retriever.retrieve(
-      RetrievalQuery(
-        text=task,
-        scope=scope,
-        limit=self.retrieval_limit,
-        score_threshold=self.score_threshold,
-      )
-    )
-    retrieval = RetrievalSummary(
-      hit_count=len(hits),
-      top_score=hits[0].score if hits else None,
-      embedding_version=hits[0].embedding_version if hits else None,
-    )
+    hits, retrieval = self._retrieve(task, scope, limit=self.retrieval_limit)
     if not hits:
       return self._fallback(task, retrieval, "no_retrieval_hits")
+    if self.generator is None:
+      return self._fallback(task, retrieval, "generation_disabled")
 
     try:
       generated = self.generator.generate(
@@ -116,25 +110,51 @@ class RagAnalysisService:
       generation=generation,
     )
 
-  def search(self, query: str, scope: AccessScope, *, limit: int = 5) -> dict:
-    hits = self.retriever.retrieve(
-      RetrievalQuery(
-        text=query,
-        scope=scope,
-        limit=limit,
-        score_threshold=self.score_threshold,
-      )
-    )
+  def retrieve_summary(self, query: str, scope: AccessScope) -> RetrievalSummary:
+    _, summary = self._retrieve(query, scope, limit=self.retrieval_limit)
+    return summary
+
+  def search(
+    self,
+    query: str,
+    scope: AccessScope,
+    *,
+    limit: int = 5,
+    project_id: str | None = None,
+  ) -> dict:
+    hits, retrieval = self._retrieve(query, scope, limit=limit, project_id=project_id)
     return {
       "query": query,
       "answer": None,
       "citations": [self._citation(hit) for hit in hits],
-      "retrieval": RetrievalSummary(
+      "retrieval": retrieval,
+    }
+
+  def _retrieve(
+    self,
+    query: str,
+    scope: AccessScope,
+    *,
+    limit: int,
+    project_id: str | None = None,
+  ) -> tuple[list, RetrievalSummary]:
+    hits = self.retriever.retrieve(
+      RetrievalQuery(
+        text=query,
+        scope=scope,
+        project_id=project_id,
+        limit=limit,
+        score_threshold=self.score_threshold,
+      )
+    )
+    return (
+      hits,
+      RetrievalSummary(
         hit_count=len(hits),
         top_score=hits[0].score if hits else None,
         embedding_version=hits[0].embedding_version if hits else None,
       ),
-    }
+    )
 
   @staticmethod
   def _citation(hit) -> Citation:
