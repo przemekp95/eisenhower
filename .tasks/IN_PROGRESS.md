@@ -1,5 +1,18 @@
 # In Progress
 
+## TASK-016: Promote retrieval-first RAG package to green dev
+**Priority:** P0 | **Tags:** rag, delivery, dev, ci
+
+Publish the completed retrieval-first RAG package through a pull request to `dev`, require the repository checks to pass, merge only after green CI, and verify the resulting remote `dev` commit. Do not modify `master` or deploy production.
+
+### Plan
+
+- Audit the intended diff and refresh the remote branch relationship.
+- Run release-level local verification, commit the scoped changes, push the feature branch, and open a PR to `dev`.
+- Resolve only failures caused by this package, merge after green CI, and verify the remote `dev` SHA.
+
+---
+
 ## TASK-001: Complete independent dual-human classifier annotation
 **Priority:** P0 | **Tags:** ai, evaluation, human-gate
 

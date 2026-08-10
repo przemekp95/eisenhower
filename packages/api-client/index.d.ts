@@ -200,6 +200,7 @@ export interface AICapabilitiesDto {
   classification: boolean;
   reasoned_local_analysis?: boolean;
   retrieval_augmented_generation?: boolean;
+  knowledge_retrieval?: boolean;
   local_similar_examples?: boolean;
   /** @deprecated Always false; no production LangChain analysis provider exists. */
   langchain_analysis: boolean;

@@ -68,8 +68,7 @@ class QdrantRetriever:
     return hits
 
   def _build_filter(self, query: RetrievalQuery) -> qmodels.Filter:
-    return qmodels.Filter(
-      must=[
+    must = [
         qmodels.FieldCondition(
           key="tenant_id",
           match=qmodels.MatchValue(value=query.scope.tenant_id),
@@ -86,8 +85,15 @@ class QdrantRetriever:
           key="acl_subjects",
           match=qmodels.MatchAny(any=query.scope.acl_subjects),
         ),
-      ]
-    )
+    ]
+    if query.project_id is not None:
+      must.append(
+        qmodels.FieldCondition(
+          key="project_id",
+          match=qmodels.MatchValue(value=query.project_id),
+        )
+      )
+    return qmodels.Filter(must=must)
 
 
 class QdrantIngestionAdapter:

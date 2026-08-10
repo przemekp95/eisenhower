@@ -110,7 +110,7 @@ def create_app(
       store=resolved_store,
   )
   resolved_rag_service = rag_service
-  if resolved_rag_service is None and resolved_settings.rag_enabled:
+  if resolved_rag_service is None and resolved_settings.rag_retrieval_enabled:
     from .rag.bootstrap import build_rag_service
 
     resolved_rag_service = build_rag_service(resolved_settings, resolved_ai_service)
@@ -287,14 +287,32 @@ def create_app(
       not resolved_settings.rag_allowed_tenants
       or principal.tenant_id in resolved_settings.rag_allowed_tenants
     )
-    if resolved_rag_service is not None and resolved_settings.rag_response_enabled and tenant_enabled:
+    generation_enabled = bool(
+      resolved_rag_service is not None
+      and getattr(resolved_rag_service, "generation_enabled", True)
+    )
+    if (
+      resolved_rag_service is not None
+      and generation_enabled
+      and resolved_settings.rag_response_enabled
+      and tenant_enabled
+    ):
       result = resolved_rag_service.analyze(request.task, scope, language=request.language)
     else:
+      if resolved_rag_service is not None and tenant_enabled:
+        try:
+          shadow = resolved_rag_service.retrieve_summary(request.task, scope)
+          metrics.observe_rag_retrieval("shadow", hit_count=shadow.hit_count)
+        except Exception:
+          request_logger.warning("Optional shadow retrieval failed", exc_info=True)
+          metrics.observe_rag_retrieval("shadow", hit_count=None)
       classification = resolved_ai_service.classify_task(request.task, use_rag=False)
       if resolved_rag_service is None:
         fallback_reason = "rag_disabled"
       elif not resolved_settings.rag_response_enabled:
         fallback_reason = "rag_response_disabled"
+      elif not generation_enabled:
+        fallback_reason = "generation_disabled"
       else:
         fallback_reason = "tenant_not_enabled"
       result = AnalyzeResult(
@@ -333,7 +351,14 @@ def create_app(
         "retrieval": RetrievalSummary(),
         "no_answer_reason": "rag_disabled",
       }
-    return resolved_rag_service.search(request.query, scope, limit=request.limit)
+    result = resolved_rag_service.search(
+      request.query,
+      scope,
+      limit=request.limit,
+      project_id=request.project_id,
+    )
+    metrics.observe_rag_retrieval("search", hit_count=result["retrieval"].hit_count)
+    return result
 
   @app.post("/internal/webhooks/n8n/verify")
   def verify_n8n_webhook(request: WebhookVerificationRequest, http_request: Request):

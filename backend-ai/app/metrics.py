@@ -21,6 +21,7 @@ class MetricsRegistry:
     self._http_duration_count = Counter()
     self._http_duration_sum = Counter()
     self._rag = Counter()
+    self._rag_retrieval = Counter()
     self._job_depth: dict[str, int] = {}
 
   def observe_http(self, method: str, route: str, status: int, duration_seconds: float) -> None:
@@ -34,6 +35,11 @@ class MetricsRegistry:
   def observe_rag_result(self, mode: str, reason: str | None = None) -> None:
     with self._lock:
       self._rag[(mode, reason or "none")] += 1
+
+  def observe_rag_retrieval(self, stage: str, *, hit_count: int | None) -> None:
+    outcome = "error" if hit_count is None else ("hit" if hit_count > 0 else "no_hit")
+    with self._lock:
+      self._rag_retrieval[(stage, outcome)] += 1
 
   def set_job_depth(self, status: str, count: int) -> None:
     with self._lock:
@@ -67,6 +73,14 @@ class MetricsRegistry:
       for (mode, reason), value in sorted(self._rag.items()):
         lines.append(
           f"eisenhower_rag_results_total{{{_labels(mode=mode, reason=reason)}}} {value}"
+        )
+      lines.extend([
+        "# HELP eisenhower_rag_retrieval_total Aggregate retrieval outcomes by bounded stage.",
+        "# TYPE eisenhower_rag_retrieval_total counter",
+      ])
+      for (stage, outcome), value in sorted(self._rag_retrieval.items()):
+        lines.append(
+          f"eisenhower_rag_retrieval_total{{{_labels(stage=stage, outcome=outcome)}}} {value}"
         )
       lines.extend([
         "# HELP eisenhower_job_queue_depth Durable jobs by lifecycle status.",

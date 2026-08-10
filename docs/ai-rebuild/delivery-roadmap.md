@@ -2,7 +2,25 @@
 
 Sizes are relative (`S`, `M`, `L`) and are not calendar estimates. They require team size, environment ownership and data-source decisions before conversion into dates. This file is a target roadmap, not the active backlog; current release work is tracked in `.tasks/`.
 
-The supported production scope is currently frozen at MiniLM+MLP classification, local similarity, and Tesseract OCR. Phases 2–6 below are deliberately paused: existing fail-closed scaffolds may remain tested, but Qdrant retrieval, vLLM generation, n8n ingestion, remote MCP, a new IdP/OIDC rollout, and multi-tenant platform work are not authorized release work. A local scaffold, merged source, or passing mock test does not prove that any of those capabilities are deployed.
+The supported production scope is currently frozen at MiniLM+MLP classification, local similarity, and Tesseract OCR. Local retrieval-first implementation and verification are authorized under TASK-009, but Qdrant deployment, real user-data ingestion, production shadow traffic, vLLM generation, n8n activation, remote MCP, a new IdP/OIDC rollout, and multi-tenant platform work remain behind their recorded gates. A local scaffold, merged source, passing mock test, or valid Compose rendering does not prove that any of those capabilities are deployed.
+
+## Continuation map
+
+TaskPlanner is the executable source of truth for future conversations:
+
+| Task | State after TASK-009 | Resume condition |
+| --- | --- | --- |
+| TASK-001 through TASK-005 | P0 release path | Complete human evaluation, promotion, backup/rollback and physical acceptance without weakening their existing gates. |
+| TASK-010 | First RAG corpus/privacy decision | Human owners approve the use case, sources, ACL, provenance, PII, retention and exclusions. |
+| TASK-011 | Canonical ingestion and reindex | TASK-010 approved; implement only the selected connector and data contract. |
+| TASK-012 | Real Qdrant isolation and recovery | Approved corpus contract and a real target-like Qdrant runtime are available. |
+| TASK-013 | Representative Recall@k/MRR gate | Human-reviewed relevance data exists after the real-Qdrant path is stable. |
+| TASK-014 | Retrieval-only production shadow | All P0 and TASK-010 through TASK-013 gates pass and deployment is explicitly authorized. |
+| TASK-015 | Private vLLM and cited responses | Retrieval shadow proves value and hardware, model, license and privacy decisions are approved. |
+
+TASK-007 remains the decision record for reranking, hybrid search, knowledge graphs and agentic or
+multi-step RAG. Do not create implementation work for them until its evidence trigger and ADR gate
+are satisfied.
 
 ## Phase 0 — semantic truth and honest capabilities
 
@@ -123,6 +141,22 @@ This slice is small enough to diagnose yet crosses the critical security, corpus
 - Blind indexing of full history, chats, mailboxes, attachments or unreviewed OCR.
 - A reranker before held-out retrieval evaluation establishes the need.
 - Selecting a vLLM model from parameter count alone or calling a local check a deployment.
+
+## Deferred advanced RAG decision register
+
+The capabilities below are deferred, not rejected. Revisit them only after the single-step,
+dense-retrieval RAG path has real corpus, quality, latency, security and operational evidence.
+Do not add any of them merely to match a generic RAG feature checklist.
+
+| Capability | Current decision | Revisit trigger | Evidence required before adoption |
+| --- | --- | --- | --- |
+| Reranking | Defer; preserve the current Qdrant score order apart from deterministic deduplication and per-document caps. | Held-out retrieval evaluation shows relevant chunks are usually retrieved but ranked too low for the context budget. | A reproducible dense-versus-reranked benchmark demonstrates an agreed Recall@k/MRR, groundedness or task-quality improvement that justifies added latency, capacity and operational complexity. |
+| Hybrid search | Defer; keep dense semantic retrieval as the baseline. | Real queries containing identifiers, exact names, dates or domain keywords are repeatedly missed by dense retrieval. | A held-out dense-versus-hybrid benchmark covers PL/EN and exact-match cases, defines score fusion, preserves tenant/project/ACL filters and meets latency targets. |
+| Knowledge graph | Defer; keep canonical documents, chunks and metadata as the knowledge model. | Product use cases require verified multi-hop relationships, dependency traversal or entity-centric explanations that document retrieval cannot answer reliably. | Approved ontology and ownership, deterministic entity/relation provenance, tenant isolation, update/deletion semantics, graph quality evaluation and backup/restore runbooks. |
+| Agentic or multi-step RAG | Defer; keep one bounded retrieve-generate-validate request with deterministic fallback. | A concrete user workflow cannot be solved safely by single-step RAG and genuinely requires decomposition, iterative retrieval or allowlisted tool use. | Threat model, strict tool and data scopes, step/time/cost budgets, idempotency, audit trail, adversarial evaluation, human confirmation for consequential actions and reliable cancellation/fallback. |
+
+Record a separate ADR before adopting any row. The ADR must cite the triggering production
+evidence, compare the simplest viable alternatives and define rollout and rollback gates.
 
 ## Decisions required from the user/owners
 

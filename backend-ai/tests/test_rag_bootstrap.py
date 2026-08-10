@@ -20,6 +20,8 @@ def test_rag_bootstrap_fails_closed_without_generator_configuration(tmp_path):
     training_data_path=tmp_path / "training.json",
     model_cache_dir=tmp_path / "runtime",
     rag_enabled=True,
+    rag_retrieval_enabled=True,
+    rag_generation_enabled=True,
     vllm_api_key=None,
     vllm_model=None,
   )
@@ -28,11 +30,29 @@ def test_rag_bootstrap_fails_closed_without_generator_configuration(tmp_path):
     build_rag_service(settings, Fallback())
 
 
+def test_rag_bootstrap_supports_retrieval_without_generator_configuration(tmp_path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    rag_retrieval_enabled=True,
+    rag_generation_enabled=False,
+    qdrant_url="http://qdrant:6333",
+    vllm_api_key=None,
+    vllm_model=None,
+  )
+
+  service = build_rag_service(settings, Fallback())
+
+  assert service.generation_enabled is False
+
+
 def test_rag_bootstrap_rejects_public_qdrant_endpoint(tmp_path):
   settings = Settings(
     training_data_path=tmp_path / "training.json",
     model_cache_dir=tmp_path / "runtime",
     rag_enabled=True,
+    rag_retrieval_enabled=True,
+    rag_generation_enabled=True,
     qdrant_url="https://qdrant.example.com",
     vllm_api_key="token",
     vllm_model="model",
@@ -48,6 +68,8 @@ def test_rag_bootstrap_fails_closed_for_unselected_candidate_model(tmp_path):
     training_data_path=tmp_path / "training.json",
     model_cache_dir=tmp_path / "runtime",
     rag_enabled=True,
+    rag_retrieval_enabled=True,
+    rag_generation_enabled=True,
     qdrant_url="http://qdrant:6333",
     vllm_api_key="token",
     vllm_model="__MODEL_SELECTION_REQUIRED__",

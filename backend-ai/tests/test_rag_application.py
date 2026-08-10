@@ -201,6 +201,28 @@ def test_rag_analysis_falls_back_when_generation_provider_is_unavailable():
   assert result.fallback_reason == "generation_unavailable"
 
 
+def test_retrieval_only_analysis_collects_summary_without_calling_generation():
+  hit = RetrievalHit(
+    chunk_id="chunk-1",
+    document_id="doc-1",
+    text="Known context",
+    score=0.8,
+    source_uri="knowledge://1",
+    title="Known",
+    tenant_id="tenant-a",
+    embedding_version="minilm-v1",
+    content_version="v1",
+  )
+  service = RagAnalysisService(StubRetriever([hit]), None, StubFallback())
+
+  result = service.analyze("Task", AccessScope(tenant_id="tenant-a", user_id="user-1"))
+
+  assert service.generation_enabled is False
+  assert result.mode == "fallback"
+  assert result.fallback_reason == "generation_disabled"
+  assert result.retrieval.hit_count == 1
+
+
 def test_rag_analysis_falls_back_when_generation_output_is_invalid():
   hit = RetrievalHit(
     chunk_id="chunk-1",

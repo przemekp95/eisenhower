@@ -71,6 +71,7 @@ def test_qdrant_retriever_always_builds_tenant_acl_version_and_tombstone_filters
   hits = retriever.retrieve(
     RetrievalQuery(
       text="roadmap",
+      project_id="project-1",
       scope=AccessScope(
         tenant_id="tenant-a",
         user_id="user-1",
@@ -85,6 +86,7 @@ def test_qdrant_retriever_always_builds_tenant_acl_version_and_tombstone_filters
   assert "user:user-1" in serialized_filter
   assert "minilm-v1" in serialized_filter
   assert "deleted" in serialized_filter
+  assert "key='project_id'" in serialized_filter
 
 
 def test_vllm_adapter_uses_private_fixed_base_url_api_key_timeout_and_json_schema():

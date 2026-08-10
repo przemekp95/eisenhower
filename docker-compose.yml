@@ -27,6 +27,8 @@ services:
       - LOCAL_MODEL_LEARNING_RATE=${LOCAL_MODEL_LEARNING_RATE:-0.01}
       - HF_HOME=/home/app/.cache/huggingface
       - RAG_ENABLED=${RAG_ENABLED:-false}
+      - RAG_RETRIEVAL_ENABLED
+      - RAG_GENERATION_ENABLED
       - RAG_RESPONSE_ENABLED=${RAG_RESPONSE_ENABLED:-false}
       - RAG_ALLOWED_TENANTS=${RAG_ALLOWED_TENANTS:-}
       - QDRANT_URL=http://qdrant:6333
@@ -75,6 +77,8 @@ services:
       - LOCAL_MODEL_LEARNING_RATE=${LOCAL_MODEL_LEARNING_RATE:-0.01}
       - HF_HOME=/home/app/.cache/huggingface
       - RAG_ENABLED=${RAG_ENABLED:-false}
+      - RAG_RETRIEVAL_ENABLED
+      - RAG_GENERATION_ENABLED
       - RAG_RESPONSE_ENABLED=${RAG_RESPONSE_ENABLED:-false}
       - RAG_ALLOWED_TENANTS=${RAG_ALLOWED_TENANTS:-}
       - QDRANT_URL=http://qdrant:6333
