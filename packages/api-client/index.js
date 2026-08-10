@@ -464,14 +464,29 @@ function isHealthResponseDto(value) {
 }
 
 function isClassificationResultDto(value) {
+  const quadrantFlags = {
+    0: { urgent: true, important: true },
+    1: { urgent: true, important: false },
+    2: { urgent: false, important: true },
+    3: { urgent: false, important: false },
+  };
+  const quadrantNames = ['Do Now', 'Delegate', 'Schedule', 'Delete'];
+  const quadrant = value?.quadrant;
+  const expectedFlags = quadrantFlags[quadrant];
   return Boolean(
     value &&
     typeof value === 'object' &&
     typeof value.task === 'string' &&
     typeof value.urgent === 'boolean' &&
     typeof value.important === 'boolean' &&
-    typeof value.quadrant === 'number' &&
-    typeof value.quadrant_name === 'string' &&
+    Number.isInteger(quadrant) &&
+    expectedFlags &&
+    value.urgent === expectedFlags.urgent &&
+    value.important === expectedFlags.important &&
+    value.quadrant_name === quadrantNames[quadrant] &&
+    (value.confidence === undefined ||
+      (typeof value.confidence === 'number' && value.confidence >= 0 && value.confidence <= 1)) &&
+    (value.requires_confirmation === undefined || typeof value.requires_confirmation === 'boolean') &&
     typeof value.method === 'string'
   );
 }

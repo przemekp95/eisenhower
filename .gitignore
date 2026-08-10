@@ -43,6 +43,7 @@ backend-ai/quadrant_model.pkl
 backend-ai/chroma_db/
 backend-ai/data/huggingface/
 backend-ai/data/runtime/
+backend-ai/data/*.lock
 
 # Mobile / Expo
 mobile/eisenhower-matrix/node_modules/

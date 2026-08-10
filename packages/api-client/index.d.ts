@@ -27,6 +27,7 @@ export const QUADRANT_DEFINITIONS: readonly QuadrantDefinition[];
 
 export type HealthState = 'healthy' | 'unhealthy' | 'unreachable';
 export type DatabaseState = 'connected' | 'disconnected';
+export type Quadrant = 0 | 1 | 2 | 3;
 
 export interface HealthResponseDto {
   status: 'ok' | 'ready' | 'not_ready';
@@ -36,16 +37,19 @@ export interface ClassificationResultDto {
   task: string;
   urgent: boolean;
   important: boolean;
-  quadrant: number;
+  quadrant: Quadrant;
   quadrant_name: string;
   timestamp: string;
   method: string;
   confidence?: number;
+  confidence_calibrated?: boolean;
+  requires_confirmation?: boolean;
+  confidence_status?: 'accepted' | 'low';
 }
 
 export interface SimilarExampleResultDto {
   text: string;
-  quadrant: number;
+  quadrant: Quadrant;
   quadrant_name: string;
   source: string;
   score: number;
@@ -55,16 +59,19 @@ export interface TaskAnalysisDto {
   task: string;
   /** Legacy wire key retained until the server contract is versioned. */
   langchain_analysis: {
-    quadrant: number | null;
+    quadrant: Quadrant | null;
     reasoning: string;
     confidence: number;
     method: string;
   };
   /** Legacy wire key retained until the server contract is versioned. */
   rag_classification: {
-    quadrant: number;
+    quadrant: Quadrant;
     quadrant_name: string;
     confidence: number;
+    confidence_calibrated?: boolean;
+    requires_confirmation?: boolean;
+    confidence_status?: 'accepted' | 'low';
   };
   comparison: {
     methods_agree: boolean;
@@ -122,9 +129,12 @@ export interface OcrResultDto {
   };
   classified_tasks: Array<{
     text: string;
-    quadrant: number;
+    quadrant: Quadrant;
     quadrant_name: string;
     confidence: number;
+    confidence_calibrated?: boolean;
+    requires_confirmation?: boolean;
+    confidence_status?: 'accepted' | 'low';
     similar_examples_used?: number;
     top_similar_examples?: SimilarExampleResultDto[];
   }>;

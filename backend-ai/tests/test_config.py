@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from app.config import load_settings
+from app.config import Settings, load_settings
 
 
 def test_load_settings_uses_defaults():
@@ -94,4 +94,41 @@ def test_production_static_auth_requires_distinct_long_tokens():
         "EISENHOWER_ADMIN_TOKEN": "short",
         "CORS_ALLOW_ORIGINS": "https://app.example.com",
       }
+    )
+
+
+@pytest.mark.parametrize(
+  ("field", "value"),
+  [
+    ("local_model_confidence_threshold", float("nan")),
+    ("local_model_minimum_macro_f1", -0.1),
+    ("local_model_maximum_ece", 1.1),
+    ("local_model_allowed_regression", float("inf")),
+    ("local_model_semantic_leakage_threshold", 1.1),
+  ],
+)
+def test_settings_reject_invalid_quality_gate_thresholds(tmp_path: Path, field: str, value: float):
+  kwargs = {
+    "training_data_path": tmp_path / "training.json",
+    "model_cache_dir": tmp_path / "runtime",
+    field: value,
+  }
+
+  with pytest.raises(ValueError, match="quality threshold"):
+    Settings(**kwargs)
+
+
+def test_loaded_settings_require_evaluation_and_support_explicit_production_profile():
+  settings = load_settings({"LOCAL_MODEL_EVALUATION_PROFILE": "production"})
+
+  assert settings.local_model_require_evaluation is True
+  assert settings.local_model_evaluation_profile == "production"
+
+
+def test_settings_reject_malformed_approved_evaluation_digest(tmp_path: Path):
+  with pytest.raises(ValueError, match="SHA-256"):
+    Settings(
+      training_data_path=tmp_path / "training.json",
+      model_cache_dir=tmp_path / "runtime",
+      local_model_approved_evaluation_sha256="not-a-digest",
     )

@@ -53,6 +53,14 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 - `LOCAL_MODEL_HIDDEN_DIM`: hidden layer width for the classification head, default `128`
 - `LOCAL_MODEL_DROPOUT`: dropout for the classification head, default `0.1`
 - `LOCAL_MODEL_LEARNING_RATE`: optimizer learning rate for the classification head, default `0.01`
+- `EVALUATION_DATA_PATH`: standalone PL/EN classifier evaluation set, default `backend-ai/data/evaluation_v1.json`
+- `LOCAL_MODEL_CONFIDENCE_THRESHOLD`: calibrated-confidence threshold below which the API requests confirmation, default `0.55`
+- `LOCAL_MODEL_MINIMUM_MACRO_F1`: minimum held-out macro-F1 required for artifact promotion, default `0.55`
+- `LOCAL_MODEL_MINIMUM_PER_CLASS_F1`: minimum held-out F1 for every direct class, default `0.50`
+- `LOCAL_MODEL_MAXIMUM_ECE`: maximum expected calibration error for promotion, default `0.30`
+- `LOCAL_MODEL_MAXIMUM_NLL`: maximum negative log-likelihood for promotion, default `1.20`
+- `LOCAL_MODEL_MAXIMUM_BRIER`: maximum multiclass Brier score for promotion, default `0.50`
+- `LOCAL_MODEL_ALLOWED_REGRESSION`: tolerated macro-F1 regression versus the centroid baseline or incumbent, default `0.02`
 - `TESSERACT_LANGUAGES`: OCR language pack list for Tesseract fallback, default `eng+pol`
 - `CORS_ALLOW_ORIGINS`: comma-separated frontend origins allowed to call the AI API, defaults to local `localhost` and `127.0.0.1` dev hosts
 - `APP_ENV`: set to `production` in production; this makes both Bearer tokens and an explicit browser origin allowlist mandatory
@@ -96,6 +104,19 @@ Per-service fallback:
 4. `mobile`: `cd mobile/eisenhower-matrix && npm ci && npm run start`
 
 The AI service is fully local. It uses a frozen multilingual MiniLM encoder plus a small PyTorch MLP head for quadrant classification, stores trained artifacts under `MODEL_CACHE_DIR`, and uses Tesseract for OCR. There is no OpenAI or native C++ classifier path in the default stack. The default MiniLM encoder is preloaded into the Docker image cache outside `/app`, so the compose bind mount does not hide it at runtime. The AI management panel can also enable or disable the deployed `local_model` and `tesseract` providers, and those switches persist under the runtime cache.
+
+The classifier has one direct four-class contract: `0 Do Now`, `1 Delegate`, `2 Schedule`, `3 Delete`. It is not decomposed into two independently trained axes. Its versioned PL/EN evaluation set is separate from training data and from any RAG golden set. Retraining calibrates the MLP, compares it with a cosine-centroid embedding baseline and the incumbent artifact, and only promotes a candidate that passes macro/per-class and calibration gates. The API always returns one of the four quadrants; low calibrated confidence is exposed additively through `requires_confirmation` and `confidence_status`.
+
+Run the reproducible local benchmark (semantic-grouped stratified five-fold validation, five training seeds, a disjoint calibration slice, and the standalone PL/EN evaluation) with:
+
+```bash
+cd backend-ai
+PYTHONPATH=. python scripts/benchmark_classifier.py --output /tmp/eisenhower-classifier-benchmark.json
+```
+
+This report is local classifier evidence only. The bundled 32-example synthetic set is a development smoke set, not canonical production evidence. It does not exercise RAG and does not prove that any artifact is deployed in production.
+
+Production promotion is fail-closed. `deploy/mikrus/docker-compose.yml` requires an externally supplied, read-only evaluation file (`AI_EVALUATION_FILE`) and its approved SHA-256 (`LOCAL_MODEL_APPROVED_EVALUATION_SHA256`). A production evaluation must be frozen, independent from training, dual-annotated, have inter-annotator agreement of at least `0.80`, contain at least 240 examples, and contain at least 30 examples for every language/class slice. Training-management endpoints are disabled in that production compose profile; approved retraining is an explicit offline operation. The liveness and readiness endpoints are `/health/live` and `/health/ready`.
 
 The Expo mobile client now keeps a local task cache in AsyncStorage, refreshes and mutates tasks through `backend-node` when available, and sends picked images to `backend-ai` OCR via `expo-image-picker`.
 

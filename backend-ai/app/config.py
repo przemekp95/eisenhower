@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+import math
 import os
 
 
@@ -45,6 +46,7 @@ class Settings:
   internal_allowed_tenants: tuple[str, ...] = ()
   webhook_secret: str | None = None
   jobs_database_path: Path | None = None
+  evaluation_data_path: Path | None = None
   # MinIO Object Storage
   minio_endpoint: str | None = None
   minio_access_key: str | None = None
@@ -57,6 +59,24 @@ class Settings:
   local_model_epochs: int = 60
   local_model_patience: int = 8
   local_model_learning_rate: float = 0.01
+  local_model_confidence_threshold: float = 0.55
+  local_model_minimum_macro_f1: float = 0.55
+  local_model_maximum_ece: float = 0.30
+  local_model_maximum_nll: float = 1.20
+  local_model_maximum_brier: float = 0.50
+  local_model_minimum_per_class_f1: float = 0.50
+  local_model_allowed_regression: float = 0.02
+  local_model_require_evaluation: bool = False
+  local_model_evaluation_profile: str = "development"
+  local_model_approved_evaluation_sha256: str | None = None
+  local_model_semantic_leakage_threshold: float = 0.92
+  local_model_maximum_semantic_leaks: int = 0
+  local_model_minimum_language_macro_f1: float = 0.70
+  local_model_minimum_selective_accuracy: float = 0.85
+  local_model_minimum_automatic_coverage: float = 0.50
+  local_model_minimum_worst_seed_macro_f1: float = 0.70
+  local_model_maximum_seed_standard_deviation: float = 0.10
+  ai_management_enabled: bool = True
   tesseract_languages: str = "eng+pol"
   app_name: str = "AI Quadrant Classifier"
   cors_allow_origins: tuple[str, ...] = (
@@ -65,6 +85,34 @@ class Settings:
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
   )
+
+  def __post_init__(self) -> None:
+    bounded_thresholds = (
+      self.local_model_confidence_threshold,
+      self.local_model_minimum_macro_f1,
+      self.local_model_maximum_ece,
+      self.local_model_maximum_brier,
+      self.local_model_minimum_per_class_f1,
+      self.local_model_allowed_regression,
+      self.local_model_semantic_leakage_threshold,
+      self.local_model_minimum_language_macro_f1,
+      self.local_model_minimum_selective_accuracy,
+      self.local_model_minimum_automatic_coverage,
+      self.local_model_minimum_worst_seed_macro_f1,
+      self.local_model_maximum_seed_standard_deviation,
+    )
+    if any(not math.isfinite(value) or not 0 <= value <= 1 for value in bounded_thresholds):
+      raise ValueError("Every bounded quality threshold must be finite and in range 0..1.")
+    if not math.isfinite(self.local_model_maximum_nll) or self.local_model_maximum_nll < 0:
+      raise ValueError("Every quality threshold must be finite and non-negative.")
+    if self.local_model_evaluation_profile not in {"development", "production"}:
+      raise ValueError("Evaluation profile must be 'development' or 'production'.")
+    if self.local_model_maximum_semantic_leaks < 0:
+      raise ValueError("Every quality threshold count must be non-negative.")
+    if self.local_model_approved_evaluation_sha256 is not None:
+      digest = self.local_model_approved_evaluation_sha256
+      if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
+        raise ValueError("Approved evaluation SHA-256 must be a lowercase 64-character hexadecimal digest.")
 
 
 def load_settings(env: dict[str, str] | None = None) -> Settings:
@@ -101,6 +149,8 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
   internal_allowed_tenants = parse_csv_list(source.get("INTERNAL_ALLOWED_TENANTS"), ())
   if app_env == "production" and internal_api_token and not internal_allowed_tenants:
     raise ValueError("INTERNAL_ALLOWED_TENANTS is required when production ingestion is enabled.")
+  evaluation_profile = source.get("LOCAL_MODEL_EVALUATION_PROFILE", "development")
+  production_profile = evaluation_profile == "production"
 
   return Settings(
     training_data_path=Path(
@@ -142,6 +192,9 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     jobs_database_path=Path(
       source.get("JOBS_DATABASE_PATH", str(base_dir / "data" / "jobs.sqlite3"))
     ),
+    evaluation_data_path=Path(
+      source.get("EVALUATION_DATA_PATH", str(base_dir / "data" / "evaluation_v1.json"))
+    ),
     local_model_name=source.get(
       "LOCAL_MODEL_NAME",
       "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
@@ -151,6 +204,24 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     local_model_epochs=int(source.get("LOCAL_MODEL_EPOCHS", "60")),
     local_model_patience=int(source.get("LOCAL_MODEL_PATIENCE", "8")),
     local_model_learning_rate=float(source.get("LOCAL_MODEL_LEARNING_RATE", "0.01")),
+    local_model_confidence_threshold=float(source.get("LOCAL_MODEL_CONFIDENCE_THRESHOLD", "0.55")),
+    local_model_minimum_macro_f1=float(source.get("LOCAL_MODEL_MINIMUM_MACRO_F1", "0.80" if production_profile else "0.55")),
+    local_model_maximum_ece=float(source.get("LOCAL_MODEL_MAXIMUM_ECE", "0.10" if production_profile else "0.30")),
+    local_model_maximum_nll=float(source.get("LOCAL_MODEL_MAXIMUM_NLL", "1.20")),
+    local_model_maximum_brier=float(source.get("LOCAL_MODEL_MAXIMUM_BRIER", "0.50")),
+    local_model_minimum_per_class_f1=float(source.get("LOCAL_MODEL_MINIMUM_PER_CLASS_F1", "0.72" if production_profile else "0.50")),
+    local_model_allowed_regression=float(source.get("LOCAL_MODEL_ALLOWED_REGRESSION", "0.01" if production_profile else "0.02")),
+    local_model_require_evaluation=source.get("LOCAL_MODEL_REQUIRE_EVALUATION", "true").lower() in ("true", "1", "yes"),
+    local_model_evaluation_profile=evaluation_profile,
+    local_model_approved_evaluation_sha256=source.get("LOCAL_MODEL_APPROVED_EVALUATION_SHA256") or None,
+    local_model_semantic_leakage_threshold=float(source.get("LOCAL_MODEL_SEMANTIC_LEAKAGE_THRESHOLD", "0.92")),
+    local_model_maximum_semantic_leaks=int(source.get("LOCAL_MODEL_MAXIMUM_SEMANTIC_LEAKS", "0")),
+    local_model_minimum_language_macro_f1=float(source.get("LOCAL_MODEL_MINIMUM_LANGUAGE_MACRO_F1", "0.77" if production_profile else "0.70")),
+    local_model_minimum_selective_accuracy=float(source.get("LOCAL_MODEL_MINIMUM_SELECTIVE_ACCURACY", "0.90" if production_profile else "0.85")),
+    local_model_minimum_automatic_coverage=float(source.get("LOCAL_MODEL_MINIMUM_AUTOMATIC_COVERAGE", "0.70" if production_profile else "0.50")),
+    local_model_minimum_worst_seed_macro_f1=float(source.get("LOCAL_MODEL_MINIMUM_WORST_SEED_MACRO_F1", "0.75" if production_profile else "0.70")),
+    local_model_maximum_seed_standard_deviation=float(source.get("LOCAL_MODEL_MAXIMUM_SEED_STANDARD_DEVIATION", "0.05" if production_profile else "0.10")),
+    ai_management_enabled=source.get("AI_MANAGEMENT_ENABLED", "true").lower() in ("true", "1", "yes"),
     tesseract_languages=source.get("TESSERACT_LANGUAGES", "eng+pol"),
     # MinIO Object Storage
     minio_endpoint=source.get("MINIO_ENDPOINT") or None,

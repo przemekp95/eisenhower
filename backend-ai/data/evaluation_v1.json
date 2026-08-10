@@ -1,0 +1,50 @@
+{
+  "name": "eisenhower-classifier-eval-v1",
+  "purpose": "Standalone PL/EN evaluation for the direct four-class local classifier; not a RAG golden set.",
+  "governance": {
+    "status": "development",
+    "provenance": "synthetic-curated",
+    "independent_from_training": false,
+    "independent_annotators": 0,
+    "inter_annotator_agreement": null,
+    "frozen": true
+  },
+  "label_contract": {"0": "Do Now", "1": "Delegate", "2": "Schedule", "3": "Delete"},
+  "examples": [
+    {"id": "en-0-01", "language": "en", "text": "respond to the security breach before the next hour", "quadrant": 0},
+    {"id": "en-0-02", "language": "en", "text": "sign the contract that expires this afternoon", "quadrant": 0},
+    {"id": "en-0-03", "language": "en", "text": "call the doctor now about severe symptoms", "quadrant": 0},
+    {"id": "en-0-04", "language": "en", "text": "fix the payment failure blocking today's sales", "quadrant": 0},
+    {"id": "pl-0-01", "language": "pl", "text": "usuń krytyczną awarię przed rozpoczęciem sprzedaży", "quadrant": 0},
+    {"id": "pl-0-02", "language": "pl", "text": "podpisz dziś umowę, bo wygasa o siedemnastej", "quadrant": 0},
+    {"id": "pl-0-03", "language": "pl", "text": "zadzwoń teraz do lekarza z powodu silnych objawów", "quadrant": 0},
+    {"id": "pl-0-04", "language": "pl", "text": "odblokuj pilnie płatności klientów", "quadrant": 0},
+
+    {"id": "en-1-01", "language": "en", "text": "ask finance to send the routine report by noon", "quadrant": 1},
+    {"id": "en-1-02", "language": "en", "text": "have the office manager arrange today's catering", "quadrant": 1},
+    {"id": "en-1-03", "language": "en", "text": "delegate the urgent calendar updates", "quadrant": 1},
+    {"id": "en-1-04", "language": "en", "text": "ask support to return routine customer calls today", "quadrant": 1},
+    {"id": "pl-1-01", "language": "pl", "text": "zleć księgowości wysłanie rutynowego raportu do południa", "quadrant": 1},
+    {"id": "pl-1-02", "language": "pl", "text": "poproś administrację o pilne zamówienie cateringu", "quadrant": 1},
+    {"id": "pl-1-03", "language": "pl", "text": "deleguj dzisiejszą aktualizację kalendarza", "quadrant": 1},
+    {"id": "pl-1-04", "language": "pl", "text": "przekaż wsparciu rutynowe telefony do klientów na dziś", "quadrant": 1},
+
+    {"id": "en-2-01", "language": "en", "text": "design a six-month learning plan", "quadrant": 2},
+    {"id": "en-2-02", "language": "en", "text": "schedule an annual preventive health check", "quadrant": 2},
+    {"id": "en-2-03", "language": "en", "text": "prepare next quarter's hiring strategy", "quadrant": 2},
+    {"id": "en-2-04", "language": "en", "text": "plan regular time with family", "quadrant": 2},
+    {"id": "pl-2-01", "language": "pl", "text": "stwórz półroczny plan nauki", "quadrant": 2},
+    {"id": "pl-2-02", "language": "pl", "text": "zaplanuj coroczny przegląd zdrowia", "quadrant": 2},
+    {"id": "pl-2-03", "language": "pl", "text": "przygotuj strategię rekrutacji na kolejny kwartał", "quadrant": 2},
+    {"id": "pl-2-04", "language": "pl", "text": "zaplanuj regularny czas dla rodziny", "quadrant": 2},
+
+    {"id": "en-3-01", "language": "en", "text": "stop reading clickbait during work", "quadrant": 3},
+    {"id": "en-3-02", "language": "en", "text": "delete an obsolete shopping wish list", "quadrant": 3},
+    {"id": "en-3-03", "language": "en", "text": "decline the pointless status meeting", "quadrant": 3},
+    {"id": "en-3-04", "language": "en", "text": "mute irrelevant promotional notifications", "quadrant": 3},
+    {"id": "pl-3-01", "language": "pl", "text": "przestań czytać clickbait w czasie pracy", "quadrant": 3},
+    {"id": "pl-3-02", "language": "pl", "text": "usuń nieaktualną listę zachcianek", "quadrant": 3},
+    {"id": "pl-3-03", "language": "pl", "text": "odrzuć bezcelowe spotkanie statusowe", "quadrant": 3},
+    {"id": "pl-3-04", "language": "pl", "text": "wycisz nieistotne powiadomienia reklamowe", "quadrant": 3}
+  ]
+}

@@ -159,7 +159,7 @@ def create_app(
 
   @app.middleware("http")
   async def authenticate_requests(request: Request, call_next):
-    if request.url.path in {"/", "/metrics"} or request.method == "OPTIONS":
+    if request.url.path in {"/", "/metrics", "/health/live", "/health/ready"} or request.method == "OPTIONS":
       return await call_next(request)
     origin = request.headers.get("origin")
     if origin and request.method in UNSAFE_METHODS and origin not in resolved_settings.cors_allow_origins:
@@ -228,7 +228,7 @@ def create_app(
 
   @app.middleware("http")
   async def log_requests(request: Request, call_next):
-    if request.url.path in {"/", "/metrics"} or request.method == "OPTIONS":
+    if request.url.path in {"/", "/metrics", "/health/live", "/health/ready"} or request.method == "OPTIONS":
       return await call_next(request)
 
     started_at = time.perf_counter()
@@ -256,6 +256,20 @@ def create_app(
       for status, count in job_queue.counts_by_status().items():
         metrics.set_job_depth(status, count)
     return Response(content=metrics.render(), media_type="text/plain; version=0.0.4")
+
+  @app.get("/health/live", include_in_schema=False)
+  def health_live():
+    return {"status": "ok"}
+
+  @app.get("/health/ready", include_in_schema=False)
+  def health_ready():
+    capabilities = resolved_ai_service.capabilities()
+    if not capabilities.get("classification"):
+      raise HTTPException(status_code=503, detail="Local classifier is not ready.")
+    return {
+      "status": "ready",
+      "generation_id": capabilities.get("model", {}).get("generation_id"),
+    }
 
   @app.post("/v2/ai/analyze", response_model=AnalyzeResult)
   def analyze_with_rag(request: RagAnalyzeRequest, http_request: Request):
@@ -346,6 +360,10 @@ def create_app(
       ),
     }
 
+  def require_management_enabled() -> None:
+    if not resolved_settings.ai_management_enabled:
+      raise HTTPException(status_code=403, detail="Training management is disabled in this environment.")
+
   def enqueue_internal_job(
     operation: str,
     job_type: str,
@@ -420,6 +438,7 @@ def create_app(
     quadrant: int = Form(..., ge=0, le=3),
     _admin: None = Depends(require_admin),
   ):
+    require_management_enabled()
     record = resolved_store.add_example(text=text, quadrant=quadrant)
     return {
       "message": "Training example added.",
@@ -428,6 +447,7 @@ def create_app(
 
   @app.post("/retrain")
   def retrain_model(preserve_experience: bool = Form(True), _admin: None = Depends(require_admin)):
+    require_management_enabled()
     return resolved_ai_service.retrain(preserve_experience=preserve_experience)
 
   @app.post("/learn-feedback")
@@ -437,6 +457,7 @@ def create_app(
     correct_quadrant: int = Form(..., ge=0, le=3),
     _admin: None = Depends(require_admin),
   ):
+    require_management_enabled()
     return resolved_ai_service.learn_feedback(
       task,
       predicted_quadrant,
@@ -446,6 +467,7 @@ def create_app(
 
   @app.post("/learn-ocr-feedback")
   def learn_from_ocr_feedback(request: OCRFeedbackRequest, _admin: None = Depends(require_admin)):
+    require_management_enabled()
     if not request.tasks:
       raise HTTPException(status_code=400, detail="At least one accepted OCR task is required.")
 
@@ -468,6 +490,7 @@ def create_app(
 
   @app.delete("/training-data")
   def clear_training_data(keep_defaults: bool = Query(True), _admin: None = Depends(require_admin)):
+    require_management_enabled()
     records = resolved_store.clear(keep_defaults=keep_defaults)
     return {
       "message": "Training data cleared.",
@@ -507,6 +530,7 @@ def create_app(
     request: ProviderStateRequest,
     _admin: None = Depends(require_admin),
   ):
+    require_management_enabled()
     return resolved_ai_service.set_provider_enabled(provider_name, request.enabled)
 
   @app.exception_handler(HTTPException)

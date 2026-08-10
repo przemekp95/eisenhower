@@ -682,7 +682,7 @@ describe('Matrix', () => {
       },
       rag_classification: {
         quadrant: 2,
-        quadrant_name: 'Delegate',
+        quadrant_name: 'Schedule',
         confidence: 0.7,
       },
       comparison: {

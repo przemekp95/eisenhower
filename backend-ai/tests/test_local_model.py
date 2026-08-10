@@ -2,7 +2,15 @@ from pathlib import Path
 import math
 
 from app.config import Settings
-from app.local_model import LocalMiniLMClassifier, ModelNotReadyError, cosine_similarity, split_indices
+from app.local_model import (
+  LocalMiniLMClassifier,
+  ModelNotReadyError,
+  clean_training_records,
+  cosine_similarity,
+  records_fingerprint,
+  split_indices,
+  three_way_split_indices,
+)
 
 
 class FakeEncoder:
@@ -113,6 +121,8 @@ def test_local_model_bootstraps_trains_and_predicts(tmp_path: Path):
   assert model.head_path.exists()
   assert model.meta_path.exists()
   assert model.index_path.exists()
+  assert model.current_pointer_path.exists()
+  assert model.status()["generation_id"]
   assert explanation["method"] == "local-analysis"
   assert status["ready"] is True
   assert status["examples_seen"] == len(records())
@@ -167,28 +177,39 @@ def test_local_model_loads_existing_artifacts_without_retraining(tmp_path: Path)
   assert loader.predict("urgent deadline today").confidence > 0
 
 
+def test_local_model_keeps_verified_incumbent_ready_when_training_data_becomes_stale(tmp_path: Path):
+  settings = build_settings(tmp_path)
+  trainer = LocalMiniLMClassifier(settings=settings, encoder=FakeEncoder())
+  trainer.train(records())
+  changed_records = records() + [{"text": "new reviewed task", "quadrant": 2, "source": "feedback"}]
+
+  loader = LocalMiniLMClassifier(settings=settings, encoder=FakeEncoder())
+  loader.train = lambda _records: (_ for _ in ()).throw(AssertionError("stale data must not replace incumbent"))  # type: ignore[method-assign]
+  loader.ensure_ready(changed_records)
+
+  assert loader.status()["ready"] is True
+  assert loader.status()["data_stale"] is True
+  assert loader.predict("urgent deadline today").confidence > 0
+
+
 def test_local_model_marks_corrupt_artifacts_as_not_ready(tmp_path: Path):
   settings = build_settings(tmp_path)
-  settings.model_cache_dir.mkdir(parents=True, exist_ok=True)
-  settings.model_cache_dir.joinpath("local_minilm_head.pt").write_text("not a torch file", encoding="utf-8")
-  settings.model_cache_dir.joinpath("local_minilm_meta.json").write_text(
-    '{"encoder_name": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", "hidden_dim": 128}',
-    encoding="utf-8",
-  )
-  settings.model_cache_dir.joinpath("local_minilm_index.json").write_text('{"items": []}', encoding="utf-8")
+  trainer = LocalMiniLMClassifier(settings=settings, encoder=FakeEncoder())
+  trainer.train(records())
+  trainer.head_path.write_text("not a torch file", encoding="utf-8")
 
   model = LocalMiniLMClassifier(settings=settings, encoder=FakeEncoder())
 
   try:
     model.ensure_ready(records())
   except ModelNotReadyError as issue:
-    assert "Weights only load failed" in str(issue)
+    assert "checksum" in str(issue)
   else:
     raise AssertionError("Expected ModelNotReadyError")
 
   status = model.status()
   assert status["ready"] is False
-  assert "Weights only load failed" in status["last_error"]
+  assert "checksum" in status["last_error"]
 
 
 def test_local_model_rejects_artifacts_for_different_encoder(tmp_path: Path):
@@ -362,11 +383,13 @@ def test_local_model_real_minilm_smoke_predicts_stable_examples(real_model_bundl
   assert schedule_prediction.confidence > 0
 
 
-def test_split_indices_covers_validation_and_skip_paths():
+def test_split_indices_covers_seeded_stratified_validation_and_skip_paths():
   train, validation, skipped = split_indices([0, 0, 1, 1, 2, 2, 3, 3])
   assert skipped is False
-  assert train
-  assert validation
+  assert len(train) == 4
+  assert len(validation) == 4
+  assert {index // 2 for index in validation} == {0, 1, 2, 3}
+  assert (train, validation, skipped) == split_indices([0, 0, 1, 1, 2, 2, 3, 3])
 
   train_sparse, validation_sparse, skipped_sparse = split_indices([0, 0, 1, 2, 2, 3, 3, 3])
   assert train_sparse == list(range(8))
@@ -385,3 +408,147 @@ def test_split_indices_covers_validation_and_skip_paths():
   assert split_indices([0, 0, 0, 0, 0, 0, 0, 1])[1] == []
 
   assert cosine_similarity([], [1.0, 0.0]) == 0.0
+
+
+def test_three_way_split_keeps_stopping_and_calibration_disjoint():
+  labels = [class_id for class_id in range(4) for _ in range(5)]
+
+  fit, stopping, calibration, skipped = three_way_split_indices(labels, seed=17)
+
+  assert skipped is False
+  assert set(fit).isdisjoint(stopping)
+  assert set(fit).isdisjoint(calibration)
+  assert set(stopping).isdisjoint(calibration)
+  assert sorted(fit + stopping + calibration) == list(range(len(labels)))
+  assert {labels[index] for index in stopping} == {0, 1, 2, 3}
+  assert {labels[index] for index in calibration} == {0, 1, 2, 3}
+
+
+def test_training_cleanup_quarantines_pending_and_conflicting_feedback():
+  candidates = records() + [
+    {"text": "  urgent deadline today  ", "quadrant": 0, "source": "feedback"},
+    {"text": "conflicting label", "quadrant": 0, "source": "feedback"},
+    {"text": "CONFLICTING   LABEL", "quadrant": 3, "source": "feedback"},
+    {"text": "auto accepted OCR", "quadrant": 1, "source": "ocr-feedback", "training_status": "pending_review"},
+  ]
+
+  cleaned = clean_training_records(candidates)
+
+  assert len(cleaned) == len(records())
+  assert all(record["text"] not in {"conflicting label", "auto accepted OCR"} for record in cleaned)
+  assert records_fingerprint(cleaned) == records_fingerprint(list(reversed(cleaned)))
+
+
+def test_rejected_candidate_preserves_incumbent_artifact(tmp_path: Path):
+  initial_settings = build_settings(tmp_path)
+  incumbent = LocalMiniLMClassifier(settings=initial_settings, encoder=FakeEncoder())
+  incumbent.train(records())
+  original_head = incumbent.head_path.read_bytes()
+  original_pointer = incumbent.current_pointer_path.read_bytes()
+
+  evaluation_path = tmp_path / "evaluation.json"
+  evaluation_examples = [
+    {"id": f"en-{quadrant}", "language": "en", "text": f"evaluation task {quadrant}", "quadrant": quadrant}
+    for quadrant in range(4)
+  ] + [
+    {"id": f"pl-{quadrant}", "language": "pl", "text": f"zadanie oceny {quadrant}", "quadrant": quadrant}
+    for quadrant in range(4)
+  ]
+  import json
+  evaluation_path.write_text(json.dumps({"name": "strict-eval", "examples": evaluation_examples}), encoding="utf-8")
+  gated_settings = Settings(
+    training_data_path=initial_settings.training_data_path,
+    model_cache_dir=initial_settings.model_cache_dir,
+    evaluation_data_path=evaluation_path,
+    local_model_epochs=6,
+    local_model_patience=2,
+    local_model_minimum_macro_f1=1.0,
+  )
+  model = LocalMiniLMClassifier(settings=gated_settings, encoder=FakeEncoder())
+  model.ensure_ready(records())
+
+  result = model.train(records())
+
+  assert result["promoted"] is False
+  assert result["quality_gate"]["gate"]["passed"] is False
+  assert model.head_path.read_bytes() == original_head
+  assert model.current_pointer_path.read_bytes() == original_pointer
+  assert model.status()["ready"] is True
+
+
+def test_worker_refreshes_atomically_to_generation_promoted_by_another_worker(tmp_path: Path):
+  settings = build_settings(tmp_path)
+  worker_one = LocalMiniLMClassifier(settings=settings, encoder=FakeEncoder())
+  worker_one.train(records())
+  worker_two = LocalMiniLMClassifier(settings=settings, encoder=FakeEncoder())
+  worker_two.ensure_ready(records())
+  first_generation = worker_two.status()["generation_id"]
+
+  worker_one.train(records())
+  second_generation = worker_one.status()["generation_id"]
+  worker_two.predict("urgent deadline today")
+
+  assert second_generation != first_generation
+  assert worker_two.status()["generation_id"] == second_generation
+
+
+def test_required_evaluation_missing_fails_closed_without_writing_artifact(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    evaluation_data_path=tmp_path / "missing-evaluation.json",
+    local_model_require_evaluation=True,
+    local_model_epochs=6,
+    local_model_patience=2,
+  )
+  model = LocalMiniLMClassifier(settings=settings, encoder=FakeEncoder())
+
+  try:
+    model.train(records())
+  except ModelNotReadyError as issue:
+    assert "Required evaluation dataset" in str(issue)
+  else:
+    raise AssertionError("Missing required evaluation must block promotion")
+
+  assert model.current_pointer_path.exists() is False
+
+
+def test_production_profile_rejects_self_declared_development_evaluation(tmp_path: Path):
+  evaluation_path = tmp_path / "evaluation.json"
+  import json
+  evaluation_path.write_text(
+    json.dumps(
+      {
+        "name": "development-only",
+        "governance": {"status": "development", "frozen": True},
+        "examples": [
+          {
+            "id": f"{language}-{quadrant}",
+            "language": language,
+            "text": f"evaluation {language} {quadrant}",
+            "quadrant": quadrant,
+          }
+          for language in ("en", "pl")
+          for quadrant in range(4)
+        ],
+      }
+    ),
+    encoding="utf-8",
+  )
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    evaluation_data_path=evaluation_path,
+    local_model_require_evaluation=True,
+    local_model_evaluation_profile="production",
+    local_model_epochs=6,
+    local_model_patience=2,
+  )
+  model = LocalMiniLMClassifier(settings=settings, encoder=FakeEncoder())
+
+  try:
+    model.train(records())
+  except ModelNotReadyError as issue:
+    assert "quality gate" in str(issue)
+  else:
+    raise AssertionError("Development evaluation must not promote production artifacts")

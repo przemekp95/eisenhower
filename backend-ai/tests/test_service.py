@@ -151,6 +151,29 @@ def test_service_helpers_cover_normalization_similarity_and_flags():
   assert lexical_similarity("pilne zadanie", "pilne nowe zadanie") > 0
 
 
+def test_low_confidence_is_additive_and_keeps_the_direct_four_class_contract(tmp_path: Path):
+  service = build_service(tmp_path)
+  prediction = LocalPrediction(
+    quadrant=1,
+      confidence=0.42,
+    probabilities=[0.20, 0.42, 0.23, 0.15],
+    similar_examples=[],
+      requires_confirmation=True,
+      confidence_calibrated=True,
+  )
+
+  payload = service._serialize_classification("delegate today's routine calls", prediction)
+
+  assert payload["quadrant"] == 1
+  assert payload["quadrant_name"] == "Delegate"
+  assert payload["urgent"] is True
+  assert payload["important"] is False
+  assert payload["confidence"] == 0.42
+  assert payload["confidence_calibrated"] is True
+  assert payload["requires_confirmation"] is True
+  assert payload["confidence_status"] == "low"
+
+
 def test_service_initialization_capabilities_and_stats(real_model_bundle, monkeypatch):
   service = build_real_service(real_model_bundle)
   monkeypatch.setattr(service, "_tesseract_available", lambda: True)
@@ -348,6 +371,12 @@ def test_learn_feedback_batch_can_retrain_after_saving_records(tmp_path: Path):
 
   assert result["examples_added"] == 2
   assert result["retrained"] is True
+  assert result["pending_review"] is True
+  assert all(
+    item["training_status"] == "pending_review"
+    for item in service.store.load()
+    if item.get("source") == "ocr-feedback"
+  )
   assert result["training"]["examples_seen"] == stats["total_examples"]
   assert local_model.train_calls
   assert stats["data_sources"]["ocr-feedback"] == 2
@@ -418,6 +447,28 @@ def test_retrain_passes_records_and_marks_preserve_flag_deprecated(real_model_bu
   assert result["preserve_experience"] is False
   assert result["preserve_experience_deprecated"] is True
   assert result["examples_seen"] >= len(real_model_bundle["records"])
+
+
+def test_retrain_reports_quality_gate_rejection_without_claiming_promotion(tmp_path: Path):
+  class RejectingLocalModel(FakeLocalModel):
+    def train(self, records):
+      self.train_calls.append(records)
+      return {
+        "artifact_path": "/tmp/incumbent.pt",
+        "trained_at": "2026-03-09T00:00:00+00:00",
+        "validation_skipped": False,
+        "examples_seen": len(records),
+        "promoted": False,
+        "quality_gate": {"gate": {"passed": False, "reasons": [{"code": "below_minimum_macro_f1"}]}},
+      }
+
+  service = build_service(tmp_path, local_model=RejectingLocalModel())
+
+  result = service.retrain()
+
+  assert result["status"] == "rejected"
+  assert result["promoted"] is False
+  assert result["message"] == "Candidate rejected; incumbent local classifier preserved."
 
 
 def test_service_surfaces_model_not_ready(tmp_path: Path):

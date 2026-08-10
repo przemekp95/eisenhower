@@ -70,9 +70,9 @@ class FakeLocalModel:
     quadrant = 2 if "roadmap" in task else 0
     return {
       "quadrant": quadrant,
-      "quadrant_name": "Deleguj" if language == "pl" and quadrant == 2 else "Delegate",
+      "quadrant_name": "Zaplanuj" if language == "pl" and quadrant == 2 else "Schedule",
       "confidence": 0.83,
-      "reasoning": "Kwadrant „Deleguj” wynika z lokalnego modelu." if language == "pl" else "Local model explanation.",
+      "reasoning": "Kwadrant „Zaplanuj” wynika z lokalnego modelu." if language == "pl" else "Local model explanation.",
       "method": "local-analysis",
       "similar_examples": [],
     }
@@ -281,8 +281,10 @@ def test_root_and_capabilities(real_model_bundle):
 
   root = client.get("/")
   capabilities = client.get("/capabilities")
+  readiness = client.get("/health/ready")
 
   assert root.status_code == 200
+  assert readiness.status_code == 200
   assert capabilities.status_code == 200
   assert capabilities.json()["classification"] is True
   assert capabilities.json()["providers"]["local_model"] is True
@@ -361,6 +363,24 @@ def test_training_management_endpoints(real_model_bundle):
   assert retrain.json()["preserve_experience_deprecated"] is True
   assert retrain.json()["examples_seen"] >= len(real_model_bundle["records"])
   assert clear.json()["remaining_examples"] == 0
+
+
+def test_production_can_disable_mutating_training_endpoints(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    ai_management_enabled=False,
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  client = TestClient(create_app(settings=settings, store=store, ai_service=service))
+  original_records = store.load()
+
+  response = client.post("/add-example", data={"text": "poison", "quadrant": 0})
+
+  assert response.status_code == 403
+  assert response.json()["error"] == "Training management is disabled in this environment."
+  assert store.load() == original_records
 
 
 def test_ocr_feedback_endpoint_batches_examples_and_retrains(tmp_path: Path):
