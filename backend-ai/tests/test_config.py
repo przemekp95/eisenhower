@@ -16,6 +16,7 @@ def test_load_settings_uses_defaults():
   assert settings.prompt_artifact_dir.name == "prompts"
   assert settings.prompt_id == "eisenhower-classifier"
   assert settings.prompt_version == "1.0.0"
+  assert settings.local_model_revision == "e8f8c211226b894fcb81acc59f3b34ba3efd5f42"
 
 
 def test_load_settings_accepts_overrides(tmp_path: Path):
@@ -24,6 +25,7 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
       "TRAINING_DATA_PATH": str(tmp_path / "examples.json"),
       "MODEL_CACHE_DIR": str(tmp_path / "cache"),
       "LOCAL_MODEL_NAME": "sentence-transformers/test-model",
+      "LOCAL_MODEL_REVISION": "0123456789abcdef0123456789abcdef01234567",
       "LOCAL_MODEL_HIDDEN_DIM": "96",
       "LOCAL_MODEL_DROPOUT": "0.2",
       "LOCAL_MODEL_EPOCHS": "20",
@@ -42,6 +44,7 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
   assert settings.training_data_path == tmp_path / "examples.json"
   assert settings.model_cache_dir == tmp_path / "cache"
   assert settings.local_model_name == "sentence-transformers/test-model"
+  assert settings.local_model_revision == "0123456789abcdef0123456789abcdef01234567"
   assert settings.local_model_hidden_dim == 96
   assert settings.local_model_dropout == 0.2
   assert settings.local_model_epochs == 20

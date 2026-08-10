@@ -1,6 +1,8 @@
 # Delivery roadmap, dependencies and go/no-go gates
 
-Sizes are relative (`S`, `M`, `L`) and are not calendar estimates. They require team size, environment ownership and data-source decisions before conversion into dates. All code currently remains local and undeployed.
+Sizes are relative (`S`, `M`, `L`) and are not calendar estimates. They require team size, environment ownership and data-source decisions before conversion into dates. This file is a target roadmap, not the active backlog; current release work is tracked in `.tasks/`.
+
+The supported production scope is currently frozen at MiniLM+MLP classification, local similarity, and Tesseract OCR. Phases 2–6 below are deliberately paused: existing fail-closed scaffolds may remain tested, but Qdrant retrieval, vLLM generation, n8n ingestion, remote MCP, a new IdP/OIDC rollout, and multi-tenant platform work are not authorized release work. A local scaffold, merged source, or passing mock test does not prove that any of those capabilities are deployed.
 
 ## Phase 0 — semantic truth and honest capabilities
 
