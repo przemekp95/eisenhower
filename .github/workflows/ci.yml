@@ -392,6 +392,7 @@ jobs:
             "build-tools;36.0.0" \
             "ndk;27.1.12297006" \
             "cmake;3.30.5"
+          echo "$ANDROID_SDK_ROOT/build-tools/36.0.0" >> "$GITHUB_PATH"
 
       - name: Install dependencies
         working-directory: mobile/eisenhower-matrix
@@ -456,7 +457,7 @@ jobs:
           NODE_ENV: production
         run: npx expo prebuild --platform android --no-install --clean
 
-      - name: Android native release APK
+      - name: Android native CI candidate APK
         working-directory: mobile/eisenhower-matrix/android
         env:
           CI: "1"
@@ -465,6 +466,12 @@ jobs:
         run: |
           export ANDROID_HOME="${ANDROID_SDK_ROOT}"
           ./gradlew assembleRelease
+
+      - name: Verify CI candidate APK integrity
+        shell: bash
+        run: |
+          apksigner verify --verbose \
+            mobile/eisenhower-matrix/android/app/build/outputs/apk/release/app-release.apk
 
       - name: Verify embedded mobile endpoints
         shell: bash
@@ -493,12 +500,12 @@ jobs:
           mkdir -p mobile/eisenhower-matrix/output
           cp \
             mobile/eisenhower-matrix/android/app/build/outputs/apk/release/app-release.apk \
-            "mobile/eisenhower-matrix/output/eisenhower-matrix-android-release-${GITHUB_SHA::7}.apk"
+            "mobile/eisenhower-matrix/output/eisenhower-matrix-android-ci-candidate-${GITHUB_SHA::7}.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
-          name: eisenhower-matrix-android-apk-${{ github.sha }}
+          name: eisenhower-matrix-android-ci-candidate-${{ github.sha }}
           path: mobile/eisenhower-matrix/output/*.apk
           if-no-files-found: error
           retention-days: 14

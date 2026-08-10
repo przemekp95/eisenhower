@@ -52,8 +52,8 @@ jobs:
           if [ -n "$DOCKER_HUB_USERNAME" ] && [ -n "$DOCKER_HUB_TOKEN" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "Docker Hub credentials are not configured. Building without push."
+            echo "::error::Docker Hub credentials are required for an immutable production release."
+            exit 1
           fi
 
       - name: Login to Docker Hub
@@ -74,19 +74,183 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  android-release:
+    name: android-release
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'master' }}
+    runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_APP_ORIGIN_URL: ${{ vars.EXPO_PUBLIC_APP_ORIGIN_URL }}
+      EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+      EXPO_PUBLIC_AI_API_URL: ${{ vars.EXPO_PUBLIC_AI_API_URL }}
+      ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+      ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+      ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+      ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+      ANDROID_RELEASE_CERT_SHA256: ${{ vars.ANDROID_RELEASE_CERT_SHA256 }}
+    steps:
+      - name: Checkout immutable release SHA
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+
+      - name: Require production signing configuration
+        shell: bash
+        run: |
+          missing=0
+          for key in ANDROID_RELEASE_KEYSTORE_BASE64 ANDROID_RELEASE_STORE_PASSWORD ANDROID_RELEASE_KEY_ALIAS ANDROID_RELEASE_KEY_PASSWORD ANDROID_RELEASE_CERT_SHA256; do
+            if [ -z "${!key}" ]; then
+              echo "::error::$key is required for the production Android release."
+              missing=1
+            fi
+          done
+
+          normalized_digest="$(printf '%s' "$ANDROID_RELEASE_CERT_SHA256" | tr -cd '[:xdigit:]' | tr '[:upper:]' '[:lower:]')"
+          if [[ ! "$normalized_digest" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::ANDROID_RELEASE_CERT_SHA256 must be a full SHA-256 certificate digest."
+            missing=1
+          fi
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Decode production keystore
+        shell: bash
+        run: |
+          umask 077
+          keystore_path="$RUNNER_TEMP/eisenhower-release.keystore"
+          printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          test -s "$keystore_path"
+          echo "ANDROID_RELEASE_STORE_FILE=$keystore_path" >> "$GITHUB_ENV"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mobile/eisenhower-matrix/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.1.12297006" \
+            "cmake;3.30.5"
+          echo "$ANDROID_SDK_ROOT/build-tools/36.0.0" >> "$GITHUB_PATH"
+
+      - name: Verify production keystore access
+        shell: bash
+        run: |
+          keytool -list \
+            -keystore "$ANDROID_RELEASE_STORE_FILE" \
+            -storepass "$ANDROID_RELEASE_STORE_PASSWORD" \
+            -alias "$ANDROID_RELEASE_KEY_ALIAS" >/dev/null
+
+      - name: Install mobile dependencies
+        working-directory: mobile/eisenhower-matrix
+        run: npm ci
+
+      - name: Validate production mobile endpoints
+        shell: bash
+        run: |
+          for key in EXPO_PUBLIC_API_URL EXPO_PUBLIC_AI_API_URL; do
+            value="${!key}"
+            if [[ ! "$value" =~ ^https:// ]] || [[ "$value" == *,* ]] || [[ "$value" =~ ^https://(localhost|127\.0\.0\.1|10\.0\.2\.2|\[::1\])([/:]|$) ]]; then
+              echo "::error::$key is required and must be one public HTTPS URL."
+              exit 1
+            fi
+          done
+
+      - name: Generate native Android project
+        working-directory: mobile/eisenhower-matrix
+        env:
+          CI: "1"
+          EXPO_NO_TELEMETRY: "1"
+          NODE_ENV: production
+        run: npx expo prebuild --platform android --no-install --clean
+
+      - name: Configure production signing
+        working-directory: mobile/eisenhower-matrix
+        run: node scripts/androidReleaseSigning.js configure android/app/build.gradle
+
+      - name: Build production Android APK
+        working-directory: mobile/eisenhower-matrix/android
+        env:
+          CI: "1"
+          EXPO_NO_TELEMETRY: "1"
+          NODE_ENV: production
+        run: |
+          export ANDROID_HOME="${ANDROID_SDK_ROOT}"
+          ./gradlew assembleRelease
+
+      - name: Verify embedded production endpoints
+        shell: bash
+        run: |
+          bundle_strings_file="$(mktemp)"
+          unzip -p mobile/eisenhower-matrix/android/app/build/outputs/apk/release/app-release.apk assets/index.android.bundle | strings > "$bundle_strings_file"
+
+          if grep -Eq 'http://(127\.0\.0\.1|localhost|10\.0\.2\.2)(:[0-9]+)?' "$bundle_strings_file"; then
+            echo "::error::Production APK contains loopback development endpoints."
+            exit 1
+          fi
+          grep -Fq "$EXPO_PUBLIC_API_URL" "$bundle_strings_file"
+          grep -Fq "$EXPO_PUBLIC_AI_API_URL" "$bundle_strings_file"
+
+      - name: Verify pinned production signature
+        working-directory: mobile/eisenhower-matrix
+        run: |
+          node scripts/androidReleaseSigning.js verify \
+            android/app/build/outputs/apk/release/app-release.apk \
+            "$ANDROID_RELEASE_CERT_SHA256"
+
+      - name: Prepare immutable Android release artifact
+        shell: bash
+        run: |
+          output_dir="mobile/eisenhower-matrix/output"
+          apk_name="eisenhower-matrix-android-release-${RELEASE_SHA}.apk"
+          mkdir -p "$output_dir"
+          cp mobile/eisenhower-matrix/android/app/build/outputs/apk/release/app-release.apk "$output_dir/$apk_name"
+          sha256sum "$output_dir/$apk_name" > "$output_dir/$apk_name.sha256"
+          jq -n \
+            --arg commit "$RELEASE_SHA" \
+            --arg certificate_sha256 "$ANDROID_RELEASE_CERT_SHA256" \
+            --arg apk "$apk_name" \
+            '{commit: $commit, certificate_sha256: $certificate_sha256, apk: $apk}' \
+            > "$output_dir/$apk_name.json"
+
+      - name: Upload production Android release
+        uses: actions/upload-artifact@v7
+        with:
+          name: eisenhower-matrix-android-release-${{ env.RELEASE_SHA }}
+          path: mobile/eisenhower-matrix/output/*
+          if-no-files-found: error
+          retention-days: 90
+
   deploy-mikrus:
     name: deploy-mikrus
     runs-on:
       - self-hosted
       - mikrus
-    needs: docker-release
+    needs: [docker-release, android-release]
     env:
       MIKRUS_HOST: ${{ secrets.MIKRUS_HOST }}
       MIKRUS_USER: ${{ secrets.MIKRUS_USER }}
       MIKRUS_SSH_KEY: ${{ secrets.MIKRUS_SSH_KEY }}
       MIKRUS_ENV_FILE: ${{ secrets.MIKRUS_ENV_FILE }}
       MIKRUS_APP_DIR: ${{ secrets.MIKRUS_APP_DIR }}
-      MIKRUS_PUBLIC_URL: ${{ secrets.MIKRUS_PUBLIC_URL }}
+      MIKRUS_PUBLIC_URL: ${{ vars.MIKRUS_PUBLIC_URL }}
       IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
       DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
       DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
@@ -97,7 +261,6 @@ jobs:
           ref: ${{ env.RELEASE_SHA }}
 
       - name: Check Mikrus configuration
-        id: mikrus-config
         shell: bash
         run: |
           missing=0
@@ -109,15 +272,12 @@ jobs:
             fi
           done
 
-          if [ "$missing" -eq 0 ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "Mikrus deployment secrets are not configured. Skipping deployment."
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::Mikrus production deployment configuration is incomplete."
+            exit 1
           fi
 
       - name: Deploy to Mikrus
-        if: ${{ steps.mikrus-config.outputs.enabled == 'true' }}
         shell: bash
         run: .github/scripts/deploy-mikrus.sh
 

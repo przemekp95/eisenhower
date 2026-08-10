@@ -7,7 +7,9 @@ Install the exact release APK produced for the promoted SHA on a physical Androi
 
 ### Plan
 
-- Download and install the immutable CI release APK.
+- Configure a user-owned, recovery-backed production keystore and pin its public certificate SHA-256 without committing secrets.
+- Require the post-`master` release workflow to reject debug or unpinned signatures, then download its immutable APK and checksum metadata.
+- Install the production-signed APK; a debug-signed CI candidate does not satisfy this task.
 - Read back task CRUD and classification results against the public HTTPS runtime.
 
 ---
@@ -17,10 +19,11 @@ Install the exact release APK produced for the promoted SHA on a physical Androi
 
 Preserve production data, create an independent backup, restore it into an isolated target, compare the restored data, and verify application rollback to a prior immutable SHA.
 
+The offline data portion passed on 2026-08-10: the stopped production MongoDB and AI volumes were archived under `/root/eisenhower-backups/20260810T114224Z`, restored into isolated disposable volumes, and matched file-for-file by SHA-256. Application rollback remains open until a new immutable release exists.
+
 ### Plan
 
-- Inventory and back up MongoDB and AI data without modifying the live source.
-- Restore into an isolated target and verify counts/checksums.
+- Retain the independently verified MongoDB and AI archives and checksum manifests with restricted permissions.
 - Rehearse application rollback and record exact evidence.
 
 ---
