@@ -88,6 +88,7 @@ if [[ "$MIKRUS_HOST" == *:* ]]; then
   scp_host="[${MIKRUS_HOST}]"
 fi
 scp_target="${MIKRUS_USER}@${scp_host}:${app_dir}/docker-compose.yml"
+http_check_scp_target="${MIKRUS_USER}@${scp_host}:${app_dir}/assert-http-status.sh"
 
 log "Deploy target: ${ssh_target}:${app_dir}"
 
@@ -138,6 +139,10 @@ REMOTE_BACKUP
 
 log "Uploading docker-compose.yml."
 scp "${ssh_opts[@]}" "deploy/mikrus/docker-compose.yml" "$scp_target"
+
+log "Uploading fail-closed HTTP status verifier."
+scp "${ssh_opts[@]}" ".github/scripts/assert-http-status.sh" "$http_check_scp_target"
+ssh "${ssh_opts[@]}" "$ssh_target" "chmod 700 '$app_dir/assert-http-status.sh'"
 
 log "Uploading .env file."
 printf '%s' "$MIKRUS_ENV_FILE" | ssh "${ssh_opts[@]}" "$ssh_target" "cat > '$app_dir/.env' && chmod 600 '$app_dir/.env'"
@@ -285,9 +290,11 @@ if [[ "$ready" != "true" ]]; then
 fi
 
 echo "Running public HTTPS smoke checks."
-curl --fail --silent --show-error --max-time 20 "$MIKRUS_PUBLIC_URL/health" >/dev/null
-curl --fail --silent --show-error --max-time 20 "$MIKRUS_PUBLIC_URL/api/health" >/dev/null
-curl --fail --silent --show-error --max-time 20 "$MIKRUS_PUBLIC_URL/ai/" >/dev/null
+./assert-http-status.sh "$MIKRUS_PUBLIC_URL/health" 200
+./assert-http-status.sh "$MIKRUS_PUBLIC_URL/api/health" 200
+./assert-http-status.sh "$MIKRUS_PUBLIC_URL/ai/" 200
+./assert-http-status.sh "$MIKRUS_PUBLIC_URL/ai/health/live" 200
+./assert-http-status.sh "$MIKRUS_PUBLIC_URL/ai/health/ready" 200
 
 printf '%s\n' "$IMAGE_TAG" > .deployed-image-tag
 rm -f docker-compose.rollback.yml .env.rollback .rollback-image-tag

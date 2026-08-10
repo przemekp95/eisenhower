@@ -84,6 +84,13 @@ Web and mobile ask for both tokens at runtime, keep them only in memory, and att
 
 For GitHub Actions Android builds, `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_AI_API_URL` repository variables are required and must be public HTTP(S) URLs. The current production values are `https://tymon169-8081.mikrus.cloud/api` and `https://tymon169-8081.mikrus.cloud/ai`. `EXPO_PUBLIC_APP_ORIGIN_URL` remains optional and can be set to `https://tymon169-8081.mikrus.cloud`.
 
+The required CI job produces an installability candidate from Expo's generated Android project. It is intentionally named `android-ci-candidate` because Expo signs that build with its generated debug keystore; it is not a production release artifact. After green CI on an exact `master` SHA, the `Release` workflow builds a separate production APK and fails closed unless all of the following are configured:
+
+- secrets: `ANDROID_RELEASE_KEYSTORE_BASE64`, `ANDROID_RELEASE_STORE_PASSWORD`, `ANDROID_RELEASE_KEY_ALIAS`, `ANDROID_RELEASE_KEY_PASSWORD`;
+- repository variable: `ANDROID_RELEASE_CERT_SHA256`, containing the pinned SHA-256 digest of the public signing certificate.
+
+The production workflow never writes signing passwords into Gradle files. It verifies APK Signature Scheme v2, rejects `CN=Android Debug`, compares the signer certificate with the pinned digest, records the immutable commit SHA, and publishes the APK with checksum metadata. Keep the keystore and its recovery copy outside the repository.
+
 ## Local Development
 
 Root commands:
@@ -218,8 +225,7 @@ Target required checks for both `dev` and `master`:
 The workflow implements these checks, but GitHub branch rules are external state and must be verified after the changes are published. See [`docs/PRODUCTION_ACCEPTANCE.md`](docs/PRODUCTION_ACCEPTANCE.md) for the exact separation between local, CI, and public-runtime evidence.
 
 Coverage thresholds remain service-specific. The web and backend services enforce `100%`, while the Expo mobile client currently enforces `95%` statements/functions/lines and `90%` branches.
-The `test-mobile-native-android` job now also uploads a downloadable release APK artifact from each successful run.
-The same `ci.yml` workflow can also be started manually with `workflow_dispatch`, so you can trigger an APK build from the GitHub Actions UI for a branch without merging it first.
+The `test-mobile-native-android` job uploads a downloadable CI candidate APK from each successful run. The same `ci.yml` workflow can also be started manually with `workflow_dispatch`, so you can trigger a candidate build from the GitHub Actions UI for a branch without merging it first. Only the production-signed artifact emitted by the post-`master` `Release` workflow is eligible for physical release acceptance.
 
 ---
 

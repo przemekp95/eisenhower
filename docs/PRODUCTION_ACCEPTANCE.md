@@ -11,7 +11,8 @@ The candidate is locally acceptable only when all of the following pass from a c
 - `make verify`, including production dependency policy, builds, formatting, unit tests, integration tests and coverage gates.
 - `cd web && npm run test:e2e` against the isolated real Node/Mongo test stack.
 - `docker compose config --quiet` and the equivalent Mikrus Compose validation with all required variables supplied.
-- an Expo Android export and a native release APK build from a disposable copy of the mobile project.
+- an Expo Android export and a native APK build from a disposable copy of the mobile project;
+- the production-signing path is exercised with a disposable non-debug certificate, while the real production certificate remains an external release gate.
 - `git diff --check`.
 
 Security behavior must also be covered by executable tests:
@@ -39,6 +40,8 @@ The GitHub commit is acceptable only when all CI jobs pass on the exact commit S
 Branch protection for `dev` and `master` must require those checks before merge. A local workflow edit does not change GitHub rulesets; rulesets must be verified after the change is pushed.
 
 The release workflow starts only after a successful `CI` push run for `master`, checks out its exact SHA, and publishes images under that immutable SHA. `latest` is not a deployment input.
+
+The native Android CI job produces only a debug-signed installability candidate. A releasable APK is a distinct post-`master` artifact: its signing key is supplied from GitHub secrets, its public certificate SHA-256 is pinned in `ANDROID_RELEASE_CERT_SHA256`, APK Signature Scheme v2 is verified, and an Android Debug certificate is rejected. The production keystore must have an independently retained recovery copy before release.
 
 ## 3. Public runtime
 
@@ -77,11 +80,12 @@ Evidence is deliberately scoped; later rows never inherit a pass from earlier ro
 
 | Level | Status on 2026-08-10 | Evidence |
 | --- | --- | --- |
-| LOCAL | green for the current candidate worktree | `make verify` passed: Node 65 tests at 100%, web 125 unit plus 2 integration tests at 100%, AI 189 passed/2 explicitly skipped at 89% coverage, and mobile 92 tests above its coverage gates. Playwright passed 2/2 against an isolated real Node/Mongo stack. Root and Mikrus Compose configurations validated with disposable non-secret values. A disposable Expo Android export and native release build succeeded; `apksigner` verified the APK and its bundle contains the intended public endpoints without loopback URLs. The real development classifier report is `backend-ai/evaluation/development-benchmark-20260810.json`; its development gate passes and its production gate fails closed. |
-| CI | green only through published `dev` SHA `1d33e393944f8c0bc0dd03f1767939ee3d2df47e` | PR #144 passed every required job, including native Android, and merged to `dev`. The evaluation/TaskPlanner candidate in this worktree has not yet been published or checked by CI. |
-| PUBLIC RUNTIME | red | `https://tymon169-8081.mikrus.cloud` returns `301` to `/error-wykres/` for frontend, Node health and AI health/readiness paths. A success page after following that redirect is not service health. |
+| LOCAL | green for the current candidate worktree, excluding external release credentials | After integrating the latest `dev`, `make verify` passed: Node 66 tests at 100%, web 125 unit plus 2 integration tests at 100%, AI 206 passed/2 explicitly skipped at 89% coverage, and mobile 95 tests above its coverage gates. Playwright passed 2/2 against an isolated real Node/Mongo stack. Root and Mikrus Compose configurations validated with disposable non-secret values. The Android production-signing path was exercised end to end against the real Expo-generated Gradle project using a one-time non-debug certificate: `assembleRelease`, v2 signature verification, pinned certificate comparison, public endpoint embedding and loopback rejection all passed. The verifier independently rejected the earlier debug-signed CI artifact. This disposable key is not production evidence. The development classifier report is `backend-ai/evaluation/development-benchmark-20260810.json`; its development gate passes and its production gate fails closed. |
+| CI | green through published `dev` SHA `f5c7ddbcfe84fd701b59c674af5c5530486640ea` | Push run `31383971990` passed all nine required jobs after PR #146. The earlier evaluation merge SHA `7c97b40a83ab651f26c04cb61e70d11dc8ec1d32` also passed all nine in run `31382275926`; its downloaded APK is structurally valid and v2-signed, but its signer is `CN=Android Debug`, so it proves CI installability only and is not a production release APK. Branch rulesets for `dev` and `master` require all nine checks. The Android-signing and exact-HTTP candidate described here still requires its own PR CI before merge. |
+| PUBLIC RUNTIME | red | A fresh no-follow check at 2026-08-10 13:29 Europe/Warsaw showed that `https://tymon169-8081.mikrus.cloud` returns `301` to `/error-wykres/` for frontend, Node health and AI health/readiness paths. Host inspection confirmed that no Eisenhower container is running, while both data volumes remain present. The final page is a generic Cloudflare-served error page. The deployment smoke previously used `curl --fail`, which accepts `301`; the candidate now uses an exact-status, no-redirect verifier so this failure cannot be reported green. The expired `mikrus-tymon169` Actions registration was backed up, re-registered, enabled in systemd and independently observed `online`/idle in GitHub. |
 | HUMAN EVALUATION | blocked | The 240-item blind PL/EN packet exists, but both human annotation files are blank. No agreement, adjudication, frozen production dataset or approved SHA exists. |
-| PHYSICAL ANDROID | unverified | A CI APK alone does not prove installation or task CRUD plus classification on a physical device. |
+| PHYSICAL ANDROID | unverified | A debug-signed CI candidate alone does not prove a production-signed installation or task CRUD plus classification on a physical device. The production keystore secrets and pinned public certificate digest are not configured yet. |
+| DATA BACKUP/RESTORE | data drill green; application rollback pending | With all Eisenhower containers stopped, the preserved `eisenhower_mongodb_data` and `eisenhower_ai_data` volumes were independently archived to `/root/eisenhower-backups/20260810T114224Z` with permissions `0600`. MongoDB contained 146 files and AI data 4 files. Both archives passed gzip and archive SHA-256 checks, were restored to isolated disposable Docker volumes, and the restored per-file SHA-256 manifests matched their sources exactly. Only the temporary restore volumes were removed after comparison; the source volumes and verified archives remain. Rollback of a running application SHA still requires a new approved release. |
 
 ## Go/no-go
 
