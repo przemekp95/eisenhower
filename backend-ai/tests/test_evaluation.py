@@ -216,6 +216,7 @@ def test_production_evaluation_governance_fails_closed_without_independent_appro
     "evaluation_not_frozen",
     "insufficient_independent_annotators",
     "missing_inter_annotator_agreement",
+    "missing_annotation_evidence",
     "insufficient_evaluation_examples",
     "underrepresented_language_class_slice",
   }
@@ -236,6 +237,14 @@ def test_production_evaluation_governance_accepts_a_large_frozen_dual_annotated_
       "independent_from_training": True,
       "independent_annotators": 2,
       "inter_annotator_agreement": 0.85,
+      "annotation_evidence": {
+        "sample_count": 240,
+        "raw_agreement": 0.9,
+        "cohen_kappa": 0.85,
+        "annotator_a_sha256": "a" * 64,
+        "annotator_b_sha256": "b" * 64,
+        "pool_sha256": "c" * 64,
+      },
       "frozen": True,
     },
   }

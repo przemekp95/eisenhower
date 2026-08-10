@@ -41,7 +41,10 @@ def build_real_settings(base_dir: Path) -> Settings:
 def real_encoder():
   from sentence_transformers import SentenceTransformer
 
-  return SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+  return SentenceTransformer(
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    revision="e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+  )
 
 
 @pytest.fixture(scope="session")

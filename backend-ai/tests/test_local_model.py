@@ -336,8 +336,9 @@ def test_local_model_covers_polish_without_examples_and_lazy_encoder_factory(tmp
   import sentence_transformers
 
   class FakeSentenceTransformer(FakeEncoderWithToList):
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, *, revision: str):
       self.model_name = model_name
+      self.revision = revision
 
   monkeypatch.setattr(sentence_transformers, "SentenceTransformer", FakeSentenceTransformer)
   lazy_model = LocalMiniLMClassifier(settings=settings)
@@ -346,6 +347,7 @@ def test_local_model_covers_polish_without_examples_and_lazy_encoder_factory(tmp
 
   assert embeddings
   assert lazy_model._load_encoder().model_name == settings.local_model_name
+  assert lazy_model._load_encoder().revision == settings.local_model_revision
   assert lazy_explanation is None
 
 

@@ -44,7 +44,10 @@ COPY --chown=app:app requirements.txt .
 RUN pip install --user --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
 RUN python - <<'PY'
 from sentence_transformers import SentenceTransformer
-SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+SentenceTransformer(
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    revision="e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+)
 PY
 
 # Production stage (placed before CUDA stages so legacy builders can target CPU only)
@@ -117,7 +120,10 @@ COPY --chown=app:app requirements.txt .
 RUN pip install --user --extra-index-url https://download.pytorch.org/whl/cu124 -r requirements.txt
 RUN python - <<'PY'
 from sentence_transformers import SentenceTransformer
-SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+SentenceTransformer(
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    revision="e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+)
 PY
 
 # Optional CUDA target. Build only after the deployment GPU/driver/VRAM has

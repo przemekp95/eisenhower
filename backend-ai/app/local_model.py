@@ -106,6 +106,7 @@ class LocalMiniLMClassifier:
       "ready": False,
       "name": "local-minilm-mlp",
       "encoder_name": settings.local_model_name,
+      "encoder_revision": settings.local_model_revision,
       "artifact_path": str(self.head_path),
       "index_path": str(self.index_path),
       "trained_at": None,
@@ -385,6 +386,7 @@ class LocalMiniLMClassifier:
       "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
       "label_contract": LABEL_CONTRACT,
       "encoder_name": self.settings.local_model_name,
+      "encoder_revision": self.settings.local_model_revision,
       "hidden_dim": self.settings.local_model_hidden_dim,
       "dropout": self.settings.local_model_dropout,
       "embedding_dim": embedding_dim,
@@ -555,7 +557,10 @@ class LocalMiniLMClassifier:
 
       self._sentence_transformer_factory = SentenceTransformer
 
-    self._encoder = self._sentence_transformer_factory(self.settings.local_model_name)
+    self._encoder = self._sentence_transformer_factory(
+      self.settings.local_model_name,
+      revision=self.settings.local_model_revision,
+    )
     return self._encoder
 
   def _resolve_embedding_dim(self) -> int:
@@ -593,6 +598,12 @@ class LocalMiniLMClassifier:
     if artifact_encoder and artifact_encoder != self.settings.local_model_name:
       raise ModelNotReadyError(
         "Saved model artifacts were created for a different encoder. "
+        "Clear the cache or retrain the local model."
+      )
+    artifact_revision = metadata.get("encoder_revision")
+    if artifact_revision != self.settings.local_model_revision:
+      raise ModelNotReadyError(
+        "Saved model artifacts were created for a different encoder revision. "
         "Clear the cache or retrain the local model."
       )
 

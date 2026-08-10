@@ -54,6 +54,7 @@ class Settings:
   minio_bucket: str | None = None
   minio_secure: bool = False
   local_model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+  local_model_revision: str = "e8f8c211226b894fcb81acc59f3b34ba3efd5f42"
   local_model_hidden_dim: int = 128
   local_model_dropout: float = 0.1
   local_model_epochs: int = 60
@@ -113,6 +114,10 @@ class Settings:
       digest = self.local_model_approved_evaluation_sha256
       if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
         raise ValueError("Approved evaluation SHA-256 must be a lowercase 64-character hexadecimal digest.")
+    if len(self.local_model_revision) != 40 or any(
+      character not in "0123456789abcdef" for character in self.local_model_revision
+    ):
+      raise ValueError("Local model revision must be a lowercase 40-character hexadecimal commit.")
 
 
 def load_settings(env: dict[str, str] | None = None) -> Settings:
@@ -198,6 +203,10 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     local_model_name=source.get(
       "LOCAL_MODEL_NAME",
       "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    ),
+    local_model_revision=source.get(
+      "LOCAL_MODEL_REVISION",
+      "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
     ),
     local_model_hidden_dim=int(source.get("LOCAL_MODEL_HIDDEN_DIM", "128")),
     local_model_dropout=float(source.get("LOCAL_MODEL_DROPOUT", "0.1")),

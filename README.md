@@ -1,5 +1,9 @@
 # Eisenhower Matrix
 
+<!-- TASKPLANNER:ATTRIBUTION:START -->
+This project uses [TaskPlanner](https://github.com/smekai/taskplanner) for task planning.
+<!-- TASKPLANNER:ATTRIBUTION:END -->
+
 Monorepo for the Eisenhower Matrix application with a React web client, a Node/Express API, a FastAPI AI service, and an Expo mobile client.
 
 ## Branch Flow
@@ -127,7 +131,9 @@ PYTHONPATH=. python scripts/benchmark_classifier.py --output /tmp/eisenhower-cla
 
 This report is local classifier evidence only. The bundled 32-example synthetic set is a development smoke set, not canonical production evidence. It does not exercise RAG and does not prove that any artifact is deployed in production.
 
-Production promotion is fail-closed. `deploy/mikrus/docker-compose.yml` requires an externally supplied, read-only evaluation file (`AI_EVALUATION_FILE`) and its approved SHA-256 (`LOCAL_MODEL_APPROVED_EVALUATION_SHA256`). A production evaluation must be frozen, independent from training, dual-annotated, have inter-annotator agreement of at least `0.80`, contain at least 240 examples, and contain at least 30 examples for every language/class slice. Training-management endpoints are disabled in that production compose profile; approved retraining is an explicit offline operation. The liveness and readiness endpoints are `/health/live` and `/health/ready`.
+Production promotion is fail-closed. `deploy/mikrus/docker-compose.yml` requires an externally supplied, read-only evaluation file (`AI_EVALUATION_FILE`) and its approved SHA-256 (`LOCAL_MODEL_APPROVED_EVALUATION_SHA256`). A production evaluation must be frozen, independent from training, dual-annotated by two humans, have both raw agreement and Cohen's kappa of at least `0.80`, contain at least 240 examples, and contain at least 30 examples for every language/class slice. The default MiniLM encoder is pinned to the immutable Hugging Face revision `e8f8c211226b894fcb81acc59f3b34ba3efd5f42`, and saved MLP artifacts from another encoder revision are rejected. Training-management endpoints are disabled in that production compose profile; approved retraining is an explicit offline operation. The liveness and readiness endpoints are `/health/live` and `/health/ready`.
+
+The human packet is under `backend-ai/evaluation/production-v1/`. Give each annotator only `pool.jsonl`, one separate blank response file, and `annotation-guide.md`; keep `internal-strata.jsonl`, model output, and the other annotator's file hidden until both blind files are complete and hashed. After human adjudication, `scripts/finalize_annotations.py` produces a still-unapproved candidate and `scripts/freeze_evaluation.py` requires a named human approval before it emits the canonical dataset and SHA-256 manifest. Neither script can turn blank annotations into production evidence.
 
 The Expo mobile client now keeps a local task cache in AsyncStorage, refreshes and mutates tasks through `backend-node` when available, and sends picked images to `backend-ai` OCR via `expo-image-picker`.
 

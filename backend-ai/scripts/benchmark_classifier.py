@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 import argparse
+import hashlib
 import json
 import sys
 
@@ -107,6 +108,55 @@ def metrics_with_slices(
   return metrics
 
 
+def evaluation_sha256(path: Path) -> str:
+  return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def evaluation_approval_issues(
+  actual_sha256: str,
+  approved_sha256: str | None,
+) -> list[dict[str, Any]]:
+  if approved_sha256 is None:
+    return [{"code": "approved_evaluation_sha256_missing", "actual": actual_sha256}]
+  if actual_sha256 != approved_sha256:
+    return [
+      {
+        "code": "approved_evaluation_sha256_mismatch",
+        "actual": actual_sha256,
+        "required": approved_sha256,
+      }
+    ]
+  return []
+
+
+def evaluate_incumbent(
+  model: Any,
+  *,
+  records: list[dict[str, Any]],
+  evaluation_embeddings: list[list[float]],
+  evaluation_labels: list[int],
+  evaluation_languages: list[str],
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+  if not (model.head_path.exists() and model.meta_path.exists() and model.index_path.exists()):
+    return {"available": False, "reason": "incumbent_artifact_missing"}, None
+  try:
+    model._load_artifacts(expected_records=records)
+    logits = model._logits_for_head(model._head, evaluation_embeddings)
+    probabilities = softmax_rows(logits, temperature=model._temperature)
+    metrics = metrics_with_slices(evaluation_labels, probabilities, evaluation_languages)
+    return {
+      "available": True,
+      "generation_id": model.status().get("generation_id"),
+      "metrics": metrics,
+    }, metrics
+  except Exception as issue:  # fail closed while preserving an actionable benchmark report
+    return {
+      "available": False,
+      "reason": "incumbent_artifact_invalid",
+      "detail": str(issue),
+    }, None
+
+
 def conservative_training_group_ids(records: list[dict[str, Any]]) -> list[str]:
   """Pair same-position PL/EN examples so likely translations never cross CV folds."""
   positions: dict[tuple[int, str], int] = {}
@@ -132,6 +182,7 @@ def run_benchmark() -> dict[str, Any]:
   labels = [int(record["quadrant"]) for record in records]
   group_ids = conservative_training_group_ids(records)
   dataset = load_evaluation_dataset(settings.evaluation_data_path, training_texts=texts)  # type: ignore[arg-type]
+  dataset_sha256 = evaluation_sha256(settings.evaluation_data_path)  # type: ignore[arg-type]
 
   model = LocalMiniLMClassifier(settings=settings)
   embeddings = model._encode(texts)
@@ -139,6 +190,13 @@ def run_benchmark() -> dict[str, Any]:
   evaluation_labels = [int(item["quadrant"]) for item in dataset["examples"]]
   evaluation_languages = [item["language"] for item in dataset["examples"]]
   torch = model._require_torch()
+  incumbent_report, incumbent_metrics = evaluate_incumbent(
+    model,
+    records=records,
+    evaluation_embeddings=evaluation_embeddings,
+    evaluation_labels=evaluation_labels,
+    evaluation_languages=evaluation_languages,
+  )
 
   fold_reports = []
   mlp_oof: dict[int, list[float]] = {}
@@ -239,6 +297,7 @@ def run_benchmark() -> dict[str, Any]:
   gate = assess_promotion(
     mlp_eval_metrics,
     baseline_metrics=centroid_eval_metrics,
+    incumbent_metrics=incumbent_metrics,
     minimum_macro_f1=settings.local_model_minimum_macro_f1,
     maximum_ece=settings.local_model_maximum_ece,
     maximum_nll=settings.local_model_maximum_nll,
@@ -277,6 +336,11 @@ def run_benchmark() -> dict[str, Any]:
     threshold=settings.local_model_semantic_leakage_threshold,
   )
   production_reasons = evaluation_governance_issues(dataset, profile="production")
+  production_reasons.extend(
+    evaluation_approval_issues(dataset_sha256, settings.local_model_approved_evaluation_sha256)
+  )
+  if not incumbent_report["available"]:
+    production_reasons.append({"code": incumbent_report["reason"]})
   if semantic_leakage["pairs_above_threshold"] > settings.local_model_maximum_semantic_leaks:
     production_reasons.append({"code": "semantic_evaluation_leakage", "actual": semantic_leakage["pairs_above_threshold"]})
   if stability["minimum"] < 0.75:
@@ -295,9 +359,13 @@ def run_benchmark() -> dict[str, Any]:
   return {
     "scope": "local",
     "contract": {"0": "Do Now", "1": "Delegate", "2": "Schedule", "3": "Delete"},
-    "encoder": settings.local_model_name,
+    "encoder": {
+      "name": settings.local_model_name,
+      "revision": settings.local_model_revision,
+    },
     "training_examples": len(records),
     "evaluation_dataset": dataset["name"],
+    "evaluation_sha256": dataset_sha256,
     "evaluation_examples": len(dataset["examples"]),
     "cross_validation": {
       "strategy": "semantic-grouped stratified 5-fold with disjoint early-stopping and calibration splits",
@@ -308,6 +376,7 @@ def run_benchmark() -> dict[str, Any]:
     "held_out_evaluation": {
       "mlp": mlp_eval_metrics,
       "centroid": centroid_eval_metrics,
+      "incumbent": incumbent_report,
       "mlp_temperature": round(final_temperature, 6),
       "centroid_temperature": round(centroid_temperature, 6),
       "multi_seed": seed_reports,
