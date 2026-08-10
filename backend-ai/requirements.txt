@@ -1,8 +1,8 @@
 # Default build: CPU. For CUDA, install PyTorch from the matching CUDA index.
 --extra-index-url https://download.pytorch.org/whl/cpu
-fastapi==0.135.1
+fastapi==0.135.4
 pydantic==2.13.4
-uvicorn==0.41.0
+uvicorn==0.44.0
 python-multipart==0.0.32
 pillow==12.3.0
 pytesseract==0.3.13
