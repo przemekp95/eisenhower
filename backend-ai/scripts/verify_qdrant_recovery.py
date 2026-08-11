@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from hashlib import sha256
 from importlib.metadata import version
 from io import BytesIO
@@ -96,7 +97,7 @@ def _hit_ids(retriever, *, tenant: str, user: str, project: str) -> list[str]:
   return sorted(hit.chunk_id for hit in hits)
 
 
-def run_verification() -> dict:
+def run_verification(snapshot_output: Path | None = None) -> dict:
   suffix = uuid4().hex
   source = f"task012_source_{suffix}"
   restored = f"task012_restored_{suffix}"
@@ -155,6 +156,9 @@ def run_verification() -> dict:
     )
     snapshot_response.raise_for_status()
     snapshot_bytes = snapshot_response.content
+    if snapshot_output is not None:
+      snapshot_output.parent.mkdir(parents=True, exist_ok=True)
+      snapshot_output.write_bytes(snapshot_bytes)
     independent_sha = sha256(snapshot_bytes).hexdigest()
     if independent_sha != artifact.checksum:
       raise AssertionError("Downloaded snapshot checksum differs from Qdrant metadata")
@@ -304,9 +308,16 @@ def run_verification() -> dict:
 
 
 def main() -> None:
-  report = run_verification()
+  parser = argparse.ArgumentParser()
+  parser.add_argument("--output", type=Path)
+  parser.add_argument("--snapshot-output", type=Path)
+  args = parser.parse_args()
+  report = run_verification(args.snapshot_output)
   if not all(report["cleanup"].values()):
     raise RuntimeError("Qdrant verification artifacts were not cleaned up")
+  if args.output:
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
   print(json.dumps(report, indent=2, sort_keys=True))
 
 
