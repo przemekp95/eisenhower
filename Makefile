@@ -32,7 +32,7 @@ test-api-client:
 	$(NPM) --prefix packages/api-client run check
 
 test-mcp:
-	$(UV) run --project mcp/eisenhower_adapter --locked python -W error -m unittest discover -s mcp/eisenhower_adapter/tests -v
+	UV_LINK_MODE=copy $(UV) run --project mcp/eisenhower_adapter --locked python -W error -m unittest discover -s mcp/eisenhower_adapter/tests -v
 
 typecheck-node:
 	cd backend-node && $(NPM) exec -- tsc --noEmit -p tsconfig.json
