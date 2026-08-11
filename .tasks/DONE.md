@@ -1,5 +1,23 @@
 # Done
 
+## TASK-038: Add deterministic change-impact CI planning
+**Priority:** P1 | **Tags:** ci, reliability, performance, security
+
+Reduce pull-request CI cost with a versioned, fail-closed impact plan while preserving stable required checks and full release-quality coverage for risky or unknown changes.
+
+### Plan
+
+- Add a deterministic merge-base and changed-path planner with rename/delete, manifest, workflow, root, infrastructure and dependency-graph handling plus multi-label reasons and an input digest.
+- Keep every required context successful through explicit not-applicable paths, while forcing full CI for `master`, release, schedules, workflows, lockfiles, infrastructure, unknown inputs and planner errors.
+- Add focused red-green planner/rules tests, actionlint and missing n8n/MCP/API-client checks; optimize safe setup/cache paths and document measured baseline boundaries.
+- Coordinate sync, release, production-acceptance and ruleset contracts, then run fresh local verification and update the existing PR to `dev` without merging or touching production.
+
+### Outcome
+
+Added a versioned, merge-base-driven and fail-closed impact planner with rename/delete handling, dependency propagation, canonical input digests and explicit reasons. Stable required jobs now fail visibly when resolution fails, otherwise report an explicit not-applicable success; security audits and Trivy remain continuous, while full CI is forced for release-risk inputs. Planner/actionlint contracts, n8n/MCP/API-client coverage, caches and coordinated workflow documentation are included. Fresh local `make verify`, focused security/planner checks and the full PR CI run `31544533146` passed on `872ea7463a58dd039124473464cb9016334502ce`; PR #159 remains unmerged.
+
+---
+
 ## TASK-037: Harden repository architecture and promote green dev
 **Priority:** P1 | **Tags:** architecture, reliability, security, contracts, quality
 

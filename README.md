@@ -257,8 +257,12 @@ Reference files:
 Target required checks for both `dev` and `master`:
 
 - `branch-policy`
+- `resolve-run-mode`
 - `security-lint`
 - `test-backend-node`
+- `test-api-client`
+- `test-mcp-adapter`
+- `test-n8n-workflows`
 - `test-frontend`
 - `test-frontend-integration`
 - `test-frontend-e2e`
@@ -266,7 +270,9 @@ Target required checks for both `dev` and `master`:
 - `test-mobile`
 - `test-mobile-native-android`
 
-The workflow implements these checks, but GitHub branch rules are external state and must be verified after the changes are published. See [`docs/PRODUCTION_ACCEPTANCE.md`](docs/PRODUCTION_ACCEPTANCE.md) for the exact separation between local, CI, and public-runtime evidence.
+The workflow implements these stable checks with explicit successful not-applicable paths driven by the versioned, merge-base-aware `ci-impact-plan/v1`. Risky, unknown, release and scheduled inputs fail closed to full CI. GitHub branch rules are external state and must be verified after the changes are published. See [`docs/PRODUCTION_ACCEPTANCE.md`](docs/PRODUCTION_ACCEPTANCE.md) for the exact separation between local, CI, and public-runtime evidence.
+
+The impact graph, fail-closed rules and measured baseline/savings boundary are documented in [`docs/CI_IMPACT_PLAN.md`](docs/CI_IMPACT_PLAN.md).
 
 Coverage thresholds remain service-specific. The web and backend services enforce `100%`, while the Expo mobile client currently enforces `95%` statements/functions/lines and `90%` branches.
 The `test-mobile-native-android` job uploads a downloadable CI candidate APK from each successful run. The same `ci.yml` workflow can also be started manually with `workflow_dispatch`, so you can trigger a candidate build from the GitHub Actions UI for a branch without merging it first. Only the production-signed artifact emitted by the post-`master` `Release` workflow is eligible for physical release acceptance.

@@ -2,8 +2,12 @@ const SYNC_BRANCH = 'sync/master-into-dev';
 
 const REQUIRED_CONTEXTS = Object.freeze({
   CI: [
+    'resolve-run-mode',
     'security-lint',
     'test-backend-node',
+    'test-api-client',
+    'test-mcp-adapter',
+    'test-n8n-workflows',
     'test-frontend',
     'test-frontend-integration',
     'test-frontend-e2e',

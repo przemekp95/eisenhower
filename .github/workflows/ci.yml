@@ -16,10 +16,14 @@ on:
     branches:
       - dev
       - master
+      - "release/**"
   push:
     branches:
       - dev
       - master
+      - "release/**"
+  schedule:
+    - cron: "23 3 * * 1"
 
 env:
   NODE_VERSION: "20"
@@ -31,8 +35,19 @@ jobs:
     name: resolve-run-mode
     runs-on: ubuntu-latest
     outputs:
-      skip_full_ci: ${{ steps.resolve.outputs.skip_full_ci }}
-      reason: ${{ steps.resolve.outputs.reason }}
+      full_ci: ${{ steps.resolve.outputs.full_ci }}
+      api_client: ${{ steps.resolve.outputs.api_client }}
+      backend_ai: ${{ steps.resolve.outputs.backend_ai }}
+      backend_node: ${{ steps.resolve.outputs.backend_node }}
+      dependency_audit: ${{ steps.resolve.outputs.dependency_audit }}
+      frontend_e2e: ${{ steps.resolve.outputs.frontend_e2e }}
+      frontend_integration: ${{ steps.resolve.outputs.frontend_integration }}
+      mcp: ${{ steps.resolve.outputs.mcp }}
+      mobile: ${{ steps.resolve.outputs.mobile }}
+      mobile_native_android: ${{ steps.resolve.outputs.mobile_native_android }}
+      n8n: ${{ steps.resolve.outputs.n8n }}
+      security_lint: ${{ steps.resolve.outputs.security_lint }}
+      web: ${{ steps.resolve.outputs.web }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -43,47 +58,100 @@ jobs:
         id: resolve
         shell: bash
         run: |
-          skip_full_ci=false
-          reason=standard
+          base_sha="${{ github.event.pull_request.base.sha || github.event.before || '' }}"
 
-          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF_NAME}" == "dev" ]]; then
-            git fetch --no-tags --depth=1 origin master
-            master_sha="$(git rev-parse origin/master)"
-
-            if [[ "${GITHUB_SHA}" == "$master_sha" ]]; then
-              skip_full_ci=true
-              reason=fast-forward-sync
-            fi
+          if [[ -z "$base_sha" || "$base_sha" =~ ^0+$ ]]; then
+            git fetch --no-tags origin dev
+            base_sha="origin/dev"
           fi
 
-          echo "skip_full_ci=$skip_full_ci" >> "$GITHUB_OUTPUT"
-          echo "reason=$reason" >> "$GITHUB_OUTPUT"
-          echo "Resolved mode: $reason"
+          node .github/scripts/ci-impact-plan.mjs \
+            --event "$GITHUB_EVENT_NAME" \
+            --ref "$GITHUB_REF_NAME" \
+            --base-ref "${GITHUB_BASE_REF:-$GITHUB_REF_NAME}" \
+            --base "$base_sha" \
+            --head "$GITHUB_SHA" \
+            --output ci-impact-plan.json
 
       - name: Summarize mode
-        shell: bash
-        run: |
-          {
-            echo "### CI run mode"
-            echo
-            echo "- reason: ${{ steps.resolve.outputs.reason }}"
-            echo "- skip_full_ci: ${{ steps.resolve.outputs.skip_full_ci }}"
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: jq . ci-impact-plan.json
+
+      - name: Upload deterministic impact plan
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-impact-plan-${{ github.sha }}
+          path: ci-impact-plan.json
+          if-no-files-found: error
+          retention-days: 14
 
   security-lint:
     name: security-lint
     needs: resolve-run-mode
-    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
       security-events: write
       contents: read
     steps:
+      - name: Require a successful CI impact plan
+        id: plan-guard
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.security_lint }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
       - name: Checkout
+        id: checkout
+        if: ${{ always() }}
         uses: actions/checkout@v6
+
+      - name: Test deterministic CI impact rules
+        run: node --test .github/scripts/ci-impact-plan.test.mjs
+
+      - name: Setup Go for actionlint
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+          cache: false
+
+      - name: Lint GitHub Actions workflows
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.11
+
+      - name: Setup Node.js for continuous dependency audits
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python for continuous dependency audits
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend-ai/requirements-dev.txt
+
+      - name: Setup pinned uv for the MCP lockfile audit
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.17"
+          enable-cache: true
+          cache-dependency-glob: mcp/eisenhower_adapter/uv.lock
+
+      - name: Install pinned Python dependency auditor
+        run: python -m pip install pip-audit==2.10.1
+
+      - name: Audit every production dependency surface
+        run: |
+          npm --prefix backend-node audit --omit=dev --audit-level=high
+          npm --prefix packages/api-client audit --omit=dev --audit-level=high
+          npm --prefix web audit --omit=dev --audit-level=high
+          npm --prefix mobile/eisenhower-matrix run audit:production
+          python backend-ai/scripts/production_dependency_audit.py
+          uv export --project mcp/eisenhower_adapter --locked --no-dev --no-emit-project --format requirements.txt --output-file "$RUNNER_TEMP/mcp-requirements.txt"
+          python -m pip_audit --requirement "$RUNNER_TEMP/mcp-requirements.txt" --require-hashes --disable-pip --progress-spinner off
 
       - name: Run Trivy scan
         id: trivy-scan
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
         shell: bash
         run: |
           set +e
@@ -104,14 +172,23 @@ jobs:
           echo "exit_code=$status" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Upload SARIF
+      - name: Preserve Trivy SARIF artifact
         if: ${{ always() && hashFiles('trivy-results.sarif') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: trivy-sarif-${{ github.sha }}
+          path: trivy-results.sarif
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload SARIF to code scanning
+        if: ${{ always() && hashFiles('trivy-results.sarif') != '' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) }}
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
 
       - name: Enforce Trivy gate
-        if: ${{ steps.trivy-scan.outputs.exit_code != '0' }}
+        if: ${{ always() && steps.trivy-scan.outputs.exit_code != '0' }}
         run: |
           echo "::error::Trivy detected HIGH or CRITICAL findings."
           exit 1
@@ -119,18 +196,38 @@ jobs:
   test-backend-node:
     name: test-backend-node
     needs: resolve-run-mode
-    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
-    services:
-      mongodb:
-        image: mongo:7
-        ports:
-          - 27017:27017
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.backend_node }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
+      - name: Not applicable
+        if: ${{ needs.resolve-run-mode.outputs.backend_node != 'true' }}
+        run: echo "backend-node is not selected by the CI impact plan."
+
       - name: Checkout
+        if: ${{ needs.resolve-run-mode.outputs.backend_node == 'true' }}
         uses: actions/checkout@v6
 
+      - name: Start MongoDB for backend tests
+        if: ${{ needs.resolve-run-mode.outputs.backend_node == 'true' }}
+        run: |
+          docker run --detach --name ci-backend-node-mongodb --publish 27017:27017 mongo:7
+          for _ in $(seq 1 30); do
+            if docker exec ci-backend-node-mongodb mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' | grep -qx 1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs ci-backend-node-mongodb
+          exit 1
+
       - name: Setup Node.js
+        if: ${{ needs.resolve-run-mode.outputs.backend_node == 'true' }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -138,40 +235,53 @@ jobs:
           cache-dependency-path: backend-node/package-lock.json
 
       - name: Install dependencies
+        if: ${{ needs.resolve-run-mode.outputs.backend_node == 'true' }}
         working-directory: backend-node
         run: npm ci
 
-      - name: Audit production dependencies
-        working-directory: backend-node
-        run: npm audit --omit=dev --audit-level=high
-
       - name: Build
+        if: ${{ needs.resolve-run-mode.outputs.backend_node == 'true' }}
         working-directory: backend-node
         run: npm run build
 
       - name: Test with coverage
+        if: ${{ needs.resolve-run-mode.outputs.backend_node == 'true' }}
         working-directory: backend-node
         env:
           MONGODB_URI: mongodb://localhost:27017/eisenhower-test
         run: npm run test:coverage
 
       - name: Run executable BDD scenarios
+        if: ${{ needs.resolve-run-mode.outputs.backend_node == 'true' }}
         working-directory: backend-node
         run: npm run test:bdd
 
       - name: Type-check application and test sources
+        if: ${{ needs.resolve-run-mode.outputs.backend_node == 'true' }}
         run: make typecheck-node
 
   test-api-client:
     name: test-api-client
     needs: resolve-run-mode
-    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.api_client }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
+      - name: Not applicable
+        if: ${{ needs.resolve-run-mode.outputs.api_client != 'true' }}
+        run: echo "api-client is not selected by the CI impact plan."
+
       - name: Checkout
+        if: ${{ needs.resolve-run-mode.outputs.api_client == 'true' }}
         uses: actions/checkout@v6
 
       - name: Setup Node.js
+        if: ${{ needs.resolve-run-mode.outputs.api_client == 'true' }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -179,61 +289,104 @@ jobs:
           cache-dependency-path: packages/api-client/package-lock.json
 
       - name: Install API client dependencies
+        if: ${{ needs.resolve-run-mode.outputs.api_client == 'true' }}
         working-directory: packages/api-client
         run: npm ci
 
       - name: Test API client runtime and declarations
+        if: ${{ needs.resolve-run-mode.outputs.api_client == 'true' }}
         run: make test-api-client
 
   test-mcp-adapter:
     name: test-mcp-adapter
     needs: resolve-run-mode
-    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.mcp }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
+      - name: Not applicable
+        if: ${{ needs.resolve-run-mode.outputs.mcp != 'true' }}
+        run: echo "MCP is not selected by the CI impact plan."
+
       - name: Checkout
+        if: ${{ needs.resolve-run-mode.outputs.mcp == 'true' }}
         uses: actions/checkout@v6
 
       - name: Setup Python
+        if: ${{ needs.resolve-run-mode.outputs.mcp == 'true' }}
         uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Setup pinned uv runner
+        if: ${{ needs.resolve-run-mode.outputs.mcp == 'true' }}
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: "0.11.17"
+          enable-cache: true
+          cache-dependency-glob: mcp/eisenhower_adapter/uv.lock
 
       - name: Test MCP adapter with warnings as errors
+        if: ${{ needs.resolve-run-mode.outputs.mcp == 'true' }}
         run: make test-mcp
 
   test-n8n-workflows:
     name: test-n8n-workflows
     needs: resolve-run-mode
-    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.n8n }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
+      - name: Not applicable
+        if: ${{ needs.resolve-run-mode.outputs.n8n != 'true' }}
+        run: echo "n8n is not selected by the CI impact plan."
+
       - name: Checkout
+        if: ${{ needs.resolve-run-mode.outputs.n8n == 'true' }}
         uses: actions/checkout@v6
 
       - name: Setup Python
+        if: ${{ needs.resolve-run-mode.outputs.n8n == 'true' }}
         uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Test n8n webhook and job contracts
+        if: ${{ needs.resolve-run-mode.outputs.n8n == 'true' }}
         run: python -m unittest discover -s n8n/tests -v
 
   test-frontend:
     name: test-frontend
     needs: resolve-run-mode
-    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.web }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
+      - name: Not applicable
+        if: ${{ needs.resolve-run-mode.outputs.web != 'true' }}
+        run: echo "web is not selected by the CI impact plan."
+
       - name: Checkout
+        if: ${{ needs.resolve-run-mode.outputs.web == 'true' }}
         uses: actions/checkout@v6
 
       - name: Setup Node.js
+        if: ${{ needs.resolve-run-mode.outputs.web == 'true' }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -241,31 +394,42 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - name: Install dependencies
+        if: ${{ needs.resolve-run-mode.outputs.web == 'true' }}
         working-directory: web
         run: npm ci
 
-      - name: Audit production dependencies
-        working-directory: web
-        run: npm audit --omit=dev --audit-level=high
-
       - name: Build
+        if: ${{ needs.resolve-run-mode.outputs.web == 'true' }}
         working-directory: web
         run: npm run build
 
       - name: Test with coverage
+        if: ${{ needs.resolve-run-mode.outputs.web == 'true' }}
         working-directory: web
         run: npm run test:coverage
 
   test-frontend-e2e:
     needs: resolve-run-mode
-    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' && !inputs.sync_pr_mode }}
+    if: ${{ always() }}
     name: test-frontend-e2e
     runs-on: ubuntu-latest
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.frontend_e2e }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
+      - name: Not applicable
+        if: ${{ needs.resolve-run-mode.outputs.frontend_e2e != 'true' }}
+        run: echo "frontend E2E is not selected by the CI impact plan."
+
       - name: Checkout
+        if: ${{ needs.resolve-run-mode.outputs.frontend_e2e == 'true' }}
         uses: actions/checkout@v6
 
       - name: Setup Node.js
+        if: ${{ needs.resolve-run-mode.outputs.frontend_e2e == 'true' }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -275,23 +439,40 @@ jobs:
             web/package-lock.json
 
       - name: Install backend dependencies
+        if: ${{ needs.resolve-run-mode.outputs.frontend_e2e == 'true' }}
         working-directory: backend-node
         run: npm ci
 
       - name: Install frontend dependencies
+        if: ${{ needs.resolve-run-mode.outputs.frontend_e2e == 'true' }}
         working-directory: web
         run: npm ci
 
-      - name: Install Playwright browser
+      - name: Cache Playwright browser
+        if: ${{ needs.resolve-run-mode.outputs.frontend_e2e == 'true' }}
+        id: playwright-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('web/package-lock.json') }}
+
+      - name: Install Playwright system dependencies
+        if: ${{ needs.resolve-run-mode.outputs.frontend_e2e == 'true' }}
         working-directory: web
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install-deps chromium
+
+      - name: Install Playwright browser on cache miss
+        if: ${{ needs.resolve-run-mode.outputs.frontend_e2e == 'true' && steps.playwright-cache.outputs.cache-hit != 'true' }}
+        working-directory: web
+        run: npx playwright install chromium
 
       - name: Run frontend E2E smoke suite
+        if: ${{ needs.resolve-run-mode.outputs.frontend_e2e == 'true' }}
         working-directory: web
         run: npm run test:e2e
 
       - name: Upload Playwright artifacts
-        if: ${{ always() }}
+        if: ${{ always() && needs.resolve-run-mode.outputs.frontend_e2e == 'true' }}
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report
@@ -302,14 +483,26 @@ jobs:
 
   test-frontend-integration:
     needs: resolve-run-mode
-    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' && !inputs.sync_pr_mode }}
+    if: ${{ always() }}
     name: test-frontend-integration
     runs-on: ubuntu-latest
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.frontend_integration }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
+      - name: Not applicable
+        if: ${{ needs.resolve-run-mode.outputs.frontend_integration != 'true' }}
+        run: echo "frontend integration is not selected by the CI impact plan."
+
       - name: Checkout
+        if: ${{ needs.resolve-run-mode.outputs.frontend_integration == 'true' }}
         uses: actions/checkout@v6
 
       - name: Setup Node.js
+        if: ${{ needs.resolve-run-mode.outputs.frontend_integration == 'true' }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -319,66 +512,91 @@ jobs:
             web/package-lock.json
 
       - name: Install backend dependencies
+        if: ${{ needs.resolve-run-mode.outputs.frontend_integration == 'true' }}
         working-directory: backend-node
         run: npm ci
 
       - name: Install frontend dependencies
+        if: ${{ needs.resolve-run-mode.outputs.frontend_integration == 'true' }}
         working-directory: web
         run: npm ci
 
       - name: Run frontend integration suite
+        if: ${{ needs.resolve-run-mode.outputs.frontend_integration == 'true' }}
         working-directory: web
         run: npm run test:integration
 
   test-backend-ai:
     name: test-backend-ai
     needs: resolve-run-mode
-    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
-    services:
-      mongodb:
-        image: mongo:7
-        ports:
-          - 27017:27017
-      qdrant:
-        image: qdrant/qdrant:v1.12.0
-        ports:
-          - 6333:6333
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.backend_ai }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
+      - name: Not applicable
+        if: ${{ needs.resolve-run-mode.outputs.backend_ai != 'true' }}
+        run: echo "backend-ai is not selected by the CI impact plan."
+
       - name: Checkout
+        if: ${{ needs.resolve-run-mode.outputs.backend_ai == 'true' }}
         uses: actions/checkout@v6
 
+      - name: Start MongoDB and Qdrant for AI tests
+        if: ${{ needs.resolve-run-mode.outputs.backend_ai == 'true' }}
+        run: |
+          docker run --detach --name ci-backend-ai-mongodb --publish 27017:27017 mongo:7
+          docker run --detach --name ci-backend-ai-qdrant --publish 6333:6333 qdrant/qdrant:v1.12.0
+          for _ in $(seq 1 30); do
+            mongo_ready=false
+            qdrant_ready=false
+            docker exec ci-backend-ai-mongodb mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' | grep -qx 1 && mongo_ready=true
+            curl --fail --silent http://127.0.0.1:6333/readyz >/dev/null && qdrant_ready=true
+            if [[ "$mongo_ready" == true && "$qdrant_ready" == true ]]; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs ci-backend-ai-mongodb
+          docker logs ci-backend-ai-qdrant
+          exit 1
+
       - name: Setup Python
+        if: ${{ needs.resolve-run-mode.outputs.backend_ai == 'true' }}
         uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            backend-ai/requirements.txt
+            backend-ai/requirements-dev.txt
 
       - name: Install governed extraction system dependencies
+        if: ${{ needs.resolve-run-mode.outputs.backend_ai == 'true' }}
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends tesseract-ocr tesseract-ocr-eng
 
-      - name: Cache pip
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('backend-ai/requirements.txt', 'backend-ai/requirements-dev.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
       - name: Install dependencies
+        if: ${{ needs.resolve-run-mode.outputs.backend_ai == 'true' }}
         working-directory: backend-ai
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
       - name: Cache immutable MiniLM snapshot
+        if: ${{ needs.resolve-run-mode.outputs.backend_ai == 'true' }}
         uses: actions/cache@v5
         with:
           path: ~/.cache/huggingface/hub
           key: ${{ runner.os }}-huggingface-minilm-${{ env.LOCAL_MODEL_REVISION }}
 
       - name: Prefetch immutable MiniLM snapshot
+        if: ${{ needs.resolve-run-mode.outputs.backend_ai == 'true' }}
         working-directory: backend-ai
         shell: bash
         run: |
@@ -399,17 +617,15 @@ jobs:
           done
           exit 1
 
-      - name: Audit production dependencies
-        working-directory: backend-ai
-        run: python scripts/production_dependency_audit.py
-
       - name: Run tests with coverage
+        if: ${{ needs.resolve-run-mode.outputs.backend_ai == 'true' }}
         working-directory: backend-ai
         env:
           PYTHONPATH: ${{ github.workspace }}/backend-ai
         run: python -m pytest
 
       - name: Build immutable MLOps candidate
+        if: ${{ needs.resolve-run-mode.outputs.backend_ai == 'true' }}
         working-directory: backend-ai
         env:
           PYTHONPATH: ${{ github.workspace }}/backend-ai
@@ -421,6 +637,7 @@ jobs:
             --output "${RUNNER_TEMP}/eisenhower-ai-candidates/mlops-manifest.json"
 
       - name: Build immutable non-live LLMOps candidate
+        if: ${{ needs.resolve-run-mode.outputs.backend_ai == 'true' }}
         working-directory: backend-ai
         env:
           PYTHONPATH: ${{ github.workspace }}/backend-ai
@@ -432,7 +649,7 @@ jobs:
             --output "${RUNNER_TEMP}/eisenhower-ai-candidates/llmops-manifest.json"
 
       - name: Build immutable live-dependency RAGOps candidate
-        if: ${{ vars.ENABLE_RAGOPS_CANDIDATE == 'true' }}
+        if: ${{ needs.resolve-run-mode.outputs.backend_ai == 'true' && vars.ENABLE_RAGOPS_CANDIDATE == 'true' }}
         working-directory: backend-ai
         env:
           PYTHONPATH: ${{ github.workspace }}/backend-ai
@@ -444,6 +661,7 @@ jobs:
             --output "${RUNNER_TEMP}/eisenhower-ai-candidates/ragops-manifest.json"
 
       - name: Upload non-sensitive AI candidate commitments
+        if: ${{ needs.resolve-run-mode.outputs.backend_ai == 'true' }}
         uses: actions/upload-artifact@v7
         with:
           name: ai-candidate-commitments-${{ github.sha }}
@@ -455,18 +673,31 @@ jobs:
           retention-days: 14
 
       - name: Enforce clean Python lint gate
+        if: ${{ needs.resolve-run-mode.outputs.backend_ai == 'true' }}
         run: make lint-ai BACKEND_AI_PYTHON=python
 
   test-mobile:
     name: test-mobile
     needs: resolve-run-mode
-    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.mobile }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
+      - name: Not applicable
+        if: ${{ needs.resolve-run-mode.outputs.mobile != 'true' }}
+        run: echo "mobile is not selected by the CI impact plan."
+
       - name: Checkout
+        if: ${{ needs.resolve-run-mode.outputs.mobile == 'true' }}
         uses: actions/checkout@v6
 
       - name: Setup Node.js
+        if: ${{ needs.resolve-run-mode.outputs.mobile == 'true' }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -474,20 +705,18 @@ jobs:
           cache-dependency-path: mobile/eisenhower-matrix/package-lock.json
 
       - name: Install dependencies
+        if: ${{ needs.resolve-run-mode.outputs.mobile == 'true' }}
         working-directory: mobile/eisenhower-matrix
         run: npm ci
 
-      - name: Enforce mobile production audit policy
-        working-directory: mobile/eisenhower-matrix
-        run: npm run audit:production
-
       - name: Test with coverage
+        if: ${{ needs.resolve-run-mode.outputs.mobile == 'true' }}
         working-directory: mobile/eisenhower-matrix
         run: npm run test:coverage
 
   test-mobile-native-android:
     needs: resolve-run-mode
-    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' && !inputs.sync_pr_mode }}
+    if: ${{ always() }}
     name: test-mobile-native-android
     runs-on: ubuntu-latest
     env:
@@ -495,10 +724,22 @@ jobs:
       EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
       EXPO_PUBLIC_AI_API_URL: ${{ vars.EXPO_PUBLIC_AI_API_URL }}
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.mobile_native_android }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
+      - name: Not applicable
+        if: ${{ needs.resolve-run-mode.outputs.mobile_native_android != 'true' }}
+        run: echo "native Android is not selected by the CI impact plan."
+
       - name: Checkout
+        if: ${{ needs.resolve-run-mode.outputs.mobile_native_android == 'true' }}
         uses: actions/checkout@v6
 
       - name: Setup Node.js
+        if: ${{ needs.resolve-run-mode.outputs.mobile_native_android == 'true' }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -506,15 +747,23 @@ jobs:
           cache-dependency-path: mobile/eisenhower-matrix/package-lock.json
 
       - name: Setup Java
+        if: ${{ needs.resolve-run-mode.outputs.mobile_native_android == 'true' }}
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
+          cache-dependency-path: |
+            mobile/eisenhower-matrix/package-lock.json
+            mobile/eisenhower-matrix/android/**/*.gradle*
+            mobile/eisenhower-matrix/android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Setup Android SDK
+        if: ${{ needs.resolve-run-mode.outputs.mobile_native_android == 'true' }}
         uses: android-actions/setup-android@v4
 
       - name: Install Android SDK packages
+        if: ${{ needs.resolve-run-mode.outputs.mobile_native_android == 'true' }}
         run: |
           yes | sdkmanager --licenses >/dev/null
           sdkmanager \
@@ -526,10 +775,12 @@ jobs:
           echo "$ANDROID_SDK_ROOT/build-tools/36.0.0" >> "$GITHUB_PATH"
 
       - name: Install dependencies
+        if: ${{ needs.resolve-run-mode.outputs.mobile_native_android == 'true' }}
         working-directory: mobile/eisenhower-matrix
         run: npm ci
 
       - name: Validate mobile public endpoints
+        if: ${{ needs.resolve-run-mode.outputs.mobile_native_android == 'true' }}
         shell: bash
         run: |
           trim() {
@@ -581,6 +832,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Generate native Android project
+        if: ${{ needs.resolve-run-mode.outputs.mobile_native_android == 'true' }}
         working-directory: mobile/eisenhower-matrix
         env:
           CI: "1"
@@ -589,6 +841,7 @@ jobs:
         run: npx expo prebuild --platform android --no-install --clean
 
       - name: Android native CI candidate APK
+        if: ${{ needs.resolve-run-mode.outputs.mobile_native_android == 'true' }}
         working-directory: mobile/eisenhower-matrix/android
         env:
           CI: "1"
@@ -599,12 +852,14 @@ jobs:
           ./gradlew assembleRelease
 
       - name: Verify CI candidate APK integrity
+        if: ${{ needs.resolve-run-mode.outputs.mobile_native_android == 'true' }}
         shell: bash
         run: |
           apksigner verify --verbose \
             mobile/eisenhower-matrix/android/app/build/outputs/apk/release/app-release.apk
 
       - name: Verify embedded mobile endpoints
+        if: ${{ needs.resolve-run-mode.outputs.mobile_native_android == 'true' }}
         shell: bash
         run: |
           bundle_strings_file="$(mktemp)"
@@ -626,6 +881,7 @@ jobs:
           fi
 
       - name: Prepare APK artifact
+        if: ${{ needs.resolve-run-mode.outputs.mobile_native_android == 'true' }}
         shell: bash
         run: |
           mkdir -p mobile/eisenhower-matrix/output
@@ -634,6 +890,7 @@ jobs:
             "mobile/eisenhower-matrix/output/eisenhower-matrix-android-ci-candidate-${GITHUB_SHA::7}.apk"
 
       - name: Upload APK artifact
+        if: ${{ needs.resolve-run-mode.outputs.mobile_native_android == 'true' }}
         uses: actions/upload-artifact@v7
         with:
           name: eisenhower-matrix-android-ci-candidate-${{ github.sha }}

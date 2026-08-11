@@ -135,6 +135,11 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
+          cache-dependency-path: |
+            mobile/eisenhower-matrix/package-lock.json
+            mobile/eisenhower-matrix/android/**/*.gradle*
+            mobile/eisenhower-matrix/android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
