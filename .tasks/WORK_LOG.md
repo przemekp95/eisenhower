@@ -1,6 +1,6 @@
 # Completion log
 
-2026-08-11 — TASK-029: Expanded executable BDD to 15 scenarios/59 steps for task behavior, bearer and browser-origin protection, validation and environment isolation; the hostile-env check and pre-integration full `make verify` gate passed.
+2026-08-11 — TASK-029: Expanded executable BDD to 15 scenarios/59 steps for task behavior, bearer and browser-origin protection, validation and environment isolation; after current `origin/dev` integration the hostile-env check, full `make verify`, actionlint and YAML parsing passed.
 
 2026-08-11 — TASK-029: Added executable Cucumber/Gherkin BDD for the four task quadrants, lifecycle and tenant isolation; 7 scenarios/37 steps and the full `make verify` gate passed, with the claim explicitly bounded to this acceptance slice.
 
