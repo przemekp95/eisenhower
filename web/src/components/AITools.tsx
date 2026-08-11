@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import AdvancedAIAnalysis from './ai/AdvancedAIAnalysis';
 import GroundedAIAnalysis from './ai/GroundedAIAnalysis';
 import BatchAnalysis from './ai/BatchAnalysis';
@@ -134,7 +135,7 @@ export default function AITools({
     setLastSummary(format(t('ai.summary.batch'), { count: result.summary.total_tasks }));
   };
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 bg-slate-950/70 px-2 py-2 sm:p-4"
       onMouseDown={(event) => {
@@ -236,6 +237,7 @@ export default function AITools({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -216,6 +216,19 @@ describe('AITools', () => {
     expect(document.documentElement.style.overflow).toBe('');
   });
 
+  it('portals the fixed dialog outside a transformed application container', () => {
+    const view = render(
+      <div data-app-matrix style={{ transform: 'translate3d(0, 0, 0)' }}>
+        <LanguageProvider>
+          <AITools taskTitle="urgent roadmap" onClose={jest.fn()} onAnalysisComplete={jest.fn()} />
+        </LanguageProvider>
+      </div>
+    );
+
+    expect(view.container.querySelector('[role="dialog"]')).toBeNull();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
   it('adds body padding when the viewport has a scrollbar gap', () => {
     const originalInnerWidth = window.innerWidth;
     const originalClientWidth = document.documentElement.clientWidth;
@@ -282,9 +295,10 @@ describe('AITools', () => {
 
   it('closes the modal when clicking the backdrop', () => {
     const onClose = jest.fn();
-    const { container } = renderTools(jest.fn(), { onClose });
+    renderTools(jest.fn(), { onClose });
+    const backdrop = screen.getByRole('dialog').parentElement?.parentElement;
 
-    fireEvent.mouseDown(container.firstChild as Element);
+    fireEvent.mouseDown(backdrop!);
 
     expect(onClose).toHaveBeenCalledTimes(1);
   });
