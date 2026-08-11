@@ -92,7 +92,7 @@ class LangChainQdrantAdapter(VectorStore):
         self,
         texts: Iterable[str],
         metadatas: Optional[List[dict]] = None,
-        **kwargs: Any
+        **_kwargs: Any
     ) -> List[str]:
         metadatas = metadatas or [{} for _ in texts]
         ids: List[str] = []
