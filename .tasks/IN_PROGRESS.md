@@ -1,5 +1,26 @@
 # In Progress
 
+## TASK-037: Harden repository architecture and promote green dev
+**Priority:** P1 | **Tags:** architecture, reliability, security, contracts, quality
+
+Resolve the repository-wide architecture audit findings without introducing speculative framework layers, then promote the integrated result through a fully green PR to `dev`.
+
+### Plan
+
+- Make RAG retrieval canonical against MongoDB, close projection-reconciliation gaps, and make opt-in webhook ingestion durable and payload-bound.
+- Make mobile task creation retry-safe end to end; harden Node HTTP semantics, trusted-proxy rate limiting, readiness, pagination, configuration, and repository boundaries where they reduce real coupling.
+- Harden MCP redirect authorization, validate API-client runtime contracts, centralize shared quadrant semantics, and add the missing contract/typecheck/quality gates to CI.
+- Remove web test warnings, correct stale architecture/methodology documentation, and pin release image inputs where an immutable supported digest is available.
+- Integrate the independently verified slices, run the complete local quality/runtime gates, open a PR to `dev`, require all checks green, merge it, and verify the remote merge SHA.
+
+### Scope boundaries
+
+- Preserve the existing pragmatic layered architecture; do not add a generic base repository, full CQRS, or an ORM/ODM abstraction without a demonstrated boundary benefit.
+- Do not modify `master`, deploy, publish, enable gated RAG/MAG/generation flags, or claim live production evidence.
+- Keep independent-human and physical-device gates fail-closed; local and CI evidence do not satisfy them.
+
+---
+
 ## TASK-013: Approve representative retrieval quality gates
 **Priority:** P1 | **Tags:** rag, evaluation, recall, mrr, human-gate
 
