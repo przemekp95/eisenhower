@@ -581,7 +581,7 @@ def classification_metrics(
   *,
   calibration_bins: int = 10,
 ) -> dict[str, Any]:
-  if not (len(labels) == len(predictions) == len(probabilities)):
+  if not len(labels) == len(predictions) == len(probabilities):
     raise ValueError("Labels, predictions, and probabilities must have equal length.")
   if not labels:
     raise ValueError("At least one evaluation example is required.")

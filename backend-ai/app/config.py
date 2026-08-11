@@ -29,7 +29,7 @@ class Settings:
   rag_enabled: bool = False
   rag_retrieval_enabled: bool | None = None
   rag_generation_enabled: bool | None = None
-  rag_response_enabled: bool = True
+  rag_response_enabled: bool = False
   rag_allowed_tenants: tuple[str, ...] = ()
   qdrant_url: str = "http://qdrant:6333"
   qdrant_api_key: str | None = None
@@ -225,7 +225,7 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
       if "RAG_GENERATION_ENABLED" in source
       else None
     ),
-    rag_response_enabled=source.get("RAG_RESPONSE_ENABLED", "true").lower() in ("true", "1", "yes"),
+    rag_response_enabled=source.get("RAG_RESPONSE_ENABLED", "false").lower() in ("true", "1", "yes"),
     rag_allowed_tenants=parse_csv_list(source.get("RAG_ALLOWED_TENANTS"), ()),
     qdrant_url=source.get("QDRANT_URL", "http://qdrant:6333"),
     qdrant_api_key=source.get("QDRANT_API_KEY") or None,

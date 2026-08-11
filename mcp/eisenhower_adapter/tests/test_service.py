@@ -1,4 +1,6 @@
+import json
 import unittest
+from pathlib import Path
 
 from eisenhower_mcp.service import EisenhowerMcpService
 
@@ -69,15 +71,12 @@ class EisenhowerMcpServiceTest(unittest.TestCase):
 
     def test_matrix_summary_uses_canonical_quadrants(self) -> None:
         result = self.service.matrix_summary()
+        contract_path = Path(__file__).resolve().parents[3] / "contracts" / "quadrants.json"
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
 
         self.assertEqual(
             result["quadrants"],
-            {
-                "0": {"label": "Do Now", "count": 1},
-                "1": {"label": "Delegate", "count": 1},
-                "2": {"label": "Schedule", "count": 1},
-                "3": {"label": "Delete", "count": 1},
-            },
+            {str(item["value"]): {"label": item["name"], "count": 1} for item in contract},
         )
 
     def test_tasks_search_is_read_only_and_bounded(self) -> None:

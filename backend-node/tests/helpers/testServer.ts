@@ -1,4 +1,4 @@
-import type { Server } from 'node:http';
+import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
@@ -44,6 +44,9 @@ function waitForListen(server: Server, port: number, host: string) {
 }
 
 function closeServer(server: Server) {
+  if (!server.listening) {
+    return Promise.resolve();
+  }
   return new Promise<void>((resolve, reject) => {
     server.close((error) => {
       if (error) {
@@ -60,23 +63,58 @@ export async function startTestServer(options: StartTestServerOptions = {}): Pro
   const host = options.host ?? '127.0.0.1';
   const port = options.port ?? 0;
   const databaseName = options.databaseName ?? 'eisenhower-test';
-  const mongo = await MongoMemoryServer.create({
-    instance: {
-      dbName: databaseName,
-    },
-  });
-
+  let mongo: MongoMemoryServer | null = null;
+  let server: Server | null = null;
   let closed = false;
 
-  await connectToDatabase(mongo.getUri());
+  const cleanup = async () => {
+    const errors: unknown[] = [];
+    if (server) {
+      try {
+        await closeServer(server);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    try {
+      await disconnectFromDatabase();
+    } catch (error) {
+      errors.push(error);
+    }
+    if (mongo) {
+      try {
+        await mongo.stop();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length > 0) {
+      throw new AggregateError(errors, 'Failed to close every test server resource');
+    }
+  };
 
-  const app = createApp({
-    aiHealthChecker: async () => 'healthy',
-    ...options.appOptions,
-  });
-
-  const server = app;
-  const address = await waitForListen(server, port, host);
+  let address: AddressInfo;
+  try {
+    mongo = await MongoMemoryServer.create({
+      instance: {
+        dbName: databaseName,
+      },
+    });
+    await connectToDatabase(mongo.getUri());
+    const app = createApp({
+      aiHealthChecker: async () => 'healthy',
+      ...options.appOptions,
+    });
+    server = createServer(app);
+    address = await waitForListen(server, port, host);
+  } catch (error) {
+    try {
+      await cleanup();
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], 'Test server startup and cleanup failed');
+    }
+    throw error;
+  }
 
   return {
     url: `http://${host}:${address.port}`,
@@ -92,9 +130,7 @@ export async function startTestServer(options: StartTestServerOptions = {}): Pro
       }
 
       closed = true;
-      await closeServer(server);
-      await disconnectFromDatabase();
-      await mongo.stop();
+      await cleanup();
     },
   };
 }

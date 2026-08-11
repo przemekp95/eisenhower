@@ -15,7 +15,7 @@ describe('health routes', () => {
     expect(response.body).toEqual({ status: 'ok' });
   });
 
-  it('returns ready only when both db and ai are healthy', async () => {
+  it('returns fully healthy readiness when both db and AI are healthy', async () => {
     const app = createApp({
       aiHealthChecker: async () => 'healthy',
       databaseStatusResolver: () => 'connected',
@@ -24,7 +24,11 @@ describe('health routes', () => {
     const response = await request(app).get('/health/ready');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ status: 'ready' });
+    expect(response.body).toEqual({
+      status: 'ready',
+      degraded: false,
+      dependencies: { database: 'connected', ai: 'healthy' },
+    });
   });
 
   it('returns not_ready when the database is disconnected', async () => {
@@ -36,10 +40,14 @@ describe('health routes', () => {
     const response = await request(app).get('/health/ready');
 
     expect(response.status).toBe(503);
-    expect(response.body).toEqual({ status: 'not_ready' });
+    expect(response.body).toEqual({
+      status: 'not_ready',
+      degraded: true,
+      dependencies: { database: 'disconnected', ai: 'unreachable' },
+    });
   });
 
-  it('returns not_ready when the ai dependency is unhealthy', async () => {
+  it('keeps CRUD ready while exposing an unavailable optional AI dependency', async () => {
     const app = createApp({
       aiHealthChecker: async () => 'unreachable',
       databaseStatusResolver: () => 'connected',
@@ -47,8 +55,12 @@ describe('health routes', () => {
 
     const response = await request(app).get('/health/ready');
 
-    expect(response.status).toBe(503);
-    expect(response.body).toEqual({ status: 'not_ready' });
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      status: 'ready',
+      degraded: true,
+      dependencies: { database: 'connected', ai: 'unreachable' },
+    });
   });
 
   it('does not call dependency checkers during liveness', async () => {
@@ -65,7 +77,7 @@ describe('health routes', () => {
     expect(response.body).toEqual({ status: 'ok' });
   });
 
-  it('returns 500 from readiness when dependency checks throw unexpectedly', async () => {
+  it('treats an optional AI checker failure as degradation', async () => {
     const app = createApp({
       aiHealthChecker: async () => {
         throw new Error('boom');
@@ -75,8 +87,26 @@ describe('health routes', () => {
 
     const response = await request(app).get('/health/ready');
 
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      status: 'ready',
+      degraded: true,
+      dependencies: { database: 'connected', ai: 'unreachable' },
+    });
+  });
+
+  it('forwards unexpected readiness resolver failures to the app error handler', async () => {
+    const app = createApp({
+      aiHealthChecker: async () => 'healthy',
+      databaseStatusResolver: () => {
+        throw new Error('database status failed');
+      },
+    });
+
+    const response = await request(app).get('/health/ready');
+
     expect(response.status).toBe(500);
-    expect(response.body.error).toBe('boom');
+    expect(response.body).toEqual({ error: 'database status failed' });
   });
 
   it('maps upstream fetch failures to unreachable', async () => {
@@ -130,6 +160,10 @@ describe('health routes', () => {
     const response = await request(app).get('/health/ready');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ status: 'ready' });
+    expect(response.body).toEqual({
+      status: 'ready',
+      degraded: false,
+      dependencies: { database: 'connected', ai: 'healthy' },
+    });
   });
 });

@@ -23,6 +23,60 @@ import {
   setApiToken,
 } from './api';
 
+const taskResponse = {
+  _id: '1',
+  title: 'Task',
+  description: '',
+  urgent: false,
+  important: false,
+  revision: 4,
+};
+
+const trainingExample = {
+  text: 'Task',
+  quadrant: 0,
+  source: 'user',
+  timestamp: '2026-08-11T12:00:00Z',
+};
+
+const classificationResponse = {
+  task: 'Task',
+  urgent: true,
+  important: true,
+  quadrant: 0,
+  quadrant_name: 'Do Now',
+  timestamp: '2026-08-11T12:00:00Z',
+  method: 'local-minilm',
+  confidence: 0.9,
+  local_scores: { 0: 0.9, 1: 0.05, 2: 0.03, 3: 0.02 },
+  similar_examples_used: 0,
+  top_similar_examples: [],
+};
+
+const analysisResponse = {
+  task: 'Task',
+  langchain_analysis: {
+    quadrant: 0,
+    reasoning: 'urgent',
+    confidence: 0.9,
+    method: 'local-analysis',
+  },
+  rag_classification: { quadrant: 0, quadrant_name: 'Do Now', confidence: 0.9 },
+  comparison: { methods_agree: true, confidence_difference: 0 },
+};
+
+const groundedAiResponse = {
+  mode: 'fallback',
+  quadrant: 2,
+  quadrant_name: 'Schedule',
+  confidence: 0.7,
+  explanation: 'fallback',
+  citations: [],
+  retrieval: { hit_count: 0, top_score: null, embedding_version: null },
+  generation: null,
+  information_delta: null,
+};
+
 describe('api service', () => {
   beforeEach(() => {
     global.fetch = jest.fn();
@@ -58,6 +112,28 @@ describe('api service', () => {
     expect((global.fetch as jest.Mock).mock.calls[0][0]).not.toContain('runtime-only-test-token');
   });
 
+  it('omits ambient browser credentials from both task and AI requests', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => [] })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => classificationResponse,
+      });
+
+    await getTasks();
+    await classifyTask('urgent');
+
+    for (const [, request] of (global.fetch as jest.Mock).mock.calls) {
+      expect(request).toEqual(
+        expect.objectContaining({
+          credentials: 'omit',
+          headers: expect.objectContaining({ Authorization: 'Bearer runtime-only-test-token' }),
+        })
+      );
+    }
+  });
+
   it('clears the in-memory token after an unauthorized response', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: false,
@@ -86,14 +162,25 @@ describe('api service', () => {
   });
 
   it('uses runtime config for task CRUD', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      status: 200,
-      headers: new Headers({ 'content-type': 'application/json' }),
-      json: async () => [
-        { _id: '1', title: 'Task', description: '', urgent: false, important: false },
-      ],
-    });
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => [taskResponse],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => taskResponse,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ ...taskResponse, urgent: true }),
+      });
 
     await getTasks();
     await createTask({ title: 'Task', description: '', urgent: false, important: false });
@@ -133,12 +220,98 @@ describe('api service', () => {
   });
 
   it('uses runtime config for AI endpoints', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    const responses = [
+      classificationResponse,
+      analysisResponse,
+      analysisResponse,
+      {
+        batch_results: [
+          {
+            task: 'Task',
+            analyses: {
+              rag: { quadrant: 0, quadrant_name: 'Do Now', confidence: 0.9 },
+              langchain: {
+                quadrant: 0,
+                reasoning: 'urgent',
+                confidence: 0.9,
+                method: 'local-analysis',
+              },
+            },
+          },
+        ],
+        summary: {
+          methods: {
+            rag: { quadrant_distribution: { 0: 1 } },
+            langchain: { quadrant_distribution: { 0: 1 } },
+          },
+          total_tasks: 1,
+        },
+      },
+      {
+        filename: 'tasks.txt',
+        image_info: { size_bytes: 4, shape: 'unknown' },
+        ocr: { extracted_text: 'Task', raw_tasks_detected: 1, method: 'plain-text' },
+        classified_tasks: [{ text: 'Task', quadrant: 0, quadrant_name: 'Do Now', confidence: 0.9 }],
+        summary: {
+          total_tasks: 1,
+          quadrant_distribution: {
+            counts: { 0: 1, 1: 0, 2: 0, 3: 0 },
+            percentages: { 0: 100, 1: 0, 2: 0, 3: 0 },
+            quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
+          },
+        },
+      },
+      { message: 'Training example added.', example: trainingExample },
+      {
+        message: 'Feedback captured.',
+        predicted_quadrant: 1,
+        correct_quadrant: 2,
+        example: trainingExample,
+      },
+      { examples_added: 1, retrained: false },
+      { message: 'Retrained.', preserve_experience: false, status: 'completed' },
+      { message: 'Retrained.', preserve_experience: true, status: 'completed' },
+      {
+        total_examples: 1,
+        quadrant_distribution: { 0: 1 },
+        data_sources: { user: 1 },
+        data_file: '/tmp/training.json',
+        model_file: '/tmp/model.pt',
+        last_updated: '2026-08-11T12:00:00Z',
+        quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
+      },
+      { message: 'Training data cleared.', remaining_examples: 0 },
+      { message: 'Training data cleared.', remaining_examples: 1 },
+      { quadrant: 0, quadrant_name: 'Do Now', examples: [trainingExample] },
+      { quadrant: 0, quadrant_name: 'Do Now', examples: [trainingExample] },
+      {
+        classification: true,
+        langchain_analysis: false,
+        ocr: true,
+        batch_analysis: true,
+        training_management: true,
+        providers: { local_model: true, tesseract: true, ocr: true },
+        device: {
+          type: 'cpu',
+          name: 'cpu',
+          vendor: 'cpu',
+          runtime: 'cpu',
+          runtime_version: null,
+          torch_device: 'cpu',
+          count: 1,
+          cuda_version: null,
+          accelerated: false,
+        },
+      },
+      { provider: 'local_model', enabled: false, available: true, active: false },
+      { provider: 'tesseract', enabled: true, available: true, active: true },
+    ];
+    (global.fetch as jest.Mock).mockImplementation(async () => ({
       ok: true,
       status: 200,
       headers: new Headers({ 'content-type': 'application/json' }),
-      json: async () => ({ total_examples: 1 }),
-    });
+      json: async () => responses.shift(),
+    }));
 
     await classifyTask('urgent');
     await analyzeTask('urgent');
@@ -212,7 +385,7 @@ describe('api service', () => {
       ok: true,
       status: 200,
       headers: new Headers({ 'content-type': 'application/json' }),
-      json: async () => ({ mode: 'fallback', citations: [] }),
+      json: async () => groundedAiResponse,
     });
 
     await analyzeTaskWithRag('ground this task');

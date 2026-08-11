@@ -32,7 +32,7 @@ def test_store_adds_and_filters_examples(tmp_path: Path):
   assert any(example["text"] == "Prepare roadmap" for example in examples)
   assert stats["data_sources"]["feedback"] == 1
   assert stats["data_sources"]["ocr-feedback"] == 1
-  assert store.add_examples([]) == []
+  assert not store.add_examples([])
 
 
 def test_store_clear_can_keep_or_drop_defaults(tmp_path: Path):
@@ -43,7 +43,7 @@ def test_store_clear_can_keep_or_drop_defaults(tmp_path: Path):
   assert len(keep_defaults) >= 4
 
   cleared = store.clear(False)
-  assert cleared == []
+  assert not cleared
 
 
 def test_store_serializes_concurrent_read_modify_write_updates(tmp_path: Path):
@@ -67,4 +67,4 @@ def test_store_atomic_save_preserves_previous_json_when_promotion_fails(tmp_path
     store.save([{"text": "candidate", "quadrant": 1, "source": "test"}])
 
   assert store.load()[0]["text"] == "incumbent"
-  assert list(tmp_path.glob(".training.json.*.tmp")) == []
+  assert not list(tmp_path.glob(".training.json.*.tmp"))

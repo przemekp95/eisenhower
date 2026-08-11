@@ -6,7 +6,7 @@ uvicorn==0.44.0
 python-multipart==0.0.32
 pillow==12.3.0
 pytesseract==0.3.13
-torch==2.13.0
+torch==2.13.0+cpu
 torchvision==0.28.0+cpu
 sentence-transformers==5.7.0
 transformers==5.14.1

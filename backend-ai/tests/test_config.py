@@ -15,6 +15,10 @@ def test_load_settings_uses_defaults():
   assert settings.rag_enabled is False
   assert settings.rag_retrieval_enabled is False
   assert settings.rag_generation_enabled is False
+  assert settings.rag_response_enabled is False
+  assert settings.memory_write_enabled is False
+  assert settings.memory_retrieval_enabled is False
+  assert settings.memory_response_enabled is False
   assert settings.inference_base_url == "http://inference:8000/v1"
   assert settings.inference_api_key is None
   assert settings.inference_model is None

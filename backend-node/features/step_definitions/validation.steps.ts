@@ -1,14 +1,12 @@
 import assert from 'node:assert/strict';
 import { When } from '@cucumber/cucumber';
+import { QUADRANT_DEFINITIONS } from '@eisenhower/api-client';
 import request from 'supertest';
 import { EisenhowerWorld } from '../support/world';
 
-const quadrantFlags: Record<string, { urgent: boolean; important: boolean }> = {
-  'Do Now': { urgent: true, important: true },
-  Delegate: { urgent: true, important: false },
-  Schedule: { urgent: false, important: true },
-  Delete: { urgent: false, important: false },
-};
+const quadrantFlags = Object.fromEntries(
+  QUADRANT_DEFINITIONS.map(({ name, urgent, important }) => [name, { urgent, important }]),
+) as Record<string, { urgent: boolean; important: boolean }>;
 
 function authenticated(world: EisenhowerWorld) {
   return {
@@ -44,6 +42,7 @@ When(
     assert.ok(flags, `Unknown quadrant: ${quadrant}`);
     this.response = await authenticated(this)
       .put('/tasks/000000000000000000000001')
+      .set('If-Match', '"0"')
       .send(flags);
   },
 );

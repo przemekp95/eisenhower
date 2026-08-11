@@ -1,17 +1,15 @@
 import assert from 'node:assert/strict';
 import { Given, Then, When } from '@cucumber/cucumber';
+import { QUADRANT_DEFINITIONS } from '@eisenhower/api-client';
 import request from 'supertest';
 import { TaskModel } from '../../src/models/task';
 import { EisenhowerWorld } from '../support/world';
 
 type Quadrant = 'Do Now' | 'Delegate' | 'Schedule' | 'Delete';
 
-const quadrants: Record<Quadrant, { urgent: boolean; important: boolean }> = {
-  'Do Now': { urgent: true, important: true },
-  Delegate: { urgent: true, important: false },
-  Schedule: { urgent: false, important: true },
-  Delete: { urgent: false, important: false },
-};
+const quadrants = Object.fromEntries(
+  QUADRANT_DEFINITIONS.map(({ name, urgent, important }) => [name, { urgent, important }]),
+) as Record<Quadrant, { urgent: boolean; important: boolean }>;
 
 function quadrantNamed(value: string) {
   assert.ok(value in quadrants, `Unknown quadrant: ${value}`);
@@ -32,6 +30,7 @@ Given(
   async function (this: EisenhowerWorld, title: string, quadrant: string) {
     const task = await TaskModel.create({ title, ...quadrantNamed(quadrant) });
     this.taskId = task.id;
+    this.taskRevision = task.revision;
   },
 );
 
@@ -56,6 +55,22 @@ When(
       .post('/tasks')
       .send({ title, ...quadrantNamed(quadrant) });
     this.taskId = this.response.body._id;
+    this.taskRevision = this.response.body.revision;
+  },
+);
+
+When(
+  'I retry creating the task {string} twice with operation key {string}',
+  async function (this: EisenhowerWorld, title: string, operationKey: string) {
+    const first = await authenticated(this)
+      .post('/tasks')
+      .set('Idempotency-Key', operationKey)
+      .send({ title, ...quadrantNamed('Schedule') });
+    assert.equal(first.status, 201, JSON.stringify(first.body));
+    this.response = await authenticated(this)
+      .post('/tasks')
+      .set('Idempotency-Key', operationKey)
+      .send({ title, ...quadrantNamed('Schedule') });
   },
 );
 
@@ -67,15 +82,21 @@ When(
   'I move the task to the {string} quadrant',
   async function (this: EisenhowerWorld, quadrant: string) {
     assert.ok(this.taskId, 'A task must exist before it can be moved');
+    assert.ok(Number.isInteger(this.taskRevision), 'The current revision must be available');
     this.response = await authenticated(this)
       .put(`/tasks/${this.taskId}`)
+      .set('If-Match', `"${this.taskRevision}"`)
       .send(quadrantNamed(quadrant));
+    this.taskRevision = this.response.body.revision;
   },
 );
 
 When('I delete the task', async function (this: EisenhowerWorld) {
   assert.ok(this.taskId, 'A task must exist before it can be deleted');
-  this.response = await authenticated(this).delete(`/tasks/${this.taskId}`);
+  assert.ok(Number.isInteger(this.taskRevision), 'The current revision must be available');
+  this.response = await authenticated(this)
+    .delete(`/tasks/${this.taskId}`)
+    .set('If-Match', `"${this.taskRevision}"`);
 });
 
 When(
@@ -84,13 +105,14 @@ When(
     assert.ok(this.taskId, 'The other tenant task must exist before it can be moved');
     this.response = await authenticated(this)
       .put(`/tasks/${this.taskId}`)
+      .set('If-Match', '"0"')
       .send(quadrantNamed(quadrant));
   },
 );
 
 When("I try to delete the other tenant's task", async function (this: EisenhowerWorld) {
   assert.ok(this.taskId, 'The other tenant task must exist before it can be deleted');
-  this.response = await authenticated(this).delete(`/tasks/${this.taskId}`);
+  this.response = await authenticated(this).delete(`/tasks/${this.taskId}`).set('If-Match', '"0"');
 });
 
 Then(
@@ -100,6 +122,10 @@ Then(
     assert.equal(this.response.status, expectedStatus, JSON.stringify(this.response.body));
   },
 );
+
+Then('exactly one task named {string} exists', async function (title: string) {
+  assert.equal(await TaskModel.countDocuments({ title }), 1);
+});
 
 Then('the request fails as not found', function (this: EisenhowerWorld) {
   assert.ok(this.response, 'A request must be made before its status is checked');

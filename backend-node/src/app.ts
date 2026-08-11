@@ -17,6 +17,7 @@ import {
 export interface CreateAppOptions {
   aiHealthChecker?: () => Promise<HealthState>;
   databaseStatusResolver?: () => 'connected' | 'disconnected';
+  rateLimitLimit?: number;
 }
 
 const DEFAULT_AI_READINESS_TIMEOUT_MS = 3_000;
@@ -43,6 +44,10 @@ export async function defaultAiHealthChecker(
 export function createApp(options: CreateAppOptions = {}) {
   const config = loadConfig();
   const app = express();
+
+  // Production traffic reaches Node through exactly one repository-controlled
+  // frontend nginx hop. Development exposes Node directly and trusts no proxy.
+  app.set('trust proxy', config.nodeEnv === 'production' ? 1 : false);
 
   app.use((req, res, next) => {
     if (process.env.NODE_ENV === 'test') {
@@ -76,7 +81,7 @@ export function createApp(options: CreateAppOptions = {}) {
   app.use(
     rateLimit({
       windowMs: 60_000,
-      limit: 120,
+      limit: options.rateLimitLimit ?? 120,
       standardHeaders: true,
       legacyHeaders: false,
     })
@@ -86,11 +91,10 @@ export function createApp(options: CreateAppOptions = {}) {
       origin: config.corsAllowOrigins,
       credentials: false,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Authorization', 'Content-Type', 'If-Match'],
+      allowedHeaders: ['Authorization', 'Content-Type', 'If-Match', 'Idempotency-Key'],
       exposedHeaders: ['ETag', 'X-Next-Cursor', 'Link'],
     })
   );
-  app.use(requireTrustedBrowserOrigin(config.corsAllowOrigins));
   app.use(express.json({ limit: '32kb' }));
 
   app.use(
@@ -111,6 +115,7 @@ export function createApp(options: CreateAppOptions = {}) {
     app.use(requireBearerToken(config.apiToken));
   }
 
+  app.use(requireTrustedBrowserOrigin(config.corsAllowOrigins));
   app.use('/tasks', createTasksRouter());
 
   app.use((_req, res) => {

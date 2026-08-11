@@ -251,11 +251,11 @@ class WebhookReplayVerifier:
       version != WEBHOOK_SIGNATURE_VERSION
       or method != WEBHOOK_INGRESS_METHOD
       or path != WEBHOOK_INGRESS_PATH
-      or not timestamp.isascii()
-      or not timestamp.isdigit()
-      or not 1 <= len(timestamp) <= 16
-      or re.fullmatch(r"[a-f0-9]{64}", signature) is None
     ):
+      return False
+    if not timestamp.isascii() or not timestamp.isdigit() or not 1 <= len(timestamp) <= 16:
+      return False
+    if re.fullmatch(r"[a-f0-9]{64}", signature) is None:
       return False
     received_at = int(timestamp)
     now = self.clock()

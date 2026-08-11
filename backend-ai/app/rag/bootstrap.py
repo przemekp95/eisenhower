@@ -19,7 +19,7 @@ from .adapters import (
   is_private_service_url,
 )
 from .application import RagAnalysisService
-from .canonical import CanonicalIngestionApplication
+from .canonical import CanonicalIngestionApplication, CanonicalRetriever
 from .collections import QdrantCollectionManager
 from .ingestion import DeterministicChunker
 from .mongo_document_store import MongoCanonicalDocumentStore
@@ -38,26 +38,50 @@ def is_private_mongodb_uri(uri: str) -> bool:
     return "." not in hostname or hostname.endswith((".internal", ".local"))
 
 
-def build_rag_service(settings: Settings, fallback_classifier) -> RagAnalysisService:
+def build_rag_service(
+  settings: Settings,
+  fallback_classifier,
+  *,
+  qdrant_client=None,
+  mongo_client=None,
+) -> RagAnalysisService:
   if not settings.rag_retrieval_enabled:
     raise ValueError("RAG retrieval is disabled")
   if not is_private_service_url(settings.qdrant_url):
     raise ValueError("Qdrant must use a private-network endpoint")
+  generator = _build_generation_provider(settings) if settings.rag_generation_enabled else None
+  if not settings.mongodb_uri and mongo_client is None:
+    raise ValueError("MONGODB_URI is required for canonical RAG retrieval")
+  if settings.mongodb_uri and not is_private_mongodb_uri(settings.mongodb_uri):
+    raise ValueError("MongoDB must use a fixed private-network endpoint")
   embedding = MiniLMEmbeddingProvider(
     fallback_classifier.local_model,
     version=settings.embedding_version,
   )
-  qdrant = QdrantClient(
+  qdrant = qdrant_client or QdrantClient(
     url=settings.qdrant_url,
     api_key=settings.qdrant_api_key,
     timeout=5,
   )
-  retriever = QdrantRetriever(
+  projection_retriever = QdrantRetriever(
     qdrant,
     embedding,
     collection_alias=settings.qdrant_collection_alias,
   )
-  generator = _build_generation_provider(settings) if settings.rag_generation_enabled else None
+  if mongo_client is None:
+    from pymongo import MongoClient
+
+    mongo_client = MongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=5000)
+  mongo_client.admin.command("ping")
+  canonical_store = MongoCanonicalDocumentStore(
+    mongo_client[settings.mongodb_database][settings.canonical_documents_collection]
+  )
+  retriever = CanonicalRetriever(
+    projection_retriever,
+    canonical_store,
+    embedding_version=settings.embedding_version,
+    chunker=DeterministicChunker(max_chars=1200, overlap_chars=160),
+  )
   return RagAnalysisService(
     retriever,
     generator,

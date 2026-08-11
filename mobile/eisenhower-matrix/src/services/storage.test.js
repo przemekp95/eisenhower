@@ -29,7 +29,24 @@ describe('storage service', () => {
         locale: 'pl',
         remoteId: null,
         syncState: 'pending_create',
+        clientOperationId: 'mobile-1',
       },
+    ]);
+  });
+
+  it('round-trips the persisted client operation id for pending creates', async () => {
+    await saveTasks([{
+      id: 'local-stable',
+      title: 'Persisted retry',
+      syncState: 'pending_create',
+      clientOperationId: 'mobile-explicit-operation',
+    }]);
+
+    await expect(loadTasks('pl')).resolves.toEqual([
+      expect.objectContaining({
+        id: 'local-stable',
+        clientOperationId: 'mobile-explicit-operation',
+      }),
     ]);
   });
 

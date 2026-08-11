@@ -72,7 +72,7 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 - `EISENHOWER_API_TOKEN`: user token shared with the Node API for ordinary task and AI operations
 - `EISENHOWER_ADMIN_TOKEN`: separate 32+ character token for all training-data writes (including feedback), retraining and AI provider management; it must differ from the user token
 
-Web and mobile ask for both tokens at runtime, keep them only in memory, and attach the appropriate value in the `Authorization` header. Do not put either token in `VITE_*`, `EXPO_PUBLIC_*`, runtime-config.js, URLs, localStorage, or AsyncStorage. Because authentication is header-based and cookies are not used, classical CSRF does not apply; unsafe browser requests are additionally rejected when their `Origin` is outside `CORS_ALLOW_ORIGINS`.
+Web and mobile ask for both tokens at runtime, keep them only in memory, and attach the appropriate value in the `Authorization` header. Do not put either token in `VITE_*`, `EXPO_PUBLIC_*`, runtime-config.js, URLs, localStorage, or AsyncStorage. Because neither API authenticates with ambient cookies, classic credentialed CSRF is not applicable to the current authentication contract; unsafe browser requests are additionally rejected when their `Origin` is outside `CORS_ALLOW_ORIGINS`. Both APIs disable credentialed CORS, and the production web adapter explicitly uses Fetch `credentials: 'omit'` for every task and AI request while retaining the bearer header.
 
 ---
 
@@ -201,7 +201,7 @@ The integration suite renders the React app in JSDOM, but talks to a real Expres
 
 ## Mikrus Deployment
 
-A successful `CI` push run on `master` triggers `release.yml`, which builds immutable commit-SHA images and can deploy them to Mikrus over SSH when secrets are configured.
+A successful `CI` push run on `master` triggers `release.yml`, which builds images tagged with the full commit SHA and can deploy them to Mikrus over SSH when secrets are configured. A full-SHA tag identifies the intended source revision but remains a mutable registry tag; the current deployment does not yet bind the three first-party images by registry digest.
 
 The existing `deploy/mikrus/docker-compose.yml` topology deliberately runs `backend-node` with
 `AUTH_MODE=static` and the shared `EISENHOWER_API_TOKEN`. It is a static, single-tenant deployment:
@@ -244,6 +244,7 @@ Reference files:
 - `deploy/mikrus/docker-compose.yml`
 - `deploy/mikrus/.env.example`
 - `deploy/mikrus/backup.sh` and `restore.sh` for checksum-verified data recovery; restore additionally requires `RESTORE_CONFIRM=restore-eisenhower-data`
+- [`docs/RELEASE_BASE_IMAGES.md`](docs/RELEASE_BASE_IMAGES.md) for digest policy, current exceptions and the controlled update procedure
 
 ## Quality Gates
 

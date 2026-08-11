@@ -2,6 +2,9 @@ from __future__ import annotations
 from typing import List, Dict, Optional, Any, Iterable, Callable
 from uuid import UUID
 
+# This research-only adapter is linted in the standard CI environment without
+# installing its deliberately isolated optional framework dependencies.
+# pylint: disable=import-error
 from langchain_core.documents import Document
 from langchain_core.vectorstores import VectorStore
 from langchain_core.embeddings import Embeddings
@@ -92,7 +95,7 @@ class LangChainQdrantAdapter(VectorStore):
         self,
         texts: Iterable[str],
         metadatas: Optional[List[dict]] = None,
-        **kwargs: Any
+        **_kwargs: Any
     ) -> List[str]:
         metadatas = metadatas or [{} for _ in texts]
         ids: List[str] = []
@@ -115,7 +118,7 @@ class LangChainQdrantAdapter(VectorStore):
         query: str,
         k: int = 4,
         filter: Optional[Dict[str, Any]] = None,
-        **kwargs: Any
+        **_kwargs: Any
     ) -> List[Document]:
         query_vector = self._embeddings.embed_query(query)
 
@@ -136,7 +139,7 @@ class LangChainQdrantAdapter(VectorStore):
         query: str,
         k: int = 4,
         filter: Optional[Dict[str, Any]] = None,
-        **kwargs: Any
+        **_kwargs: Any
     ) -> List[tuple[Document, float]]:
         query_vector = self._embeddings.embed_query(query)
 

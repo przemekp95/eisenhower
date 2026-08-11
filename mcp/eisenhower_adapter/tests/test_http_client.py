@@ -1,5 +1,7 @@
 import json
 import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from threading import Thread
 from urllib.error import HTTPError
 from unittest.mock import Mock, patch
 
@@ -19,6 +21,62 @@ class FakeResponse:
 
     def __exit__(self, *_args: object) -> None:
         return None
+
+
+class _RedirectState:
+    def __init__(self, status: int | None = None) -> None:
+        self.status = status
+        self.location = ""
+        self.requests: list[dict[str, str | None]] = []
+
+
+def _redirect_handler(state: _RedirectState):
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, _format: str, *_args: object) -> None:
+            return
+
+        def do_GET(self) -> None:
+            state.requests.append(
+                {
+                    "path": self.path,
+                    "authorization": self.headers.get("Authorization"),
+                }
+            )
+            if state.status is not None and self.path == "/tasks":
+                self.send_response(state.status)
+                self.send_header("Location", state.location)
+                self.end_headers()
+                return
+
+            payload = b"[]"
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+    return Handler
+
+
+class _RunningRedirectServer:
+    def __init__(self, status: int | None = None) -> None:
+        self.state = _RedirectState(status)
+        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), _redirect_handler(self.state))
+        self.thread = Thread(target=self.httpd.serve_forever, daemon=True)
+
+    @property
+    def url(self) -> str:
+        host, port = self.httpd.server_address
+        return f"http://{host}:{port}"
+
+    def __enter__(self) -> "_RunningRedirectServer":
+        self.thread.start()
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.thread.join(timeout=2)
 
 
 class EisenhowerApiClientTest(unittest.TestCase):
@@ -99,6 +157,47 @@ class EisenhowerApiClientTest(unittest.TestCase):
             client.list_tasks()
 
         error.close.assert_called_once_with()
+
+    def test_rejects_same_origin_redirects_without_replaying_authorization(self) -> None:
+        for status in (301, 302, 303, 307, 308):
+            with self.subTest(status=status), _RunningRedirectServer(status) as upstream:
+                upstream.state.location = f"{upstream.url}/redirected"
+                client = EisenhowerApiClient(
+                    upstream.url,
+                    upstream.url,
+                    bearer_token="secret-token",
+                )
+
+                with self.assertRaisesRegex(ApiClientError, f"HTTP {status}"):
+                    client.list_tasks()
+
+                self.assertEqual(
+                    upstream.state.requests,
+                    [{"path": "/tasks", "authorization": "Bearer secret-token"}],
+                )
+
+    def test_rejects_cross_origin_redirects_without_forwarding_authorization(self) -> None:
+        for status in (301, 302, 303, 307, 308):
+            with (
+                self.subTest(status=status),
+                _RunningRedirectServer() as destination,
+                _RunningRedirectServer(status) as source,
+            ):
+                source.state.location = f"{destination.url}/redirected"
+                client = EisenhowerApiClient(
+                    source.url,
+                    source.url,
+                    bearer_token="secret-token",
+                )
+
+                with self.assertRaisesRegex(ApiClientError, f"HTTP {status}"):
+                    client.list_tasks()
+
+                self.assertEqual(
+                    source.state.requests,
+                    [{"path": "/tasks", "authorization": "Bearer secret-token"}],
+                )
+                self.assertEqual(destination.state.requests, [])
 
 
 if __name__ == "__main__":

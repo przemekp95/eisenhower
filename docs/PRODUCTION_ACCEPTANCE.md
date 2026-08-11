@@ -1,6 +1,6 @@
 # Production acceptance
 
-Last reviewed: 2026-08-10
+Last reviewed: 2026-08-11
 
 This checklist deliberately separates evidence produced on a developer machine, evidence produced by GitHub Actions, and evidence from the public Mikrus runtime. Passing one level does not imply that either of the others passed.
 
@@ -51,7 +51,7 @@ The GitHub commit is acceptable only when all CI jobs pass on the exact commit S
 
 Branch protection for `dev` and `master` must require those checks before merge. A local workflow edit does not change GitHub rulesets; rulesets must be verified after the change is pushed.
 
-The release workflow starts only after a successful `CI` push run for `master`, checks out its exact SHA, and publishes images under that immutable SHA. `latest` is not a deployment input.
+The release workflow starts only after a successful `CI` push run for `master`, checks out its exact SHA, and publishes first-party images under a full-SHA tag. `latest` is not a deployment input, but a full-SHA tag is still mutable registry metadata; release acceptance must not call the image immutable until the deployment records and consumes each image digest.
 
 The native Android CI job produces only a debug-signed installability candidate. A releasable APK is a distinct post-`master` artifact: its signing key is supplied from GitHub secrets, its public certificate SHA-256 is pinned in `ANDROID_RELEASE_CERT_SHA256`, APK Signature Scheme v2 is verified, and an Android Debug certificate is rejected. The production keystore must have an independently retained recovery copy before release.
 

@@ -159,6 +159,54 @@ jobs:
         working-directory: backend-node
         run: npm run test:bdd
 
+      - name: Type-check application and test sources
+        run: make typecheck-node
+
+  test-api-client:
+    name: test-api-client
+    needs: resolve-run-mode
+    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: packages/api-client/package-lock.json
+
+      - name: Install API client dependencies
+        working-directory: packages/api-client
+        run: npm ci
+
+      - name: Test API client runtime and declarations
+        run: make test-api-client
+
+  test-mcp-adapter:
+    name: test-mcp-adapter
+    needs: resolve-run-mode
+    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup pinned uv runner
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.17"
+
+      - name: Test MCP adapter with warnings as errors
+        run: make test-mcp
+
   test-frontend:
     name: test-frontend
     needs: resolve-run-mode
@@ -336,7 +384,7 @@ jobs:
 
       - name: Audit production dependencies
         working-directory: backend-ai
-        run: python -m pip_audit -r requirements.txt
+        run: python scripts/production_dependency_audit.py
 
       - name: Run tests with coverage
         working-directory: backend-ai
@@ -388,6 +436,9 @@ jobs:
             ${{ runner.temp }}/eisenhower-ai-candidates/ragops-commitment.json
           if-no-files-found: error
           retention-days: 14
+
+      - name: Enforce clean Python lint gate
+        run: make lint-ai BACKEND_AI_PYTHON=python
 
   test-mobile:
     name: test-mobile

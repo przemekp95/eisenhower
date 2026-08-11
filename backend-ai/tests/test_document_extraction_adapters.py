@@ -1,6 +1,8 @@
 from hashlib import sha256
+from importlib.metadata import version
 import json
 from pathlib import Path
+import re
 
 import pytest
 
@@ -23,6 +25,31 @@ from app.document_extraction.models import (
 )
 from app.document_extraction.inspection import LocalDocumentInspector
 from app.document_extraction.policy import FrozenManifestExtractionPolicy
+
+
+DOCLING_2_119_TABLE_IMAGE_WARNING = (
+  "This field is deprecated. Use `generate_page_images=True` and call "
+  "`TableItem.get_image()` to extract table images from page images."
+)
+
+
+def extract_with_known_docling_2_119_warning(extractor, request):
+  """Pin the narrow upstream warning until Docling is upgraded from 2.119.0."""
+  assert version("docling") == "2.119.0"
+  with pytest.warns(
+    DeprecationWarning,
+    match=re.escape(DOCLING_2_119_TABLE_IMAGE_WARNING),
+  ) as observed:
+    result = extractor.extract(request)
+
+  assert len(observed) == 1
+  warning = observed[0]
+  assert str(warning.message) == DOCLING_2_119_TABLE_IMAGE_WARNING
+  assert Path(warning.filename).as_posix().endswith(
+    "/docling/pipeline/standard_pdf_pipeline.py"
+  )
+  assert warning.lineno == 599
+  return result
 
 
 def approved(path: Path) -> ApprovedExtractionRequest:
@@ -124,7 +151,10 @@ def test_real_docling_primary_preserves_html_structure_and_security_metadata():
 def test_real_pdf_runs_through_pinned_local_docling_and_unstructured_engines():
   path = Path(__file__).resolve().parents[2] / "corpus" / "approved-documents" / "extraction-golden-pdf.pdf"
 
-  primary = DoclingDocumentExtractor().extract(approved(path))
+  primary = extract_with_known_docling_2_119_warning(
+    DoclingDocumentExtractor(),
+    approved(path),
+  )
   fallback = UnstructuredDocumentExtractor().extract(approved(path))
 
   assert DOCLING_LAYOUT_MODEL_REVISION == "40bde044036bb181c130ddf6c51792187268748f"
@@ -150,7 +180,7 @@ def test_real_ocr_uses_the_exact_owner_frozen_receipt_and_local_tesseract_cli():
     ocr=OCRRequest(languages=["en"], approval=approval),
   ))
 
-  result = DoclingDocumentExtractor().extract(request)
+  result = extract_with_known_docling_2_119_warning(DoclingDocumentExtractor(), request)
 
   assert "OCR VALIDATION HUMAN APPROVAL REQUIRED" in " ".join(
     item.text for item in result.elements

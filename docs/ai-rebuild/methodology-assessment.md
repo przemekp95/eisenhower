@@ -34,7 +34,9 @@ Local `rag.models`, `ports`, `application`, `ingestion` and `adapters` move in t
 
 ## Hexagonal / ports and adapters
 
-The local code defines `Retriever`, `EmbeddingProvider`, `GenerationProvider`, `DocumentStore`, `IngestionPort` and `FallbackClassifier`. These are useful driven ports. Qdrant, vLLM and MiniLM are adapters; FastAPI/MCP/webhook are driving adapters.
+The local experimental RAG package defines `Retriever`, `EmbeddingProvider`, `GenerationProvider`, `DocumentStore`, `IngestionPort` and `FallbackClassifier`. Qdrant, vLLM and MiniLM are useful driven adapters in that bounded slice; FastAPI, MCP and the webhook are driving adapters. Direct framework, persistence and service dependencies remain elsewhere, so the supported monorepo is pragmatic layered/hybrid rather than strict hexagonal architecture.
+
+ADR 0006 records a light command/query separation for the inactive experimental ingestion path. The supported runtime has no separate read/write models, event sourcing or production message bus, so this is not full CQRS.
 
 Required contract refinements:
 
@@ -50,14 +52,14 @@ Do not let Qdrant payload models or `httpx` exceptions leak into application/dom
 
 ## TDD
 
-Tests exist for several new components, but tests alone do not prove a red-green workflow. Unless failing-before evidence is preserved, describe the process as “test-covered implementation” rather than verified TDD. For remaining work, use explicit red-green-refactor slices: quadrant truth table, authorization failure, retrieval ACL, invalid citations, provider timeout, deterministic ingestion, duplicate webhook/job, MCP allowlist and alias rollback.
+Tests exist for several new components, but tests alone do not prove a red-green workflow. Unless contemporaneous failing-before evidence is preserved, describe the process as “test-covered implementation” rather than verified TDD. Task-scoped implementation records may claim TDD only where they record the intended failing check and the later green check; the resulting green suite alone cannot independently reconstruct that history. For remaining work, use explicit red-green-refactor slices: quadrant truth table, authorization failure, retrieval ACL, invalid citations, provider timeout, deterministic ingestion, duplicate webhook/job, MCP allowlist and alias rollback.
 
 TDD is most valuable around stable policy boundaries. Provider smoke tests and infrastructure experiments may start with characterization/contract tests, but changes are accepted only when repeatable automated evidence exists.
 
 ## BDD
 
-Ordinary unit/integration tests are not BDD. The local repository has test files but this assessment does not establish executable Gherkin, shared product scenarios or living behavior documentation. Add a small set of cross-service acceptance scenarios from [testing-evaluation.md](testing-evaluation.md), reviewed by product/security/engineering, and run them in a production-like topology. Avoid converting every unit test into verbose Given-When-Then syntax.
+Ordinary unit/integration tests are not BDD. The Node task API has a bounded executable Cucumber/Gherkin slice under `backend-node/features/`, run by `npm run test:bdd`, covering the four quadrants, task movement/deletion, tenant isolation, bearer authentication, trusted/untrusted browser origins and request validation. It is living behavior documentation for that slice only, not evidence of repository-wide BDD. The cross-service AI/RAG scenarios in [testing-evaluation.md](testing-evaluation.md) remain specification examples rather than an executable acceptance suite. Avoid converting every unit test into verbose Given-When-Then syntax.
 
 ## Methodology gate
 
-Go when bounded-context ownership and canonical terms are accepted, ports have adapter contract tests, domain/application code does not import infrastructure, red-green evidence is recorded for new policy work, and critical behavior scenarios are executable. Do not claim full DDD, TDD or BDD adoption without this evidence.
+Go when bounded-context ownership and canonical terms are accepted, ports have adapter contract tests, domain/application code does not import infrastructure, red-green evidence is recorded for new policy work, and critical behavior scenarios are executable. Do not claim full DDD, strict hexagonal architecture, CQRS, TDD or repository-wide BDD adoption without this evidence.

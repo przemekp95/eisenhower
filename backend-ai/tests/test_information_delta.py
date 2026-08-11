@@ -6,6 +6,9 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
+from test_generation_contract import _prompt_spec
+from test_prompt_renderer import WordCounter
+
 from app.generation.delta import (
   InformationDeltaValidator,
   InformationDeltaViolation,
@@ -22,10 +25,6 @@ from app.generation.registry import PromptRegistry
 from app.rag.adapters import VLLMGenerationProvider
 from app.rag.application import RagAnalysisService
 from app.rag.models import AccessScope, GenerationRequest, RetrievalHit
-
-from test_generation_contract import _prompt_spec
-from test_prompt_renderer import WordCounter
-
 
 class SemanticGroups:
   version = "test-multilingual-semantic-groups-v1"

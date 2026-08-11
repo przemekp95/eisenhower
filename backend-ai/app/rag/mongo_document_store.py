@@ -3,7 +3,7 @@ from __future__ import annotations
 from hashlib import sha256
 from typing import Any
 
-from .canonical import CanonicalWriteStatus
+from .canonical import CanonicalDocumentState, CanonicalWriteStatus
 from .models import SourceDocument
 
 
@@ -82,6 +82,15 @@ class MongoCanonicalDocumentStore:
   def get(self, tenant_id: str, document_id: str) -> SourceDocument | None:
     record = self.collection.find_one({"tenant_id": tenant_id, "document_id": document_id})
     return self._source_document(record) if record is not None else None
+
+  def retrieval_state(self, tenant_id: str, document_id: str) -> CanonicalDocumentState | None:
+    record = self.collection.find_one({"tenant_id": tenant_id, "document_id": document_id})
+    if record is None:
+      return None
+    return CanonicalDocumentState(
+      document=self._source_document(record),
+      projection_pending=record.get("projection_pending") is not False,
+    )
 
   def _classify_existing(self, candidate: SourceDocument) -> CanonicalWriteStatus:
     current = self.collection.find_one(

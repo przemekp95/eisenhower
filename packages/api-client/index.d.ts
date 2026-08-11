@@ -39,19 +39,22 @@ export interface ClassificationResultDto {
   urgent: boolean;
   important: boolean;
   quadrant: Quadrant;
-  quadrant_name: string;
+  quadrant_name: QuadrantDefinition['name'];
   timestamp: string;
   method: string;
   confidence?: number;
   confidence_calibrated?: boolean;
   requires_confirmation?: boolean;
   confidence_status?: 'accepted' | 'low';
+  local_scores: Record<string, number>;
+  similar_examples_used: number;
+  top_similar_examples: SimilarExampleResultDto[];
 }
 
 export interface SimilarExampleResultDto {
   text: string;
   quadrant: Quadrant;
-  quadrant_name: string;
+  quadrant_name: QuadrantDefinition['name'];
   source: string;
   score: number;
 }
@@ -96,8 +99,8 @@ export interface CitationDto {
 
 export interface GroundedAnalysisDto {
   mode: 'rag' | 'fallback' | 'no_answer';
-  quadrant: number | null;
-  quadrant_name: string | null;
+  quadrant: Quadrant | null;
+  quadrant_name: QuadrantDefinition['name'] | null;
   confidence: number | null;
   explanation: string;
   citations: CitationDto[];
@@ -107,6 +110,35 @@ export interface GroundedAnalysisDto {
     embedding_version: string | null;
   };
   fallback_reason?: string | null;
+  generation?: GenerationMetadataDto | null;
+  information_delta?: InformationDeltaDto | null;
+}
+
+export interface GenerationMetadataDto {
+  execution_id: string;
+  prompt_id: string;
+  prompt_version: string;
+  model_id: string;
+  model_revision: string;
+  schema_version: string;
+  language: 'pl' | 'en';
+  input_tokens: number;
+}
+
+export interface InformationDeltaClaimDto {
+  claim_id: string;
+  statement: string;
+  relation: 'new_information' | 'confirmation' | 'contradiction' | 'update' | 'necessary_reminder';
+  compared_to_statement_ids: string[];
+  citation_ids: string[];
+  reminder_reason?: 'direct_answer' | 'decision_constraint' | 'safety_constraint' | null;
+}
+
+export interface InformationDeltaDto {
+  status: 'new_information' | 'mixed' | 'confirmation_only' | 'no_new_information' | 'freshness_unverified';
+  claims: InformationDeltaClaimDto[];
+  summary_code: 'grounded_delta_available' | 'known_information_only' | 'no_new_information' | 'current_world_freshness_unverified';
+  world_freshness: 'frozen_corpus_snapshot_not_current_world';
 }
 
 export interface KnowledgeSearchDto {
@@ -114,7 +146,7 @@ export interface KnowledgeSearchDto {
   answer: string | null;
   citations: CitationDto[];
   retrieval: GroundedAnalysisDto['retrieval'];
-  no_answer_reason?: string;
+  no_answer_reason?: string | null;
 }
 
 export interface OcrResultDto {
@@ -155,14 +187,18 @@ export interface BatchAnalysisResultDto {
     task: string;
     analyses: {
       rag: {
-        quadrant: number;
+        quadrant: Quadrant;
         confidence: number;
         quadrant_name: string;
+        confidence_calibrated?: boolean;
+        requires_confirmation?: boolean;
+        confidence_status?: 'accepted' | 'low';
       };
       langchain: {
-        quadrant: number;
+        quadrant: Quadrant | null;
         confidence: number;
         reasoning: string;
+        method: string;
       };
     };
   }>;
@@ -186,6 +222,7 @@ export interface TrainingStatsDto {
   model_validation_skipped?: boolean;
   model_error?: string | null;
   last_updated: string;
+  quadrant_names: Record<string, string>;
 }
 
 export interface AIProviderControlDto {
@@ -233,6 +270,17 @@ export interface AICapabilitiesDto {
     last_error?: string | null;
     examples_seen?: number;
   };
+  device: {
+    type: string;
+    name: string;
+    vendor: string;
+    runtime: string;
+    runtime_version: string | null;
+    torch_device: string;
+    count: number;
+    cuda_version: string | null;
+    accelerated: boolean;
+  };
 }
 
 export interface TrainingDataClearResultDto {
@@ -240,15 +288,57 @@ export interface TrainingDataClearResultDto {
   remaining_examples: number;
 }
 
+export interface TrainingExampleDto {
+  text: string;
+  quadrant: Quadrant;
+  source: string;
+  timestamp?: string;
+}
+
+export interface TrainingExampleAddedDto {
+  message: string;
+  example: TrainingExampleDto;
+}
+
+export interface FeedbackResultDto {
+  message: string;
+  predicted_quadrant: Quadrant;
+  correct_quadrant: Quadrant;
+  example: TrainingExampleDto;
+}
+
+export interface RetrainResultDto {
+  message: string;
+  preserve_experience: boolean;
+  preserve_experience_deprecated?: boolean;
+  status: 'completed' | 'rejected';
+  [key: string]: unknown;
+}
+
+export interface OcrFeedbackResultDto {
+  examples_added: number;
+  retrained: boolean;
+  message?: string;
+  source?: string;
+  pending_review?: boolean;
+  training?: RetrainResultDto;
+}
+
+export interface ExamplesByQuadrantDto {
+  quadrant: Quadrant;
+  quadrant_name: QuadrantDefinition['name'];
+  examples: TrainingExampleDto[];
+}
+
 export interface AcceptedOcrTaskDto {
   text: string;
-  quadrant: number;
+  quadrant: Quadrant;
 }
 
 export interface AcceptedOcrLearningTaskLike {
   text?: string;
   title?: string;
-  quadrant?: number;
+  quadrant?: Quadrant;
   urgent?: boolean;
   important?: boolean;
 }
@@ -300,21 +390,26 @@ export interface AiApiClient {
   fetchCapabilities(): Promise<AICapabilitiesDto>;
   fetchTrainingStats(): Promise<TrainingStatsDto>;
   setProviderEnabled(provider: AIProviderName, enabled: boolean): Promise<{ provider: AIProviderName } & AIProviderControlDto>;
-  addTrainingExample(text: string, quadrant: number): Promise<void>;
-  learnFromFeedback(task: string, predictedQuadrant: number, correctQuadrant: number): Promise<void>;
-  learnFromAcceptedOcrTasks(tasks: AcceptedOcrLearningTaskLike[], retrain?: boolean): Promise<{ examples_added: number; retrained: boolean }>;
-  retrainModel(preserveExperience?: boolean): Promise<{ preserve_experience: boolean; preserve_experience_deprecated?: boolean }>;
+  addTrainingExample(text: string, quadrant: Quadrant): Promise<TrainingExampleAddedDto>;
+  learnFromFeedback(task: string, predictedQuadrant: Quadrant, correctQuadrant: Quadrant): Promise<FeedbackResultDto>;
+  learnFromAcceptedOcrTasks(tasks: AcceptedOcrLearningTaskLike[], retrain?: boolean): Promise<OcrFeedbackResultDto>;
+  retrainModel(preserveExperience?: boolean): Promise<RetrainResultDto>;
   clearTrainingData(keepDefaults?: boolean): Promise<TrainingDataClearResultDto>;
-  getExamplesByQuadrant(quadrant: number, limit?: number): Promise<{ examples: Array<{ text: string; quadrant: number }> }>;
+  getExamplesByQuadrant(quadrant: Quadrant, limit?: number): Promise<ExamplesByQuadrantDto>;
 }
 
 export function buildUrl(baseUrl: string, path: string): string;
 export function createRequestError(message: string, details?: { code?: string; status?: number }): Error & { code?: string; status?: number };
-export function readJson<T>(response: Response, options?: { defaultError?: string; errorCode?: string }): Promise<T>;
+export function readJson<T>(response: Response, options?: {
+  defaultError?: string;
+  errorCode?: string;
+  validate?: (value: unknown) => boolean;
+  invalidResponse?: string;
+}): Promise<T>;
 export function toTaskInputDto(task: Partial<TaskInputDto> & { title: string }): TaskInputDto;
 export function toTaskPatchDto(patch: Partial<TaskInputDto>): Partial<TaskInputDto>;
-export function resolveTaskQuadrant(task: AcceptedOcrLearningTaskLike): number;
-export function toAcceptedOcrLearningPayload(tasks: AcceptedOcrLearningTaskLike[]): Array<{ task: string; quadrant: number }>;
+export function resolveTaskQuadrant(task: AcceptedOcrLearningTaskLike): Quadrant;
+export function toAcceptedOcrLearningPayload(tasks: AcceptedOcrLearningTaskLike[]): Array<{ task: string; quadrant: Quadrant }>;
 export interface ApiClientOptions {
   fetch?: typeof fetch;
   accessToken?: string | (() => string | null);

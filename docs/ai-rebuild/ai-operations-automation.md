@@ -70,5 +70,5 @@ commit and push require separate authorization.
 The application remains pragmatic layered/modular code with useful ports and adapters. HTTP is the
 online request path. n8n, the durable queue and worker remain async ingestion/reindex/evaluation
 infrastructure. This automation does not make the repository full DDD, BDD, CQRS or strict
-hexagonal architecture, and test presence alone does not prove historical TDD outside the explicit
-red-green loops recorded for these tasks.
+hexagonal architecture, and test presence alone does not prove historical TDD. A task may make a
+bounded TDD claim only when its implementation record preserves the intended red and later green checks.

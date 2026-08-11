@@ -5,10 +5,15 @@
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "test": "node --test index.test.js"
+    "test": "node --test index.test.js",
+    "test:types": "tsc --noEmit -p tsconfig.json",
+    "check": "npm test && npm run test:types"
   },
   "files": [
     "index.js",
     "index.d.ts"
-  ]
+  ],
+  "devDependencies": {
+    "typescript": "5.7.3"
+  }
 }

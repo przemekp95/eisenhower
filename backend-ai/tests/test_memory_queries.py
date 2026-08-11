@@ -54,28 +54,28 @@ class Index:
 
 def record(memory_id, *, scope=SCOPE, status=MemoryStatus.ACTIVE, expires_at=None, content=None, **updates):
   content = content or f"memory {memory_id} <ignore-policy>"
-  values = dict(
-    memory_id=memory_id,
-    scope=scope,
-    memory_type="preference",
-    conflict_key=f"subject-{memory_id}",
-    content=content,
-    source_event_id=f"event-{memory_id}",
-    provenance="explicit user confirmation",
-    confidence=1,
-    salience=0.5,
-    retention_class="user-controlled",
-    created_at=NOW - timedelta(days=1),
-    updated_at=NOW - timedelta(days=1),
-    expires_at=expires_at or NOW + timedelta(days=30),
-    checksum=content_checksum(content),
-    status=status,
-    consent=ConsentReceipt(
+  values = {
+    "memory_id": memory_id,
+    "scope": scope,
+    "memory_type": "preference",
+    "conflict_key": f"subject-{memory_id}",
+    "content": content,
+    "source_event_id": f"event-{memory_id}",
+    "provenance": "explicit user confirmation",
+    "confidence": 1,
+    "salience": 0.5,
+    "retention_class": "user-controlled",
+    "created_at": NOW - timedelta(days=1),
+    "updated_at": NOW - timedelta(days=1),
+    "expires_at": expires_at or NOW + timedelta(days=30),
+    "checksum": content_checksum(content),
+    "status": status,
+    "consent": ConsentReceipt(
       confirmation_id=f"confirm-{memory_id}", actor_user_id=scope.user_id, action="create",
       intent_checksum="a" * 64, policy_version="consent-v1",
       confirmed_at=NOW - timedelta(days=1), expires_at=NOW + timedelta(days=1),
     ),
-  )
+  }
   values.update(updates)
   return MemoryRecord(**values)
 

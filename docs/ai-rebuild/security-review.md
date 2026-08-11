@@ -1,16 +1,18 @@
 # Security and privacy review
 
-Scope: FastAPI HTTP, browser/mobile clients, Qdrant, vLLM, n8n webhooks/jobs and MCP. This is a threat review and required control set, not proof that a production security assessment has passed.
+Scope: Express and FastAPI HTTP, the same-origin web proxy, browser/mobile clients, Qdrant, vLLM, n8n webhooks/jobs and MCP. This is a threat review and required control set, not proof that a production security assessment has passed.
 
 ## Trust boundaries
 
 ```mermaid
 flowchart TB
-  INTERNET((Untrusted network)) --> GW[Public TLS gateway]
-  BROWSER[Browser / mobile] --> GW
+  INTERNET((Untrusted network)) --> EDGE[Public TLS / edge]
+  BROWSER[Browser / mobile] --> EDGE
+  EDGE --> WEB[Web Nginx /api and /ai proxy]
+  WEB --> NODE[Express task API]
+  WEB --> API[FastAPI AI API]
   MCPCLIENT[MCP client] --> MCP[MCP adapter]
-  MCP --> GW
-  GW --> API[FastAPI]
+  MCP --> EDGE
   API --> Q[(Private Qdrant)]
   API --> V[Private vLLM]
   SOURCE[Allowlisted source] --> WH[Signed webhook ingress]
@@ -20,16 +22,16 @@ flowchart TB
   API --> OBS[Sanitized audit/telemetry]
 ```
 
-Only the gateway is public. Qdrant, vLLM, n8n UI/workers and internal command endpoints bind privately and use service authentication. Network location is defense in depth, not identity.
+The target exposes only the public edge and keeps Express, FastAPI, Qdrant, vLLM, n8n UI/workers and internal command endpoints private. The shipped web Nginx provides the same-origin `/api` and `/ai` hop inside Compose; repository configuration does not prove the external TLS/edge boundary. Network location is defense in depth, not identity.
 
 ## Required controls
 
 | Axis | Threat | Required control | Local evidence / gap |
 | --- | --- | --- | --- |
-| Bearer/OAuth | stolen/forged tokens, confused deputy | OIDC issuer/audience/expiry/signature validation; narrow scopes; short TTL; key rotation; separate service audience | FastAPI and Node OIDC/JWKS verifiers exist; live IdP and rotation unverified |
-| CSRF/browser requests | cross-site state change | Prefer Authorization header rather than cookies; exact CORS allowlist; reject untrusted `Origin` on unsafe methods; if cookies are introduced, add CSRF token + SameSite policy | Bearer middleware and Origin check exist locally; gateway behavior unverified |
-| CORS | hostile browser origin or credential leakage | Never wildcard with credentials; allow only required origins/methods/headers; validate preflight and reverse-proxy headers | Local FastAPI allowlist exists; production origins unknown |
-| HTTP transport | interception, smuggling, redirect/token leak | TLS externally and private TLS/mTLS where required; fixed upstream URLs; no redirects for credentials; request/body limits; proxy normalization | vLLM adapter rejects public endpoint and redirects; end-to-end TLS unknown |
+| Bearer/OAuth | stolen/forged tokens, confused deputy | OIDC issuer/audience/expiry/signature validation; narrow scopes; short TTL; key rotation; separate service audience | The shared web client supplies `Authorization: Bearer`; Express and FastAPI bearer/OIDC verification exists; live IdP and rotation are unverified |
+| CSRF/browser requests | cross-site state change | Use explicit Authorization rather than ambient cookie auth; exact CORS allowlist; reject untrusted `Origin` on unsafe methods; if cookies are introduced, add CSRF token + SameSite policy | The web adapter uses `credentials: 'omit'`; both APIs reject an untrusted present Origin and ignore cookies for auth; public edge behavior remains unverified |
+| CORS | hostile browser origin or credential leakage | Never wildcard with credentials; allow only required origins/methods/headers; validate preflight and reverse-proxy headers | Express uses `credentials: false`; FastAPI uses `allow_credentials=False`; both use configured allowlists, but production origins/runtime headers are unverified |
+| HTTP transport | interception, smuggling, redirect/token leak | TLS externally and private TLS/mTLS where required; fixed upstream URLs; no redirects for credentials; request/body limits; proxy normalization | Web Nginx proxies `/api` and `/ai` over Compose HTTP and sets forwarded headers; the vLLM adapter rejects public endpoints and redirects; end-to-end TLS and trusted proxy normalization are unknown |
 | SSRF | connector or model induces fetch | Dedicated allowlisted connectors; parse/resolve host; block loopback/link-local/metadata/private ranges as policy requires; pin redirect/DNS behavior; no generic fetch tool | vLLM URL fixed; source fetch boundary not implemented end to end |
 | Webhooks | forgery/replay/body ambiguity | Versioned HMAC over timestamp + method + path + exact raw bytes; constant-time compare; five-minute window; durable unique event ID longer than retry; fail-closed schema/body limit | FastAPI and the inactive n8n workflow now preserve exact raw bytes locally, bind `v1`/`POST`/the ingress path, enforce 8 MiB plus strict schema parsing and reserve replay IDs atomically for 24 hours; no imported workflow or deployed ingress is claimed |
 | Prompt injection | corpus tells model to ignore policy/exfiltrate | Treat task/context/tool text as data; delimit context; minimal system prompt; no tools for generator; validate JSON/citations; redact secrets before index | Prompt warns that chunks are untrusted; adversarial evaluation still required |
@@ -46,9 +48,15 @@ OIDC/JWT verification must allowlist algorithms, require issuer/audience/subject
 
 ## Browser, mobile and CSRF
 
-With bearer tokens in the `Authorization` header and no ambient cookie credential, classic CSRF exposure is reduced, but malicious origins and token exfiltration still matter. Unsafe browser methods must validate `Origin`; missing Origin is acceptable only for authenticated non-browser clients under gateway policy. CORS is not authentication. Do not persist long-lived tokens in `localStorage`; use platform-secure storage/mobile keystore or a reviewed BFF/session design.
+The web/shared client supplies bearer tokens in the `Authorization` header, and neither API authenticates through ambient cookies. Classic credentialed CSRF is therefore not applicable to the current authentication contract. Malicious origins and token exfiltration still matter: unsafe browser methods validate a present `Origin`, while a missing Origin is accepted for authenticated non-browser clients. CORS is browser response policy, not authentication, and both APIs disable credentialed CORS.
+
+The production web adapter explicitly sets `credentials: 'omit'` for every task and AI request while preserving the bearer header. A regression test covers both client factories. This is defense in depth for the current bearer-only contract, not permission to weaken backend authentication, Origin checks or CORS. Do not persist long-lived tokens in `localStorage`; use platform-secure storage/mobile keystore or a reviewed BFF/session design.
 
 If browser auth later changes to cookies, this review must be reopened: use `Secure`, `HttpOnly`, restrictive `SameSite`, per-request CSRF protection for unsafe methods, and login/logout CSRF defenses.
+
+## Same-origin proxy boundary
+
+`web/nginx.conf` routes `/api/` to `api-service:3001` and `/ai/` to `ai-service:8000` over the Compose network. Nginx forwards request headers by default and explicitly sets `Host`, `X-Real-IP`, `X-Forwarded-For` and `X-Forwarded-Proto`; it does not replace bearer or Origin validation in either API. This local configuration is not evidence that a public TLS terminator preserves the required headers, normalizes conflicting forwarded headers, limits requests correctly or avoids redirects. Verify those properties against the deployed edge and exact release SHA.
 
 ## Webhook and job security
 
