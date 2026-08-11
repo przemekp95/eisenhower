@@ -2,6 +2,9 @@ from __future__ import annotations
 from typing import List, Dict, Optional, Any, Iterable, Callable
 from uuid import UUID
 
+# This research-only adapter is linted in the standard CI environment without
+# installing its deliberately isolated optional framework dependencies.
+# pylint: disable=import-error
 from langchain_core.documents import Document
 from langchain_core.vectorstores import VectorStore
 from langchain_core.embeddings import Embeddings

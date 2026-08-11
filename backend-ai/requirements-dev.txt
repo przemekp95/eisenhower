@@ -1,5 +1,4 @@
 -r requirements.txt
--r requirements-experimental.txt
 
 pytest==9.0.2
 pytest-cov==7.0.0
