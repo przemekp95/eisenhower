@@ -11,6 +11,7 @@
 2026-08-11 — TASK-032: Added deterministic candidate-only MLOps composition over grouped-CV/five-seed/leakage/slice/baseline/incumbent gates; public CI uploads only an allowlisted commitment while full private lineage stays runner-local, without changing model or human/production gates.
 
 2026-08-11 — TASK-031: Added the dependency-light immutable AI candidate manifest and private content-addressed registry/CLI with complete explicit lineage, overwrite/conflict/tamper rejection and no promotion semantics; 45 focused/regression tests passed and pylint rated the new code 10.00/10.
+2026-08-11 — TASK-030: Merged green PR #154 with executable BDD to `dev` as `0721ca8f2edbeb4216622f315b23d62119cb5d83` after all required checks, including native Android, passed; `master` and production were unchanged.
 
 2026-08-11 — TASK-029: Expanded executable BDD to 15 scenarios/59 steps for task behavior, bearer and browser-origin protection, validation and environment isolation; after current `origin/dev` integration the hostile-env check, full `make verify`, actionlint and YAML parsing passed.
 

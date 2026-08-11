@@ -1,19 +1,5 @@
 # In Progress
 
-## TASK-030: Promote executable BDD to green dev
-**Priority:** P1 | **Tags:** bdd, delivery, dev, ci
-
-Publish the completed TASK-029 BDD package through a pull request to `dev`, require every repository check to pass, merge only after green CI, and verify the resulting remote `dev` commit. Do not modify `master` or deploy production.
-
-### Plan
-
-- Commit only the intended BDD, documentation, CI, and TaskPlanner changes on a dedicated branch.
-- Integrate the latest `origin/dev` without losing or stashing the dirty worktree, then rerun release-level local verification.
-- Push the branch, open a detailed PR to `dev`, and wait for all required checks before merging.
-- Close the TaskPlanner promotion state through a follow-up PR if necessary and independently verify the final `origin/dev` SHA.
-
----
-
 ## TASK-013: Approve representative retrieval quality gates
 **Priority:** P1 | **Tags:** rag, evaluation, recall, mrr, human-gate
 

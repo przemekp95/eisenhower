@@ -100,6 +100,24 @@ Create one dependency-light, immutable candidate manifest that binds Git SHA, da
 ### Outcome
 
 Added a strict checksummed `ai-candidate-v1` lineage contract with explicit applicable/not-applicable groups for datasets, model/encoder, prompts, schemas, corpus, Qdrant, runtime and reports. Added a private filesystem registry with content-addressed blobs, `0700` directories, `0600` files, exclusive creation, idempotent identical registration, conflict/tamper detection and no delete or promotion operation, plus a register/verify CLI. No MLflow or persistent service was introduced. TDD evidence: the collected test first failed because `app.artifacts` did not exist; the CLI slice separately failed on the missing CLI module. Green evidence: 5 focused tests and 45 artifact/prompt/model/evaluation tests passed, and pylint rated the new modules 10.00/10.
+## TASK-030: Promote executable BDD to green dev
+**Priority:** P1 | **Tags:** bdd, delivery, dev, ci
+
+Publish the completed TASK-029 BDD package through a pull request to `dev`, require every repository check to pass, merge only after green CI, and verify the resulting remote `dev` commit. Do not modify `master` or deploy production.
+
+### Plan
+
+- Commit only the intended BDD, documentation, CI, and TaskPlanner changes on a dedicated branch.
+- Integrate the latest `origin/dev` without losing or stashing the dirty worktree, then rerun release-level local verification.
+- Push the branch, open a detailed PR to `dev`, and wait for all required checks before merging.
+- Close the TaskPlanner promotion state through a follow-up PR if necessary and independently verify the final `origin/dev` SHA.
+
+### Outcome
+
+Reconciled the local package with PR #153 without stash or data loss, renumbered the colliding local tasks to TASK-029/TASK-030, and reran the complete local release-quality gate. Green PR #154 passed branch policy, security/Trivy, Node including 15 BDD scenarios/59 steps, frontend unit/integration/Playwright, backend AI, mobile and native Android checks, then merged to `dev` as `0721ca8f2edbeb4216622f315b23d62119cb5d83`. The remote merge SHA was fetched and verified before this follow-up state update. `master` and production were not changed.
+
+---
+
 ## TASK-029: Add executable BDD for task behavior
 **Priority:** P2 | **Tags:** testing, bdd, cucumber, backend-node
 
