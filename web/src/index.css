@@ -221,21 +221,18 @@
       box-shadow:
         0 0 0 0 rgba(103, 232, 249, 0),
         0 0 0 rgba(34, 211, 238, 0);
-      transform: translateY(0);
     }
 
     18% {
       box-shadow:
         0 0 0 0 rgba(103, 232, 249, 0.32),
         0 0 0 rgba(34, 211, 238, 0.12);
-      transform: translateY(0);
     }
 
     58% {
       box-shadow:
         0 0 0 12px rgba(103, 232, 249, 0),
         0 0 22px rgba(34, 211, 238, 0.18);
-      transform: translateY(-1px);
     }
   }
 
