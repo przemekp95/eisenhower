@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from hashlib import sha256
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -98,7 +99,7 @@ def write_dataset(path: Path, records: tuple[HistoryRecord, ...]) -> DatasetRece
     for item in ordered
   ).encode()
   path.parent.mkdir(parents=True, exist_ok=True)
-  path.write_bytes(payload)
+  _write_immutable(path, payload)
   counts = {"required": 0, "safe_to_skip": 0, "unknown": 0}
   for record in ordered:
     for label in record.labels.values():
@@ -120,3 +121,22 @@ def read_dataset(path: Path) -> tuple[HistoryRecord, ...]:
     except ValueError as issue:
       raise ValueError(f"invalid CI history record on line {line_number}") from issue
   return tuple(records)
+
+
+def _write_immutable(path: Path, payload: bytes) -> None:
+  try:
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+  except FileExistsError as issue:
+    if path.read_bytes() != payload:
+      raise ValueError("immutable CI impact dataset conflict") from issue
+    return
+  try:
+    remaining = memoryview(payload)
+    while remaining:
+      written = os.write(descriptor, remaining)
+      if written <= 0:
+        raise OSError("immutable dataset write made no progress")
+      remaining = remaining[written:]
+    os.fsync(descriptor)
+  finally:
+    os.close(descriptor)

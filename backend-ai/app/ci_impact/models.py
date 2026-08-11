@@ -157,6 +157,22 @@ class JobConfig(FrozenModel):
       raise ValueError("probability thresholds must be between zero and one")
     if any(not set(jobs).issubset(universe) for jobs in self.rule_paths.values()):
       raise ValueError("rule path maps to an unknown job")
+    if len(set(self.known_path_prefixes)) != len(self.known_path_prefixes):
+      raise ValueError("known path prefixes contain duplicates")
+    for prefix in self.known_path_prefixes:
+      if not prefix.endswith("/") or len(prefix) > 256:
+        raise ValueError("known path prefix must be a bounded directory prefix")
+      if _safe_relative_path(prefix[:-1]) + "/" != prefix:
+        raise ValueError("known path prefix is not normalized")
+    for prefix, jobs in self.rule_paths.items():
+      if not prefix.endswith("/") or len(prefix) > 256:
+        raise ValueError("rule path must be a bounded directory prefix")
+      if _safe_relative_path(prefix[:-1]) + "/" != prefix:
+        raise ValueError("rule path is not normalized")
+      if not any(prefix.startswith(known) for known in self.known_path_prefixes):
+        raise ValueError("rule path is outside known path prefixes")
+      if not jobs or len(set(jobs)) != len(jobs):
+        raise ValueError("rule path jobs must be non-empty and unique")
     return self
 
   def checksum(self) -> str:
@@ -167,6 +183,34 @@ class JobConfig(FrozenModel):
   def classifier_jobs(self) -> tuple[str, ...]:
     deterministic = set(self.deterministic_jobs)
     return tuple(job for job in self.all_jobs if job not in deterministic)
+
+
+class DeterministicTargetAdapter(FrozenModel):
+  schema_version: Literal["ci-impact-deterministic-adapter-v1"] = "ci-impact-deterministic-adapter-v1"
+  plan_version: Literal["ci-impact-plan/v1"] = "ci-impact-plan/v1"
+  target_to_jobs: dict[str, tuple[str, ...]]
+
+  @model_validator(mode="after")
+  def validate_mapping(self):
+    if not self.target_to_jobs or any(not SAFE_JOB_PATTERN.fullmatch(target) for target in self.target_to_jobs):
+      raise ValueError("deterministic adapter contains an invalid target")
+    if any(not jobs or any(not SAFE_JOB_PATTERN.fullmatch(job) for job in jobs) for jobs in self.target_to_jobs.values()):
+      raise ValueError("deterministic adapter contains invalid job mappings")
+    return self
+
+  def checksum(self) -> str:
+    payload = json.dumps(self.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+    return sha256(payload.encode()).hexdigest()
+
+  def jobs_for(self, targets: tuple[str, ...], config: JobConfig) -> tuple[str, ...]:
+    if any(target not in self.target_to_jobs for target in targets):
+      raise ValueError("deterministic plan contains an unknown target")
+    mapped = tuple(dict.fromkeys(
+      job for target in targets for job in self.target_to_jobs[target]
+    ))
+    if not set(mapped).issubset(config.all_jobs):
+      raise ValueError("deterministic adapter maps outside the canonical job universe")
+    return tuple(job for job in config.all_jobs if job in set(mapped))
 
 
 class FeatureVector(FrozenModel):
@@ -192,6 +236,7 @@ class ShadowPlan(FrozenModel):
   schema_version: Literal["ci-impact-shadow-plan-v1"] = "ci-impact-shadow-plan-v1"
   mode: Literal["shadow"] = "shadow"
   probabilities: dict[str, float]
+  canonical_jobs: tuple[str, ...]
   deterministic_jobs: tuple[str, ...]
   classifier_jobs: tuple[str, ...]
   effective_jobs: tuple[str, ...]
@@ -202,7 +247,16 @@ class ShadowPlan(FrozenModel):
 
   @model_validator(mode="after")
   def enforce_additive_contract(self):
+    universe = set(self.canonical_jobs)
+    if len(universe) != len(self.canonical_jobs) or any(
+      not SAFE_JOB_PATTERN.fullmatch(job) for job in self.canonical_jobs
+    ):
+      raise ValueError("canonical jobs must be unique safe identifiers")
+    if not set((*self.deterministic_jobs, *self.classifier_jobs, *self.probabilities)).issubset(universe):
+      raise ValueError("shadow plan contains a job outside the canonical universe")
     expected = tuple(dict.fromkeys((*self.deterministic_jobs, *self.classifier_jobs)))
+    if self.full_ci and self.effective_jobs != self.canonical_jobs:
+      raise ValueError("full CI must contain the exact canonical job universe")
     if not self.full_ci and self.effective_jobs != expected:
       raise ValueError("effective jobs must be deterministic_jobs UNION classifier_jobs")
     if self.abstain != self.full_ci:

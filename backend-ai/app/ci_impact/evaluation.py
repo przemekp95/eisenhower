@@ -17,6 +17,7 @@ class EvaluationCase(BaseModel):
   labels: dict[str, LabelValue]
   abstain: bool
   change_fingerprint: str | None = None
+  stability_variant: str | None = None
 
 
 class JobMetrics(BaseModel):
@@ -88,9 +89,9 @@ def _per_job(cases: tuple[EvaluationCase, ...]) -> dict[str, JobMetrics]:
     reviewed = [case for case in cases if case.labels.get(job) in {"required", "safe_to_skip"}]
     required = [case for case in reviewed if case.labels[job] == "required"]
     safe = [case for case in reviewed if case.labels[job] == "safe_to_skip"]
-    selected = [case for case in reviewed if job in case.selected_jobs]
+    selected = [case for case in reviewed if not case.abstain and job in case.selected_jobs]
     true_selected = sum(case.labels[job] == "required" for case in selected)
-    recall = sum(job in case.selected_jobs for case in required) / len(required) if required else None
+    recall = sum(not case.abstain and job in case.selected_jobs for case in required) / len(required) if required else None
     targets_and_probabilities = [
       (float(case.labels[job] == "required"), case.probabilities[job])
       for case in reviewed if job in case.probabilities
@@ -131,7 +132,10 @@ def _stability(cases: tuple[EvaluationCase, ...]) -> float | None:
   for case in cases:
     if case.change_fingerprint:
       groups[case.change_fingerprint].append(case)
-  repeated = [group for group in groups.values() if len(group) > 1]
+  repeated = [
+    group for group in groups.values()
+    if len({case.stability_variant for case in group if case.stability_variant}) > 1
+  ]
   if not repeated:
     return None
   spreads: list[float] = []

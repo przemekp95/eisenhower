@@ -22,11 +22,18 @@ class ShadowPlanner:
     expected_model_checksum: str | None = None,
     drift_detected: bool = False,
     blocking_reasons: tuple[str, ...] = (),
+    deterministic_jobs: tuple[str, ...] | None = None,
+    deterministic_plan_verified: bool = False,
   ) -> ShadowPlan:
     del changes  # The checksum-bound feature vector is the only model input.
     reasons: list[str] = list(blocking_reasons)
     probabilities: dict[str, float] = {}
     classifier_jobs: tuple[str, ...] = ()
+    additive_jobs = deterministic_jobs if deterministic_jobs is not None else self.config.deterministic_jobs
+    if not deterministic_plan_verified:
+      reasons.append("deterministic_plan_unverified")
+    if not set(additive_jobs).issubset(self.config.all_jobs):
+      reasons.append("deterministic_job_universe_mismatch")
     if model is None:
       reasons.append("model_unavailable")
     elif expected_model_checksum is not None and model.checksum != expected_model_checksum:
@@ -39,7 +46,7 @@ class ShadowPlanner:
       try:
         model_probabilities = model.predict(features.values)
         probabilities = {
-          job: 1.0 if job in self.config.deterministic_jobs else model_probabilities[job]
+          job: 1.0 if job in additive_jobs else model_probabilities[job]
           for job in self.config.all_jobs
         }
       except (ArithmeticError, OverflowError, ValueError):
@@ -68,7 +75,8 @@ class ShadowPlanner:
     if reasons:
       return ShadowPlan(
         probabilities=probabilities,
-        deterministic_jobs=self.config.deterministic_jobs,
+        canonical_jobs=self.config.all_jobs,
+        deterministic_jobs=additive_jobs,
         classifier_jobs=classifier_jobs,
         effective_jobs=self.config.all_jobs,
         abstain=True,
@@ -76,10 +84,11 @@ class ShadowPlanner:
         reasons=tuple(reasons),
         model_checksum=model.checksum if model else None,
       )
-    effective_jobs = tuple(dict.fromkeys((*self.config.deterministic_jobs, *classifier_jobs)))
+    effective_jobs = tuple(job for job in self.config.all_jobs if job in set((*additive_jobs, *classifier_jobs)))
     return ShadowPlan(
       probabilities=probabilities,
-      deterministic_jobs=self.config.deterministic_jobs,
+      canonical_jobs=self.config.all_jobs,
+      deterministic_jobs=additive_jobs,
       classifier_jobs=classifier_jobs,
       effective_jobs=effective_jobs,
       abstain=False,

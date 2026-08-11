@@ -4,6 +4,7 @@
     "test-backend-node",
     "test-api-client",
     "test-mcp-adapter",
+    "test-n8n-workflows",
     "test-frontend",
     "test-frontend-integration",
     "test-frontend-e2e",
@@ -22,6 +23,7 @@
     "docs/",
     "mobile/",
     "mcp/",
+    "n8n/",
     "packages/",
     "web/"
   ],
@@ -35,11 +37,13 @@
     "test-frontend-integration": 0.9,
     "test-mobile": 0.9,
     "test-mobile-native-android": 0.9,
-    "test-mcp-adapter": 0.9
+    "test-mcp-adapter": 0.9,
+    "test-n8n-workflows": 0.9
   },
   "rule_paths": {
     "backend-ai/": [
-      "test-backend-ai"
+      "test-backend-ai",
+      "test-n8n-workflows"
     ],
     "backend-node/": [
       "test-backend-node",
@@ -48,6 +52,10 @@
     ],
     "mcp/": [
       "test-mcp-adapter"
+    ],
+    "n8n/": [
+      "test-n8n-workflows",
+      "test-backend-ai"
     ],
     "mobile/": [
       "test-mobile",
@@ -71,10 +79,13 @@
   "required_context_jobs": [
     "security-lint",
     "test-backend-node",
+    "test-api-client",
+    "test-mcp-adapter",
     "test-frontend",
     "test-frontend-integration",
     "test-frontend-e2e",
     "test-backend-ai",
+    "test-n8n-workflows",
     "test-mobile",
     "test-mobile-native-android"
   ],

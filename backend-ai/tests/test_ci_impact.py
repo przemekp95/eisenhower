@@ -5,20 +5,28 @@ from hashlib import sha256
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 
 from app.ci_impact.artifacts import CiImpactCandidateManifest, CiImpactRegistry, CiImpactRuntimeLineage
 from app.ci_impact.baseline import RuleBaseline
 from app.ci_impact.classifier import MultilabelLogisticModel, TrainingExample
+from app.ci_impact.deterministic import verify_deterministic_plan
 from app.ci_impact.evaluation import EvaluationCase, evaluate, temporal_holdout
 from app.ci_impact.features import FeatureExtractor, LocalDependencyGraph
+from app.ci_impact.git_changes import changes_between
 from app.ci_impact.history import normalize_github_pr, write_dataset
-from app.ci_impact.models import ChangeFile, ChangeSet, JobConfig, JobLabel
-from app.ci_impact.promotion import PromotionPolicy, build_promotion_evidence
+from app.ci_impact.models import (
+  ChangeFile, ChangeSet, DeterministicTargetAdapter, FeatureVector, HistoryRecord, JobConfig,
+  JobLabel, ShadowPlan,
+)
+from app.ci_impact.promotion import CiImpactPromotionEvidence, PromotionPolicy, build_promotion_evidence
+from app.ci_impact.process import BoundedProcessError, run_bounded
 from app.ci_impact.shadow import ShadowPlanner
 from app.ci_impact.training import classify_epochs, require_reviewed_training_labels
 from app.ci_impact.workflow import validate_repository_job_universe
+from scripts import collect_ci_impact_history as history_collector
 
 
 ALL_JOBS = (
@@ -61,6 +69,7 @@ def fixed_model(feature_names: tuple[str, ...], *, bias: float = 2.0) -> Multila
     weights=weights,
     biases=biases,
     training_dataset_sha256="1" * 64,
+    training_seed=7,
   )
 
 
@@ -150,11 +159,17 @@ def test_shadow_is_additive_and_every_model_failure_runs_full_ci():
   features = FeatureExtractor(config=config).extract(changes)
   model = fixed_model(tuple(features.values))
   plan = ShadowPlanner(config=config, minimum_margin=0.1).plan(
-    changes=changes, features=features, model=model
+    changes=changes, features=features, model=model, deterministic_plan_verified=True
   )
   assert set(config.deterministic_jobs).issubset(plan.effective_jobs)
   assert plan.effective_jobs == tuple(dict.fromkeys((*plan.deterministic_jobs, *plan.classifier_jobs)))
   assert plan.full_ci is False
+
+  missing_plan = ShadowPlanner(config=config, minimum_margin=0.1).plan(
+    changes=changes, features=features, model=model
+  )
+  assert missing_plan.full_ci is True
+  assert "deterministic_plan_unverified" in missing_plan.reasons
 
   for kwargs, reason in (
     ({"model": None}, "model_unavailable"),
@@ -178,6 +193,13 @@ def test_shadow_is_additive_and_every_model_failure_runs_full_ci():
   )
   assert lineage_blocked.full_ci is True
   assert "workflow_job_universe_mismatch" in lineage_blocked.reasons
+
+  with pytest.raises(ValueError, match="exact canonical"):
+    ShadowPlan(
+      probabilities={}, canonical_jobs=ALL_JOBS, deterministic_jobs=("security-lint",),
+      classifier_jobs=(), effective_jobs=ALL_JOBS[:-1], abstain=True, full_ci=True,
+      reasons=("invalid_fixture",),
+    )
 
 
 def test_training_is_multilabel_and_ignores_unknown_labels():
@@ -227,8 +249,108 @@ def test_dependency_graph_is_reconstructed_from_exact_git_epoch(tmp_path: Path):
   graph = LocalDependencyGraph.from_git_revision(tmp_path, revision)
   assert graph.impacted_by({"backend-ai/app/leaf.py"}) == ("backend-ai/app/consumer.py",)
   assert graph.unresolved == 0
+  bounded = LocalDependencyGraph.from_git_revision(tmp_path, revision, maximum_file_bytes=5)
+  assert bounded.relevant_unresolved({"backend-ai/app/leaf.py"}) == (
+    "backend-ai/app/consumer.py", "backend-ai/app/leaf.py",
+  )
   with pytest.raises(ValueError, match="full Git SHA"):
     LocalDependencyGraph.from_git_revision(tmp_path, "HEAD")
+
+
+def test_dependency_graph_combines_base_and_head_for_relative_import_delete(tmp_path: Path):
+  (tmp_path / "backend-ai/app/domain").mkdir(parents=True)
+  (tmp_path / "backend-ai/app/domain/leaf.py").write_text("VALUE = 1\n", encoding="utf-8")
+  consumer = tmp_path / "backend-ai/app/domain/consumer.py"
+  consumer.write_text("from .leaf import VALUE\n", encoding="utf-8")
+  for command in (
+    ("git", "init", "-q"), ("git", "add", "."),
+    ("git", "-c", "user.name=CI", "-c", "user.email=ci@example.invalid", "commit", "-qm", "base"),
+  ):
+    subprocess.run(command, cwd=tmp_path, check=True)
+  base = subprocess.run(
+    ("git", "rev-parse", "HEAD"), cwd=tmp_path, check=True, capture_output=True, text=True
+  ).stdout.strip()
+  (tmp_path / "backend-ai/app/domain/leaf.py").unlink()
+  subprocess.run(("git", "add", "-A"), cwd=tmp_path, check=True)
+  subprocess.run(
+    ("git", "-c", "user.name=CI", "-c", "user.email=ci@example.invalid", "commit", "-qm", "delete"),
+    cwd=tmp_path, check=True,
+  )
+  head = subprocess.run(
+    ("git", "rev-parse", "HEAD"), cwd=tmp_path, check=True, capture_output=True, text=True
+  ).stdout.strip()
+  graph = LocalDependencyGraph.combine(
+    LocalDependencyGraph.from_git_revision(tmp_path, base),
+    LocalDependencyGraph.from_git_revision(tmp_path, head),
+  )
+  assert graph.impacted_by({"backend-ai/app/domain/leaf.py"}) == (
+    "backend-ai/app/domain/consumer.py",
+  )
+
+
+def test_dependency_graph_traverses_consumers_beyond_twenty_hops():
+  reverse = {f"module-{index}.py": {f"module-{index + 1}.py"} for index in range(25)}
+  graph = LocalDependencyGraph(reverse_edges=reverse)
+  impacted = graph.impacted_by({"module-0.py"})
+  assert len(impacted) == 25
+  assert "module-25.py" in impacted
+
+
+def test_dependency_graph_syntax_error_and_oversized_source_are_unresolved(tmp_path: Path):
+  source = tmp_path / "backend-ai/app/broken.py"
+  source.parent.mkdir(parents=True)
+  source.write_text("def broken(:\n", encoding="utf-8")
+  graph = LocalDependencyGraph.from_repository(tmp_path)
+  assert graph.relevant_unresolved({"backend-ai/app/broken.py"}) == ("backend-ai/app/broken.py",)
+  source.write_text("x" * 100, encoding="utf-8")
+  bounded = LocalDependencyGraph.from_repository(tmp_path, maximum_file_bytes=10)
+  assert bounded.relevant_unresolved({"backend-ai/app/broken.py"}) == ("backend-ai/app/broken.py",)
+
+
+def test_dynamic_python_import_is_conservatively_unresolved(tmp_path: Path):
+  source = tmp_path / "backend-ai/app/dynamic.py"
+  source.parent.mkdir(parents=True)
+  source.write_text("import importlib\nvalue = importlib.import_module(name)\n", encoding="utf-8")
+  graph = LocalDependencyGraph.from_repository(tmp_path)
+  assert graph.relevant_unresolved({"backend-ai/app/dynamic.py"}) == ("backend-ai/app/dynamic.py",)
+  assert graph.relevant_unresolved({"backend-ai/app/another.py"}) == ("backend-ai/app/dynamic.py",)
+
+
+def test_bounded_process_limits_output_and_time(tmp_path: Path):
+  with pytest.raises(BoundedProcessError, match="stdout limit"):
+    run_bounded(
+      (sys.executable, "-c", "print('x' * 10000)"), cwd=tmp_path, maximum_stdout_bytes=100
+    )
+  with pytest.raises(BoundedProcessError, match="timed out"):
+    run_bounded(
+      (sys.executable, "-c", "import time; time.sleep(1)"), cwd=tmp_path, timeout_seconds=0.05
+    )
+
+
+def test_git_change_set_is_derived_from_exact_revisions(tmp_path: Path):
+  (tmp_path / "old.py").write_text("one\n", encoding="utf-8")
+  subprocess.run(("git", "init", "-q"), cwd=tmp_path, check=True)
+  subprocess.run(("git", "add", "."), cwd=tmp_path, check=True)
+  subprocess.run(
+    ("git", "-c", "user.name=CI", "-c", "user.email=ci@example.invalid", "commit", "-qm", "base"),
+    cwd=tmp_path, check=True,
+  )
+  base = subprocess.run(
+    ("git", "rev-parse", "HEAD"), cwd=tmp_path, check=True, capture_output=True, text=True
+  ).stdout.strip()
+  (tmp_path / "old.py").rename(tmp_path / "new.py")
+  (tmp_path / "new.py").write_text("one\ntwo\n", encoding="utf-8")
+  subprocess.run(("git", "add", "-A"), cwd=tmp_path, check=True)
+  subprocess.run(
+    ("git", "-c", "user.name=CI", "-c", "user.email=ci@example.invalid", "commit", "-qm", "head"),
+    cwd=tmp_path, check=True,
+  )
+  changes = changes_between(tmp_path, base, "HEAD")
+  assert changes.base_sha == base
+  assert changes.files[0].path == "new.py"
+  assert changes.files[0].previous_path == "old.py"
+  assert changes.files[0].status == "renamed"
+  assert changes.files[0].additions == 1
 
 
 def test_history_keeps_green_jobs_unknown_until_manual_review(tmp_path: Path):
@@ -254,6 +376,65 @@ def test_history_keeps_green_jobs_unknown_until_manual_review(tmp_path: Path):
   assert receipt.schema_version == "ci-impact-dataset-v1"
   assert receipt.record_count == 1
   assert receipt.sha256 == sha256(dataset_path.read_bytes()).hexdigest()
+  assert write_dataset(dataset_path, (record,)) == receipt
+  with pytest.raises(ValueError, match="immutable"):
+    write_dataset(dataset_path, ())
+
+
+def test_collector_binds_check_evidence_to_actions_suite_and_pr_head(monkeypatch):
+  pull = {
+    "number": 160, "merged_at": "2026-08-11T23:00:00Z",
+    "base": {"ref": "dev", "sha": "a" * 40, "repo": {"full_name": "owner/repo"}},
+    "head": {"sha": "b" * 40},
+  }
+  trusted = {
+    "name": "test-backend-ai", "conclusion": "success", "id": 1, "run_attempt": 1,
+    "check_suite": {"id": 10}, "app": {"slug": "github-actions"},
+  }
+  foreign = {
+    **trusted, "id": 2, "check_suite": {"id": 20},
+  }
+
+  def fake_gh(endpoint: str, **_kwargs):
+    if endpoint.endswith("pulls?state=closed&base=dev&per_page=100"):
+      return [[pull]]
+    if endpoint.endswith("pulls/160/files?per_page=100"):
+      return [[{
+        "filename": "backend-ai/app/service.py", "status": "modified",
+        "additions": 1, "deletions": 0, "patch": "@@",
+      }]]
+    if "check-runs" in endpoint:
+      return [{"check_runs": [trusted, foreign]}]
+    if "check-suites" in endpoint:
+      return [{"check_suites": [{
+        "id": 10, "head_sha": "b" * 40, "app": {"slug": "github-actions"},
+      }, {
+        "id": 20, "head_sha": "c" * 40, "app": {"slug": "github-actions"},
+      }]}]
+    return {"sha": "d" * 40}
+
+  monkeypatch.setattr(history_collector, "_gh", fake_gh)
+  records = history_collector.collect(
+    repo="owner/repo", base="dev", minimum_pr=160, maximum_pr=160, config=job_config()
+  )
+  assert len(records[0].job_results) == 1
+  assert records[0].job_results[0].run_id == 1
+  with pytest.raises(ValueError, match="range"):
+    history_collector.collect(
+      repo="owner/repo", base="dev", minimum_pr=1, maximum_pr=251, config=job_config()
+    )
+
+
+def test_latest_dataset_remains_unknown_and_cannot_authenticate_reviewers():
+  dataset = (
+    Path(__file__).resolve().parents[1]
+    / "ci-impact/datasets/github-pr-141-160-authenticated-v1.jsonl"
+  )
+  records = tuple(
+    HistoryRecord.model_validate_json(line) for line in dataset.read_text(encoding="utf-8").splitlines()
+  )
+  assert records
+  assert {label.value for record in records for label in record.labels.values()} == {"unknown"}
 
 
 def test_temporal_holdout_and_metrics_cover_required_safety_calibration_and_epochs():
@@ -310,6 +491,9 @@ def test_ci_impact_lineage_is_separate_immutable_and_checksum_bound(tmp_path: Pa
     feature_schema_sha256="c" * 64,
     job_config_sha256="d" * 64,
     workflow_sha256="e" * 64,
+    promotion_policy_sha256="1" * 64,
+    implementation_sha256="2" * 64,
+    deterministic_adapter_sha256="3" * 64,
     runtime=CiImpactRuntimeLineage(name="python", version="3.12", digest="f" * 64),
     model=model_ref,
     evaluation=report_ref,
@@ -382,7 +566,89 @@ def test_checked_in_job_config_matches_current_workflows():
     (repo_root / "backend-ai/ci-impact/config/jobs-v1.json").read_text(encoding="utf-8")
   )
   assert {"test-api-client", "test-mcp-adapter"}.issubset(config.all_jobs)
-  assert validate_repository_job_universe(repo_root, config) == ()
+  assert not validate_repository_job_universe(repo_root, config)
+
+
+def test_deterministic_target_adapter_maps_planner_targets_additively():
+  repo_root = Path(__file__).resolve().parents[2]
+  config = JobConfig.model_validate_json(
+    (repo_root / "backend-ai/ci-impact/config/jobs-v1.json").read_text(encoding="utf-8")
+  )
+  adapter = DeterministicTargetAdapter.model_validate_json(
+    (repo_root / "backend-ai/ci-impact/config/deterministic-target-jobs-v1.json").read_text(
+      encoding="utf-8"
+    )
+  )
+  assert adapter.jobs_for(("security-lint", "n8n", "backend-ai"), config) == (
+    "security-lint", "test-n8n-workflows", "test-backend-ai",
+  )
+  with pytest.raises(ValueError, match="unknown target"):
+    adapter.jobs_for(("invented-target",), config)
+
+
+def test_deterministic_plan_is_bound_to_sha_changes_and_digest():
+  config = job_config()
+  adapter = DeterministicTargetAdapter(
+    plan_version="ci-impact-plan/v1",
+    target_to_jobs={"security-lint": ("security-lint",), "backend-ai": ("test-backend-ai",)},
+  )
+  changes = ({"status": "M", "path": "backend-ai/app/service.py"},)
+  digest_input = {
+    "version": "ci-impact-plan/v1", "eventName": "pull_request", "refName": "feature",
+    "baseRefName": "dev", "mergeBase": "a" * 40, "headSha": "b" * 40,
+    "changes": list(changes), "error": None,
+  }
+  payload = {
+    **{key: digest_input[key] for key in (
+      "version", "eventName", "refName", "baseRefName", "mergeBase", "headSha",
+    )},
+    "inputDigest": "sha256:" + sha256(json.dumps(
+      digest_input, ensure_ascii=False, separators=(",", ":")
+    ).encode()).hexdigest(),
+    "fullCi": False,
+    "targets": ["backend-ai", "security-lint"],
+    "reasons": {"backend-ai": ["test"], "security-lint": ["test"]},
+    "changes": list(changes),
+  }
+  jobs, full_ci = verify_deterministic_plan(
+    payload, expected_base_sha="a" * 40, expected_head_sha="b" * 40,
+    expected_changes=changes, expected_event_name="pull_request", expected_ref_name="feature",
+    expected_base_ref_name="dev", authoritative_plan=payload, adapter=adapter, config=config,
+  )
+  assert jobs == ("security-lint", "test-backend-ai")
+  assert full_ci is False
+  for field, value, message in (
+    ("headSha", "c" * 40, "revision"),
+    ("changes", [], "changes"),
+    ("inputDigest", "sha256:" + "0" * 64, "digest"),
+    ("targets", ["backend-ai"], "canonical planner"),
+    ("fullCi", True, "canonical planner"),
+  ):
+    stale = {**payload, field: value}
+    with pytest.raises(ValueError, match=message):
+      verify_deterministic_plan(
+        stale, expected_base_sha="a" * 40, expected_head_sha="b" * 40,
+        expected_changes=changes, expected_event_name="pull_request", expected_ref_name="feature",
+        expected_base_ref_name="dev", authoritative_plan=payload, adapter=adapter, config=config,
+      )
+
+
+@pytest.mark.parametrize(
+  "update",
+  (
+    {"known_path_prefixes": ("",)},
+    {"known_path_prefixes": ("../",)},
+    {"known_path_prefixes": ("backend-ai",)},
+    {"known_path_prefixes": ("backend-ai/", "backend-ai/")},
+    {"rule_paths": {"": ("test-backend-ai",)}},
+    {"rule_paths": {"outside/": ("test-backend-ai",)}},
+  ),
+)
+def test_job_config_rejects_unscoped_or_malformed_path_prefixes(update: dict):
+  values = job_config().model_dump(mode="python")
+  values.update(update)
+  with pytest.raises(ValueError, match="prefix|rule path|unsafe segment"):
+    JobConfig(**values)
 
 
 def test_unreviewed_history_cannot_train_or_claim_promotion():
@@ -412,7 +678,10 @@ def test_promotion_evidence_requires_metrics_epochs_baseline_and_zero_unsafe_ski
     )
     for index, epoch in enumerate(epochs)
   )
-  stability_cases = base_cases + tuple(case.model_copy() for case in base_cases)
+  stability_cases = tuple(
+    case.model_copy(update={"stability_variant": variant})
+    for case in base_cases for variant in ("seed-7", "seed-19")
+  )
   cases = base_cases
   report = evaluate(
     cases, required_epochs=epochs, baseline_cases=cases, stability_cases=stability_cases
@@ -437,9 +706,12 @@ def test_promotion_evidence_requires_metrics_epochs_baseline_and_zero_unsafe_ski
     job_config_sha256="c" * 64,
     workflow_sha256="d" * 64,
     required_jobs=("job",),
+    deterministic_adapter_sha256="f" * 64,
   )
-  assert evidence.passed is True
-  assert evidence.blockers == ()
+  assert evidence.passed is False
+  assert evidence.blockers == ("trusted_owner_approval_verifier_unavailable",)
+  assert evidence.approval_verified is False
+  assert evidence.approval_receipt_sha256 is None
 
   unsafe_report = evaluate(
     cases + (EvaluationCase(
@@ -463,6 +735,41 @@ def test_promotion_evidence_requires_metrics_epochs_baseline_and_zero_unsafe_ski
     dataset_sha256="a" * 64, model_checksum="b" * 64,
     job_config_sha256="c" * 64, workflow_sha256="d" * 64,
     required_jobs=("job",),
+    deterministic_adapter_sha256="f" * 64,
   )
   assert unsafe.passed is False
   assert any("unsafe_skip_rate" in blocker for blocker in unsafe.blockers)
+
+
+def test_abstention_counts_as_counterfactual_required_miss():
+  report = evaluate((EvaluationCase(
+    epoch="dependency",
+    probabilities={"job": 0.99},
+    selected_jobs=("job",),
+    labels={"job": "required"},
+    abstain=True,
+  ),), required_epochs=("dependency",))
+  metrics = report.per_job["job"]
+  assert metrics.required_job_recall == 0.0
+  assert metrics.unsafe_skip_rate == 1.0
+
+
+@pytest.mark.parametrize(
+  ("filename", "model"),
+  (
+    ("candidate-v1.schema.json", CiImpactCandidateManifest),
+    ("deterministic-adapter-v1.schema.json", DeterministicTargetAdapter),
+    ("features-v1.schema.json", FeatureVector),
+    ("history-record-v1.schema.json", HistoryRecord),
+    ("model-v1.schema.json", MultilabelLogisticModel),
+    ("promotion-evidence-v1.schema.json", CiImpactPromotionEvidence),
+    ("shadow-plan-v1.schema.json", ShadowPlan),
+  ),
+)
+def test_published_json_schemas_are_generated_from_runtime_contracts(filename: str, model):
+  schema_path = Path(__file__).resolve().parents[1] / "ci-impact/schemas" / filename
+  published = json.loads(schema_path.read_text(encoding="utf-8"))
+  expected = model.model_json_schema()
+  expected["$schema"] = "https://json-schema.org/draft/2020-12/schema"
+  expected["$id"] = f"https://eisenhower.invalid/schemas/{filename}"
+  assert published == expected

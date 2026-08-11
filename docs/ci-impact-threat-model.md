@@ -36,16 +36,26 @@ from the four-class MLOps registry, and converting every uncertain state into fu
 
 ### Data flows and trust boundaries
 
-- GitHub → collector: PR/file/check metadata over authenticated HTTPS; exact repo, bounded PR range,
-  pagination and subprocess timeout are enforced; outcomes remain observations.
-- Git history → dependency extractor: archived source at exact full SHA via argv-only subprocess;
-  archive/file/encoding/path limits apply and no member is extracted to the filesystem.
+- GitHub → collector: PR/file/check metadata over authenticated HTTPS; exact repo/base, bounded PR
+  range, cumulative requests/bytes/records, pagination and subprocess timeout are enforced. Check
+  results require the GitHub Actions app and a suite bound to the exact PR head; outcomes remain
+  observations, never labels.
+- Git history → dependency extractor: changes are derived from an ancestor base/head pair and both
+  archived graphs are combined via argv-only subprocesses; process output, time,
+  archive/file/total-byte/encoding/path limits apply and no member is extracted to the filesystem.
 - Dataset → human review → trainer: labels cross the highest-integrity boundary; non-unknown labels
   require reviewer/evidence provenance and both classes per job before training.
 - Trainer/evaluator → private registry: canonical JSON and SHA-256 references bind dataset, model,
-  features, job config, workflow, runtime and evaluation; exclusive writes prevent replacement.
+  feature implementation/schema, job config, workflow, promotion policy, runtime, evaluation and
+  a separately authenticated approval receipt; exclusive writes prevent replacement.
 - Shadow CLI → CI consumer: allowlisted JSON only; no shell fragments or `GITHUB_OUTPUT`; full CI
   remains authoritative.
+- Deterministic planner → adapter → shadow CLI: a versioned target-to-job mapping preserves the
+  existing rule plan as an additive lower bound. The plan is mandatory and bound to resolved
+  base/head SHAs, trusted event/ref context, exact canonical name-status changes and a recomputed
+  digest. The canonical JavaScript resolver is rerun independently and its entire decision must
+  match; missing/stale/foreign/narrowed plans, version drift, unknown targets and deterministic
+  full-CI plans cannot be narrowed by the model.
 
 #### Diagram
 
@@ -90,6 +100,9 @@ flowchart LR
 - The shadow CLI cannot mutate a workflow or deploy code.
 - SHA-256 integrity does not authenticate a malicious actor who already controls every registry
   input; access control and review remain external requirements.
+- Reviewer IDs, free-text evidence, dataset receipts, SHA-256 and `O_EXCL` do not authenticate the
+  writer. Schema-valid poisoned labels remain possible until a future approved reviewer allowlist
+  and authenticated dual-review/adjudication attestation are bound to the exact dataset checksum.
 
 ## Entry points and attack surfaces
 
@@ -100,7 +113,7 @@ flowchart LR
 | Manual labels | Dataset edit/review | Human → trainer | Required provenance and both classes | `backend-ai/app/ci_impact/models.py` |
 | Model/config JSON | Shadow CLI args | Filesystem → planner | Strict Pydantic schemas and checksums | `backend-ai/scripts/run_ci_impact_shadow.py` |
 | Registry blobs | Candidate training | Trainer → private storage | Content addressed, private, exclusive | `backend-ai/app/ci_impact/artifacts.py` |
-| Counterfactual plan | JSON output | Planner → future CI integration | Allowlisted jobs; no skip authority | `backend-ai/app/ci_impact/shadow.py` |
+| Counterfactual plan | JSON output | Planner → versioned adapter → future CI integration | Allowlisted jobs; deterministic union; no skip authority | `backend-ai/app/ci_impact/shadow.py` |
 
 ## Top abuse paths
 
@@ -111,8 +124,9 @@ flowchart LR
    overconfidently narrows jobs. Control: unknown/unresolved/OOD causes abstain/full CI.
 3. Workflow/job names change without config update → probabilities refer to stale jobs → required
    context disappears. Control: checksum/job-universe mismatch blocks and full CI remains canonical.
-4. A registry blob or manifest is replaced → shadow loads unrelated model. Control:
-   content-addressing, exclusive writes and load-time checksum verification.
+4. A registry blob, policy, approval or manifest is replaced → shadow loads unrelated evidence.
+   Control: content-addressing, exclusive writes and load-time semantic/checksum verification;
+   trainer self-assertion cannot satisfy the external approval gate.
 5. A crafted archive path, binary or huge history response exhausts/parses outside scope. Control:
    full SHA, path checks, no extraction, count/byte/time limits and failure-to-full-CI.
 6. A future workflow interpolates untrusted filenames/model text into shell outputs → command/output
@@ -123,9 +137,9 @@ flowchart LR
 
 | Threat ID | Threat source | Prerequisites | Threat action | Impact | Impacted assets | Existing controls (evidence) | Gaps | Recommended mitigations | Detection ideas | Likelihood | Impact severity | Priority |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| TM-001 | Bad/mistaken labeler | Dataset write/review access | Marks green observation safe-to-skip without causal proof | Unsafe CI omission | Labels, model, gates | Unknown-by-default and provenance validation (`history.py`, `models.py`) | No approved reviewers yet | Dual review/adjudication and signed dataset receipt | Label conflict/unknown/support report | medium | high | high |
+| TM-001 | Bad/mistaken labeler | Dataset write/review access | Marks green observation safe-to-skip without causal proof | Unsafe CI omission | Labels, model, gates | Unknown-by-default, provenance shape validation and unavailable trusted approval verifier (`history.py`, `models.py`, `promotion.py`) | Reviewer/evidence fields and receipt checksums do not authenticate writers | Approved reviewer allowlist plus authenticated dual review/adjudication bound to the exact dataset checksum | Label conflict/unknown/support report | medium | high | high |
 | TM-002 | PR author or repo drift | Novel path/import/job | Produces OOD change that maps to too few jobs | Missed regression/security check | Job universe, fallback | Unknown/workflow/manifest/lockfile abstention (`shadow.py`) | Dynamic import completeness is limited | Verify config against workflow/bridge checksums before every run | Abstention and unknown-path trend | medium | high | high |
-| TM-003 | Registry writer | Write access | Mixes or replaces model/evaluation lineage | False promotion evidence | Candidate lineage | Content addressing, `O_EXCL`, checksum verification (`artifacts.py`) | SHA does not authenticate owner | Protected storage, signed attestations, independent verifier | Registry conflict/tamper alerts | low | high | medium |
+| TM-003 | Registry writer | Write access | Mixes or replaces model/evaluation/policy/approval lineage | False promotion evidence | Candidate lineage | Content addressing, `O_EXCL`, semantic and checksum verification (`artifacts.py`, `promotion.py`) | SHA alone does not authenticate owner | Protected storage, authenticated approval receipts, independent verifier | Registry conflict/tamper alerts | low | high | medium |
 | TM-004 | Crafted Git/history input | PR creation | Uses path/archive/resource edge cases | DoS or parser confusion | Evaluator availability | No shell, no extraction, full SHA and limits (`features.py`) | API retry/rate-limit policy is basic | Add bounded retries, Unicode normalization policy and archive streaming cap | Collection failure/limit counters | medium | medium | medium |
 | TM-005 | Future integrator | Workflow edit access | Treats shadow list as subtractive skip authority | Full-CI safety boundary lost | Full-CI fallback | Current CLI has no mutation interface; docs require union | Workflow integration not implemented | Separate reviewed task; invariant test against canonical contexts | Alert on skipped/missing required contexts | low | high | medium |
 | TM-006 | Output consumer | Future CI read access | Interpolates untrusted values into shell/output channels | Injection or job selection drift | CI runner, plan | Canonical job enum and JSON output (`models.py`) | Consumer does not yet exist | Parse JSON with schema; never emit paths to shell/GITHUB_OUTPUT | Reject non-enum plan fields | low | high | medium |

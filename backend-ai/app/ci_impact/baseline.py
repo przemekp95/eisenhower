@@ -31,6 +31,7 @@ class RuleBaseline:
     if unsafe_scope:
       return ShadowPlan(
         probabilities=probabilities,
+        canonical_jobs=self.config.all_jobs,
         deterministic_jobs=self.config.deterministic_jobs,
         classifier_jobs=selected_jobs,
         effective_jobs=self.config.all_jobs,
@@ -41,6 +42,7 @@ class RuleBaseline:
     classifier_jobs = tuple(job for job in selected_jobs if job not in self.config.deterministic_jobs)
     return ShadowPlan(
       probabilities=probabilities,
+      canonical_jobs=self.config.all_jobs,
       deterministic_jobs=self.config.deterministic_jobs,
       classifier_jobs=classifier_jobs,
       effective_jobs=tuple(dict.fromkeys((*self.config.deterministic_jobs, *classifier_jobs))),

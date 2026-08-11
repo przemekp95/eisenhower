@@ -27,6 +27,7 @@ def validate_repository_job_universe(root: Path, config: JobConfig) -> tuple[str
     bridge_text = (root / ".github/scripts/bridge-sync-pr-statuses.mjs").read_text(encoding="utf-8")
     bridge_block = bridge_text.split("CI: [", 1)[1].split("],", 1)[0]
     bridge_jobs = {match.group("value") for match in QUOTED_VALUE.finditer(bridge_block)}
+    bridge_jobs.discard("resolve-run-mode")
     if bridge_jobs != required_contexts:
       reasons.append("bridge_job_universe_mismatch")
   except (IndexError, OSError):
@@ -47,6 +48,7 @@ def validate_repository_job_universe(root: Path, config: JobConfig) -> tuple[str
       line.strip() for line in sync_block.splitlines()
       if line.strip() and re.fullmatch(r"[a-z0-9][a-z0-9-]+", line.strip())
     }
+    sync_jobs.discard("resolve-run-mode")
     if sync_jobs != required_contexts:
       reasons.append("sync_job_universe_mismatch")
   except (IndexError, OSError):

@@ -6,10 +6,10 @@ from io import BytesIO
 from pathlib import Path
 import posixpath
 import re
-import subprocess
 import tarfile
 
 from app.ci_impact.models import ChangeSet, FeatureVector, JobConfig
+from app.ci_impact.process import run_bounded
 
 
 MANIFEST_NAMES = {
@@ -42,7 +42,24 @@ class LocalDependencyGraph:
     return len(self._unresolved_sources)
 
   @classmethod
-  def from_repository(cls, root: Path, *, maximum_files: int = 20_000) -> "LocalDependencyGraph":
+  def combine(cls, *graphs: "LocalDependencyGraph") -> "LocalDependencyGraph":
+    reverse: dict[str, set[str]] = defaultdict(set)
+    unresolved: set[str] = set()
+    for graph in graphs:
+      for dependency, consumers in graph._reverse_edges.items():
+        reverse[dependency].update(consumers)
+      unresolved.update(graph._unresolved_sources)
+    return cls(dict(reverse), unresolved)
+
+  @classmethod
+  def from_repository(
+    cls,
+    root: Path,
+    *,
+    maximum_files: int = 20_000,
+    maximum_file_bytes: int = 2 * 1024 * 1024,
+    maximum_total_bytes: int = 64 * 1024 * 1024,
+  ) -> "LocalDependencyGraph":
     candidates = sorted(
       path for path in root.rglob("*")
       if path.is_file() and not path.is_symlink() and path.suffix.lower() in {".py", ".js", ".jsx", ".ts", ".tsx"}
@@ -52,11 +69,19 @@ class LocalDependencyGraph:
       raise ValueError("dependency graph file limit exceeded")
     sources: dict[str, str] = {}
     unreadable: set[str] = set()
+    total_bytes = 0
     for path in candidates:
+      relative = path.relative_to(root).as_posix()
       try:
-        sources[path.relative_to(root).as_posix()] = path.read_text(encoding="utf-8")
+        size = path.stat().st_size
+        if size > maximum_file_bytes or total_bytes + size > maximum_total_bytes:
+          unreadable.add(relative)
+          continue
+        content = path.read_bytes()
+        total_bytes += len(content)
+        sources[relative] = content.decode("utf-8")
       except (OSError, UnicodeDecodeError):
-        unreadable.add(path.relative_to(root).as_posix())
+        unreadable.add(relative)
     return cls._from_sources(sources, initial_unresolved=unreadable)
 
   @classmethod
@@ -67,31 +92,15 @@ class LocalDependencyGraph:
     *,
     maximum_files: int = 20_000,
     maximum_archive_bytes: int = 128 * 1024 * 1024,
+    maximum_file_bytes: int = 2 * 1024 * 1024,
   ) -> "LocalDependencyGraph":
     if not re.fullmatch(r"[a-f0-9]{40}", revision):
       raise ValueError("dependency graph revision must be a full Git SHA")
-    with subprocess.Popen(
-      ["git", "archive", "--format=tar", revision],
+    archive_bytes = run_bounded(
+      ("git", "archive", "--format=tar", revision),
       cwd=root,
-      stdout=subprocess.PIPE,
-      stderr=subprocess.PIPE,
-    ) as process:
-      try:
-        if process.stdout is None:
-          raise ValueError("dependency graph archive stdout is unavailable")
-        archive_bytes = process.stdout.read(maximum_archive_bytes + 1)
-        if len(archive_bytes) > maximum_archive_bytes:
-          process.kill()
-          process.communicate()
-          raise ValueError("dependency graph archive limit exceeded")
-        _, stderr = process.communicate(timeout=120)
-      except subprocess.TimeoutExpired as issue:
-        process.kill()
-        process.communicate()
-        raise ValueError("dependency graph archive timed out") from issue
-      if process.returncode != 0:
-        message = stderr.decode("utf-8", errors="replace")[:500]
-        raise ValueError(f"dependency graph archive failed: {message}")
+      maximum_stdout_bytes=maximum_archive_bytes,
+    )
     sources: dict[str, str] = {}
     unreadable: set[str] = set()
     with tarfile.open(fileobj=BytesIO(archive_bytes), mode="r:") as archive:
@@ -107,6 +116,9 @@ class LocalDependencyGraph:
           continue
         if len(sources) >= maximum_files:
           raise ValueError("dependency graph file limit exceeded")
+        if member.size > maximum_file_bytes:
+          unreadable.add(path.as_posix())
+          continue
         extracted = archive.extractfile(member)
         if extracted is None:
           unreadable.add(path.as_posix())
@@ -130,6 +142,9 @@ class LocalDependencyGraph:
         if Path(relative).suffix == ".py"
         else cls._js_dependencies(relative, text)
       )
+      if dependencies is None:
+        unresolved_sources.add(relative)
+        continue
       for dependency in dependencies:
         resolved = cls._resolve_dependency(dependency, relative_paths)
         if resolved is None:
@@ -139,19 +154,41 @@ class LocalDependencyGraph:
     return cls(dict(reverse), unresolved_sources)
 
   @staticmethod
-  def _python_dependencies(relative: str, text: str) -> set[str]:
+  def _python_dependencies(relative: str, text: str) -> set[str] | None:
     try:
       tree = ast.parse(text)
     except SyntaxError:
-      return set()
+      return None
     prefix = "backend-ai/" if relative.startswith("backend-ai/") else ""
+    package_parts = Path(relative).parent.parts
+    if prefix:
+      package_parts = package_parts[1:]
     dependencies: set[str] = set()
     for node in ast.walk(tree):
-      names: list[str] = []
       if isinstance(node, ast.Import):
-        names.extend(alias.name for alias in node.names)
-      elif isinstance(node, ast.ImportFrom) and node.module:
-        names.append(node.module)
+        names = [alias.name for alias in node.names]
+      elif isinstance(node, ast.ImportFrom):
+        if node.level:
+          keep = len(package_parts) - node.level + 1
+          if keep < 0:
+            dependencies.add("__unresolvable_relative_import__.py")
+            continue
+          components = [*package_parts[:keep]]
+          if node.module:
+            components.extend(node.module.split("."))
+            names = [".".join(components)]
+          else:
+            names = [".".join((*components, alias.name)) for alias in node.names]
+        else:
+          names = [node.module] if node.module else []
+      elif isinstance(node, ast.Call) and (
+        isinstance(node.func, ast.Name) and node.func.id == "__import__"
+        or isinstance(node.func, ast.Attribute) and node.func.attr == "import_module"
+      ):
+        dependencies.add("__dynamic_import__.py")
+        continue
+      else:
+        continue
       for name in names:
         if name.startswith(("app.", "scripts.")):
           dependencies.add(prefix + name.replace(".", "/") + ".py")
@@ -175,24 +212,27 @@ class LocalDependencyGraph:
     )
     return next((option for option in options if option in paths), None)
 
-  def impacted_by(self, changed_paths: set[str], *, maximum_depth: int = 20) -> tuple[str, ...]:
+  def impacted_by(self, changed_paths: set[str]) -> tuple[str, ...]:
     impacted: set[str] = set()
-    queue = deque((path, 0) for path in changed_paths)
+    queue = deque(changed_paths)
     visited = set(changed_paths)
     while queue:
-      current, depth = queue.popleft()
-      if depth >= maximum_depth:
-        continue
+      current = queue.popleft()
       for consumer in sorted(self._reverse_edges.get(current, ())):
         if consumer in visited:
           continue
         visited.add(consumer)
         impacted.add(consumer)
-        queue.append((consumer, depth + 1))
+        queue.append(consumer)
     return tuple(sorted(impacted))
 
   def relevant_unresolved(self, paths: set[str]) -> tuple[str, ...]:
-    return tuple(sorted(paths & self._unresolved_sources))
+    roots = {path.split("/", 1)[0] for path in paths}
+    if "packages" in roots:
+      return tuple(sorted(self._unresolved_sources))
+    return tuple(sorted(
+      source for source in self._unresolved_sources if source.split("/", 1)[0] in roots
+    ))
 
 
 class FeatureExtractor:

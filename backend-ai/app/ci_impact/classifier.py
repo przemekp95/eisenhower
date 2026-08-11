@@ -3,6 +3,7 @@ from __future__ import annotations
 from hashlib import sha256
 import json
 import math
+import random
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -26,6 +27,7 @@ class MultilabelLogisticModel(BaseModel):
   weights: dict[str, dict[str, float]]
   biases: dict[str, float]
   training_dataset_sha256: str = Field(..., pattern=SHA256_PATTERN.pattern)
+  training_seed: int = Field(..., ge=0, le=2_147_483_647)
   checksum: str = Field(..., pattern=SHA256_PATTERN.pattern)
 
   @classmethod
@@ -43,14 +45,19 @@ class MultilabelLogisticModel(BaseModel):
     epochs: int = 500,
     learning_rate: float = 0.1,
     l2: float = 0.001,
+    training_seed: int = 7,
   ) -> "MultilabelLogisticModel":
     if not examples:
       raise ValueError("training requires reviewed examples")
     if not 1 <= epochs <= 100_000 or not 0 < learning_rate <= 1 or not 0 <= l2 <= 1:
       raise ValueError("training hyperparameters are outside the bounded range")
     feature_names = tuple(sorted({name for example in examples for name in example.features}))
-    weights = {job: {name: 0.0 for name in feature_names} for job in job_ids}
-    biases = {job: 0.0 for job in job_ids}
+    randomizer = random.Random(training_seed)
+    weights = {
+      job: {name: randomizer.uniform(-0.001, 0.001) for name in feature_names}
+      for job in job_ids
+    }
+    biases = {job: randomizer.uniform(-0.001, 0.001) for job in job_ids}
     for job in job_ids:
       reviewed = [example for example in examples if example.labels.get(job) in {"required", "safe_to_skip"}]
       if not reviewed:
@@ -78,6 +85,7 @@ class MultilabelLogisticModel(BaseModel):
       weights=weights,
       biases=biases,
       training_dataset_sha256=dataset_sha256,
+      training_seed=training_seed,
     )
 
   @model_validator(mode="after")

@@ -10,6 +10,9 @@ from app.ci_impact.evaluation import EvaluationReport
 from app.ci_impact.models import SHA256_PATTERN
 
 
+TRUSTED_APPROVAL_VERIFIER_AVAILABLE = False
+
+
 class PromotionPolicy(BaseModel):
   model_config = ConfigDict(extra="forbid", frozen=True)
   owner_approved: bool
@@ -24,6 +27,10 @@ class PromotionPolicy(BaseModel):
   minimum_stability: float = Field(..., ge=0, le=1)
   required_epochs: tuple[str, ...] = Field(..., min_length=1)
 
+  def checksum(self) -> str:
+    payload = json.dumps(self.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+    return sha256(payload.encode()).hexdigest()
+
 
 class CiImpactPromotionEvidence(BaseModel):
   model_config = ConfigDict(extra="forbid", frozen=True)
@@ -32,6 +39,10 @@ class CiImpactPromotionEvidence(BaseModel):
   model_checksum: str = Field(..., pattern=SHA256_PATTERN.pattern)
   job_config_sha256: str = Field(..., pattern=SHA256_PATTERN.pattern)
   workflow_sha256: str = Field(..., pattern=SHA256_PATTERN.pattern)
+  promotion_policy_sha256: str = Field(..., pattern=SHA256_PATTERN.pattern)
+  deterministic_adapter_sha256: str = Field(..., pattern=SHA256_PATTERN.pattern)
+  approval_receipt_sha256: str | None = Field(default=None, pattern=SHA256_PATTERN.pattern)
+  approval_verified: bool
   evaluation_checksum: str = Field(..., pattern=SHA256_PATTERN.pattern)
   passed: bool
   blockers: tuple[str, ...]
@@ -66,10 +77,13 @@ def build_promotion_evidence(
   job_config_sha256: str,
   workflow_sha256: str,
   required_jobs: tuple[str, ...],
+  deterministic_adapter_sha256: str,
 ) -> CiImpactPromotionEvidence:
   blockers: list[str] = []
   if not policy.owner_approved:
     blockers.append("promotion_policy_unapproved")
+  if not TRUSTED_APPROVAL_VERIFIER_AVAILABLE:
+    blockers.append("trusted_owner_approval_verifier_unavailable")
   if set(report.per_job) != set(required_jobs):
     blockers.append("required_job_metrics_missing_or_job_universe_mismatch")
   if set(report.baseline_per_job) != set(report.per_job):
@@ -117,6 +131,10 @@ def build_promotion_evidence(
     model_checksum=model_checksum,
     job_config_sha256=job_config_sha256,
     workflow_sha256=workflow_sha256,
+    promotion_policy_sha256=policy.checksum(),
+    deterministic_adapter_sha256=deterministic_adapter_sha256,
+    approval_receipt_sha256=None,
+    approval_verified=False,
     evaluation_checksum=sha256(evaluation_payload.encode()).hexdigest(),
     passed=not blockers,
     blockers=tuple(blockers),

@@ -49,6 +49,9 @@ class CiImpactCandidateManifest(FrozenModel):
   feature_schema_sha256: str = Field(..., pattern=SHA256_PATTERN.pattern)
   job_config_sha256: str = Field(..., pattern=SHA256_PATTERN.pattern)
   workflow_sha256: str = Field(..., pattern=SHA256_PATTERN.pattern)
+  promotion_policy_sha256: str = Field(..., pattern=SHA256_PATTERN.pattern)
+  implementation_sha256: str = Field(..., pattern=SHA256_PATTERN.pattern)
+  deterministic_adapter_sha256: str = Field(..., pattern=SHA256_PATTERN.pattern)
   runtime: CiImpactRuntimeLineage
   model: CiImpactArtifactReference
   evaluation: CiImpactArtifactReference

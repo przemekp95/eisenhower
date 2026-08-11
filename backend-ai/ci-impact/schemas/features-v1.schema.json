@@ -1,19 +1,47 @@
 {
+  "$id": "https://eisenhower.invalid/schemas/features-v1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://eisenhower.invalid/schemas/ci-impact-features-v1.json",
   "additionalProperties": false,
   "properties": {
-    "checksum": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
-    "dependency_impacts": {"items": {"type": "string"}, "type": "array"},
-    "schema_version": {"const": "ci-impact-features-v1"},
-    "unknown_paths": {"items": {"type": "string"}, "type": "array"},
+    "checksum": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Checksum",
+      "type": "string"
+    },
+    "dependency_impacts": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Dependency Impacts",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "ci-impact-features-v1",
+      "default": "ci-impact-features-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "unknown_paths": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Unknown Paths",
+      "type": "array"
+    },
     "values": {
-      "additionalProperties": {"type": "number"},
-      "propertyNames": {"pattern": "^(change|dependency|diff|path|aux)\\."},
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Values",
       "type": "object"
     }
   },
-  "required": ["schema_version", "values", "unknown_paths", "dependency_impacts", "checksum"],
-  "title": "Eisenhower CI impact feature vector",
+  "required": [
+    "values",
+    "checksum"
+  ],
+  "title": "FeatureVector",
   "type": "object"
 }
