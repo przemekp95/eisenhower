@@ -16,6 +16,7 @@ export default function TaskComposer({
   return (
     <View style={styles.form}>
       <TextInput
+        accessibilityLabel={t.titlePlaceholder}
         value={newTask.title}
         onChangeText={(value) => onChangeTask('title', value)}
         placeholder={t.titlePlaceholder}
@@ -23,6 +24,7 @@ export default function TaskComposer({
         style={styles.input}
       />
       <TextInput
+        accessibilityLabel={t.descriptionPlaceholder}
         value={newTask.description}
         onChangeText={(value) => onChangeTask('description', value)}
         placeholder={t.descriptionPlaceholder}
@@ -34,6 +36,7 @@ export default function TaskComposer({
         <Switch
           testID="new-task-urgent-switch"
           value={newTask.urgent}
+          accessibilityLabel={t.urgent}
           onValueChange={(value) => onChangeTask('urgent', value)}
         />
       </View>
@@ -42,15 +45,19 @@ export default function TaskComposer({
         <Switch
           testID="new-task-important-switch"
           value={newTask.important}
+          accessibilityLabel={t.important}
           onValueChange={(value) => onChangeTask('important', value)}
         />
       </View>
       <View style={styles.actions}>
-        <Pressable testID="add-task-button" onPress={onAddTask} style={styles.primaryButton}>
+        <Pressable testID="add-task-button" accessibilityRole="button" accessibilityLabel={t.addTask} onPress={onAddTask} style={styles.primaryButton}>
           <Text style={styles.primaryButtonText}>{t.addTask}</Text>
         </Pressable>
         <Pressable
           testID="suggest-task-button"
+          accessibilityRole="button"
+          accessibilityLabel={t.suggest}
+          accessibilityState={{ disabled: suggestDisabled }}
           onPress={onSuggest}
           disabled={suggestDisabled}
           style={[styles.secondaryButton, suggestDisabled && styles.disabledButton]}
@@ -59,6 +66,9 @@ export default function TaskComposer({
         </Pressable>
         <Pressable
           testID="scan-task-button"
+          accessibilityRole="button"
+          accessibilityLabel={t.scan}
+          accessibilityState={{ disabled: scanDisabled }}
           onPress={onScan}
           disabled={scanDisabled}
           style={[styles.secondaryButton, scanDisabled && styles.disabledButton]}
@@ -67,6 +77,8 @@ export default function TaskComposer({
         </Pressable>
         <Pressable
           testID="open-ai-tools-button"
+          accessibilityRole="button"
+          accessibilityLabel={t.aiTools}
           onPress={onOpenAITools}
           style={styles.toolsButton}
         >

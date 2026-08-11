@@ -31,10 +31,12 @@ import {
   getTaskRemoteId,
   hasPendingTasks,
   markTaskPendingDelete,
+  markTaskSyncFailed,
   markTaskPendingUpdate,
   normalizeStoredTasks,
   reconcilePendingTasks,
   removeTask,
+  resolveTaskConflict,
   taskToRemotePayload,
   upsertTask,
 } from '../utils/taskSync';
@@ -170,21 +172,89 @@ export default function useTaskSyncController() {
     setNewTask((current) => ({ ...current, [key]: value }));
   };
 
-  const importScannedTasks = async (scannedTasks) => {
+  const importScannedTasks = async (scannedTasks, { learn = false } = {}) => {
     const createdTasks = await Promise.all(
       scannedTasks.map(async (task, index) => {
         try {
-          return await createRemoteTask(taskToRemotePayload(task), language);
-        } catch {
+          return { task: await createRemoteTask(taskToRemotePayload(task), language), savedRemotely: true };
+        } catch (error) {
           return createTaskRecord(language, task, task.id || `local-scan-${Date.now()}-${index}`);
         }
       })
     );
+    const importedTasks = createdTasks.map((entry) => entry.task || entry);
+    const remotelySavedTasks = createdTasks
+      .filter((entry) => entry.savedRemotely)
+      .map((entry) => entry.task);
+    let feedbackSaved = false;
 
-    void learnFromAcceptedOCRTasks(createdTasks).catch(() => undefined);
+    if (learn && remotelySavedTasks.length > 0) {
+      try {
+        await learnFromAcceptedOCRTasks(remotelySavedTasks);
+        feedbackSaved = true;
+      } catch {
+        feedbackSaved = false;
+      }
+    }
 
-    await persistTasks(mergeTasks(tasksRef.current, createdTasks), t.ocrAdded);
-    return createdTasks.length;
+    await persistTasks(
+      mergeTasks(tasksRef.current, importedTasks),
+      remotelySavedTasks.length === importedTasks.length ? t.syncedRemote : t.pendingSyncNotice
+    );
+    return {
+      requested: scannedTasks.length,
+      imported: importedTasks.length,
+      savedRemotely: remotelySavedTasks.length,
+      pending: importedTasks.length - remotelySavedTasks.length,
+      feedbackSaved,
+    };
+  };
+
+  const retrySync = async (cachedTasksOverride = null) => {
+    const cachedTasks = Array.isArray(cachedTasksOverride)
+      ? cachedTasksOverride
+      : tasksRef.current;
+    setNotice(t.syncing);
+
+    try {
+      const remoteTasks = normalizeStoredTasks(await fetchRemoteTasks(language), language);
+      const resolvedTasks = await reconcilePendingTasks({
+        cachedTasks,
+        remoteTasks,
+        language,
+        createRemoteTask,
+        updateRemoteTask,
+        deleteRemoteTask,
+      });
+      await persistTasks(
+        resolvedTasks,
+        hasPendingTasks(resolvedTasks) ? t.pendingSyncNotice : t.syncedRemote
+      );
+      return !hasPendingTasks(resolvedTasks);
+    } catch {
+      setNotice(hasPendingTasks(cachedTasks) ? t.pendingSyncNotice : t.syncFailed);
+      return false;
+    }
+  };
+
+  const handleResolveConflict = async (id, resolution) => {
+    const conflictTask = tasksRef.current.find((task) => task.id === id);
+    if (!conflictTask || conflictTask.syncState !== TASK_SYNC_STATE.conflict) {
+      return;
+    }
+
+    const resolvedTask = resolveTaskConflict(conflictTask, resolution);
+    const nextTasks = resolvedTask
+      ? upsertTask(tasksRef.current, resolvedTask)
+      : removeTask(tasksRef.current, conflictTask);
+
+    if (resolution === 'remote') {
+      await persistTasks(nextTasks, hasPendingTasks(nextTasks) ? t.pendingSyncNotice : t.syncedRemote);
+      return;
+    }
+
+    await persistTasks(nextTasks, t.pendingSyncNotice);
+    await retrySync(nextTasks);
   };
 
   const addAnalysisTaskToMatrix = async (analysis) => {
@@ -266,14 +336,22 @@ export default function useTaskSyncController() {
     }
 
     try {
-      await deleteRemoteTask(remoteId);
+      if (Number.isInteger(currentTask.revision)) {
+        await deleteRemoteTask(remoteId, currentTask.revision);
+      } else {
+        await deleteRemoteTask(remoteId);
+      }
       await persistTasks(removeTask(tasksRef.current, currentTask), t.syncedRemote);
-    } catch {
+    } catch (error) {
       const pendingDeleteTask = markTaskPendingDelete(currentTask);
       const nextTasks = pendingDeleteTask
         ? upsertTask(removeTask(tasksRef.current, currentTask), pendingDeleteTask)
         : removeTask(tasksRef.current, currentTask);
-      await persistTasks(nextTasks, t.cachedLocal);
+      await persistTasks(nextTasks, t.pendingSyncNotice);
+      const status = Number(error?.status || error?.response?.status || 0);
+      if (status === 409 || status === 412) {
+        await retrySync(nextTasks);
+      }
     }
   };
 
@@ -295,10 +373,18 @@ export default function useTaskSyncController() {
     }
 
     try {
-      const remoteTask = await updateRemoteTask(remoteId, { [key]: nextTask[key] }, language);
+      const remoteTask = Number.isInteger(toggledTask.revision)
+        ? await updateRemoteTask(remoteId, { [key]: nextTask[key] }, language, toggledTask.revision)
+        : await updateRemoteTask(remoteId, { [key]: nextTask[key] }, language);
       await persistTasks(upsertTask(tasksRef.current, remoteTask), t.syncedRemote);
-    } catch {
-      await persistTasks(nextTasks, t.cachedLocal);
+    } catch (error) {
+      const status = Number(error?.status || error?.response?.status || 0);
+      if (status === 409 || status === 412) {
+        await persistTasks(nextTasks, t.pendingSyncNotice);
+        await retrySync(nextTasks);
+      } else {
+        await persistTasks(upsertTask(tasksRef.current, markTaskSyncFailed(localTask, error)), t.pendingSyncNotice);
+      }
     }
   };
 
@@ -325,6 +411,7 @@ export default function useTaskSyncController() {
     handleAddTask,
     handleDelete,
     handleLanguageChange,
+    handleResolveConflict,
     handleScan,
     handleSuggest,
     handleToggle,
@@ -336,6 +423,7 @@ export default function useTaskSyncController() {
     providerControls,
     quadrantOptions,
     refreshCapabilities,
+    retrySync,
     scanDisabled,
     suggestDisabled,
     t,

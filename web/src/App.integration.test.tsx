@@ -219,7 +219,7 @@ describe('App integration', () => {
       );
     });
 
-    fireEvent.click(screen.getByLabelText(`toggle urgent ${title}`));
+    fireEvent.click(screen.getByLabelText(`Przełącz pilność zadania ${title}`));
 
     await waitFor(async () => {
       const tasks = await listBackendTasks();
@@ -238,7 +238,12 @@ describe('App integration', () => {
     const article = taskCard.closest('article');
     expect(article).not.toBeNull();
 
-    fireEvent.click(within(article as HTMLElement).getByRole('button', { name: 'Usuń' }));
+    fireEvent.click(within(article as HTMLElement).getByRole('button', { name: `Usuń ${title}` }));
+    fireEvent.click(
+      within(article as HTMLElement).getByRole('button', {
+        name: 'Potwierdź trwałe usunięcie',
+      })
+    );
 
     await waitFor(() => expect(screen.queryByText(title)).not.toBeInTheDocument());
     await waitFor(async () => {

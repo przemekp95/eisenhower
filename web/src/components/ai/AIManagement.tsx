@@ -50,6 +50,7 @@ export default function AIManagement({ onModelUpdated }: Props) {
   const [examplesQuadrant, setExamplesQuadrant] = useState(0);
   const [preserveExperience, setPreserveExperience] = useState(true);
   const [keepDefaults, setKeepDefaults] = useState(true);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const quadrants = [
     { value: 0, label: t('matrix.do') },
@@ -422,7 +423,12 @@ export default function AIManagement({ onModelUpdated }: Props) {
                 type="button"
                 className={`${buttonClass} bg-white/10 text-white hover:bg-white/15 hover:text-white`}
                 disabled={loadingAction !== null}
-                onClick={() =>
+                onClick={() => {
+                  if (!confirmClear) {
+                    setConfirmClear(true);
+                    return;
+                  }
+                  setConfirmClear(false);
                   void runAction(
                     'clear',
                     async () => {
@@ -435,13 +441,24 @@ export default function AIManagement({ onModelUpdated }: Props) {
                       );
                     },
                     t('ai.manage.cleared')
-                  )
-                }
+                  );
+                }}
               >
                 {loadingAction === 'clear'
                   ? t('ai.manage.clearing')
-                  : t('ai.manage.clearTrainingData')}
+                  : confirmClear
+                    ? t('ai.manage.confirmClearTrainingData')
+                    : t('ai.manage.clearTrainingData')}
               </button>
+              {confirmClear ? (
+                <button
+                  type="button"
+                  className={`${buttonClass} bg-white/5 text-white`}
+                  onClick={() => setConfirmClear(false)}
+                >
+                  {t('task.cancelDelete')}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

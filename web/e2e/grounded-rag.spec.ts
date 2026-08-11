@@ -37,7 +37,6 @@ test.beforeEach(async ({ page }) => {
   });
   await page.goto('/');
   await page.getByLabel('Token dostępu').fill('test-api-token');
-  await page.getByLabel('Token administratora AI').fill('test-admin-token');
   await page.getByRole('button', { name: 'Odblokuj' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Eisenhower Matrix' })).toBeVisible();
 });

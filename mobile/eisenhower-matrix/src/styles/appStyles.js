@@ -265,6 +265,14 @@ const styles = StyleSheet.create({
     color: '#fee2e2',
     fontWeight: '700',
   },
+  deleteConfirmation: {
+    flex: 1,
+    gap: 8,
+  },
+  deleteConfirmationText: {
+    color: '#fecaca',
+    lineHeight: 18,
+  },
   badges: {
     flexDirection: 'row',
     gap: 8,

@@ -26,6 +26,7 @@ export function normalizeRemoteTask(task, language = 'pl') {
     locale: task.locale || language,
     remoteId,
     syncState: TASK_SYNC_STATE.synced,
+    ...(Number.isInteger(task.revision) ? { revision: task.revision } : {}),
   };
 }
 
@@ -38,10 +39,10 @@ export async function createRemoteTask(task, language = 'pl') {
   return normalizeRemoteTask(await getTaskApi().createTask(task), language);
 }
 
-export async function updateRemoteTask(id, patch, language = 'pl') {
-  return normalizeRemoteTask(await getTaskApi().updateTask(id, patch), language);
+export async function updateRemoteTask(id, patch, language = 'pl', revision) {
+  return normalizeRemoteTask(await getTaskApi().updateTask(id, patch, revision), language);
 }
 
-export async function deleteRemoteTask(id) {
-  await getTaskApi().deleteTask(id);
+export async function deleteRemoteTask(id, revision) {
+  await getTaskApi().deleteTask(id, revision);
 }

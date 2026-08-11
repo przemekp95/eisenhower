@@ -17,10 +17,16 @@ interface Props {
 
 export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDeleteTask }: Props) {
   const { t } = useLanguage();
+  const format = (template: string, values: Record<string, string>) =>
+    Object.entries(values).reduce(
+      (current, [key, value]) => current.replace(`{${key}}`, value),
+      template
+    );
   const matrixRef = useRef<HTMLDivElement | null>(null);
   const [matrixIntroState, setMatrixIntroState] = useState<'pending' | 'ready'>(() =>
     shouldDisableMotion() ? 'ready' : 'pending'
   );
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const {
     aiError,
     aiLoading,
@@ -173,12 +179,14 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
             onChange={(event) => updateNewTaskField('title', event.target.value)}
             className="rounded-full border border-white/10 bg-white/10 px-4 py-3 text-white transition-all placeholder:text-white/50 focus:border-emerald-200/40 focus:bg-white/12 focus:outline-hidden"
             placeholder={t('form.title')}
+            aria-label={t('form.title')}
           />
           <input
             value={newTask.description}
             onChange={(event) => updateNewTaskField('description', event.target.value)}
             className="rounded-full border border-white/10 bg-white/10 px-4 py-3 text-white transition-all placeholder:text-white/50 focus:border-cyan-200/40 focus:bg-white/12 focus:outline-hidden"
             placeholder={t('form.description')}
+            aria-label={t('form.description')}
           />
           <label
             className={`flex cursor-pointer items-center justify-between rounded-2xl border px-4 py-3 transition-all ${
@@ -296,7 +304,12 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
                       className="pointer-events-none absolute inset-x-4 top-0 h-20 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0))] opacity-70 transition-opacity duration-300 group-hover:opacity-100"
                     />
                     <div className="mb-3 flex items-center justify-between">
-                      <h3 className="text-lg font-semibold text-white">{quadrant.label}</h3>
+                      <div>
+                        <h3 className="text-lg font-semibold text-white">{quadrant.label}</h3>
+                        {quadrant.key === 'delete' ? (
+                          <p className="text-xs text-white/55">{t('matrix.deleteHint')}</p>
+                        ) : null}
+                      </div>
                       <span
                         data-matrix-float
                         className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] uppercase tracking-[0.2em] text-white/50"
@@ -323,20 +336,46 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
                                   <h4 className="font-semibold">{task.title}</h4>
                                   <p className="mt-1 text-sm text-white/70">{task.description}</p>
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    void onDeleteTask(task._id);
-                                  }}
-                                  className="rounded-full bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-100 transition-all hover:bg-red-500/30 hover:text-white"
-                                >
-                                  {t('task.delete')}
-                                </button>
+                                {pendingDeleteId === task._id ? (
+                                  <div
+                                    role="group"
+                                    aria-label={`${t('task.delete')} ${task.title}`}
+                                    className="flex gap-1"
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setPendingDeleteId(null);
+                                        void onDeleteTask(task._id);
+                                      }}
+                                      className="rounded-full bg-red-500 px-3 py-1 text-xs font-semibold text-white"
+                                    >
+                                      {t('task.confirmDelete')}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setPendingDeleteId(null)}
+                                      className="rounded-full bg-white/10 px-3 py-1 text-xs"
+                                    >
+                                      {t('task.cancelDelete')}
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    aria-label={`${t('task.delete')} ${task.title}`}
+                                    onClick={() => setPendingDeleteId(task._id)}
+                                    className="rounded-full bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-100 transition-all hover:bg-red-500/30 hover:text-white"
+                                  >
+                                    {t('task.delete')}
+                                  </button>
+                                )}
                               </div>
                               <div className="mt-4 flex flex-wrap gap-2">
                                 <button
                                   type="button"
-                                  aria-label={`toggle urgent ${task.title}`}
+                                  aria-label={format(t('task.toggleUrgent'), { title: task.title })}
+                                  aria-pressed={task.urgent}
                                   onClick={() => {
                                     void onUpdateTask(task._id, { urgent: !task.urgent });
                                   }}
@@ -346,11 +385,14 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
                                       : 'bg-white/10 text-white hover:bg-white/15'
                                   }`}
                                 >
-                                  {t('form.urgent')}: {task.urgent ? 'on' : 'off'}
+                                  {t('form.urgent')}: {task.urgent ? t('state.on') : t('state.off')}
                                 </button>
                                 <button
                                   type="button"
-                                  aria-label={`toggle important ${task.title}`}
+                                  aria-label={format(t('task.toggleImportant'), {
+                                    title: task.title,
+                                  })}
+                                  aria-pressed={task.important}
                                   onClick={() => {
                                     void onUpdateTask(task._id, { important: !task.important });
                                   }}
@@ -360,7 +402,8 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
                                       : 'bg-white/10 text-white hover:bg-white/15'
                                   }`}
                                 >
-                                  {t('form.important')}: {task.important ? 'on' : 'off'}
+                                  {t('form.important')}:{' '}
+                                  {task.important ? t('state.on') : t('state.off')}
                                 </button>
                               </div>
                             </article>
