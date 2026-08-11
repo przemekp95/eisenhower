@@ -1,24 +1,29 @@
 from hashlib import sha256
+from datetime import datetime, timedelta, timezone
 import json
 
 import pytest
 
-from app.job_worker import PermanentJobError
-from app.jobs import ALLOWED_JOB_TYPES
+from app.job_worker import JobWorker, PermanentJobError
+from app.jobs import ALLOWED_JOB_TYPES, SqliteJobQueue
+from app.rag.errors import ProjectionUnavailable
 from app.rag.job_handlers import RagJobHandlers
 
 
 class RecordingIngestion:
-  def __init__(self):
+  def __init__(self, result=None):
     self.documents = []
     self.tombstones = []
+    self.result = result
     self.embedding_provider = type("Embedding", (), {"version": "minilm-v1"})()
 
   def ingest(self, documents):
     self.documents.extend(documents)
+    return self.result
 
   def tombstone(self, document_ids, *, tenant_id, content_version, source_sequence):
     self.tombstones.append((document_ids, tenant_id, content_version, source_sequence))
+    return self.result
 
 
 class RecordingVersions:
@@ -163,5 +168,83 @@ def test_stale_upsert_cannot_resurrect_a_newer_tombstone():
     "content_checksum": checksum(documents), "documents": documents,
   })
 
-  assert ingestion.documents == []
+  assert not ingestion.documents
   assert versions.current("tenant-a", "doc-1") == 3
+
+
+def test_upsert_keeps_projection_pending_observable_and_does_not_advance_version():
+  ingestion = RecordingIngestion({"accepted": 1, "projected": 0, "pending": 1})
+  versions = RecordingVersions()
+  handlers = RagJobHandlers(ingestion, versions, chunking_version="char-v1")
+  documents = [{
+    "document_id": "doc-1", "source_type": "note", "title": "Plan",
+    "content": "context", "acl": {"owner_id": "user-1"},
+  }]
+
+  with pytest.raises(ProjectionUnavailable, match="pending"):
+    handlers.upsert({
+      "tenant_id": "tenant-a", "source_version": "v1", "source_sequence": 1,
+      "embedding_version": "minilm-v1", "chunking_version": "char-v1",
+      "content_checksum": checksum(documents), "documents": documents,
+    })
+
+  assert versions.current("tenant-a", "doc-1") is None
+
+
+def test_tombstone_keeps_projection_pending_observable_and_does_not_advance_version():
+  ingestion = RecordingIngestion({"accepted": 1, "projected": 0, "pending": 1})
+  versions = RecordingVersions()
+  handlers = RagJobHandlers(ingestion, versions, chunking_version="char-v1")
+
+  with pytest.raises(ProjectionUnavailable, match="pending"):
+    handlers.tombstone({
+      "tenant_id": "tenant-a", "source_version": "deleted-v2", "source_sequence": 2,
+      "document_ids": ["doc-1"],
+    })
+
+  assert versions.current("tenant-a", "doc-1") is None
+
+
+def test_worker_retries_observable_pending_projection_and_completes_after_recovery(tmp_path):
+  class RecoveringIngestion(RecordingIngestion):
+    def __init__(self):
+      super().__init__()
+      self.results = [
+        {"accepted": 1, "projected": 0, "pending": 1},
+        {"duplicate": 1, "projected": 1, "pending": 0},
+      ]
+
+    def ingest(self, documents):
+      self.documents.extend(documents)
+      return self.results.pop(0)
+
+  ingestion = RecoveringIngestion()
+  handlers = RagJobHandlers(ingestion, None, chunking_version="char-v1")
+  queue = SqliteJobQueue(tmp_path / "jobs.sqlite3")
+  documents = [{
+    "document_id": "doc-1", "source_type": "note", "title": "Plan",
+    "content": "context", "acl": {"owner_id": "user-1"},
+  }]
+  job = queue.enqueue("event-1", "rag.upsert", {
+    "tenant_id": "tenant-a", "source_version": "v1", "source_sequence": 1,
+    "embedding_version": "minilm-v1", "chunking_version": "char-v1",
+    "content_checksum": checksum(documents), "documents": documents,
+  })
+  worker = JobWorker(
+    queue,
+    handlers.registry,
+    base_backoff_seconds=1,
+    max_backoff_seconds=1,
+    random_value=lambda: 0,
+  )
+  now = datetime.now(timezone.utc)
+
+  assert worker.run_once(worker_id="worker-1", now=now) is True
+  pending = queue.get(job.job_id)
+  assert pending.status == "queued"
+  assert pending.last_error == "ProjectionUnavailable"
+
+  assert worker.run_once(worker_id="worker-1", now=now + timedelta(seconds=1)) is True
+  completed = queue.get(job.job_id)
+  assert completed.status == "completed"
+  assert completed.attempts == 2

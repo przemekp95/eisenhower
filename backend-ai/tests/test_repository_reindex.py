@@ -1,6 +1,10 @@
+from types import SimpleNamespace
+
+import pytest
+
+from app.rag.errors import ProjectionUnavailable
 from app.rag.models import AccessScope
 from app.rag.reindex import RepositoryReindexHandler
-from types import SimpleNamespace
 
 
 class Connector:
@@ -23,10 +27,11 @@ class Connector:
 
 
 class Ingestion:
-  def __init__(self):
+  def __init__(self, *, pending=0):
     self.documents = []
     self.reindexed = []
     self.reconciled = []
+    self.pending = pending
 
   def ingest(self, documents):
     self.documents.extend(documents)
@@ -34,7 +39,7 @@ class Ingestion:
 
   def reconcile(self, tenant_id, project_id):
     self.reconciled.append((tenant_id, project_id))
-    return {"projected": 0, "pending": 0, "drifted": 0}
+    return {"projected": 0, "pending": self.pending, "drifted": 0}
 
   def reindex_project(self, tenant_id, project_id):
     self.reindexed.append((tenant_id, project_id))
@@ -99,3 +104,21 @@ def test_repository_reindex_rejects_payload_scope_or_manifest_drift():
       assert "reindex" in str(error)
     else:
       raise AssertionError(f"reindex accepted drift: {override}")
+
+
+def test_repository_reindex_surfaces_projection_still_pending_after_reconciliation():
+  handler = RepositoryReindexHandler(
+    Connector(),
+    Ingestion(pending=1),
+    owner_id="repository-owner",
+    allowed_projects=("project-1",),
+  )
+
+  with pytest.raises(ProjectionUnavailable, match="pending"):
+    handler({
+      "tenant_id": "tenant-1",
+      "project_id": "project-1",
+      "source_version": "corpus-v1",
+      "content_checksum": "sha256:" + ("a" * 64),
+      "source_sequence": 7,
+    })

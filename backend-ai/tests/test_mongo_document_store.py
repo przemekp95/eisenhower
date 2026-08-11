@@ -1,6 +1,8 @@
 from copy import deepcopy
 from operator import itemgetter
 
+import pytest
+
 from app.rag.canonical import CanonicalWriteStatus
 from app.rag.models import SourceDocument
 from app.rag.mongo_document_store import MongoCanonicalDocumentStore
@@ -165,3 +167,22 @@ def test_project_documents_return_all_current_records_within_scope():
 
   assert [item.document_id for item in store.project_documents("tenant-1", "project-1")] == ["doc-1"]
   assert [item.document_id for item in store.project_documents("tenant-1")] == ["doc-1", "doc-2"]
+
+
+def test_retrieval_state_exposes_pending_atomically_and_rejects_canonical_checksum_drift():
+  collection = FakeCollection()
+  store = MongoCanonicalDocumentStore(collection)
+  source = source_document()
+  store.stage(source)
+
+  pending = store.retrieval_state("tenant-1", "doc-1")
+  assert pending.document == source
+  assert pending.projection_pending is True
+
+  store.mark_projected(source)
+  projected = store.retrieval_state("tenant-1", "doc-1")
+  assert projected.projection_pending is False
+
+  collection.documents[("tenant-1", "doc-1")]["text"] = "tampered canonical body"
+  with pytest.raises(ValueError, match="content_checksum"):
+    store.retrieval_state("tenant-1", "doc-1")

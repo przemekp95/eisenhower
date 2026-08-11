@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import Enum
 from hashlib import sha256
 from typing import Protocol
 
 from .ingestion import DeterministicChunker, build_chunk_records
 from .errors import ProjectionUnavailable
-from .models import SourceDocument
-from .ports import EmbeddingProvider, IngestionPort
+from .models import RetrievalHit, RetrievalQuery, SourceDocument
+from .ports import EmbeddingProvider, IngestionPort, Retriever
 
 
 class CanonicalWriteStatus(str, Enum):
@@ -17,12 +18,114 @@ class CanonicalWriteStatus(str, Enum):
   CONFLICT = "conflict"
 
 
+@dataclass(frozen=True)
+class CanonicalDocumentState:
+  document: SourceDocument
+  projection_pending: bool
+
+
 class CanonicalDocumentStore(Protocol):
   def stage(self, document: SourceDocument) -> CanonicalWriteStatus: ...
   def mark_projected(self, document: SourceDocument) -> bool: ...
   def pending_documents(self, tenant_id: str, project_id: str | None = None) -> list[SourceDocument]: ...
   def project_documents(self, tenant_id: str, project_id: str | None = None) -> list[SourceDocument]: ...
   def get(self, tenant_id: str, document_id: str) -> SourceDocument | None: ...
+  def retrieval_state(self, tenant_id: str, document_id: str) -> CanonicalDocumentState | None: ...
+
+
+class CanonicalRetriever:
+  """Treats vector results only as candidates and returns canonical content."""
+
+  def __init__(
+    self,
+    projection: Retriever,
+    document_store: CanonicalDocumentStore,
+    *,
+    embedding_version: str,
+    chunker: DeterministicChunker | None = None,
+    candidate_multiplier: int = 4,
+  ):
+    if candidate_multiplier < 1:
+      raise ValueError("candidate_multiplier must be positive")
+    self.projection = projection
+    self.document_store = document_store
+    self.embedding_version = embedding_version
+    self.chunker = chunker or DeterministicChunker()
+    self.candidate_multiplier = candidate_multiplier
+
+  def retrieve(self, query: RetrievalQuery) -> list[RetrievalHit]:
+    candidate_limit = min(20, max(query.limit, query.limit * self.candidate_multiplier))
+    candidates = self.projection.retrieve(query.model_copy(update={"limit": candidate_limit}))
+    accepted: list[RetrievalHit] = []
+    accepted_chunk_ids: set[str] = set()
+    for candidate in candidates:
+      state = self.document_store.retrieval_state(query.scope.tenant_id, candidate.document_id)
+      if state is None or state.projection_pending:
+        continue
+      canonical = state.document
+      if not self._document_is_visible(canonical, query):
+        continue
+      expected = next(
+        (
+          chunk
+          for chunk in build_chunk_records(
+            canonical,
+            self.chunker,
+            embedding_version=self.embedding_version,
+          )
+          if chunk.chunk_id == candidate.chunk_id
+        ),
+        None,
+      )
+      if expected is None or not self._candidate_matches(candidate, expected):
+        continue
+      if candidate.chunk_id in accepted_chunk_ids:
+        continue
+      accepted.append(
+        RetrievalHit(
+          chunk_id=expected.chunk_id,
+          document_id=expected.document_id,
+          text=expected.text,
+          score=candidate.score,
+          source_uri=expected.source_uri,
+          title=expected.title,
+          tenant_id=expected.tenant_id,
+          project_id=expected.project_id,
+          owner_id=expected.owner_id,
+          embedding_version=expected.embedding_version,
+          content_version=expected.content_version,
+          source_type=expected.source_type,
+        )
+      )
+      accepted_chunk_ids.add(candidate.chunk_id)
+      if len(accepted) >= query.limit:
+        break
+    return accepted
+
+  @staticmethod
+  def _document_is_visible(document: SourceDocument, query: RetrievalQuery) -> bool:
+    if document.deleted or document.tenant_id != query.scope.tenant_id:
+      return False
+    if document.project_id is not None and document.project_id not in query.scope.project_ids:
+      return False
+    if query.project_id is not None and document.project_id != query.project_id:
+      return False
+    return bool(set(document.acl_subjects) & set(query.scope.acl_subjects))
+
+  @staticmethod
+  def _candidate_matches(candidate: RetrievalHit, expected) -> bool:
+    return (
+      candidate.document_id == expected.document_id
+      and candidate.text == expected.text
+      and candidate.source_uri == expected.source_uri
+      and candidate.title == expected.title
+      and candidate.tenant_id == expected.tenant_id
+      and candidate.project_id == expected.project_id
+      and candidate.owner_id == expected.owner_id
+      and candidate.embedding_version == expected.embedding_version
+      and candidate.content_version == expected.content_version
+      and candidate.source_type == expected.source_type
+    )
 
 
 class CanonicalIngestionApplication:
@@ -44,9 +147,15 @@ class CanonicalIngestionApplication:
     for document in documents:
       status = self.document_store.stage(document)
       counts[status.value] += 1
-      if status is not CanonicalWriteStatus.ACCEPTED:
+      current = document
+      if status is CanonicalWriteStatus.DUPLICATE:
+        state = self.document_store.retrieval_state(document.tenant_id, document.document_id)
+        if state is None or not state.projection_pending:
+          continue
+        current = state.document
+      elif status is not CanonicalWriteStatus.ACCEPTED:
         continue
-      if self._project(document):
+      if self._project(current):
         projected += 1
     scopes = {(document.tenant_id, document.project_id) for document in documents}
     pending = sum(len(self.document_store.pending_documents(tenant_id, project_id)) for tenant_id, project_id in scopes)
@@ -120,7 +229,14 @@ class CanonicalIngestionApplication:
         )
       status = self.document_store.stage(current)
       counts[status.value] += 1
-      if status is CanonicalWriteStatus.ACCEPTED and self._project(current):
+      if status is CanonicalWriteStatus.DUPLICATE:
+        state = self.document_store.retrieval_state(tenant_id, document_id)
+        if state is None or not state.projection_pending:
+          continue
+        current = state.document
+      elif status is not CanonicalWriteStatus.ACCEPTED:
+        continue
+      if self._project(current):
         projected += 1
     pending = len(self.document_store.pending_documents(tenant_id))
     return {**counts, "projected": projected, "pending": pending}

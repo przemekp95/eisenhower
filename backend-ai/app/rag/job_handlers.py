@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from ..document_versions import DocumentVersionStore
 from ..job_worker import PermanentJobError
+from .errors import ProjectionUnavailable
 from .models import SourceDocument
 
 
@@ -73,6 +74,7 @@ class RagJobHandlers:
     result = self.ingestion.ingest(accepted)
     if result and result.get("conflict", 0):
       raise PermanentJobError("canonical source sequence conflict")
+    self._require_projection_complete(result)
     for document in accepted:
       if self.versions is not None:
         self.versions.record(document.tenant_id, document.document_id, source_sequence)
@@ -98,6 +100,7 @@ class RagJobHandlers:
     )
     if result and result.get("conflict", 0):
       raise PermanentJobError("canonical tombstone sequence conflict")
+    self._require_projection_complete(result)
     for document_id in accepted:
       if self.versions is not None:
         self.versions.record(str(tenant_id), document_id, source_sequence)
@@ -155,3 +158,8 @@ class RagJobHandlers:
       return True
     current = self.versions.current(tenant_id, document_id)
     return current is None or source_sequence > current
+
+  @staticmethod
+  def _require_projection_complete(result: dict | None) -> None:
+    if result and int(result.get("pending", 0)) > 0:
+      raise ProjectionUnavailable("canonical projection remains pending")

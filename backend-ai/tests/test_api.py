@@ -10,6 +10,7 @@ import pytest
 from app.config import Settings
 from app.generation.models import InformationDelta, statement_checksum
 from app.local_model import LocalMiniLMClassifier, LocalPrediction, ModelNotReadyError, SimilarExample
+from app.jobs import SqliteJobQueue
 from app.main import create_app
 from app.rag.models import AnalyzeResult, RetrievalSummary
 from app.service import QuadrantAIService
@@ -75,6 +76,7 @@ class FakeLocalModel:
     return [self.predict(task, limit=limit) for task in tasks]
 
   def explain(self, task: str, language: str = "en", prediction: LocalPrediction | None = None):
+    del prediction
     quadrant = 2 if "roadmap" in task else 0
     return {
       "quadrant": quadrant,
@@ -238,6 +240,7 @@ def test_v2_rag_contract_uses_authenticated_scope_not_client_tenant(tmp_path: Pa
   settings = Settings(
     training_data_path=tmp_path / "training.json",
     model_cache_dir=tmp_path / "runtime",
+    rag_response_enabled=True,
   )
   store = TrainingStore(settings.training_data_path)
   service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
@@ -260,6 +263,7 @@ def test_v2_rag_contract_forwards_bounded_known_state_and_rejects_duplicate_ids(
   settings = Settings(
     training_data_path=tmp_path / "training.json",
     model_cache_dir=tmp_path / "runtime",
+    rag_response_enabled=True,
   )
   store = TrainingStore(settings.training_data_path)
   service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
@@ -347,8 +351,8 @@ def test_v2_rag_response_flag_and_tenant_cohort_fall_back_safely(tmp_path: Path)
   assert response.status_code == 200
   assert response.json()["mode"] == "fallback"
   assert response.json()["fallback_reason"] == "tenant_not_enabled"
-  assert rag.calls == []
-  assert rag.shadow_calls == []
+  assert not rag.calls
+  assert not rag.shadow_calls
 
 
 def test_v2_shadow_retrieval_runs_without_exposing_hits_or_calling_generation(tmp_path: Path):
@@ -379,7 +383,7 @@ def test_v2_shadow_retrieval_runs_without_exposing_hits_or_calling_generation(tm
     "top_score": None,
     "embedding_version": None,
   }
-  assert rag.calls == []
+  assert not rag.calls
   assert len(rag.shadow_calls) == 1
   assert 'eisenhower_rag_retrieval_total{stage="shadow",outcome="hit"} 1' in metrics.text
   assert 'eisenhower_rag_retrieval_duration_seconds_count{stage="shadow",outcome="hit"} 1' in metrics.text
@@ -500,10 +504,23 @@ def test_signed_internal_ingestion_is_replay_safe_and_idempotently_queued(tmp_pa
     content=raw_body,
     headers=webhook_headers,
   )
+  durable_job = SqliteJobQueue(settings.jobs_database_path).get(verified.json()["job_id"])
   replay = client.post(
     "/internal/webhooks/n8n/verify",
     content=raw_body,
     headers=webhook_headers,
+  )
+  changed_event = {**event, "source_version": "v2"}
+  changed_raw = json.dumps(changed_event, separators=(",", ":")).encode("utf-8")
+  changed_signature = hmac.new(
+    secret.encode(),
+    WebhookReplayVerifier.signature_message(timestamp, changed_raw),
+    sha256,
+  ).hexdigest()
+  changed_replay = client.post(
+    "/internal/webhooks/n8n/verify",
+    content=changed_raw,
+    headers={**webhook_headers, "X-Eisenhower-Signature": changed_signature},
   )
   dispatched = client.post(
     "/internal/rag/ingestion/upsert",
@@ -515,8 +532,20 @@ def test_signed_internal_ingestion_is_replay_safe_and_idempotently_queued(tmp_pa
   )
 
   assert verified.json()["accepted"] is True
+  assert verified.json()["status"] == "queued"
+  assert durable_job is not None
+  assert durable_job.status == "queued"
+  assert durable_job.payload == {
+    key: value for key, value in event.items() if key not in {"operation", "schema_version"}
+  }
   assert replay.json()["accepted"] is False
+  assert replay.json()["job_id"] == durable_job.job_id
+  assert changed_replay.status_code == 409
+  assert changed_replay.json() == {
+    "error": "Idempotency key is already bound to a different job request."
+  }
   assert dispatched.status_code == 202
+  assert dispatched.json()["job_id"] == durable_job.job_id
   assert dispatched.json()["status"] == "queued"
 
 
@@ -603,6 +632,64 @@ def test_webhook_verification_fails_closed_before_reserving_event_id(tmp_path: P
   assert wrong_media_type.status_code == 415
   assert unsigned_malformed.status_code == 200
   assert unsigned_malformed.json() == {"accepted": False}
+
+
+def test_signed_webhook_is_durably_queued_before_replay_reservation(tmp_path: Path, monkeypatch):
+  secret = "webhook-secret"
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    internal_api_token="internal-token",
+    internal_allowed_tenants=("tenant-a",),
+    webhook_secret=secret,
+    jobs_database_path=tmp_path / "jobs.sqlite3",
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service),
+    headers={"Authorization": "Bearer internal-token"},
+    raise_server_exceptions=False,
+  )
+  event = {
+    "schema_version": "2",
+    "event_id": "00000000-0000-4000-8000-000000000099",
+    "operation": "reindex_project",
+    "tenant_id": "tenant-a",
+    "project_id": "project-1",
+    "source_version": "v1",
+    "source_sequence": 1,
+    "content_checksum": f"sha256:{'a' * 64}",
+    "embedding_version": "minilm-v1",
+    "chunking_version": "chars-v1",
+  }
+  timestamp = str(int(datetime.now(timezone.utc).timestamp()))
+  raw_body = json.dumps(event, separators=(",", ":")).encode("utf-8")
+  signature = hmac.new(
+    secret.encode(),
+    WebhookReplayVerifier.signature_message(timestamp, raw_body),
+    sha256,
+  ).hexdigest()
+
+  def fail_reservation(_self, _event_id):
+    raise RuntimeError("simulated crash after durable enqueue")
+
+  monkeypatch.setattr(WebhookReplayVerifier, "reserve_event", fail_reservation)
+  response = client.post(
+    "/internal/webhooks/n8n/verify",
+    content=raw_body,
+    headers={
+      "Content-Type": "application/json",
+      "X-Eisenhower-Timestamp": timestamp,
+      "X-Eisenhower-Signature": signature,
+      "X-Eisenhower-Signature-Version": WEBHOOK_SIGNATURE_VERSION,
+      "X-Eisenhower-Signed-Method": WEBHOOK_INGRESS_METHOD,
+      "X-Eisenhower-Signed-Path": WEBHOOK_INGRESS_PATH,
+    },
+  )
+
+  assert response.status_code == 500
+  assert SqliteJobQueue(settings.jobs_database_path).counts_by_status() == {"queued": 1}
 
 
 def test_webhook_verification_rejects_oversized_declared_body(tmp_path: Path):

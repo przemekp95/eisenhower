@@ -114,7 +114,7 @@ def test_controller_fails_closed_on_dependency_transition_evidence_or_approval(
 
 def test_dry_run_does_not_write_and_canary_assignment_is_stable(tmp_path):
   controller = PromotionController(
-    tmp_path / "promotion", candidate_verifier=lambda candidate_id: _candidate(candidate_id),
+    tmp_path / "promotion", candidate_verifier=_candidate,
     approval_verifier=_approval_verifier,
   )
   before = controller.read()
@@ -153,7 +153,7 @@ def test_controller_rejects_candidate_workflow_that_does_not_match_phase(tmp_pat
 )
 def test_controller_rejects_malformed_or_non_owner_approval(tmp_path, approval):
   controller = PromotionController(
-    tmp_path / "promotion", candidate_verifier=lambda candidate_id: _candidate(candidate_id),
+    tmp_path / "promotion", candidate_verifier=_candidate,
     approval_verifier=_approval_verifier,
   )
   with pytest.raises(PromotionBlocked, match="approval"):

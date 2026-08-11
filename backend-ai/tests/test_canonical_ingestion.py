@@ -1,4 +1,8 @@
-from app.rag.canonical import CanonicalIngestionApplication, CanonicalWriteStatus
+from app.rag.canonical import (
+  CanonicalDocumentState,
+  CanonicalIngestionApplication,
+  CanonicalWriteStatus,
+)
 from app.rag.errors import ProjectionUnavailable
 from app.rag.ingestion import DeterministicChunker, build_chunk_records
 from app.rag.models import SourceDocument
@@ -35,10 +39,20 @@ class Store:
     return True
 
   def pending_documents(self, tenant_id, project_id=None):
+    del project_id
     return [self.documents[key] for key in self.pending if key[0] == tenant_id]
 
   def get(self, tenant_id, document_id):
     return self.documents.get((tenant_id, document_id))
+
+  def retrieval_state(self, tenant_id, document_id):
+    document = self.get(tenant_id, document_id)
+    if document is None:
+      return None
+    return CanonicalDocumentState(
+      document,
+      projection_pending=(tenant_id, document_id) in self.pending,
+    )
 
   def project_documents(self, tenant_id, project_id=None):
     return [
@@ -56,6 +70,7 @@ class Projection:
     self.chunks = {}
 
   def replace_documents(self, documents, chunks, vectors):
+    del vectors
     assert all((document.tenant_id, document.document_id) in self.store.documents for document in documents)
     if self.fail:
       raise ProjectionUnavailable("qdrant unavailable")
@@ -126,6 +141,22 @@ def test_reconciliation_projects_a_previously_staged_pending_document():
   projection.fail = False
 
   assert app.reconcile("tenant-1", "project-1") == {"projected": 1, "pending": 0, "drifted": 0}
+  assert store.pending == set()
+
+
+def test_retrying_the_same_command_reprojects_its_pending_canonical_document():
+  store = Store()
+  projection = Projection(store, fail=True)
+  app = CanonicalIngestionApplication(Embedder(), store, projection)
+  first = app.ingest([document()])
+  projection.fail = False
+
+  retried = app.ingest([document()])
+
+  assert first["pending"] == 1
+  assert retried["duplicate"] == 1
+  assert retried["projected"] == 1
+  assert retried["pending"] == 0
   assert store.pending == set()
 
 

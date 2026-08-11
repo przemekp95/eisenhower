@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..job_worker import PermanentJobError
+from .errors import ProjectionUnavailable
 from .models import AccessScope
 
 
@@ -43,6 +44,8 @@ class RepositoryReindexHandler:
     ingestion_result = self.ingestion.ingest(documents)
     reindex_result = self.ingestion.reindex_project(tenant_id, project_id)
     reconciliation_result = self.ingestion.reconcile(tenant_id, project_id)
+    if int(reconciliation_result.get("pending", 0)) > 0:
+      raise ProjectionUnavailable("repository projection remains pending after reconciliation")
     return {
       "ingestion": ingestion_result,
       "reindex": reindex_result,

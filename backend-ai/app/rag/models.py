@@ -153,8 +153,11 @@ class SourceDocument(StrictModel):
   deleted: bool = False
 
   def model_post_init(self, _context) -> None:
+    expected_checksum = sha256(self.text.encode("utf-8")).hexdigest()
     if self.content_checksum is None:
-      self.content_checksum = sha256(self.text.encode("utf-8")).hexdigest()
+      self.content_checksum = expected_checksum
+    elif self.content_checksum != expected_checksum:
+      raise ValueError("content_checksum must match the canonical document text")
 
 
 class ChunkRecord(StrictModel):

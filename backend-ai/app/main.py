@@ -30,6 +30,12 @@ MAX_TASK_LENGTH = 500
 MAX_BATCH_TASKS = 100
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_WEBHOOK_BYTES = 8 * 1024 * 1024
+WEBHOOK_JOB_TYPES = {
+  "upsert": "rag.upsert",
+  "tombstone": "rag.tombstone",
+  "reindex_project": "rag.reindex_project",
+  "start_rag_evaluation": "rag.evaluate",
+}
 
 
 class StrictRequest(BaseModel):
@@ -504,14 +510,29 @@ def create_app(
     except (UnicodeDecodeError, ValueError) as exception:
       raise HTTPException(status_code=422, detail="Invalid ingestion envelope.") from exception
     event_id = str(envelope.event_id)
-    if not webhook_verifier.reserve_event(event_id):
-      return {"accepted": False}
     tenant_id = envelope.tenant_id
+    if job_queue is None:
+      raise HTTPException(status_code=503, detail="Durable job queue is disabled.")
+    if tenant_id not in resolved_settings.internal_allowed_tenants:
+      raise HTTPException(status_code=403, detail="Tenant is outside the connector scope.")
     operation = envelope.operation
-    payload = envelope.model_dump(mode="json", exclude_none=True)
+    signed_payload = envelope.model_dump(mode="json", exclude_none=True, exclude_unset=True)
+    payload = {
+      key: value
+      for key, value in signed_payload.items()
+      if key not in {"operation", "schema_version"}
+    }
+    try:
+      job = job_queue.enqueue(event_id, WEBHOOK_JOB_TYPES[operation], payload)
+    except JobConflictError as exception:
+      raise HTTPException(status_code=409, detail=str(exception)) from exception
+    if not webhook_verifier.reserve_event(event_id):
+      return {"accepted": False, "job_id": job.job_id, "status": job.status}
     return {
       "accepted": True,
-      "envelope": payload,
+      "job_id": job.job_id,
+      "status": job.status,
+      "envelope": signed_payload,
       "internal_signature": webhook_verifier.sign_internal_dispatch(
         event_id,
         tenant_id,

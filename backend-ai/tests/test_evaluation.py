@@ -125,7 +125,7 @@ def test_quality_gate_requires_absolute_quality_calibration_and_no_regression():
   )
 
   assert passing["passed"] is True
-  assert passing["reasons"] == []
+  assert not passing["reasons"]
   assert failing["passed"] is False
   assert {reason["code"] for reason in failing["reasons"]} == {
     "below_minimum_macro_f1",
@@ -249,7 +249,7 @@ def test_production_evaluation_governance_accepts_a_large_frozen_dual_annotated_
     },
   }
 
-  assert evaluation_governance_issues(dataset, profile="production") == []
+  assert not evaluation_governance_issues(dataset, profile="production")
 
 
 def test_semantic_leakage_report_flags_near_duplicates_not_only_exact_text():

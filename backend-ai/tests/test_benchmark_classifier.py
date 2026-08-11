@@ -14,7 +14,7 @@ def test_evaluation_sha_and_approval_issues_bind_report_to_exact_bytes(tmp_path:
   digest = hashlib.sha256(dataset.read_bytes()).hexdigest()
 
   assert evaluation_sha256(dataset) == digest
-  assert evaluation_approval_issues(digest, digest) == []
+  assert not evaluation_approval_issues(digest, digest)
   assert evaluation_approval_issues(digest, None) == [
     {"code": "approved_evaluation_sha256_missing", "actual": digest}
   ]

@@ -25,6 +25,7 @@ class FakeEncoder:
     convert_to_numpy: bool = True,
     show_progress_bar: bool = False,
   ):
+    del convert_to_numpy, show_progress_bar
     self.calls.append(list(texts))
     return [self._vectorize(text, normalize_embeddings=normalize_embeddings) for text in texts]
 
@@ -141,7 +142,7 @@ def test_local_model_predict_reuses_query_embedding_and_supports_batch_predictio
     limit=0,
   )
 
-  assert single_prediction.similar_examples == []
+  assert not single_prediction.similar_examples
   assert batch_predictions[0].quadrant == single_prediction.quadrant
   assert batch_predictions[1].confidence > 0
   assert all(prediction.similar_examples == [] for prediction in batch_predictions)
@@ -149,7 +150,7 @@ def test_local_model_predict_reuses_query_embedding_and_supports_batch_predictio
     ["urgent deadline today"],
     ["urgent deadline today", "prepare strategic roadmap"],
   ]
-  assert model.find_similar_examples("urgent deadline today", limit=0) == []
+  assert not model.find_similar_examples("urgent deadline today", limit=0)
 
 
 def test_local_model_batch_predict_rejects_empty_tasks(tmp_path: Path):
@@ -209,7 +210,9 @@ def test_local_model_marks_corrupt_artifacts_as_not_ready(tmp_path: Path):
 
   status = model.status()
   assert status["ready"] is False
-  assert "checksum" in status["last_error"]
+  last_error = status["last_error"]
+  assert isinstance(last_error, str)
+  assert "checksum" in str(last_error)
 
 
 def test_local_model_rejects_artifacts_for_different_encoder(tmp_path: Path):
@@ -268,7 +271,7 @@ def test_local_model_uses_encoder_dimension_getter_before_probe_encode(tmp_path:
 
   assert model._resolve_embedding_dim() == 384
   assert model._resolve_embedding_dim() == 384
-  assert encoder.calls == []
+  assert not encoder.calls
 
 
 def test_local_model_rejects_empty_training_set(tmp_path: Path):
@@ -337,6 +340,7 @@ def test_local_model_covers_polish_without_examples_and_lazy_encoder_factory(tmp
 
   class FakeSentenceTransformer(FakeEncoderWithToList):
     def __init__(self, model_name: str, *, revision: str):
+      super().__init__()
       self.model_name = model_name
       self.revision = revision
 
@@ -395,19 +399,19 @@ def test_split_indices_covers_seeded_stratified_validation_and_skip_paths():
 
   train_sparse, validation_sparse, skipped_sparse = split_indices([0, 0, 1, 2, 2, 3, 3, 3])
   assert train_sparse == list(range(8))
-  assert validation_sparse == []
+  assert not validation_sparse
   assert skipped_sparse is True
 
   train_small, validation_small, skipped_small = split_indices([0, 1, 2])
   assert train_small == [0, 1, 2]
-  assert validation_small == []
+  assert not validation_small
   assert skipped_small is True
 
   assert split_indices([0, 0, 0, 0, 0, 0, 0, 0])[2] is False
   assert split_indices([0, 0, 0, 0, 0, 0, 0, 0])[1]
 
   assert split_indices([0, 0, 0, 0, 0, 0, 0, 1])[2] is True
-  assert split_indices([0, 0, 0, 0, 0, 0, 0, 1])[1] == []
+  assert not split_indices([0, 0, 0, 0, 0, 0, 0, 1])[1]
 
   assert cosine_similarity([], [1.0, 0.0]) == 0.0
 

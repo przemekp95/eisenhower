@@ -207,4 +207,4 @@ def test_freeze_requires_named_human_approval_and_makes_governance_auditable():
   assert frozen["governance"]["status"] == "approved"
   assert frozen["governance"]["frozen"] is True
   assert frozen["governance"]["approved_by"] == "human-reviewer-1"
-  assert evaluation_governance_issues(frozen, profile="production") == []
+  assert not evaluation_governance_issues(frozen, profile="production")
