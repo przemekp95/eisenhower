@@ -63,18 +63,8 @@ const DIRECT_RULES = [
   },
   {
     pattern: /^mobile\/eisenhower-matrix\//,
-    targets: ["mobile"],
-    reason: "mobile application surface",
-  },
-  {
-    pattern: /^mobile\/eisenhower-matrix\/(?:package\.json$|app\.config\.[^/]+$)/,
-    targets: ["mobile-native-android"],
-    reason: "mobile dependency or Expo configuration surface",
-  },
-  {
-    pattern: /^mobile\/eisenhower-matrix\/(?:android\/|app\.json$|eas\.json$)/,
-    targets: ["mobile-native-android"],
-    reason: "native Android or Expo build surface",
+    targets: ["mobile", "mobile-native-android"],
+    reason: "mobile application, Metro bundle, Expo, or native Android surface",
   },
   {
     pattern: /^packages\/api-client\//,
@@ -85,6 +75,7 @@ const DIRECT_RULES = [
       "frontend-integration",
       "frontend-e2e",
       "mobile",
+      "mobile-native-android",
       "mcp",
     ],
     reason: "shared HTTP API client contract",

@@ -87,12 +87,22 @@ jobs:
   security-lint:
     name: security-lint
     needs: resolve-run-mode
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
       security-events: write
       contents: read
     steps:
+      - name: Require a successful CI impact plan
+        id: plan-guard
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.security_lint }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
       - name: Checkout
+        id: checkout
+        if: ${{ always() }}
         uses: actions/checkout@v6
 
       - name: Test deterministic CI impact rules
@@ -107,8 +117,41 @@ jobs:
       - name: Lint GitHub Actions workflows
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.11
 
+      - name: Setup Node.js for continuous dependency audits
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python for continuous dependency audits
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend-ai/requirements-dev.txt
+
+      - name: Setup pinned uv for the MCP lockfile audit
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.17"
+          enable-cache: true
+          cache-dependency-glob: mcp/eisenhower_adapter/uv.lock
+
+      - name: Install pinned Python dependency auditor
+        run: python -m pip install pip-audit==2.10.1
+
+      - name: Audit every production dependency surface
+        run: |
+          npm --prefix backend-node audit --omit=dev --audit-level=high
+          npm --prefix packages/api-client audit --omit=dev --audit-level=high
+          npm --prefix web audit --omit=dev --audit-level=high
+          npm --prefix mobile/eisenhower-matrix run audit:production
+          python backend-ai/scripts/production_dependency_audit.py
+          uv export --project mcp/eisenhower_adapter --locked --no-dev --no-emit-project --format requirements.txt --output-file "$RUNNER_TEMP/mcp-requirements.txt"
+          python -m pip_audit --requirement "$RUNNER_TEMP/mcp-requirements.txt" --require-hashes --disable-pip --progress-spinner off
+
       - name: Run Trivy scan
         id: trivy-scan
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
         shell: bash
         run: |
           set +e
@@ -129,14 +172,23 @@ jobs:
           echo "exit_code=$status" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Upload SARIF
+      - name: Preserve Trivy SARIF artifact
         if: ${{ always() && hashFiles('trivy-results.sarif') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: trivy-sarif-${{ github.sha }}
+          path: trivy-results.sarif
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload SARIF to code scanning
+        if: ${{ always() && hashFiles('trivy-results.sarif') != '' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) }}
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
 
       - name: Enforce Trivy gate
-        if: ${{ steps.trivy-scan.outputs.exit_code != '0' }}
+        if: ${{ always() && steps.trivy-scan.outputs.exit_code != '0' }}
         run: |
           echo "::error::Trivy detected HIGH or CRITICAL findings."
           exit 1
@@ -144,8 +196,15 @@ jobs:
   test-backend-node:
     name: test-backend-node
     needs: resolve-run-mode
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.backend_node }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
       - name: Not applicable
         if: ${{ needs.resolve-run-mode.outputs.backend_node != 'true' }}
         run: echo "backend-node is not selected by the CI impact plan."
@@ -180,11 +239,6 @@ jobs:
         working-directory: backend-node
         run: npm ci
 
-      - name: Audit production dependencies
-        if: ${{ needs.resolve-run-mode.outputs.backend_node == 'true' && needs.resolve-run-mode.outputs.dependency_audit == 'true' }}
-        working-directory: backend-node
-        run: npm audit --omit=dev --audit-level=high
-
       - name: Build
         if: ${{ needs.resolve-run-mode.outputs.backend_node == 'true' }}
         working-directory: backend-node
@@ -209,8 +263,15 @@ jobs:
   test-api-client:
     name: test-api-client
     needs: resolve-run-mode
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.api_client }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
       - name: Not applicable
         if: ${{ needs.resolve-run-mode.outputs.api_client != 'true' }}
         run: echo "api-client is not selected by the CI impact plan."
@@ -232,11 +293,6 @@ jobs:
         working-directory: packages/api-client
         run: npm ci
 
-      - name: Audit API client production dependencies
-        if: ${{ needs.resolve-run-mode.outputs.api_client == 'true' && needs.resolve-run-mode.outputs.dependency_audit == 'true' }}
-        working-directory: packages/api-client
-        run: npm audit --omit=dev --audit-level=high
-
       - name: Test API client runtime and declarations
         if: ${{ needs.resolve-run-mode.outputs.api_client == 'true' }}
         run: make test-api-client
@@ -244,8 +300,15 @@ jobs:
   test-mcp-adapter:
     name: test-mcp-adapter
     needs: resolve-run-mode
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.mcp }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
       - name: Not applicable
         if: ${{ needs.resolve-run-mode.outputs.mcp != 'true' }}
         run: echo "MCP is not selected by the CI impact plan."
@@ -275,8 +338,15 @@ jobs:
   test-n8n-workflows:
     name: test-n8n-workflows
     needs: resolve-run-mode
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.n8n }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
       - name: Not applicable
         if: ${{ needs.resolve-run-mode.outputs.n8n != 'true' }}
         run: echo "n8n is not selected by the CI impact plan."
@@ -298,8 +368,15 @@ jobs:
   test-frontend:
     name: test-frontend
     needs: resolve-run-mode
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.web }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
       - name: Not applicable
         if: ${{ needs.resolve-run-mode.outputs.web != 'true' }}
         run: echo "web is not selected by the CI impact plan."
@@ -321,11 +398,6 @@ jobs:
         working-directory: web
         run: npm ci
 
-      - name: Audit production dependencies
-        if: ${{ needs.resolve-run-mode.outputs.web == 'true' && needs.resolve-run-mode.outputs.dependency_audit == 'true' }}
-        working-directory: web
-        run: npm audit --omit=dev --audit-level=high
-
       - name: Build
         if: ${{ needs.resolve-run-mode.outputs.web == 'true' }}
         working-directory: web
@@ -338,9 +410,16 @@ jobs:
 
   test-frontend-e2e:
     needs: resolve-run-mode
+    if: ${{ always() }}
     name: test-frontend-e2e
     runs-on: ubuntu-latest
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.frontend_e2e }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
       - name: Not applicable
         if: ${{ needs.resolve-run-mode.outputs.frontend_e2e != 'true' }}
         run: echo "frontend E2E is not selected by the CI impact plan."
@@ -404,9 +483,16 @@ jobs:
 
   test-frontend-integration:
     needs: resolve-run-mode
+    if: ${{ always() }}
     name: test-frontend-integration
     runs-on: ubuntu-latest
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.frontend_integration }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
       - name: Not applicable
         if: ${{ needs.resolve-run-mode.outputs.frontend_integration != 'true' }}
         run: echo "frontend integration is not selected by the CI impact plan."
@@ -443,8 +529,15 @@ jobs:
   test-backend-ai:
     name: test-backend-ai
     needs: resolve-run-mode
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.backend_ai }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
       - name: Not applicable
         if: ${{ needs.resolve-run-mode.outputs.backend_ai != 'true' }}
         run: echo "backend-ai is not selected by the CI impact plan."
@@ -524,11 +617,6 @@ jobs:
           done
           exit 1
 
-      - name: Audit production dependencies
-        if: ${{ needs.resolve-run-mode.outputs.backend_ai == 'true' && needs.resolve-run-mode.outputs.dependency_audit == 'true' }}
-        working-directory: backend-ai
-        run: python scripts/production_dependency_audit.py
-
       - name: Run tests with coverage
         if: ${{ needs.resolve-run-mode.outputs.backend_ai == 'true' }}
         working-directory: backend-ai
@@ -591,8 +679,15 @@ jobs:
   test-mobile:
     name: test-mobile
     needs: resolve-run-mode
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.mobile }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
       - name: Not applicable
         if: ${{ needs.resolve-run-mode.outputs.mobile != 'true' }}
         run: echo "mobile is not selected by the CI impact plan."
@@ -614,11 +709,6 @@ jobs:
         working-directory: mobile/eisenhower-matrix
         run: npm ci
 
-      - name: Enforce mobile production audit policy
-        if: ${{ needs.resolve-run-mode.outputs.mobile == 'true' && needs.resolve-run-mode.outputs.dependency_audit == 'true' }}
-        working-directory: mobile/eisenhower-matrix
-        run: npm run audit:production
-
       - name: Test with coverage
         if: ${{ needs.resolve-run-mode.outputs.mobile == 'true' }}
         working-directory: mobile/eisenhower-matrix
@@ -626,6 +716,7 @@ jobs:
 
   test-mobile-native-android:
     needs: resolve-run-mode
+    if: ${{ always() }}
     name: test-mobile-native-android
     runs-on: ubuntu-latest
     env:
@@ -633,6 +724,12 @@ jobs:
       EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
       EXPO_PUBLIC_AI_API_URL: ${{ vars.EXPO_PUBLIC_AI_API_URL }}
     steps:
+      - name: Require a successful CI impact plan
+        env:
+          RESOLVER_RESULT: ${{ needs.resolve-run-mode.result }}
+          TARGET: ${{ needs.resolve-run-mode.outputs.mobile_native_android }}
+        run: test "$RESOLVER_RESULT" = success && [[ "$TARGET" =~ ^(true|false)$ ]]
+
       - name: Not applicable
         if: ${{ needs.resolve-run-mode.outputs.mobile_native_android != 'true' }}
         run: echo "native Android is not selected by the CI impact plan."

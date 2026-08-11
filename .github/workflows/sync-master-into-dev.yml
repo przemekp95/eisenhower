@@ -90,6 +90,7 @@ jobs:
           run_id="${{ steps.master-ci-run.outputs.run_id }}"
           repo="${{ github.repository }}"
           required_jobs=(
+            resolve-run-mode
             security-lint
             test-backend-node
             test-api-client

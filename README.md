@@ -257,6 +257,7 @@ Reference files:
 Target required checks for both `dev` and `master`:
 
 - `branch-policy`
+- `resolve-run-mode`
 - `security-lint`
 - `test-backend-node`
 - `test-api-client`

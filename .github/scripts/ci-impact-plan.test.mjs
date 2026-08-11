@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
@@ -90,6 +91,42 @@ test("module manifests select dependency audits without forcing unrelated suites
 
   assert.equal(plan.fullCi, false);
   assert.deepEqual(plan.targets, ["dependency-audit", "mcp"]);
+});
+
+test("every mobile application change validates the bundled Android release surface", () => {
+  for (const path of [
+    "mobile/eisenhower-matrix/src/services/tasks.js",
+    "mobile/eisenhower-matrix/App.js",
+    "mobile/eisenhower-matrix/metro.config.js",
+    "mobile/eisenhower-matrix/assets/icon.png",
+  ]) {
+    const plan = buildImpactPlan({
+      eventName: "pull_request",
+      refName: "feature/mobile-source",
+      mergeBase: "a".repeat(40),
+      headSha: "b".repeat(40),
+      changes: [change("M", path)],
+    });
+
+    assert.ok(plan.targets.includes("mobile"), path);
+    assert.ok(plan.targets.includes("mobile-native-android"), path);
+  }
+});
+
+test("the shared API client validates every consumer including the Android bundle", () => {
+  for (const path of ["packages/api-client/index.js", "packages/api-client/package.json"]) {
+    const plan = buildImpactPlan({
+      eventName: "pull_request",
+      refName: "feature/shared-client",
+      mergeBase: "a".repeat(40),
+      headSha: "b".repeat(40),
+      changes: [change("M", path)],
+    });
+
+    assert.ok(plan.targets.includes("api-client"), path);
+    assert.ok(plan.targets.includes("mobile"), path);
+    assert.ok(plan.targets.includes("mobile-native-android"), path);
+  }
 });
 
 test("workflows, lockfiles, infrastructure, root config, and unknown paths fail closed", () => {
@@ -184,6 +221,24 @@ test("documentation-only changes produce an explicit not-applicable plan", () =>
   assert.deepEqual(first, second);
 });
 
+test("required job guard fails closed when the resolver fails or omits its output", () => {
+  const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
+  const guard = workflow.match(
+    /- name: Require a successful CI impact plan[\s\S]*?\n\s+run: ([^\n]+)/,
+  )?.[1];
+  assert.ok(guard);
+
+  const execute = (resolverResult, target) =>
+    spawnSync("bash", ["-c", guard], {
+      env: { ...process.env, RESOLVER_RESULT: resolverResult, TARGET: target },
+    }).status;
+
+  assert.notEqual(execute("failure", "true"), 0);
+  assert.notEqual(execute("success", ""), 0);
+  assert.equal(execute("success", "false"), 0);
+  assert.equal(execute("success", "true"), 0);
+});
+
 test("required contexts stay synchronized and expose explicit not-applicable jobs", () => {
   const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
   const bridge = readFileSync(".github/scripts/bridge-sync-pr-statuses.mjs", "utf8");
@@ -191,6 +246,7 @@ test("required contexts stay synchronized and expose explicit not-applicable job
   const acceptance = readFileSync("docs/PRODUCTION_ACCEPTANCE.md", "utf8");
   const readme = readFileSync("README.md", "utf8");
   const contexts = [
+    "resolve-run-mode",
     "security-lint",
     "test-backend-node",
     "test-api-client",
@@ -220,10 +276,37 @@ test("required contexts stay synchronized and expose explicit not-applicable job
   );
   assert.doesNotMatch(workflow, /- name: Run Trivy scan\n\s+if:/);
   assert.doesNotMatch(workflow, /security scan not applicable/i);
-
-  const dependencyAuditSteps = workflow.match(
-    /- name: (?:Audit production dependencies|Audit API client production dependencies|Enforce mobile production audit policy)\n\s+if: [^\n]+/g,
+  assert.equal((workflow.match(/^    if: \$\{\{ always\(\) \}\}$/gm) ?? []).length, 11);
+  assert.equal(
+    (workflow.match(/- name: Require a successful CI impact plan/g) ?? []).length,
+    11,
   );
-  assert.equal(dependencyAuditSteps?.length, 5);
-  for (const step of dependencyAuditSteps) assert.match(step, /dependency_audit == 'true'/);
+  assert.equal((workflow.match(/RESOLVER_RESULT: \$\{\{ needs\.resolve-run-mode\.result \}\}/g) ?? []).length, 11);
+  assert.equal((workflow.match(/TARGET: \$\{\{ needs\.resolve-run-mode\.outputs\.[a-z0-9_]+ \}\}/g) ?? []).length, 11);
+
+  const auditCommands = [
+    "npm --prefix backend-node audit --omit=dev --audit-level=high",
+    "npm --prefix packages/api-client audit --omit=dev --audit-level=high",
+    "npm --prefix web audit --omit=dev --audit-level=high",
+    "npm --prefix mobile/eisenhower-matrix run audit:production",
+    "python backend-ai/scripts/production_dependency_audit.py",
+    "uv export --project mcp/eisenhower_adapter --locked --no-dev --no-emit-project --format requirements.txt",
+    'python -m pip_audit --requirement "$RUNNER_TEMP/mcp-requirements.txt" --require-hashes --disable-pip --progress-spinner off',
+  ];
+  for (const command of auditCommands) assert.ok(workflow.includes(command), command);
+  assert.match(workflow, /- name: Audit every production dependency surface\n\s+run: \|/);
+  assert.match(workflow, /- name: Preserve Trivy SARIF artifact\n\s+if: \$\{\{ always\(\)/);
+  assert.match(
+    workflow,
+    /- name: Run Trivy scan\n\s+id: trivy-scan\n\s+if: \$\{\{ always\(\) && steps\.checkout\.outcome == 'success' \}\}/,
+  );
+  assert.match(
+    workflow,
+    /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/,
+  );
+  assert.ok(workflow.includes("github.actor != 'dependabot[bot]'"));
+  assert.match(
+    workflow,
+    /- name: Enforce Trivy gate\n\s+if: \$\{\{ always\(\) && steps\.trivy-scan\.outputs\.exit_code != '0' \}\}/,
+  );
 });

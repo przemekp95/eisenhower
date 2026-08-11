@@ -2,7 +2,7 @@
 
 `ci-impact-plan/v1` selects test targets from the merge-base diff. Its JSON artifact is the audit record: it contains normalized rename/delete-aware changes, the selected multi-label targets and reasons, and a SHA-256 digest of the canonical planner input.
 
-The planner fails closed to every target for `master`, `release/*`, the weekly schedule, workflow/action changes, lockfiles, Docker/Compose or deployment infrastructure, root build configuration, empty diffs, unknown paths/statuses, and planner or Git errors. Required jobs are never omitted: an unaffected component job runs a short explicit `Not applicable` step and succeeds under its stable context name. The required `security-lint` job always runs planner tests, actionlint and the complete Trivy source scan, including documentation-only changes.
+The planner fails closed to every target for `master`, `release/*`, the weekly schedule, workflow/action changes, lockfiles, Docker/Compose or deployment infrastructure, root build configuration, empty diffs, unknown paths/statuses, and planner or Git errors. `resolve-run-mode` is itself a stable required context, and every dependent required job uses an `always()` guard that fails unless the resolver succeeded and emitted a boolean target. Required component jobs are never omitted: an unaffected component job runs a short explicit `Not applicable` step and succeeds under its stable context name. The required `security-lint` job always runs planner tests, actionlint, all production dependency audits, and the complete Trivy source scan, including documentation-only changes.
 
 The dependency graph preserves the repository's real boundaries:
 
@@ -11,7 +11,8 @@ The dependency graph preserves the repository's real boundaries:
 - backend AI API, webhook, job and adapter changes retain AI, web, MCP and n8n contracts;
 - shared contracts fan out across backends and consumers; API-client changes retain backend/client/browser/mobile compatibility;
 - n8n changes retain signed-webhook, idempotency, retry and backend-AI job contracts;
-- dependency audits are selected by owned manifests, while lockfiles and the weekly schedule run the full dependency set; Trivy remains unconditional on every run.
+- the whole mobile application tree and the directly imported shared API client select the Android release build because Metro bundles both into the APK;
+- manifest changes retain the `dependency-audit` impact label, while npm, backend Python, MCP lockfile and mobile policy audits execute continuously on every run; Trivy enforcement is also unconditional, with fork PR SARIF retained as a normal artifact when code-scanning upload is not write-capable.
 
 This is dependency-aware layered/ports-and-adapters impact selection, not a claim that the monorepo implements CQRS or a fully hexagonal architecture.
 

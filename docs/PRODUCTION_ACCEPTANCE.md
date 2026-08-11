@@ -42,6 +42,7 @@ completion by the supported web, mobile, shared-client and MCP readers without c
 The GitHub commit is acceptable only when all CI jobs pass on the exact commit SHA:
 
 - `branch-policy`
+- `resolve-run-mode`
 - `security-lint`
 - `test-backend-node`
 - `test-api-client`
@@ -56,7 +57,7 @@ The GitHub commit is acceptable only when all CI jobs pass on the exact commit S
 
 Branch protection for `dev` and `master` must require those checks before merge. Every context remains present for selective runs and reports a fast successful not-applicable result when its owned surface is unaffected. A local workflow edit does not change GitHub rulesets; rulesets must be verified after the change is pushed.
 
-The versioned `ci-impact-plan/v1` artifact records the merge-base, rename/delete-aware path set, selected targets, reasons and SHA-256 input digest. Changes to workflows, lockfiles, root configuration, Docker/Compose, deployment infrastructure, unknown paths, planner errors, `master`, `release/*`, and the weekly schedule fail closed to full CI. Backend HTTP/API/auth and ports-and-adapters changes retain executable BDD and consumer checks; browser/CSRF changes retain integration/E2E; webhook/job/messaging changes retain backend AI and n8n contract checks. Dependency audits run with their owning manifests and on every weekly full run; the complete Trivy scan remains mandatory on every CI run.
+The versioned `ci-impact-plan/v1` artifact records the merge-base, rename/delete-aware path set, selected targets, reasons and SHA-256 input digest. Changes to workflows, lockfiles, root configuration, Docker/Compose, deployment infrastructure, unknown paths, planner errors, `master`, `release/*`, and the weekly schedule fail closed to full CI. Backend HTTP/API/auth and ports-and-adapters changes retain executable BDD and consumer checks; browser/CSRF changes retain integration/E2E; webhook/job/messaging changes retain backend AI and n8n contract checks. Manifests retain an explicit dependency-impact label, but npm, backend Python, MCP lockfile and mobile-policy audits execute continuously on every CI run. The complete Trivy scan is likewise mandatory on every run.
 
 The release workflow starts only after a successful `CI` push run for `master`, checks out its exact SHA, and publishes first-party images under a full-SHA tag. `latest` is not a deployment input, but a full-SHA tag is still mutable registry metadata; release acceptance must not call the image immutable until the deployment records and consumes each image digest.
 
