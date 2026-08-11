@@ -17,20 +17,37 @@ Requires explicit deployment authorization, approved production origins/identity
 
 ---
 
-## TASK-015: Select and validate private vLLM generation
+## TASK-015: Qualify the selected live GPU, runtime, model and quantization
 **Priority:** P2 | **Tags:** rag, vllm, gpu, citations
 
-After retrieval proves useful, select a licensed model for the actual GPU/runtime and validate private structured generation, grounded citations, no-answer behavior, security, capacity, shadow generation, and response canary gates.
+After retrieval proves useful, qualify a licensed model on the exact physical NVIDIA/CUDA or AMD/ROCm host and prove that its pinned runtime satisfies the private generation contract, capacity and failure gates.
 
 ### Plan
 
-- Inventory target GPU/VRAM/runtime and approve model license, residency, tokenizer, chat template, and immutable revisions.
-- Run live vLLM contract, adversarial, groundedness, citation, latency, capacity, OOM, and fallback tests.
-- Keep responses disabled through shadow generation; enable only an approved cohort after rollback rehearsal.
+- Record exact accelerator, VRAM, driver, runtime, vLLM image digest, model/license/revision, tokenizer/chat template, dtype or quantization, context and concurrency.
+- Run the live structured-output, auth, health, metrics, latency, capacity, VRAM, OOM, disconnect and fallback gates on the selected local or dedicated host.
+- Preserve a comparable evidence packet and reject any matrix that cannot meet the application contract without weakening validation or fallback.
 
 ### Resume gate
 
-Blocked until TASK-014 passes and the hardware/model/privacy owners make the recorded decisions. Reranking, hybrid search, knowledge graph, and agentic RAG remain governed by TASK-007 and require separate ADR triggers.
+Blocked until TASK-014 and TASK-022 pass and hardware, model, license, residency and operations owners make the recorded decisions. Mock HTTP and Compose rendering cannot complete this task.
+
+---
+
+## TASK-023: Run private generation shadow and response canary
+**Priority:** P2 | **Tags:** rag, generation, shadow, canary, production
+
+Deploy the qualified private inference matrix behind FastAPI, discard validated generated output during a bounded shadow, and expose grounded responses only to an approved cohort after quality, security, availability and rollback gates pass.
+
+### Plan
+
+- Require TASK-013 through TASK-015 and TASK-022, an immutable deployment SHA, approved privacy boundaries and owned telemetry/runbooks.
+- Compare sampled shadow generation for groundedness, citations, no-answer, information delta, latency, errors, fallback and cost without changing user-visible responses.
+- Rehearse disable and model rollback, then enable a small allowlisted cohort and expand only while every threshold remains green.
+
+### Resume gate
+
+Requires separate deployment authorization, a qualified physical host/model matrix, privacy-safe sampling, monitoring ownership and an approved rollback window. No production or public action is implied by source completion.
 
 ---
 

@@ -36,9 +36,16 @@ services:
       - QDRANT_COLLECTION_ALIAS=${QDRANT_COLLECTION_ALIAS:-eisenhower-knowledge-active}
       - EMBEDDING_VERSION=${EMBEDDING_VERSION:-minilm-v1}
       - CHUNKING_VERSION=${CHUNKING_VERSION:-chars-1200-overlap-160-v1}
-      - VLLM_BASE_URL=http://vllm:8000/v1
-      - VLLM_API_KEY=${VLLM_API_KEY:-}
-      - VLLM_MODEL=${VLLM_MODEL:-}
+      - INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}
+      - INFERENCE_API_KEY=${INFERENCE_API_KEY:-}
+      - INFERENCE_MODEL=${INFERENCE_MODEL:-}
+      - INFERENCE_ALLOWED_HOSTS=${INFERENCE_ALLOWED_HOSTS:-}
+      - INFERENCE_CONNECT_TIMEOUT_SECONDS=${INFERENCE_CONNECT_TIMEOUT_SECONDS:-2}
+      - INFERENCE_READ_TIMEOUT_SECONDS=${INFERENCE_READ_TIMEOUT_SECONDS:-15}
+      - INFERENCE_WRITE_TIMEOUT_SECONDS=${INFERENCE_WRITE_TIMEOUT_SECONDS:-5}
+      - INFERENCE_POOL_TIMEOUT_SECONDS=${INFERENCE_POOL_TIMEOUT_SECONDS:-1}
+      - INFERENCE_CIRCUIT_FAILURE_THRESHOLD=${INFERENCE_CIRCUIT_FAILURE_THRESHOLD:-3}
+      - INFERENCE_CIRCUIT_RESET_SECONDS=${INFERENCE_CIRCUIT_RESET_SECONDS:-30}
       - EISENHOWER_INTERNAL_API_TOKEN=${EISENHOWER_INTERNAL_API_TOKEN:-}
       - EISENHOWER_WEBHOOK_SECRET=${EISENHOWER_WEBHOOK_SECRET:-}
       - INTERNAL_ALLOWED_TENANTS=${INTERNAL_ALLOWED_TENANTS:-}
@@ -50,62 +57,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-
-  # AI service with CUDA acceleration - run with: docker compose --profile gpu up
-  ai-service-gpu:
-    build:
-      context: ./backend-ai
-      dockerfile: Dockerfile
-      target: production-cuda
-    ports:
-      - "127.0.0.1:8000:8000"
-    environment:
-      - PYTHONUNBUFFERED=1
-      - APP_ENV=development
-      - AUTH_MODE=${AUTH_MODE:-static}
-      - EISENHOWER_API_TOKEN=${EISENHOWER_API_TOKEN:?EISENHOWER_API_TOKEN is required}
-      - EISENHOWER_ADMIN_TOKEN=${EISENHOWER_ADMIN_TOKEN:?EISENHOWER_ADMIN_TOKEN is required}
-      - OIDC_ISSUER=${OIDC_ISSUER:-}
-      - OIDC_AUDIENCE=${OIDC_AUDIENCE:-}
-      - OIDC_JWKS_URL=${OIDC_JWKS_URL:-}
-      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://localhost,http://127.0.0.1,http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173}
-      - LOCAL_MODEL_NAME=${LOCAL_MODEL_NAME:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
-      - LOCAL_MODEL_EPOCHS=${LOCAL_MODEL_EPOCHS:-60}
-      - LOCAL_MODEL_PATIENCE=${LOCAL_MODEL_PATIENCE:-8}
-      - LOCAL_MODEL_HIDDEN_DIM=${LOCAL_MODEL_HIDDEN_DIM:-128}
-      - LOCAL_MODEL_DROPOUT=${LOCAL_MODEL_DROPOUT:-0.1}
-      - LOCAL_MODEL_LEARNING_RATE=${LOCAL_MODEL_LEARNING_RATE:-0.01}
-      - HF_HOME=/home/app/.cache/huggingface
-      - RAG_ENABLED=${RAG_ENABLED:-false}
-      - RAG_RETRIEVAL_ENABLED
-      - RAG_GENERATION_ENABLED
-      - RAG_RESPONSE_ENABLED=${RAG_RESPONSE_ENABLED:-false}
-      - RAG_ALLOWED_TENANTS=${RAG_ALLOWED_TENANTS:-}
-      - QDRANT_URL=http://qdrant:6333
-      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
-      - QDRANT_COLLECTION_ALIAS=${QDRANT_COLLECTION_ALIAS:-eisenhower-knowledge-active}
-      - VLLM_BASE_URL=http://vllm:8000/v1
-      - VLLM_API_KEY=${VLLM_API_KEY:-}
-      - VLLM_MODEL=${VLLM_MODEL:-}
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-    volumes:
-      - ./backend-ai:/app
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    profiles:
-      - gpu
 
   # Durable asynchronous consumer for validated ingestion commands.
   rag-worker:
@@ -271,35 +222,6 @@ services:
       start_period: 20s
     profiles:
       - experimental
-
-  # Private OpenAI-compatible inference adapter; no host port is published.
-  vllm:
-    image: vllm/vllm-openai:v0.20.0
-    expose:
-      - "8000"
-    command:
-      - --model
-      - ${VLLM_MODEL:-MODEL_REQUIRED_AFTER_GPU_VALIDATION}
-      - --api-key
-      - ${VLLM_API_KEY:-local-development-only}
-      - --enable-log-requests
-    ipc: host
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 120s
-    profiles:
-      - rag-gpu
 
   # Private asynchronous orchestration only; never part of online analysis.
   n8n:

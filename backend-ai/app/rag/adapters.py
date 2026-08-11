@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ipaddress import ip_address
+from threading import Lock
 from time import monotonic
 from urllib.parse import urlparse
 from uuid import NAMESPACE_URL, uuid5
@@ -200,11 +201,16 @@ class QdrantIngestionAdapter:
     )
 
 
-def is_private_service_url(base_url: str) -> bool:
+def is_private_service_url(base_url: str, *, allowed_hosts: tuple[str, ...] = ()) -> bool:
   parsed = urlparse(base_url)
   if parsed.scheme not in {"http", "https"} or not parsed.hostname:
     return False
+  if any(("@" in parsed.netloc, bool(parsed.query), bool(parsed.fragment))):
+    return False
   hostname = parsed.hostname.lower()
+  normalized_allowed = {host.strip().lower().rstrip(".") for host in allowed_hosts if host.strip()}
+  if hostname.rstrip(".") in normalized_allowed:
+    return True
   if hostname in {"localhost", "127.0.0.1", "::1"}:
     return True
   try:
@@ -213,7 +219,7 @@ def is_private_service_url(base_url: str) -> bool:
     return "." not in hostname or hostname.endswith((".internal", ".local"))
 
 
-class VLLMGenerationProvider:
+class OpenAICompatibleGenerationProvider:
   def __init__(
     self,
     *,
@@ -223,20 +229,32 @@ class VLLMGenerationProvider:
     prompt_renderer: PromptRenderer,
     prompt_id: str,
     prompt_version: str,
-    timeout_seconds: float = 15.0,
+    allowed_hosts: tuple[str, ...] = (),
+    connect_timeout_seconds: float = 2.0,
+    read_timeout_seconds: float = 15.0,
+    write_timeout_seconds: float = 5.0,
+    pool_timeout_seconds: float = 1.0,
     client: httpx.Client | None = None,
   ):
-    if not is_private_service_url(base_url):
-      raise ValueError("vLLM must use a fixed private-network endpoint")
+    if not is_private_service_url(base_url, allowed_hosts=allowed_hosts):
+      raise ValueError("Inference provider must use a fixed private-network endpoint")
     if not api_key:
-      raise ValueError("vLLM API key is required")
+      raise ValueError("Inference provider service API key is required")
     self.base_url = base_url.rstrip("/")
     self.api_key = api_key
     self.prompt_registry = prompt_registry
     self.prompt_renderer = prompt_renderer
     self.prompt_id = prompt_id
     self.prompt_version = prompt_version
-    self.client = client or httpx.Client(timeout=timeout_seconds, follow_redirects=False)
+    self.client = client or httpx.Client(
+      timeout=httpx.Timeout(
+        connect=connect_timeout_seconds,
+        read=read_timeout_seconds,
+        write=write_timeout_seconds,
+        pool=pool_timeout_seconds,
+      ),
+      follow_redirects=False,
+    )
 
   def generate(self, request: GenerationRequest) -> GenerationResult:
     spec = self.prompt_registry.get(self.prompt_id, self.prompt_version, request.language)
@@ -268,13 +286,27 @@ class VLLMGenerationProvider:
       )
       response.raise_for_status()
     except httpx.TimeoutException as error:
-      raise GenerationProviderUnavailable("vLLM request timed out") from error
+      raise GenerationProviderUnavailable(
+        "Inference provider request timed out",
+        reason="generation_timeout",
+      ) from error
     except httpx.RequestError as error:
-      raise GenerationProviderUnavailable("vLLM request failed") from error
+      raise GenerationProviderUnavailable(
+        "Inference provider connection failed",
+        reason="generation_connection_error",
+      ) from error
     except httpx.HTTPStatusError as error:
-      if error.response.status_code == 429 or error.response.status_code >= 500:
-        raise GenerationProviderUnavailable("vLLM request failed") from error
-      raise InvalidGenerationOutput("vLLM rejected the generation contract") from error
+      if error.response.status_code == 429:
+        raise GenerationProviderUnavailable(
+          "Inference provider rate limited the request",
+          reason="generation_rate_limited",
+        ) from error
+      if error.response.status_code >= 500:
+        raise GenerationProviderUnavailable(
+          "Inference provider returned a server error",
+          reason="generation_server_error",
+        ) from error
+      raise InvalidGenerationOutput("Inference provider rejected the generation contract") from error
     try:
       body = response.json()
       content = body["choices"][0]["message"]["content"]
@@ -297,7 +329,12 @@ class VLLMGenerationProvider:
         context_chunk_ids=list(rendered.allowed_chunk_ids),
       )
     except (KeyError, IndexError, TypeError, ValueError) as error:
-      raise InvalidGenerationOutput("invalid vLLM output") from error
+      raise InvalidGenerationOutput("invalid inference provider output") from error
+
+
+# Compatibility import for existing opt-in live-vLLM checks. Application code uses
+# the vendor-neutral name above; vLLM remains one OpenAI-compatible implementation.
+VLLMGenerationProvider = OpenAICompatibleGenerationProvider
 
 
 class CircuitBreakerGenerationProvider:
@@ -309,19 +346,34 @@ class CircuitBreakerGenerationProvider:
     self.reset_seconds = reset_seconds
     self.failures = 0
     self.opened_at: float | None = None
+    self._half_open_probe = False
+    self._lock = Lock()
+
+  def status(self) -> dict[str, str | int]:
+    with self._lock:
+      state = "half_open" if self._half_open_probe else "open" if self.opened_at is not None else "closed"
+      return {"state": state, "failures": self.failures}
 
   def generate(self, request: GenerationRequest) -> GenerationResult:
-    if self.opened_at is not None:
-      if monotonic() - self.opened_at < self.reset_seconds:
-        raise GenerationProviderUnavailable("generation circuit breaker is open")
-      self.opened_at = None
-      self.failures = 0
+    with self._lock:
+      if self.opened_at is not None:
+        if monotonic() - self.opened_at < self.reset_seconds or self._half_open_probe:
+          raise GenerationProviderUnavailable(
+            "generation circuit breaker is open",
+            reason="generation_circuit_open",
+          )
+        self._half_open_probe = True
     try:
       result = self.provider.generate(request)
-      self.failures = 0
+      with self._lock:
+        self.failures = 0
+        self.opened_at = None
+        self._half_open_probe = False
       return result
     except GenerationProviderError:
-      self.failures += 1
-      if self.failures >= self.failure_threshold:
-        self.opened_at = monotonic()
+      with self._lock:
+        self.failures += 1
+        if self.failures >= self.failure_threshold or self._half_open_probe:
+          self.opened_at = monotonic()
+        self._half_open_probe = False
       raise

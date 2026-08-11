@@ -1,5 +1,28 @@
 # Done
 
+## TASK-022: Implement a portable private generation boundary
+**Priority:** P2 | **Tags:** rag, generation, gpu, portability, security
+
+Implement the locally verifiable vendor-neutral FastAPI-to-`GenerationProvider` boundary for a fixed private OpenAI-compatible inference endpoint without assuming GPU colocation or vendor. Preserve application-owned auth, ACL, retrieval, prompt construction, validation, citations, fallback and all three RAG gates.
+
+### Plan
+
+- Add red contract and failure tests for NVIDIA/CUDA versus AMD/ROCm and local versus remote endpoint invariance, plus unavailable, timeout, 429/5xx, disconnect and invalid structured output.
+- Harden the fixed private endpoint, service authentication, secrets, bounded phase timeouts, circuit breaker, health/metrics reporting and safe classifier fallback.
+- Separate neutral base configuration from disabled opt-in NVIDIA/CUDA and AMD/ROCm vLLM profiles without publishing the inference port.
+- Report CUDA, ROCm, MPS, CPU and other supported runtimes honestly, and document the hardware/runtime/model/quantization matrix plus exact live gates.
+- Run focused and full local verification while keeping every live GPU, vLLM, performance, VRAM, OOM and production claim explicitly open.
+
+### Resume gate
+
+Local contracts, configuration, profiles and mock transport verification may proceed now. Enabling generated responses or declaring hardware compatibility remains governed by TASK-015 and TASK-023.
+
+### Outcome
+
+Replaced the application-level vLLM naming/configuration with a vendor-neutral private OpenAI-compatible adapter while keeping the compatibility input, all RAG flags, FastAPI auth/ACL/prompt/validation/citation ownership and classifier fallback. Added explicit private-host allowlisting, service auth, phase timeouts, bounded failure reasons, a concurrency-safe single-probe circuit breaker, optional readiness/Prometheus circuit reporting and honest CUDA/ROCm/XPU/MPS/CPU detection. Removed the NVIDIA FastAPI image and common CUDA settings, then added separate disabled NVIDIA and AMD vLLM profiles with no host port and no default service secret. Documented local/remote topology, the evidence-bound hardware/runtime/model/quantization matrix and exact live gates. TDD evidence: the first focused run failed at collection for the missing neutral provider; the profile contract then failed 2/2 before the files existed. Green evidence: focused Python 102/102, profile 2/2, Node deployment 7/7, both Compose renders, changed Python pylint 10.00/10, and full `make verify` passed Node 66, web 135 plus 2 integration, backend AI 414 with 6 opt-in skips at 89.46% coverage, and mobile 95. No live vLLM, selected model, CUDA/ROCm inference, performance, VRAM, OOM, deployment or production claim is made.
+
+---
+
 ## TASK-021: Enforce grounded information-delta responses
 **Priority:** P1 | **Tags:** rag, generation, novelty, grounding, evaluation
 

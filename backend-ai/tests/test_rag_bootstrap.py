@@ -40,8 +40,8 @@ def test_rag_bootstrap_fails_closed_without_generator_configuration(tmp_path):
     rag_enabled=True,
     rag_retrieval_enabled=True,
     rag_generation_enabled=True,
-    vllm_api_key=None,
-    vllm_model=None,
+    inference_api_key=None,
+    inference_model=None,
   )
 
   with pytest.raises(ValueError):
@@ -55,8 +55,8 @@ def test_rag_bootstrap_supports_retrieval_without_generator_configuration(tmp_pa
     rag_retrieval_enabled=True,
     rag_generation_enabled=False,
     qdrant_url="http://qdrant:6333",
-    vllm_api_key=None,
-    vllm_model=None,
+    inference_api_key=None,
+    inference_model=None,
   )
 
   service = build_rag_service(settings, Fallback())
@@ -72,8 +72,8 @@ def test_rag_bootstrap_rejects_public_qdrant_endpoint(tmp_path):
     rag_retrieval_enabled=True,
     rag_generation_enabled=True,
     qdrant_url="https://qdrant.example.com",
-    vllm_api_key="token",
-    vllm_model="model",
+    inference_api_key="token",
+    inference_model="model",
   )
 
   with pytest.raises(ValueError):
@@ -89,8 +89,8 @@ def test_rag_bootstrap_fails_closed_for_unselected_candidate_model(tmp_path):
     rag_retrieval_enabled=True,
     rag_generation_enabled=True,
     qdrant_url="http://qdrant:6333",
-    vllm_api_key="token",
-    vllm_model="__MODEL_SELECTION_REQUIRED__",
+    inference_api_key="token",
+    inference_model="__MODEL_SELECTION_REQUIRED__",
     prompt_artifact_dir=prompt_dir,
   )
 

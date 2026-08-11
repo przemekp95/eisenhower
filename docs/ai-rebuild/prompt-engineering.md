@@ -12,7 +12,7 @@ POST /v2/ai/analyze
 -> RagAnalysisService
 -> Retriever
 -> GenerationProvider
--> VLLMGenerationProvider
+-> OpenAICompatibleGenerationProvider
 -> ClassificationOutput Pydantic validation
 -> citation allowlist validation
 -> rag / no_answer / fallback

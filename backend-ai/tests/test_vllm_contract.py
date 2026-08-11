@@ -50,7 +50,7 @@ def test_selected_live_vllm_honors_schema_and_is_repeatable_for_fixed_matrix():
     prompt_renderer=PromptRenderer(HuggingFaceTokenCounter.from_prompt_spec(spec)),
     prompt_id=spec.prompt_id,
     prompt_version=spec.prompt_version,
-    timeout_seconds=30,
+    read_timeout_seconds=30,
   )
   request = GenerationRequest(
     task="Prepare the important roadmap for next quarter; there is no immediate deadline.",

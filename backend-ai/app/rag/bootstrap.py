@@ -15,7 +15,7 @@ from .adapters import (
   MiniLMEmbeddingProvider,
   QdrantRetriever,
   QdrantIngestionAdapter,
-  VLLMGenerationProvider,
+  OpenAICompatibleGenerationProvider,
   is_private_service_url,
 )
 from .application import RagAnalysisService
@@ -69,8 +69,8 @@ def build_rag_service(settings: Settings, fallback_classifier) -> RagAnalysisSer
 
 
 def _build_generation_provider(settings: Settings):
-  if not settings.vllm_api_key or not settings.vllm_model:
-    raise ValueError("VLLM_API_KEY and VLLM_MODEL are required when RAG generation is enabled")
+  if not settings.inference_api_key or not settings.inference_model:
+    raise ValueError("INFERENCE_API_KEY and INFERENCE_MODEL are required when RAG generation is enabled")
   prompt_registry = PromptRegistry.load_directory(settings.prompt_artifact_dir)
   prompt_specs = [
     prompt_registry.get(settings.prompt_id, settings.prompt_version, language)
@@ -83,8 +83,8 @@ def _build_generation_provider(settings: Settings):
     for spec in prompt_specs
   ):
     raise ValueError("PromptSpec model selection is incomplete; RAG remains fail-closed")
-  if any(spec.model_id != settings.vllm_model for spec in prompt_specs):
-    raise ValueError("VLLM_MODEL must match the immutable PromptSpec model_id")
+  if any(spec.model_id != settings.inference_model for spec in prompt_specs):
+    raise ValueError("INFERENCE_MODEL must match the immutable PromptSpec model_id")
   reference = prompt_specs[0]
   if any(
     (spec.model_id, spec.model_revision, spec.tokenizer_id, spec.tokenizer_revision, spec.chat_template_hash)
@@ -100,16 +100,21 @@ def _build_generation_provider(settings: Settings):
     raise ValueError("PL and EN PromptSpec variants must pin the same model and tokenizer matrix")
   prompt_renderer = PromptRenderer(HuggingFaceTokenCounter.from_prompt_spec(reference))
   return CircuitBreakerGenerationProvider(
-    VLLMGenerationProvider(
-      base_url=settings.vllm_base_url,
-      api_key=settings.vllm_api_key,
+    OpenAICompatibleGenerationProvider(
+      base_url=settings.inference_base_url,
+      allowed_hosts=settings.inference_allowed_hosts,
+      api_key=settings.inference_api_key,
       prompt_registry=prompt_registry,
       prompt_renderer=prompt_renderer,
       prompt_id=settings.prompt_id,
       prompt_version=settings.prompt_version,
+      connect_timeout_seconds=settings.inference_connect_timeout_seconds,
+      read_timeout_seconds=settings.inference_read_timeout_seconds,
+      write_timeout_seconds=settings.inference_write_timeout_seconds,
+      pool_timeout_seconds=settings.inference_pool_timeout_seconds,
     ),
-    failure_threshold=3,
-    reset_seconds=30,
+    failure_threshold=settings.inference_circuit_failure_threshold,
+    reset_seconds=settings.inference_circuit_reset_seconds,
   )
 
 

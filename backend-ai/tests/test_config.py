@@ -15,6 +15,11 @@ def test_load_settings_uses_defaults():
   assert settings.rag_enabled is False
   assert settings.rag_retrieval_enabled is False
   assert settings.rag_generation_enabled is False
+  assert settings.inference_base_url == "http://inference:8000/v1"
+  assert settings.inference_api_key is None
+  assert settings.inference_model is None
+  assert settings.inference_connect_timeout_seconds == 2.0
+  assert settings.inference_read_timeout_seconds == 15.0
   assert settings.prompt_artifact_dir.name == "prompts"
   assert settings.prompt_id == "eisenhower-classifier"
   assert settings.prompt_version == "1.1.0"
@@ -47,6 +52,16 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
       "INDEX_VERSION": "index-v3",
       "RAG_RETRIEVAL_ENABLED": "true",
       "RAG_GENERATION_ENABLED": "false",
+      "INFERENCE_BASE_URL": "https://gpu.mesh.example/v1",
+      "INFERENCE_API_KEY": "service-token",
+      "INFERENCE_MODEL": "approved-model",
+      "INFERENCE_ALLOWED_HOSTS": "gpu.mesh.example,gpu-backup.mesh.example",
+      "INFERENCE_CONNECT_TIMEOUT_SECONDS": "1.5",
+      "INFERENCE_READ_TIMEOUT_SECONDS": "12.5",
+      "INFERENCE_WRITE_TIMEOUT_SECONDS": "3.5",
+      "INFERENCE_POOL_TIMEOUT_SECONDS": "0.5",
+      "INFERENCE_CIRCUIT_FAILURE_THRESHOLD": "4",
+      "INFERENCE_CIRCUIT_RESET_SECONDS": "45",
       "MONGODB_URI": "mongodb://mongodb:27017/eisenhower",
       "MONGODB_DATABASE": "eisenhower-test",
       "CANONICAL_DOCUMENTS_COLLECTION": "canonical-test",
@@ -78,6 +93,16 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
   assert settings.index_version == "index-v3"
   assert settings.rag_retrieval_enabled is True
   assert settings.rag_generation_enabled is False
+  assert settings.inference_base_url == "https://gpu.mesh.example/v1"
+  assert settings.inference_api_key == "service-token"
+  assert settings.inference_model == "approved-model"
+  assert settings.inference_allowed_hosts == ("gpu.mesh.example", "gpu-backup.mesh.example")
+  assert settings.inference_connect_timeout_seconds == 1.5
+  assert settings.inference_read_timeout_seconds == 12.5
+  assert settings.inference_write_timeout_seconds == 3.5
+  assert settings.inference_pool_timeout_seconds == 0.5
+  assert settings.inference_circuit_failure_threshold == 4
+  assert settings.inference_circuit_reset_seconds == 45
   assert settings.mongodb_uri == "mongodb://mongodb:27017/eisenhower"
   assert settings.mongodb_database == "eisenhower-test"
   assert settings.canonical_documents_collection == "canonical-test"
@@ -88,6 +113,20 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
   assert settings.memory_retrieval_enabled is True
   assert settings.memory_response_enabled is False
   assert settings.memory_policy_path == tmp_path / "memory-policy.json"
+
+
+def test_load_settings_accepts_legacy_vllm_environment_as_compatibility_input():
+  settings = load_settings(
+    {
+      "VLLM_BASE_URL": "http://legacy-vllm.internal:8000/v1",
+      "VLLM_API_KEY": "legacy-token",
+      "VLLM_MODEL": "legacy-model",
+    }
+  )
+
+  assert settings.inference_base_url == "http://legacy-vllm.internal:8000/v1"
+  assert settings.inference_api_key == "legacy-token"
+  assert settings.inference_model == "legacy-model"
 
 
 def test_production_oidc_requires_issuer_audience_and_explicit_cors():

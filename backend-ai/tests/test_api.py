@@ -5,6 +5,7 @@ import hmac
 import json
 
 from fastapi.testclient import TestClient
+import pytest
 
 from app.config import Settings
 from app.generation.models import InformationDelta, statement_checksum
@@ -180,6 +181,57 @@ class FakeRagService:
       "citations": [],
       "retrieval": RetrievalSummary(hit_count=1, top_score=0.8, embedding_version="minilm-v1"),
     }
+
+
+@pytest.mark.parametrize(
+  ("vendor", "location", "endpoint", "allowed_hosts"),
+  [
+    ("nvidia-cuda", "local", "http://inference:8000/v1", ()),
+    ("amd-rocm", "local", "http://inference:8000/v1", ()),
+    ("nvidia-cuda", "remote", "https://nvidia-gpu.mesh.example/v1", ("nvidia-gpu.mesh.example",)),
+    ("amd-rocm", "remote", "https://amd-gpu.mesh.example/v1", ("amd-gpu.mesh.example",)),
+  ],
+)
+def test_fastapi_contract_is_invariant_across_gpu_vendor_and_endpoint_location(
+  tmp_path: Path,
+  vendor: str,
+  location: str,
+  endpoint: str,
+  allowed_hosts: tuple[str, ...],
+):
+  settings = Settings(
+    training_data_path=tmp_path / f"{vendor}-{location}.json",
+    model_cache_dir=tmp_path / f"{vendor}-{location}-runtime",
+    rag_retrieval_enabled=True,
+    rag_generation_enabled=True,
+    rag_response_enabled=True,
+    inference_base_url=endpoint,
+    inference_allowed_hosts=allowed_hosts,
+    inference_api_key="service-token",
+    inference_model="approved-model",
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service, rag_service=FakeRagService()),
+    headers={"Authorization": "Bearer test-api-token"},
+  )
+
+  response = client.post("/v2/ai/analyze", json={"task": "Prepare roadmap"})
+
+  assert response.status_code == 200
+  assert response.json() == {
+    "mode": "rag",
+    "quadrant": 2,
+    "quadrant_name": "Schedule",
+    "confidence": 0.84,
+    "explanation": "Important and not urgent.",
+    "citations": [],
+    "retrieval": {"hit_count": 1, "top_score": 0.9, "embedding_version": "minilm-v1"},
+    "generation": None,
+    "information_delta": None,
+    "fallback_reason": None,
+  }
 
 
 def test_v2_rag_contract_uses_authenticated_scope_not_client_tenant(tmp_path: Path):

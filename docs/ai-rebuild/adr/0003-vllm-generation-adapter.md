@@ -4,7 +4,7 @@ Status: accepted conditionally; no model is selected.
 
 ## Decision
 
-Use vLLM through its OpenAI-compatible HTTP API behind `GenerationProvider`. The first role is grounded generation; the existing MiniLM model remains the embedding provider. Add a reranker only if evaluation shows retrieval quality cannot meet the agreed threshold.
+Use a private OpenAI-compatible HTTP endpoint behind the vendor-neutral `GenerationProvider` and `OpenAICompatibleGenerationProvider` adapter. vLLM is the first serving implementation, not part of the application/domain contract. The existing MiniLM model remains the embedding provider. Add a reranker only if evaluation shows retrieval quality cannot meet the agreed threshold.
 
 The endpoint is fixed configuration, private-network only, authenticated, non-redirecting and subject to strict connect/read/overall timeouts. FastAPI validates vLLM JSON against its own Pydantic schema and rejects citations not present in retrieved context.
 

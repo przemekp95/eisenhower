@@ -11,6 +11,7 @@ def test_prometheus_metrics_are_aggregate_and_do_not_leak_tenant_or_prompt():
   metrics.observe_generation("unavailable", duration_seconds=0.05, input_tokens=0)
   metrics.observe_information_delta("no_new_information")
   metrics.observe_memory("reconcile", "success", duration_seconds=0.02)
+  metrics.set_generation_status("open", failures=3)
   metrics.set_job_depth("queued", 3)
 
   rendered = metrics.render()
@@ -27,6 +28,8 @@ def test_prometheus_metrics_are_aggregate_and_do_not_leak_tenant_or_prompt():
   assert 'eisenhower_rag_input_tokens_sum{outcome="unavailable"} 0' in rendered
   assert 'eisenhower_information_delta_total{status="no_new_information"} 1' in rendered
   assert 'eisenhower_memory_operations_total{operation="reconcile",outcome="success"} 1' in rendered
+  assert 'eisenhower_generation_circuit_state{state="open"} 1' in rendered
+  assert "eisenhower_generation_circuit_failures 3" in rendered
   assert 'eisenhower_job_queue_depth{status="queued"} 3' in rendered
   assert "tenant" not in rendered
   assert "prompt" not in rendered

@@ -110,18 +110,30 @@ Before starting the root Docker Compose stack, copy `.env.example` to `.env` and
 
 The standard backend AI development environment installs `requirements-dev.txt`, which includes core runtime and test/audit tools but excludes research frameworks. Install `requirements-experimental.txt` separately only to run the opt-in LangChain/MinIO experiments.
 
-The complete local RAG topology is opt-in and requires both profiles:
+The retrieval topology is opt-in and remains independent from the inference host:
 
 ```bash
-docker compose --profile rag --profile rag-gpu up qdrant vllm rag-worker ai-service
+docker compose --profile rag up qdrant rag-worker ai-service
 ```
 
-This command is a local integration topology, not production evidence. It remains fail-closed until a concrete model, tokenizer, prompt artifacts, credentials and suitable GPU have passed the documented gates.
+For a local NVIDIA/CUDA or AMD/ROCm inference candidate, add exactly one disabled profile file:
+
+```bash
+docker compose -f docker-compose.yml -f deploy/inference/compose.nvidia.yaml \
+  --profile rag --profile inference-nvidia up qdrant rag-worker inference ai-service
+docker compose -f docker-compose.yml -f deploy/inference/compose.amd.yaml \
+  --profile rag --profile inference-amd up qdrant rag-worker inference ai-service
+```
+
+For a dedicated or user-computer GPU host, run only the private inference service there and set
+`INFERENCE_BASE_URL`, `INFERENCE_ALLOWED_HOSTS`, `INFERENCE_API_KEY` and `INFERENCE_MODEL` on
+FastAPI. Neither profile publishes port 8000 on the host. These definitions are contract-only
+candidates, not proof of image compatibility, model loading, GPU capacity, performance or production readiness.
 
 RAG rollout uses independent server-side flags. Start with
 `RAG_RETRIEVAL_ENABLED=true`, `RAG_GENERATION_ENABLED=false`, and
 `RAG_RESPONSE_ENABLED=false` to exercise Qdrant retrieval and aggregate shadow metrics without
-calling vLLM or exposing retrieved content in analysis responses. Enable generation only after the
+calling inference or exposing retrieved content in analysis responses. Enable generation only after the
 retrieval gates pass, and enable responses only for an approved tenant cohort. `RAG_ENABLED` is a
 legacy compatibility switch that enables both retrieval and generation when the explicit flags are
 absent; new environments should use the phase-specific flags.

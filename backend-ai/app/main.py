@@ -272,6 +272,15 @@ def create_app(
     if job_queue is not None:
       for status, count in job_queue.counts_by_status().items():
         metrics.set_job_depth(status, count)
+    generation_status = (
+      resolved_rag_service.generation_status()
+      if resolved_rag_service is not None and hasattr(resolved_rag_service, "generation_status")
+      else {"state": "disabled", "failures": 0}
+    )
+    metrics.set_generation_status(
+      str(generation_status.get("state", "unknown")),
+      failures=int(generation_status.get("failures", 0)),
+    )
     return Response(content=metrics.render(), media_type="text/plain; version=0.0.4")
 
   @app.get("/health/live", include_in_schema=False)
@@ -283,9 +292,15 @@ def create_app(
     capabilities = resolved_ai_service.capabilities()
     if not capabilities.get("classification"):
       raise HTTPException(status_code=503, detail="Local classifier is not ready.")
+    generation_status = (
+      resolved_rag_service.generation_status()
+      if resolved_rag_service is not None and hasattr(resolved_rag_service, "generation_status")
+      else {"enabled": False, "state": "disabled", "failures": 0}
+    )
     return {
       "status": "ready",
       "generation_id": capabilities.get("model", {}).get("generation_id"),
+      "optional_dependencies": {"generation": generation_status},
     }
 
   @app.post("/v2/ai/analyze", response_model=AnalyzeResult)
@@ -665,6 +680,10 @@ def create_app(
     caps["device"] = {
       "type": device.type,
       "name": device.name,
+      "vendor": device.vendor,
+      "runtime": device.runtime,
+      "runtime_version": device.runtime_version,
+      "torch_device": device.torch_device,
       "count": device.device_count,
       "cuda_version": device.cuda_version,
       "accelerated": device.type != "cpu"

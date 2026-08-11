@@ -86,10 +86,10 @@ class RagAnalysisService:
         freshness_requirement=freshness_requirement,
       )
       generated = self.generator.generate(generation_request)
-    except InvalidGenerationOutput:
-      return self._fallback(task, retrieval, "invalid_generation_output")
-    except GenerationProviderError:
-      return self._fallback(task, retrieval, "generation_unavailable")
+    except InvalidGenerationOutput as error:
+      return self._fallback(task, retrieval, error.reason)
+    except GenerationProviderError as error:
+      return self._fallback(task, retrieval, error.reason)
 
     output = generated.output
     if generation_request.delta_requested or output.information_delta is not None:
@@ -159,6 +159,13 @@ class RagAnalysisService:
   def retrieve_summary(self, query: str, scope: AccessScope) -> RetrievalSummary:
     _, summary = self._retrieve(query, scope, limit=self.retrieval_limit)
     return summary
+
+  def generation_status(self) -> dict[str, object]:
+    if self.generator is None:
+      return {"enabled": False, "state": "disabled", "failures": 0}
+    status_getter = getattr(self.generator, "status", None)
+    status = status_getter() if callable(status_getter) else {"state": "unknown"}
+    return {"enabled": True, **status}
 
   def search(
     self,

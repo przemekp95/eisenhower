@@ -36,9 +36,16 @@ class Settings:
   qdrant_collection_alias: str = "eisenhower-knowledge-active"
   embedding_version: str = "minilm-v1"
   chunking_version: str = "chars-1200-overlap-160-v1"
-  vllm_base_url: str = "http://vllm:8000/v1"
-  vllm_api_key: str | None = None
-  vllm_model: str | None = None
+  inference_base_url: str = "http://inference:8000/v1"
+  inference_api_key: str | None = None
+  inference_model: str | None = None
+  inference_allowed_hosts: tuple[str, ...] = ()
+  inference_connect_timeout_seconds: float = 2.0
+  inference_read_timeout_seconds: float = 15.0
+  inference_write_timeout_seconds: float = 5.0
+  inference_pool_timeout_seconds: float = 1.0
+  inference_circuit_failure_threshold: int = 3
+  inference_circuit_reset_seconds: float = 30.0
   prompt_artifact_dir: Path = DEFAULT_PROMPT_ARTIFACT_DIR
   prompt_id: str = "eisenhower-classifier"
   prompt_version: str = "1.1.0"
@@ -107,6 +114,17 @@ class Settings:
     object.__setattr__(self, "rag_generation_enabled", generation_enabled)
     if generation_enabled and not retrieval_enabled:
       raise ValueError("RAG generation requires RAG retrieval to be enabled.")
+    timeout_values = (
+      self.inference_connect_timeout_seconds,
+      self.inference_read_timeout_seconds,
+      self.inference_write_timeout_seconds,
+      self.inference_pool_timeout_seconds,
+      self.inference_circuit_reset_seconds,
+    )
+    if any(not math.isfinite(value) or value <= 0 for value in timeout_values):
+      raise ValueError("Inference timeouts and circuit reset must be finite and positive.")
+    if self.inference_circuit_failure_threshold < 1:
+      raise ValueError("Inference circuit failure threshold must be positive.")
     if self.memory_retrieval_enabled and not self.memory_write_enabled:
       raise ValueError("Memory retrieval requires governed memory writes.")
     if self.memory_response_enabled and not self.memory_retrieval_enabled:
@@ -216,9 +234,19 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     ),
     embedding_version=source.get("EMBEDDING_VERSION", "minilm-v1"),
     chunking_version=source.get("CHUNKING_VERSION", "chars-1200-overlap-160-v1"),
-    vllm_base_url=source.get("VLLM_BASE_URL", "http://vllm:8000/v1"),
-    vllm_api_key=source.get("VLLM_API_KEY") or None,
-    vllm_model=source.get("VLLM_MODEL") or None,
+    inference_base_url=source.get(
+      "INFERENCE_BASE_URL",
+      source.get("VLLM_BASE_URL", "http://inference:8000/v1"),
+    ),
+    inference_api_key=source.get("INFERENCE_API_KEY", source.get("VLLM_API_KEY", "")) or None,
+    inference_model=source.get("INFERENCE_MODEL", source.get("VLLM_MODEL", "")) or None,
+    inference_allowed_hosts=parse_csv_list(source.get("INFERENCE_ALLOWED_HOSTS"), ()),
+    inference_connect_timeout_seconds=float(source.get("INFERENCE_CONNECT_TIMEOUT_SECONDS", "2")),
+    inference_read_timeout_seconds=float(source.get("INFERENCE_READ_TIMEOUT_SECONDS", "15")),
+    inference_write_timeout_seconds=float(source.get("INFERENCE_WRITE_TIMEOUT_SECONDS", "5")),
+    inference_pool_timeout_seconds=float(source.get("INFERENCE_POOL_TIMEOUT_SECONDS", "1")),
+    inference_circuit_failure_threshold=int(source.get("INFERENCE_CIRCUIT_FAILURE_THRESHOLD", "3")),
+    inference_circuit_reset_seconds=float(source.get("INFERENCE_CIRCUIT_RESET_SECONDS", "30")),
     prompt_artifact_dir=Path(
       source.get("PROMPT_ARTIFACT_DIR", str(DEFAULT_PROMPT_ARTIFACT_DIR))
     ),
