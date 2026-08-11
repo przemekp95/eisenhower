@@ -148,6 +148,7 @@ Every cited ID must be among the retrieved chunks for that request. Missing hits
 - [Operations, observability and rollout](operations.md)
 - [Testing and evaluation](testing-evaluation.md)
 - [Prompt engineering, versioning and evaluation](prompt-engineering.md)
+- [Portable private inference boundary and live matrix](inference-portability.md)
 - [DDD, hexagonal, TDD and BDD assessment](methodology-assessment.md)
 - [Phases, gates and smallest vertical slice](delivery-roadmap.md)
 - [Recruiter-aligned AI delivery plan](recruitment-readiness.md)

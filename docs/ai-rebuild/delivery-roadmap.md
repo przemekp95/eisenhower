@@ -16,7 +16,9 @@ TaskPlanner is the executable source of truth for future conversations:
 | TASK-012 | Real Qdrant isolation and recovery | Approved corpus contract and a real target-like Qdrant runtime are available. |
 | TASK-013 | Representative Recall@k/MRR gate | Human-reviewed relevance data exists after the real-Qdrant path is stable. |
 | TASK-014 | Retrieval-only production shadow | All P0 and TASK-010 through TASK-013 gates pass and deployment is explicitly authorized. |
-| TASK-015 | Private vLLM and cited responses | Retrieval shadow proves value and hardware, model, license and privacy decisions are approved. |
+| TASK-015 | Live GPU/runtime/model qualification | TASK-014 and portable TASK-022 pass; exact hardware, model, license and privacy decisions are approved. |
+| TASK-022 | Portable private generation boundary | Local contracts, safe transport/configuration and disabled CUDA/ROCm profiles can be verified without a GPU. |
+| TASK-023 | Generation shadow and response canary | TASK-013 through TASK-015 and TASK-022 pass with separate deployment authorization and owned rollback. |
 | TASK-018 | Docling/Unstructured extraction | TASK-010 approves document sources/formats; output joins TASK-011's canonical lifecycle. |
 | TASK-019 | Consent-governed MAG | Memory ownership/consent/retention is approved and the grounded RAG baseline is stable. |
 | TASK-020 | Recruiter-facing case study | Publish only verified evidence from TASK-010 through TASK-019 and an explicitly authorized demo SHA. |

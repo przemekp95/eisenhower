@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-11 — TASK-022: Added the vendor/location-neutral private OpenAI-compatible generation boundary, typed fallback/circuit observability, honest runtime detection and disabled NVIDIA/AMD profiles; full `make verify` passed while all live GPU/model/performance/deployment gates remain open.
+
 2026-08-11 — TASK-021: Added an application-enforced grounded information-delta contract with explicit state, semantic/citation validation, honest no-new/current-world abstention and PL/EN adversarial metrics; 385 backend tests passed with 7 skipped at 89.28%, while live vLLM, deployment and MAG rollout remain gated.
 
 2026-08-11 — TASK-013: Added a hash-bound single-read independent-review attestation and crash-recoverable finalizer that re-verifies the physical corpus and preserves no-answer probes; backend regression passed 365/7 skipped at 89.86%, while 18 human decisions and out-of-band provenance remain pending.

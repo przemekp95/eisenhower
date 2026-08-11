@@ -11,6 +11,7 @@ from app.generation.registry import PromptRegistry
 from app.generation.renderer import PromptRenderer
 from app.rag.adapters import (
   CircuitBreakerGenerationProvider,
+  OpenAICompatibleGenerationProvider,
   QdrantIngestionAdapter,
   QdrantRetriever,
   VLLMGenerationProvider,
@@ -187,6 +188,43 @@ def test_vllm_adapter_rejects_public_or_mutable_endpoints():
     )
 
 
+def test_openai_compatible_adapter_accepts_explicit_remote_private_host_without_vendor_assumptions():
+  provider = OpenAICompatibleGenerationProvider(
+    base_url="https://gpu.mesh.example/v1",
+    allowed_hosts=("gpu.mesh.example",),
+    api_key="token",
+    prompt_registry=PromptRegistry([_prompt_spec()]),
+    prompt_renderer=PromptRenderer(WordCounter()),
+    prompt_id="eisenhower-classifier",
+    prompt_version="1.0.0",
+    client=httpx.Client(transport=httpx.MockTransport(lambda _request: httpx.Response(503))),
+  )
+
+  assert provider.base_url == "https://gpu.mesh.example/v1"
+
+
+@pytest.mark.parametrize(
+  "base_url",
+  [
+    "https://user:password@gpu.internal/v1",
+    "https://gpu.internal/v1?target=other",
+    "https://gpu.internal/v1#fragment",
+    "https://gpu.mesh.example/v1",
+  ],
+)
+def test_openai_compatible_adapter_rejects_ambiguous_or_unapproved_endpoint(base_url):
+  with pytest.raises(ValueError, match="private-network endpoint"):
+    OpenAICompatibleGenerationProvider(
+      base_url=base_url,
+      allowed_hosts=(),
+      api_key="token",
+      prompt_registry=PromptRegistry([_prompt_spec()]),
+      prompt_renderer=PromptRenderer(WordCounter()),
+      prompt_id="eisenhower-classifier",
+      prompt_version="1.0.0",
+    )
+
+
 @pytest.mark.parametrize(
   "content",
   [
@@ -253,15 +291,16 @@ def test_vllm_adapter_rejects_empty_truncated_semantically_invalid_or_foreign_ou
     language="pl",
   )
 
-  with pytest.raises(InvalidGenerationOutput, match="invalid vLLM output"):
+  with pytest.raises(InvalidGenerationOutput, match="invalid inference provider output"):
     provider.generate(request)
 
 
 @pytest.mark.parametrize(
   ("failure", "message"),
   [
-    (httpx.ReadTimeout("slow"), "vLLM request timed out"),
-    (httpx.ConnectError("offline"), "vLLM request failed"),
+    (httpx.ReadTimeout("slow"), "Inference provider request timed out"),
+    (httpx.ConnectError("offline"), "Inference provider connection failed"),
+    (httpx.RemoteProtocolError("connection interrupted"), "Inference provider connection failed"),
   ],
 )
 def test_vllm_adapter_maps_transport_failures_to_typed_unavailable_error(failure, message):
@@ -442,3 +481,16 @@ def test_generation_circuit_breaker_counts_invalid_provider_output():
     protected.generate(request)
   with pytest.raises(GenerationProviderUnavailable, match="circuit breaker is open"):
     protected.generate(request)
+
+
+def test_generation_circuit_breaker_reports_bounded_state_without_exposing_provider_details():
+  class Failing:
+    def generate(self, _request):
+      raise GenerationProviderUnavailable("offline", reason="generation_connection_error")
+
+  protected = CircuitBreakerGenerationProvider(Failing(), failure_threshold=1, reset_seconds=60)
+
+  assert protected.status() == {"state": "closed", "failures": 0}
+  with pytest.raises(GenerationProviderUnavailable):
+    protected.generate(GenerationRequest(task="task", context=[]))
+  assert protected.status() == {"state": "open", "failures": 1}

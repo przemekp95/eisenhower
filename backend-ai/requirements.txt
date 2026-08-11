@@ -1,4 +1,4 @@
-# Default build: CPU. For CUDA, install PyTorch from the matching CUDA index.
+# FastAPI/application build is CPU-based; GPU inference runs behind private HTTP.
 --extra-index-url https://download.pytorch.org/whl/cpu
 fastapi==0.135.4
 pydantic==2.13.4

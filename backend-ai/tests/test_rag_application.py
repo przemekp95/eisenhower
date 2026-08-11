@@ -201,6 +201,42 @@ def test_rag_analysis_falls_back_when_generation_provider_is_unavailable():
   assert result.fallback_reason == "generation_unavailable"
 
 
+@pytest.mark.parametrize(
+  "reason",
+  [
+    "generation_timeout",
+    "generation_connection_error",
+    "generation_rate_limited",
+    "generation_server_error",
+    "generation_circuit_open",
+    "invalid_generation_output",
+  ],
+)
+def test_rag_analysis_preserves_bounded_generation_failure_reason(reason):
+  hit = RetrievalHit(
+    chunk_id="chunk-1",
+    document_id="doc-1",
+    text="Known context",
+    score=0.8,
+    source_uri="knowledge://1",
+    title="Known",
+    tenant_id="tenant-a",
+    embedding_version="minilm-v1",
+    content_version="v1",
+  )
+  error_type = InvalidGenerationOutput if reason == "invalid_generation_output" else GenerationProviderUnavailable
+  service = RagAnalysisService(
+    StubRetriever([hit]),
+    StubGenerator(error=error_type("provider failure", reason=reason)),
+    StubFallback(),
+  )
+
+  result = service.analyze("Task", AccessScope(tenant_id="tenant-a", user_id="user-1"))
+
+  assert result.mode == "fallback"
+  assert result.fallback_reason == reason
+
+
 def test_retrieval_only_analysis_collects_summary_without_calling_generation():
   hit = RetrievalHit(
     chunk_id="chunk-1",

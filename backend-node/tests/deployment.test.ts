@@ -97,12 +97,14 @@ describe('production deployment boundaries', () => {
     const compose = fs.readFileSync(path.join(repositoryRoot, 'docker-compose.yml'), 'utf8');
     const envExample = fs.readFileSync(path.join(repositoryRoot, '.env.example'), 'utf8');
 
-    const aiBlock = compose.slice(compose.indexOf('  ai-service:'), compose.indexOf('  ai-service-gpu:'));
+    const aiBlock = compose.slice(compose.indexOf('  ai-service:'), compose.indexOf('  rag-worker:'));
     const qdrantBlock = compose.slice(compose.indexOf('  qdrant:'), compose.indexOf('  minio:'));
     const minioBlock = compose.slice(compose.indexOf('  minio:'), compose.indexOf('  nginx:'));
 
     expect(aiBlock).toContain('RAG_ENABLED=${RAG_ENABLED:-false}');
     expect(aiBlock).toContain('QDRANT_URL=http://qdrant:6333');
+    expect(aiBlock).toContain('INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}');
+    expect(compose).not.toContain('driver: nvidia');
     expect(aiBlock).not.toContain('MINIO_');
     expect(qdrantBlock).toMatch(/profiles:\n\s+- experimental\n\s+- rag/);
     expect(minioBlock).toMatch(/profiles:\n\s+- experimental/);

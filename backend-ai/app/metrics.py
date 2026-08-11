@@ -10,6 +10,11 @@ RAG_REASONS = {
   "no_retrieval_hits",
   "generation_disabled",
   "generation_unavailable",
+  "generation_timeout",
+  "generation_connection_error",
+  "generation_rate_limited",
+  "generation_server_error",
+  "generation_circuit_open",
   "invalid_generation_output",
   "invalid_citations",
   "invalid_information_delta",
@@ -23,6 +28,7 @@ RETRIEVAL_STAGES = {"shadow", "search", "online", "evaluation"}
 VALIDATION_KINDS = {"schema", "citations", "grounding", "information_delta"}
 VALIDATION_OUTCOMES = {"accepted", "rejected"}
 GENERATION_OUTCOMES = {"success", "no_answer", "unavailable", "rejected"}
+GENERATION_CIRCUIT_STATES = {"disabled", "closed", "open", "half_open", "unknown"}
 MEMORY_OPERATIONS = {"create", "supersede", "revoke", "delete", "search", "reconcile", "export"}
 MEMORY_OUTCOMES = {"success", "conflict", "rejected", "error", "no_hit"}
 INFORMATION_DELTA_STATUSES = {
@@ -73,6 +79,8 @@ class MetricsRegistry:
     self._rag_generation_duration_sum = Counter()
     self._rag_generation_duration_buckets = Counter()
     self._information_delta = Counter()
+    self._generation_circuit_state = "disabled"
+    self._generation_circuit_failures = 0
     self._memory = Counter()
     self._memory_duration_count = Counter()
     self._memory_duration_sum = Counter()
@@ -172,6 +180,11 @@ class MetricsRegistry:
   def set_job_depth(self, status: str, count: int) -> None:
     with self._lock:
       self._job_depth[status] = max(0, int(count))
+
+  def set_generation_status(self, state: str, *, failures: int) -> None:
+    with self._lock:
+      self._generation_circuit_state = _bounded(state, GENERATION_CIRCUIT_STATES)
+      self._generation_circuit_failures = max(0, int(failures))
 
   def render(self) -> str:
     with self._lock:
@@ -306,6 +319,14 @@ class MetricsRegistry:
           f"eisenhower_rag_generation_duration_seconds_sum{{{labels}}} "
           f"{self._rag_generation_duration_sum[outcome]:.6f}"
         )
+      lines.extend([
+        "# HELP eisenhower_generation_circuit_state Optional inference circuit state.",
+        "# TYPE eisenhower_generation_circuit_state gauge",
+        f"eisenhower_generation_circuit_state{{{_labels(state=self._generation_circuit_state)}}} 1",
+        "# HELP eisenhower_generation_circuit_failures Consecutive bounded provider failures.",
+        "# TYPE eisenhower_generation_circuit_failures gauge",
+        f"eisenhower_generation_circuit_failures {self._generation_circuit_failures}",
+      ])
       lines.extend([
         "# HELP eisenhower_memory_operations_total Consent-governed memory outcomes.",
         "# TYPE eisenhower_memory_operations_total counter",
