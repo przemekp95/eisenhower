@@ -155,6 +155,10 @@ jobs:
           MONGODB_URI: mongodb://localhost:27017/eisenhower-test
         run: npm run test:coverage
 
+      - name: Run executable BDD scenarios
+        working-directory: backend-node
+        run: npm run test:bdd
+
   test-frontend:
     name: test-frontend
     needs: resolve-run-mode

@@ -10,6 +10,7 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "test": "jest --runInBand",
+    "test:bdd": "tsc -p tsconfig.bdd.json && NODE_ENV=test node --import tsx ./node_modules/@cucumber/cucumber/bin/cucumber.js --config cucumber.mjs",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage --runInBand"
   },
@@ -24,6 +25,7 @@
     "mongoose": "^9.9.1"
   },
   "devDependencies": {
+    "@cucumber/cucumber": "^12.9.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",

@@ -1,6 +1,6 @@
 # Done
 
-## TASK-034: Add a fail-closed AI promotion controller
+## TASK-036: Add a fail-closed AI promotion controller
 **Priority:** P1 | **Tags:** ai, promotion, shadow, canary, rollback
 
 Implement a reversible controller for independently governed retrieval, generation, response and MAG phases. Require immutable candidates, explicit approvals and green quality/drift evidence before shadow or canary pointer changes, with stable assignment, stop conditions and rollback.
@@ -17,7 +17,7 @@ Added a locked atomic pointer state machine for independently governed retrieval
 
 ---
 
-## TASK-033: Add quality and drift monitoring reports
+## TASK-035: Add quality and drift monitoring reports
 **Priority:** P1 | **Tags:** ai, monitoring, drift, observability
 
 Produce privacy-safe, checksummed periodic quality and drift reports for classifier, retrieval, generation, response and MAG phases without logging prompts, PII, tokens or private identifiers.
@@ -34,7 +34,7 @@ Added a checksummed aggregate-only quality/drift report for classifier, retrieva
 
 ---
 
-## TASK-032: Automate the LLMOps candidate workflow
+## TASK-034: Automate the LLMOps candidate workflow
 **Priority:** P1 | **Tags:** ai, llmops, prompts, evaluation
 
 Build a candidate-only workflow for immutable PromptSpec checksums, schema and token budgets, PL/EN golden, safety and structured-output evaluation, regression comparison and candidate registration. Mock or in-process results must be labelled and must never satisfy a live-model gate.
@@ -51,7 +51,7 @@ Added a candidate-only LLMOps workflow that checksum-validates PL/EN PromptSpecs
 
 ---
 
-## TASK-031: Automate the RAGOps candidate workflow
+## TASK-033: Automate the RAGOps candidate workflow
 **Priority:** P1 | **Tags:** ai, ragops, ingestion, qdrant, recovery
 
 Compose the approved corpus manifest, governed extraction, canonical MongoDB, versioned Qdrant, reconciliation, evaluation and snapshot/restore primitives into one checksummed candidate workflow. Candidate creation must never promote the live alias automatically.
@@ -68,7 +68,7 @@ Added a RAGOps candidate registrar that requires canonical-before-vector orderin
 
 ---
 
-## TASK-030: Automate the MLOps candidate workflow
+## TASK-032: Automate the MLOps candidate workflow
 **Priority:** P1 | **Tags:** ai, mlops, training, evaluation
 
 Build a deterministic candidate-only workflow for data validation, leakage and required slices, multi-seed training, incumbent/baseline comparison, thresholds and checksummed artifact registration. Human-approved production evaluation and promotion remain fail-closed.
@@ -85,7 +85,7 @@ Composed the existing deterministic grouped-CV, five-seed training, leakage, PL/
 
 ---
 
-## TASK-029: Add an immutable AI artifact registry and lineage manifest
+## TASK-031: Add an immutable AI artifact registry and lineage manifest
 **Priority:** P1 | **Tags:** ai, mlops, ragops, llmops, lineage
 
 Create one dependency-light, immutable candidate manifest that binds Git SHA, datasets, encoder/model revisions, prompt/schema, corpus/Qdrant state, runtime identity and reports by checksum. Store candidates privately without overwrite or delete semantics and keep promotion pointers separate and reversible.
@@ -100,6 +100,24 @@ Create one dependency-light, immutable candidate manifest that binds Git SHA, da
 ### Outcome
 
 Added a strict checksummed `ai-candidate-v1` lineage contract with explicit applicable/not-applicable groups for datasets, model/encoder, prompts, schemas, corpus, Qdrant, runtime and reports. Added a private filesystem registry with content-addressed blobs, `0700` directories, `0600` files, exclusive creation, idempotent identical registration, conflict/tamper detection and no delete or promotion operation, plus a register/verify CLI. No MLflow or persistent service was introduced. TDD evidence: the collected test first failed because `app.artifacts` did not exist; the CLI slice separately failed on the missing CLI module. Green evidence: 5 focused tests and 45 artifact/prompt/model/evaluation tests passed, and pylint rated the new modules 10.00/10.
+## TASK-029: Add executable BDD for task behavior
+**Priority:** P2 | **Tags:** testing, bdd, cucumber, backend-node
+
+Add a real executable Gherkin workflow for the user-visible task lifecycle without relabeling ordinary Jest tests as BDD.
+
+### Plan
+
+- Preserve the existing seven lifecycle/quadrant scenarios and typed Express/Supertest/Mongo harness.
+- Add bounded living scenarios for bearer authentication, trusted browser origins, request validation, and missing-resource behavior.
+- Keep unit-level edge cases, experimental AI/RAG, messaging, and physical-device acceptance outside this BDD slice.
+- Run focused BDD/backend verification and the complete root release-quality gate, then update the documented evidence boundary.
+
+### Outcome
+
+Added a Node 20/24-compatible Cucumber 12.9 executable acceptance layer with typed TypeScript steps driving the real Express app through Supertest and isolated MongoDB. Fifteen Gherkin scenarios and 59 steps now cover all four canonical quadrants, task movement/deletion, tenant isolation, missing and invalid bearer credentials, trusted and untrusted browser origins, title limits, unexpected-field rejection, and missing-resource behavior. The harness pins and restores auth/OIDC/CORS environment state and passed with deliberately hostile inherited variables. Added `test:bdd` and `make test-bdd`, included BDD in root test/verify and the existing backend CI job, and documented that this is a bounded living-behavior slice rather than repository-wide BDD, DDD, CQRS, hexagonal architecture, or historical TDD evidence. After integrating current `origin/dev`, fresh `make verify` passed production audits, Node 87 tests at 100% plus BDD 15/15, web 150 at 100% plus 2 integration tests, backend AI 419 with 6 opt-in skips at 89.44% coverage, and mobile 115 tests; `actionlint` and YAML parsing also passed.
+
+---
+
 ## TASK-024: Harden supported task runtime and client reliability contracts
 **Priority:** P0 | **Tags:** production, auth, tasks, web, mobile, reliability
 
