@@ -118,7 +118,9 @@ VRAM/OOM behavior and production readiness are unverified.
 
 ## TDD evidence for this change
 
-This local work followed explicit red-green loops: missing generation modules,
-old adapter constructor/output schema, old orchestration contract, missing config
-and missing regression gate each failed first, then focused suites passed. This is
-evidence for this change only. It does not establish historical repository-wide TDD.
+The implementation record for this change reports explicit red-green loops: missing
+generation modules, old adapter constructor/output schema, old orchestration contract,
+missing config and a missing regression gate each failed first, then focused suites
+passed. The repository preserves the resulting green regression suite but not the
+failing-before output, so this is task-scoped process evidence, not proof of historical
+repository-wide TDD.

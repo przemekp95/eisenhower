@@ -58,6 +58,26 @@ describe('api service', () => {
     expect((global.fetch as jest.Mock).mock.calls[0][0]).not.toContain('runtime-only-test-token');
   });
 
+  it('omits ambient browser credentials from both task and AI requests', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [],
+    });
+
+    await getTasks();
+    await classifyTask('urgent');
+
+    for (const [, request] of (global.fetch as jest.Mock).mock.calls) {
+      expect(request).toEqual(
+        expect.objectContaining({
+          credentials: 'omit',
+          headers: expect.objectContaining({ Authorization: 'Bearer runtime-only-test-token' }),
+        })
+      );
+    }
+  });
+
   it('clears the in-memory token after an unauthorized response', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: false,

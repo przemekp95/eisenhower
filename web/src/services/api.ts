@@ -31,8 +31,13 @@ const { createAiApi, createTaskApi } = apiClient;
 
 export { clearApiToken, setAdminToken, setApiToken, setCredentials };
 
+function fetchWithoutAmbientCredentials(input: RequestInfo | URL, init?: RequestInit) {
+  return globalThis.fetch(input, { ...init, credentials: 'omit' });
+}
+
 function getTaskApi() {
   return createTaskApi(runtimeConfig.apiUrl, {
+    fetch: fetchWithoutAmbientCredentials,
     accessToken: getAccessToken,
     onUnauthorized: clearTokens,
   });
@@ -40,6 +45,7 @@ function getTaskApi() {
 
 function getAiApi() {
   return createAiApi(runtimeConfig.aiApiUrl, {
+    fetch: fetchWithoutAmbientCredentials,
     accessToken: getAccessToken,
     adminToken: getAdminToken,
     onUnauthorized: clearTokens,

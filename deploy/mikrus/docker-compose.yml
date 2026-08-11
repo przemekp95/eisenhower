@@ -2,7 +2,7 @@ name: eisenhower
 
 services:
   mongodb:
-    image: mongo:7-jammy
+    image: mongo:7-jammy@sha256:04582c3a144d088f841c446abfc19f79adcefa8bd00ad4a7fb18e27b9585c5d6
     restart: unless-stopped
     environment:
       MONGO_INITDB_DATABASE: eisenhower

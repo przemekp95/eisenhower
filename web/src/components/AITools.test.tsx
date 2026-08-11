@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AITools from './AITools';
 import { LanguageProvider } from '../i18n/LanguageContext';
 import * as api from '../services/api';
@@ -136,9 +136,11 @@ describe('AITools', () => {
     });
   });
 
-  afterEach(() => clearAdminToken());
+  afterEach(() => {
+    act(() => clearAdminToken());
+  });
 
-  it('requests the admin credential only after entering management and allows recredentialing', () => {
+  it('requests the admin credential only after entering management and allows recredentialing', async () => {
     clearAdminToken();
     renderTools();
 
@@ -149,6 +151,7 @@ describe('AITools', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Unlock management' }));
     expect(screen.getByRole('button', { name: 'Change administrator token' })).toBeInTheDocument();
+    await screen.findByText(/Total examples in the experience store/i);
     fireEvent.click(screen.getByRole('button', { name: 'Change administrator token' }));
     expect(screen.getByLabelText('AI administrator token')).toBeInTheDocument();
   });
@@ -193,7 +196,7 @@ describe('AITools', () => {
     expect(advanced).toHaveFocus();
   });
 
-  it('localizes the deferred administrator credential gate', () => {
+  it('localizes the deferred administrator credential gate', async () => {
     localStorage.setItem('eisenhower-language', 'pl');
     clearAdminToken();
     renderTools();
@@ -207,6 +210,7 @@ describe('AITools', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Odblokuj zarządzanie' }));
     expect(screen.getByRole('button', { name: 'Zmień token administratora' })).toBeInTheDocument();
+    await screen.findByText(/Łączna liczba przykładów w magazynie doświadczeń/i);
   });
 
   it('focuses the close action, traps focus, and restores the opener', () => {
