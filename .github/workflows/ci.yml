@@ -207,6 +207,23 @@ jobs:
       - name: Test MCP adapter with warnings as errors
         run: make test-mcp
 
+  test-n8n-workflows:
+    name: test-n8n-workflows
+    needs: resolve-run-mode
+    if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Test n8n webhook and job contracts
+        run: python -m unittest discover -s n8n/tests -v
+
   test-frontend:
     name: test-frontend
     needs: resolve-run-mode

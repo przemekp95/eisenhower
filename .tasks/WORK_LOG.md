@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-11 — TASK-037: Hardened repository architecture, canonical data and delivery contracts, cleared historical Python/workflow lint debt, and merged green PR #157 to `dev` as `73c984066cfd65ffce0a4fc31f041ba7c24eded2`; full post-merge CI passed on the exact SHA without modifying `master` or production.
+
 2026-08-11 — TASK-036: Added a fail-closed atomic retrieval/generation/response/MAG promotion state machine with immutable-candidate, fresh quality, approval, dependency, stable canary and rollback gates; 17 tests passed and pylint scored 10.00/10 without applying any runtime or deployment change.
 
 2026-08-11 — TASK-035: Added checksummed aggregate-only classifier/retrieval/generation/response/MAG drift reports with fail-closed missing/drift handling and recursive rejection of prompt/token/content/PII/private identifiers; 12 tests passed and pylint scored 10.00/10.
