@@ -142,6 +142,44 @@ describe('task routes', () => {
     await expect(TaskModel.countDocuments({ title: 'Retry-safe task' })).resolves.toBe(1);
   });
 
+  it('does not recreate an idempotent task after it was deleted', async () => {
+    const operationId = 'mobile-deleted-operation-1';
+    const first = await api
+      .post('/tasks')
+      .set('Idempotency-Key', operationId)
+      .send({ title: 'Delete after create', description: 'private body', urgent: true });
+    const deleted = await api
+      .delete(`/tasks/${first.body._id}`)
+      .set('If-Match', `"${first.body.revision}"`);
+
+    const replay = await api
+      .post('/tasks')
+      .set('Idempotency-Key', operationId)
+      .send({ title: 'Delete after create', description: 'private body', urgent: true });
+    const changedReplay = await api
+      .post('/tasks')
+      .set('Idempotency-Key', operationId)
+      .send({ title: 'Changed after delete' });
+    const listed = await api.get('/tasks');
+
+    expect(first.status).toBe(201);
+    expect(deleted.status).toBe(204);
+    expect(replay.status).toBe(410);
+    expect(replay.body.code).toBe('idempotency_result_deleted');
+    expect(changedReplay.status).toBe(409);
+    expect(changedReplay.body.code).toBe('idempotency_key_reused');
+    expect(listed.body).toEqual([]);
+    await expect(TaskModel.countDocuments({ createOperationId: operationId })).resolves.toBe(1);
+    await expect(TaskModel.findOne({ createOperationId: operationId }).select('+createOperationDigest +deletedAt'))
+      .resolves.toMatchObject({
+        title: '[deleted]',
+        description: '',
+        urgent: false,
+        important: false,
+        deletedAt: expect.any(Date),
+      });
+  });
+
   it('collapses concurrent creates with one operation key to one owner-scoped task', async () => {
     const responses = await Promise.all(
       Array.from({ length: 16 }, () => api

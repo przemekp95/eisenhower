@@ -11,6 +11,7 @@ export interface Task {
   revision: number;
   createOperationId?: string;
   createOperationDigest?: string;
+  deletedAt?: Date;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -52,6 +53,10 @@ const taskSchema = new Schema<Task>(
       type: String,
       select: false,
     },
+    deletedAt: {
+      type: Date,
+      select: false,
+    },
   },
   {
     timestamps: true,
@@ -74,10 +79,12 @@ taskSchema.set('toJSON', {
       _id: string;
       createOperationId?: string;
       createOperationDigest?: string;
+      deletedAt?: Date;
     };
     serialized._id = String(ret._id);
     delete serialized.createOperationId;
     delete serialized.createOperationDigest;
+    delete serialized.deletedAt;
     return ret;
   },
 });

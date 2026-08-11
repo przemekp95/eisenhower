@@ -160,6 +160,21 @@ def test_retrying_the_same_command_reprojects_its_pending_canonical_document():
   assert store.pending == set()
 
 
+def test_ingest_result_ignores_an_unrelated_pending_document():
+  store = Store()
+  projection = Projection(store, fail=True)
+  app = CanonicalIngestionApplication(Embedder(), store, projection)
+  unrelated = document().model_copy(update={"document_id": "unrelated"})
+  app.ingest([unrelated])
+  projection.fail = False
+
+  result = app.ingest([document()])
+
+  assert result["projected"] == 1
+  assert result["pending"] == 0
+  assert store.pending == {("tenant-1", "unrelated")}
+
+
 def test_reconciliation_repairs_projection_drift_even_when_canonical_is_not_pending():
   store = Store()
   projection = Projection(store)
@@ -214,3 +229,23 @@ def test_tombstone_is_canonical_and_projected_without_retaining_content():
   assert tombstone.text == ""
   assert "private content" not in repr(tombstone)
   assert projection.tombstones == [("doc-1", "tenant-1", "deleted-v2")]
+
+
+def test_tombstone_result_ignores_an_unrelated_pending_document():
+  store = Store()
+  projection = Projection(store, fail=True)
+  app = CanonicalIngestionApplication(Embedder(), store, projection)
+  unrelated = document().model_copy(update={"document_id": "unrelated"})
+  app.ingest([unrelated])
+  projection.fail = False
+
+  result = app.tombstone(
+    ["doc-1"],
+    tenant_id="tenant-1",
+    content_version="deleted-v2",
+    source_sequence=2,
+  )
+
+  assert result["projected"] == 1
+  assert result["pending"] == 0
+  assert store.pending == {("tenant-1", "unrelated")}

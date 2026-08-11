@@ -4,6 +4,8 @@ const TASK_API_PATHS = Object.freeze({
   readiness: '/health/ready',
 });
 
+const MAX_TASK_LIST_PAGES = 100;
+
 const QUADRANT_DEFINITIONS = Object.freeze([
   Object.freeze({ value: 0, key: 'do', name: 'Do Now', urgent: true, important: true }),
   Object.freeze({ value: 1, key: 'delegate', name: 'Delegate', urgent: true, important: false }),
@@ -215,12 +217,39 @@ function createTaskApi(baseUrl, optionsOrFetch) {
   return {
     paths: TASK_API_PATHS,
     async listTasks() {
-      const response = await request(buildUrl(baseUrl, TASK_API_PATHS.tasks));
-      return readJson(response, {
-        defaultError: 'Task request failed',
-        errorCode: 'task_request_failed',
-        validate: isTaskListDto,
-        invalidResponse: 'Task API returned an invalid response',
+      const tasks = [];
+      const seenCursors = new Set();
+      let cursor;
+
+      for (let page = 0; page < MAX_TASK_LIST_PAGES; page += 1) {
+        const path = cursor === undefined
+          ? TASK_API_PATHS.tasks
+          : `${TASK_API_PATHS.tasks}?cursor=${encodeURIComponent(cursor)}`;
+        const response = await request(buildUrl(baseUrl, path));
+        const pageTasks = await readJson(response, {
+          defaultError: 'Task request failed',
+          errorCode: 'task_request_failed',
+          validate: isTaskListDto,
+          invalidResponse: 'Task API returned an invalid response',
+        });
+        tasks.push(...pageTasks);
+
+        const nextCursor = response?.headers?.get?.('X-Next-Cursor');
+        if (!nextCursor) {
+          return tasks;
+        }
+        if (seenCursors.has(nextCursor)) {
+          throw createRequestError('Task API returned a repeated pagination cursor', {
+            code: 'invalid_response',
+            status: response.status,
+          });
+        }
+        seenCursors.add(nextCursor);
+        cursor = nextCursor;
+      }
+
+      throw createRequestError('Task API pagination exceeded the page limit', {
+        code: 'invalid_response',
       });
     },
     async createTask(task) {

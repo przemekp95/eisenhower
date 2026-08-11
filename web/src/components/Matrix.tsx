@@ -324,8 +324,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
                             <article
                               ref={dragProvided.innerRef}
                               {...dragProvided.draggableProps}
-                              {...dragProvided.dragHandleProps}
-                              className="relative cursor-grab overflow-hidden rounded-[1.4rem] border border-white/10 bg-slate-950/72 p-4 text-white transition-all hover:border-white/16 hover:bg-slate-950/82 hover:shadow-[0_20px_50px_rgba(2,6,23,0.45)] active:cursor-grabbing"
+                              className="relative overflow-hidden rounded-[1.4rem] border border-white/10 bg-slate-950/72 p-4 text-white transition-all hover:border-white/16 hover:bg-slate-950/82 hover:shadow-[0_20px_50px_rgba(2,6,23,0.45)]"
                             >
                               <div
                                 aria-hidden="true"
@@ -336,40 +335,50 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
                                   <h4 className="font-semibold">{task.title}</h4>
                                   <p className="mt-1 text-sm text-white/70">{task.description}</p>
                                 </div>
-                                {pendingDeleteId === task._id ? (
-                                  <div
-                                    role="group"
-                                    aria-label={`${t('task.delete')} ${task.title}`}
-                                    className="flex gap-1"
-                                  >
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setPendingDeleteId(null);
-                                        void onDeleteTask(task._id);
-                                      }}
-                                      className="rounded-full bg-red-500 px-3 py-1 text-xs font-semibold text-white"
-                                    >
-                                      {t('task.confirmDelete')}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setPendingDeleteId(null)}
-                                      className="rounded-full bg-white/10 px-3 py-1 text-xs"
-                                    >
-                                      {t('task.cancelDelete')}
-                                    </button>
-                                  </div>
-                                ) : (
+                                <div className="flex items-center gap-1">
                                   <button
                                     type="button"
-                                    aria-label={`${t('task.delete')} ${task.title}`}
-                                    onClick={() => setPendingDeleteId(task._id)}
-                                    className="rounded-full bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-100 transition-all hover:bg-red-500/30 hover:text-white"
+                                    {...dragProvided.dragHandleProps}
+                                    aria-label={format(t('task.drag'), { title: task.title })}
+                                    className="cursor-grab rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/70 transition-all hover:bg-white/15 hover:text-white active:cursor-grabbing"
                                   >
-                                    {t('task.delete')}
+                                    ⋮⋮
                                   </button>
-                                )}
+                                  {pendingDeleteId === task._id ? (
+                                    <div
+                                      role="group"
+                                      aria-label={`${t('task.delete')} ${task.title}`}
+                                      className="flex gap-1"
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setPendingDeleteId(null);
+                                          void onDeleteTask(task._id);
+                                        }}
+                                        className="rounded-full bg-red-500 px-3 py-1 text-xs font-semibold text-white"
+                                      >
+                                        {t('task.confirmDelete')}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setPendingDeleteId(null)}
+                                        className="rounded-full bg-white/10 px-3 py-1 text-xs"
+                                      >
+                                        {t('task.cancelDelete')}
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      aria-label={`${t('task.delete')} ${task.title}`}
+                                      onClick={() => setPendingDeleteId(task._id)}
+                                      className="rounded-full bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-100 transition-all hover:bg-red-500/30 hover:text-white"
+                                    >
+                                      {t('task.delete')}
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                               <div className="mt-4 flex flex-wrap gap-2">
                                 <button

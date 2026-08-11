@@ -4,7 +4,7 @@ import json
 import socket
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
@@ -15,6 +15,7 @@ class _RejectRedirects(HTTPRedirectHandler):
 
 
 _NO_REDIRECT_OPENER = build_opener(_RejectRedirects())
+_MAX_TASK_LIST_PAGES = 100
 
 
 def urlopen(request: Request, *, timeout: float):
@@ -56,10 +57,26 @@ class EisenhowerApiClient:
         return normalized.rstrip("/")
 
     def list_tasks(self) -> list[dict[str, Any]]:
-        payload = self._request(self.task_base_url, "GET", "tasks")
-        if not isinstance(payload, list) or not all(isinstance(item, dict) for item in payload):
-            raise ApiClientError("The tasks API returned an invalid response")
-        return payload
+        tasks: list[dict[str, Any]] = []
+        seen_cursors: set[str] = set()
+        cursor: str | None = None
+
+        for _page in range(_MAX_TASK_LIST_PAGES):
+            path = "tasks" if cursor is None else f"tasks?cursor={quote(cursor, safe='')}"
+            payload, headers = self._request_with_headers(self.task_base_url, "GET", path)
+            if not isinstance(payload, list) or not all(isinstance(item, dict) for item in payload):
+                raise ApiClientError("The tasks API returned an invalid response")
+            tasks.extend(payload)
+
+            next_cursor = headers.get("X-Next-Cursor")
+            if not next_cursor:
+                return tasks
+            if next_cursor in seen_cursors:
+                raise ApiClientError("The tasks API returned a repeated pagination cursor")
+            seen_cursors.add(next_cursor)
+            cursor = next_cursor
+
+        raise ApiClientError("The tasks API pagination exceeded the page limit")
 
     def search_knowledge(self, query: str, project_id: str | None, limit: int) -> dict[str, Any]:
         payload = self._request(
@@ -83,6 +100,16 @@ class EisenhowerApiClient:
         path: str,
         body: dict[str, Any] | None = None,
     ) -> Any:
+        payload, _headers = self._request_with_headers(base_url, method, path, body)
+        return payload
+
+    def _request_with_headers(
+        self,
+        base_url: str,
+        method: str,
+        path: str,
+        body: dict[str, Any] | None = None,
+    ) -> tuple[Any, Any]:
         url = urljoin(base_url + "/", path.lstrip("/"))
         data = None if body is None else json.dumps(body, separators=(",", ":")).encode("utf-8")
         headers = {"Accept": "application/json"}
@@ -98,8 +125,8 @@ class EisenhowerApiClient:
                 if len(raw) > self._max_response_bytes:
                     raise ApiClientError("The Eisenhower API response exceeded the configured size limit")
                 if not raw:
-                    return None
-                return json.loads(raw)
+                    return None, response.headers
+                return json.loads(raw), response.headers
         except HTTPError as error:
             try:
                 error.close()

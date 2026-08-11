@@ -157,8 +157,15 @@ class CanonicalIngestionApplication:
         continue
       if self._project(current):
         projected += 1
-    scopes = {(document.tenant_id, document.project_id) for document in documents}
-    pending = sum(len(self.document_store.pending_documents(tenant_id, project_id)) for tenant_id, project_id in scopes)
+    requested_keys = {(document.tenant_id, document.document_id) for document in documents}
+    pending = sum(
+      1
+      for tenant_id, document_id in requested_keys
+      if (
+        (state := self.document_store.retrieval_state(tenant_id, document_id)) is not None
+        and state.projection_pending
+      )
+    )
     return {
       **counts,
       "projected": projected,
@@ -238,7 +245,14 @@ class CanonicalIngestionApplication:
         continue
       if self._project(current):
         projected += 1
-    pending = len(self.document_store.pending_documents(tenant_id))
+    pending = sum(
+      1
+      for document_id in set(document_ids)
+      if (
+        (state := self.document_store.retrieval_state(tenant_id, document_id)) is not None
+        and state.projection_pending
+      )
+    )
     return {**counts, "projected": projected, "pending": pending}
 
   def _project(self, document: SourceDocument) -> bool:

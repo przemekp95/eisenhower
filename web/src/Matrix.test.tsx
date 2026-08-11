@@ -430,6 +430,18 @@ describe('Matrix', () => {
     await waitFor(() => expect(onDeleteTask).toHaveBeenCalledWith('1'));
   });
 
+  it('keeps the drag handle separate from task action buttons', () => {
+    renderMatrix({
+      tasks: [{ _id: 'drag', title: 'Move me', description: '', urgent: false, important: false }],
+    });
+
+    const card = screen.getByRole('article');
+    const dragHandle = screen.getByRole('button', { name: 'Przeciągnij zadanie Move me' });
+
+    expect(card).not.toHaveAttribute('data-drag-handle');
+    expect(dragHandle).toHaveAttribute('data-drag-handle', 'drag');
+  });
+
   it('localizes Polish toggle labels and visible pressed states', () => {
     localStorage.setItem('eisenhower-language', 'pl');
     renderMatrix({

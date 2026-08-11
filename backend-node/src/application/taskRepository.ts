@@ -32,6 +32,7 @@ export interface CreateTaskPersistenceResult {
   task: StoredTask;
   replayed: boolean;
   storedPayloadDigest?: string;
+  operationDeleted?: boolean;
 }
 
 export interface TaskRepository {

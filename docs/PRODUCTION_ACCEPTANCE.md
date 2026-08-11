@@ -32,8 +32,10 @@ production. An OIDC candidate additionally requires negative tests proving that 
 tenant cannot list, update, or delete one another's tasks.
 
 Task-write acceptance includes the additive `ETag`/`If-Match` contract: a stale conditional write
-returns `412` without overwriting the stored revision. Cursor pagination must preserve the legacy
-array response for existing clients and use the compound owner/sort index.
+returns `412` without overwriting the stored revision. A deleted idempotent create must retain only
+a redacted operation tombstone and must never be recreated by a delayed retry. Cursor pagination
+must preserve the legacy array response, use the compound owner/sort index, and be consumed to
+completion by the supported web, mobile, shared-client and MCP readers without cursor cycles.
 
 ## 2. CI candidate
 
@@ -42,6 +44,8 @@ The GitHub commit is acceptable only when all CI jobs pass on the exact commit S
 - `branch-policy`
 - `security-lint`
 - `test-backend-node`
+- `test-api-client`
+- `test-mcp-adapter`
 - `test-frontend`
 - `test-frontend-integration`
 - `test-frontend-e2e`
