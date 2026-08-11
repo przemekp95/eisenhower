@@ -4,6 +4,9 @@ const REQUIRED_CONTEXTS = Object.freeze({
   CI: [
     'security-lint',
     'test-backend-node',
+    'test-api-client',
+    'test-mcp-adapter',
+    'test-n8n-workflows',
     'test-frontend',
     'test-frontend-integration',
     'test-frontend-e2e',
