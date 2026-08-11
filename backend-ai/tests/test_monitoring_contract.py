@@ -23,3 +23,14 @@ def test_alerts_use_real_inference_job_and_cover_worker_heartbeat():
   assert "eisenhower_job_worker_heartbeat_age_seconds" in rules["EisenhowerRagWorkerStale"]["expr"]
   assert "eisenhower_job_queue_enabled == 1" in rules["EisenhowerRagWorkerStale"]["expr"]
   assert "> 90" in rules["EisenhowerRagWorkerStale"]["expr"]
+
+
+def test_public_ci_upload_excludes_private_ai_registry_manifests_and_snapshots():
+  workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+  upload = workflow.split("- name: Upload non-sensitive AI candidate commitments", 1)[1].split(
+    "\n  test-mobile:", 1
+  )[0]
+  assert "commitment.json" in upload
+  assert "eisenhower-ai-registry" not in upload
+  assert "manifest.json" not in upload
+  assert "qdrant-candidate.snapshot" not in upload

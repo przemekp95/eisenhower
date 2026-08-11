@@ -270,6 +270,15 @@ jobs:
     needs: resolve-run-mode
     if: ${{ needs.resolve-run-mode.outputs.skip_full_ci != 'true' }}
     runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+      qdrant:
+        image: qdrant/qdrant:v1.12.0
+        ports:
+          - 6333:6333
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -334,6 +343,51 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}/backend-ai
         run: python -m pytest
+
+      - name: Build immutable MLOps candidate
+        working-directory: backend-ai
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend-ai
+        run: |
+          python scripts/run_mlops_candidate.py \
+            --registry "${RUNNER_TEMP}/eisenhower-ai-registry" \
+            --candidate-id "mlops-${GITHUB_SHA}" \
+            --git-sha "${GITHUB_SHA}" \
+            --output "${RUNNER_TEMP}/eisenhower-ai-candidates/mlops-manifest.json"
+
+      - name: Build immutable non-live LLMOps candidate
+        working-directory: backend-ai
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend-ai
+        run: |
+          python scripts/run_llmops_candidate.py \
+            --registry "${RUNNER_TEMP}/eisenhower-ai-registry" \
+            --candidate-id "llmops-${GITHUB_SHA}" \
+            --git-sha "${GITHUB_SHA}" \
+            --output "${RUNNER_TEMP}/eisenhower-ai-candidates/llmops-manifest.json"
+
+      - name: Build immutable live-dependency RAGOps candidate
+        if: ${{ vars.ENABLE_RAGOPS_CANDIDATE == 'true' }}
+        working-directory: backend-ai
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend-ai
+        run: |
+          python scripts/run_ragops_candidate.py \
+            --registry "${RUNNER_TEMP}/eisenhower-ai-registry" \
+            --candidate-id "ragops-${GITHUB_SHA}" \
+            --git-sha "${GITHUB_SHA}" \
+            --output "${RUNNER_TEMP}/eisenhower-ai-candidates/ragops-manifest.json"
+
+      - name: Upload non-sensitive AI candidate commitments
+        uses: actions/upload-artifact@v7
+        with:
+          name: ai-candidate-commitments-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/eisenhower-ai-candidates/mlops-commitment.json
+            ${{ runner.temp }}/eisenhower-ai-candidates/llmops-commitment.json
+            ${{ runner.temp }}/eisenhower-ai-candidates/ragops-commitment.json
+          if-no-files-found: error
+          retention-days: 14
 
   test-mobile:
     name: test-mobile

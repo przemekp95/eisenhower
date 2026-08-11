@@ -23,6 +23,7 @@ from app.rag.golden_runner import RetrievalGoldenRunner
 from app.rag.ingestion import DeterministicChunker
 from app.rag.models import AccessScope
 from app.rag.mongo_document_store import MongoCanonicalDocumentStore
+from scripts.verify_qdrant_recovery import verify_candidate_collection_snapshot
 
 
 class PinnedMiniLMEmbedding:
@@ -51,7 +52,7 @@ def _delete_alias(client: QdrantClient, alias: str) -> None:
     ])
 
 
-def run(candidate_path: Path) -> dict:
+def run(candidate_path: Path, snapshot_output: Path | None = None) -> dict:
   repository_root = Path(__file__).resolve().parents[2]
   manifest_path = repository_root / "docs" / "ai-rebuild" / "corpus-manifest-v1.json"
   manifest = CorpusManifest.load(manifest_path)
@@ -106,6 +107,10 @@ def run(candidate_path: Path) -> dict:
 
     retriever = QdrantRetriever(qdrant, embedding, collection_alias=alias)
     evaluation = RetrievalGoldenRunner(retriever).run(cases, k=5)
+    recovery = (
+      verify_candidate_collection_snapshot(qdrant, manager, collection_name, snapshot_output)
+      if snapshot_output is not None else None
+    )
     report = {
       "schema_version": "retrieval-candidate-runtime-v1",
       "evidence_level": "local-container-runtime",
@@ -132,6 +137,8 @@ def run(candidate_path: Path) -> dict:
       "ingestion": ingestion_result,
       "reconciliation": reconciliation,
       "evaluation": evaluation,
+      "collection": {"name": collection_name, "revision": embedding.version},
+      "snapshot_restore": recovery,
       "total_seconds_before_cleanup": round(perf_counter() - started, 6),
       "cleanup": cleanup,
     }

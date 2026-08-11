@@ -1,5 +1,105 @@
 # Done
 
+## TASK-036: Add a fail-closed AI promotion controller
+**Priority:** P1 | **Tags:** ai, promotion, shadow, canary, rollback
+
+Implement a reversible controller for independently governed retrieval, generation, response and MAG phases. Require immutable candidates, explicit approvals and green quality/drift evidence before shadow or canary pointer changes, with stable assignment, stop conditions and rollback.
+
+### Plan
+
+- Add red state-machine tests for illegal transitions, missing or stale evidence, phase dependencies, canary assignment and rollback.
+- Keep candidate artifacts immutable and write only auditable atomic pointers; never enable a phase merely because another phase starts.
+- Provide local dry-run and CI contract checks while leaving production traffic, owner approvals and deployment as explicit resume gates.
+
+### Outcome
+
+Added a locked atomic pointer state machine for independently governed retrieval, generation, response and MAG phases with legal `disabled -> shadow -> canary -> enabled` progression, dependency gates, bounded stable pseudonymous canary assignment, immutable-candidate verification, fresh checksummed green quality evidence and matching approval receipts. Each applied transition preserves a private rollback pointer; dry-run is the CLI default and `--apply` changes only local state, never runtime flags or deployment. TDD evidence: the test first failed on the absent controller; three fixtures then exposed their own invalid shadow percentages without weakening the implementation. Green evidence is 17 promotion/monitoring tests and pylint 10.00/10. No production approval, flag change, traffic assignment or deployment occurred.
+
+---
+
+## TASK-035: Add quality and drift monitoring reports
+**Priority:** P1 | **Tags:** ai, monitoring, drift, observability
+
+Produce privacy-safe, checksummed periodic quality and drift reports for classifier, retrieval, generation, response and MAG phases without logging prompts, PII, tokens or private identifiers.
+
+### Plan
+
+- Add red tests for baseline comparison, slice drift, missing evidence, sensitive-label rejection and fail-closed status.
+- Reuse aggregate metrics while keeping offline quality reports distinct from runtime SLO telemetry.
+- Register reports in the shared lineage manifest and expose only bounded status/metrics needed by promotion decisions.
+
+### Outcome
+
+Added a checksummed aggregate-only quality/drift report for classifier, retrieval, generation, response and MAG. Missing phases, samples, metric drift or slice drift block the report; recursive field validation rejects prompt, token, content, citation, PII and private-identifier keys before serialization. Reports record only counts/deltas and can be registered as monitoring lineage without retaining raw snapshots or collection IDs. TDD evidence: tests first failed on the absent monitoring module and later absent registrar; green evidence is 12 monitoring/metrics tests and pylint 10.00/10. This is offline quality evidence, not deployed telemetry or an invented production SLO.
+
+---
+
+## TASK-034: Automate the LLMOps candidate workflow
+**Priority:** P1 | **Tags:** ai, llmops, prompts, evaluation
+
+Build a candidate-only workflow for immutable PromptSpec checksums, schema and token budgets, PL/EN golden, safety and structured-output evaluation, regression comparison and candidate registration. Mock or in-process results must be labelled and must never satisfy a live-model gate.
+
+### Plan
+
+- Add red contracts for prompt/schema/runtime lineage, required PL/EN and safety slices, regression policy and evidence-level separation.
+- Reuse the prompt registry, renderer, validators and regression gate to create a deterministic offline candidate command and CI job.
+- Keep model/tokenizer/GPU/license selection, live vLLM and champion promotion fail-closed.
+
+### Outcome
+
+Added a candidate-only LLMOps workflow that checksum-validates PL/EN PromptSpecs and token budgets, binds the JSON Schema, golden/adversarial cases and independently frozen mock outputs, then executes schema, citation-safety and regression comparisons without a model. It registers a checksummed `ci_in_process` contract candidate and explicitly records `live_model.executed=false`; this does not satisfy live-model quality. TDD evidence includes fail-closed registrar tests and a regression caused by changing a frozen mock output. Model/GPU/license selection, real live-model evaluation, durable private CI storage and promotion remain open.
+
+---
+
+## TASK-033: Automate the RAGOps candidate workflow
+**Priority:** P1 | **Tags:** ai, ragops, ingestion, qdrant, recovery
+
+Compose the approved corpus manifest, governed extraction, canonical MongoDB, versioned Qdrant, reconciliation, evaluation and snapshot/restore primitives into one checksummed candidate workflow. Candidate creation must never promote the live alias automatically.
+
+### Plan
+
+- Add red contracts for immutable lineage, canonical-before-vector ordering, reconciliation, snapshot verification and absence of alias promotion.
+- Reuse existing ingestion, collection and evaluation components behind an explicit candidate command and CI-local smoke profile.
+- Register reports and recovery evidence while keeping real services, representative review and deployment as explicit external gates.
+
+### Outcome
+
+Added a RAGOps candidate registrar that requires canonical-before-vector ordering, zero reconciliation drift, evaluated retrieval, a checksummed isolated snapshot/restore proof, Mongo/Qdrant runtime identity and an explicitly unpromoted alias. It registers corpus, golden set, encoder, canonical schema, versioned collection receipt, snapshot and report in the shared immutable registry; it cannot switch an alias. A CLI accepts only freshly produced report/snapshot inputs and fails closed rather than rebinding stale evidence. TDD evidence: the focused slice first failed on the missing registrar; green evidence is 30 focused/RAG regression tests with one opt-in live-runtime skip and pylint 10.00/10. Representative TASK-013 review, target runtime and deployment remain external gates.
+
+---
+
+## TASK-032: Automate the MLOps candidate workflow
+**Priority:** P1 | **Tags:** ai, mlops, training, evaluation
+
+Build a deterministic candidate-only workflow for data validation, leakage and required slices, multi-seed training, incumbent/baseline comparison, thresholds and checksummed artifact registration. Human-approved production evaluation and promotion remain fail-closed.
+
+### Plan
+
+- Drive the workflow with red contract tests and reuse the existing evaluation, benchmark and atomic model-generation components.
+- Separate candidate creation from any current/champion pointer change and record seeds, dataset, encoder, code and report lineage.
+- Add a local command and CI job that produces private immutable artifacts without fabricating TASK-001 or TASK-002 evidence.
+
+### Outcome
+
+Composed the existing deterministic grouped-CV, five-seed training, leakage, PL/EN slices, centroid baseline, incumbent and threshold report into a candidate-only registry workflow. It records training/evaluation data, encoder receipt, schema, runtime, Git and report lineage, requires the development gate to pass, preserves a failed human/production gate in the report, and proves the current model pointer is unchanged. CI builds the private registry only in runner-local storage and uploads a checksummed allowlisted public commitment, never full lineage or blobs; durable private CI storage remains an external owner gate. No human annotation, production approval or model promotion was performed.
+
+---
+
+## TASK-031: Add an immutable AI artifact registry and lineage manifest
+**Priority:** P1 | **Tags:** ai, mlops, ragops, llmops, lineage
+
+Create one dependency-light, immutable candidate manifest that binds Git SHA, datasets, encoder/model revisions, prompt/schema, corpus/Qdrant state, runtime identity and reports by checksum. Store candidates privately without overwrite or delete semantics and keep promotion pointers separate and reversible.
+
+### Plan
+
+- Add red contract tests for canonical serialization, checksums, complete typed lineage, immutability, conflict rejection and private filesystem storage.
+- Implement a project-owned manifest/registry and CLI that can register and verify candidates without introducing MLflow or a new service.
+- Integrate the registry contract with later MLOps, RAGOps and LLMOps workflows while keeping promotion outside candidate creation.
+- Run focused and broader local verification and record exact artifact boundaries.
+
+### Outcome
+
+Added a strict checksummed `ai-candidate-v1` lineage contract with explicit applicable/not-applicable groups for datasets, model/encoder, prompts, schemas, corpus, Qdrant, runtime and reports. Added a private filesystem registry with content-addressed blobs, `0700` directories, `0600` files, exclusive creation, idempotent identical registration, conflict/tamper detection and no delete or promotion operation, plus a register/verify CLI. No MLflow or persistent service was introduced. TDD evidence: the collected test first failed because `app.artifacts` did not exist; the CLI slice separately failed on the missing CLI module. Green evidence: 5 focused tests and 45 artifact/prompt/model/evaluation tests passed, and pylint rated the new modules 10.00/10.
 ## TASK-030: Promote executable BDD to green dev
 **Priority:** P1 | **Tags:** bdd, delivery, dev, ci
 
@@ -57,7 +157,6 @@ Mikrus now renders and boots the supported static single-tenant contract, while 
 The experimental SQLite worker renews long leases and durable heartbeats, refuses acknowledgement after renewal loss, and has multi-worker coverage. Prometheus now scrapes the real optional inference target and gates inference/worker alerts on configured runtimes; `promtool` validated the config and all 9 rules. Schedule reminders, Delegate workflow, lifecycle states and RAG/camera parity remain separate TASK-025 through TASK-028 product decisions.
 
 TDD evidence was recorded from failing contracts for Compose boot, readiness timeout/unready, owner isolation/concurrency/pagination, web/mobile mutations and OCR, reconnect/conflicts, worker lease/heartbeat and topology-gated alerts, followed by focused green runs. Final local verification: `make verify` passed Node 87/87 at 100% coverage, web 150/150 at 100% plus 2 integration tests, backend AI 415 passed/7 skipped at 89.40%, and mobile 115/115 above every coverage threshold. Playwright passed 6/6 desktop/mobile checks; the exact rendered Mikrus environment passed 19 focused deployment/readiness tests and the Node production config loader; system `pytest 7.4.4` is installed. No deployment, public runtime, physical-device, live inference, n8n/job/webhook production, commit, push or PR evidence is claimed.
-
 ---
 
 ## TASK-022: Implement a portable private generation boundary
