@@ -1,11 +1,18 @@
 from app.rag.golden import GoldenCase
 from app.job_worker import PermanentJobError
-from app.rag.golden_runner import GoldenEvaluationRunner, RepositoryEvaluationHandler
+from app.rag.golden_runner import (
+  GoldenEvaluationRunner,
+  RepositoryEvaluationHandler,
+  RetrievalGoldenRunner,
+)
 from app.rag.models import AnalyzeResult, Citation, RetrievalHit, RetrievalSummary
 
 
 class Retriever:
+  last_query = None
+
   def retrieve(self, query):
+    self.last_query = query
     if "unknown" in query.text:
       return []
     return [RetrievalHit(
@@ -19,6 +26,7 @@ class Service:
   retriever = Retriever()
 
   def analyze(self, task, _scope, *, language="en"):
+    del language
     if "unknown" in task:
       return AnalyzeResult(mode="no_answer", explanation="No grounded answer.")
     return AnalyzeResult(
@@ -35,8 +43,9 @@ def test_golden_runner_measures_retrieval_citations_no_answer_and_latency():
   cases = [
     GoldenCase(
       dataset_version="v1", case_id="answer", tenant_id="tenant-a", user_id="u1",
-      project_ids=["p1"], task="roadmap", expected_quadrant=2,
+      project_ids=["p1"], query_project_id="p1", task="roadmap", expected_quadrant=2,
       answerability="answerable", relevant_document_ids=["doc-1"],
+      expected_content_versions={"doc-1": "v1"}, split="holdout",
       allowed_citation_ids=["chunk-1"], tags=["test"],
     ),
     GoldenCase(
@@ -54,6 +63,60 @@ def test_golden_runner_measures_retrieval_citations_no_answer_and_latency():
   assert report["metrics"]["no_answer_accuracy"] == 1.0
   assert report["metrics"]["accuracy"] == 1.0
   assert report["metrics"]["no_answer"]["f1"] == 1.0
+  assert report["metrics"]["freshness_rate"] == 1.0
+  assert report["metrics"]["duplicate_hit_rate"] == 0.0
+  assert report["metrics"]["by_split"]["holdout"]["cases"] == 1
+  assert report["cases"][0]["retrieved_content_versions"] == ["v1"]
+  assert Service.retriever.last_query.project_id is None
+
+
+def test_golden_runner_passes_an_allowlisted_project_filter():
+  service = Service()
+  case = GoldenCase(
+    dataset_version="v1", case_id="project-filter", tenant_id="tenant-a", user_id="u1",
+    project_ids=["p1", "p2"], query_project_id="p2", task="roadmap",
+    answerability="answerable", tags=["project-isolation"],
+  )
+
+  report = GoldenEvaluationRunner(service, clock=lambda: 1.0).run([case])
+
+  assert service.retriever.last_query.project_id == "p2"
+  assert report["cases"][0]["split"] == "dev"
+
+
+def test_retrieval_runner_does_not_invoke_generation_and_scores_no_hit_separately():
+  cases = [
+    GoldenCase(
+      dataset_version="v1", case_id="answer", tenant_id="tenant-a", user_id="u1",
+      project_ids=["p1"], query_project_id="p1", task="roadmap",
+      answerability="answerable", relevant_document_ids=["doc-1"], tags=["test"],
+    ),
+    GoldenCase(
+      dataset_version="v1", case_id="no-answer", tenant_id="tenant-a", user_id="u1",
+      project_ids=["p1"], task="unknown", answerability="no_answer", tags=["test"],
+    ),
+  ]
+
+  report = RetrievalGoldenRunner(Retriever(), clock=lambda: 1.0).run(cases)
+
+  assert report["mode"] == "retrieval_only"
+  assert report["metrics"]["recall_at_k"] == 1.0
+  assert report["metrics"]["mrr"] == 1.0
+  assert report["metrics"]["no_answer_accuracy"] == 1.0
+  assert report["cases"][1]["result_mode"] == "no_answer"
+
+
+def test_golden_case_rejects_query_project_outside_access_scope():
+  try:
+    GoldenCase(
+      dataset_version="v1", case_id="bad-project", tenant_id="tenant-a", user_id="u1",
+      project_ids=["p1"], query_project_id="p2", task="roadmap",
+      answerability="answerable", tags=["project-isolation"],
+    )
+  except ValueError as error:
+    assert "query_project_id must belong to project_ids" in str(error)
+  else:
+    raise AssertionError("out-of-scope query projects must be rejected")
 
 
 def test_repository_evaluation_handler_allowlists_dataset_and_writes_report_atomically(tmp_path):

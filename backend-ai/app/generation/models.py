@@ -5,6 +5,7 @@ from hashlib import sha256
 import json
 import re
 from typing import Literal
+import unicodedata
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -12,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 SEMVER_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 CHECKSUM_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 CONTEXT_POOL_LIMIT = 4800
+WORLD_FRESHNESS_SCOPE = "frozen_corpus_snapshot_not_current_world"
 
 
 class StrictFrozenModel(BaseModel):
@@ -139,6 +141,114 @@ class Evidence(StrictFrozenModel):
   chunk_id: str = Field(..., min_length=1, max_length=256)
 
 
+def normalize_statement(value: str) -> str:
+  normalized = unicodedata.normalize("NFC", value).casefold()
+  return " ".join(normalized.split())
+
+
+def statement_checksum(value: str) -> str:
+  return sha256(normalize_statement(value).encode("utf-8")).hexdigest()
+
+
+class KnownStatement(StrictFrozenModel):
+  statement_id: str = Field(..., min_length=1, max_length=128)
+  statement: str = Field(..., min_length=1, max_length=500)
+  language: Literal["pl", "en"]
+  checksum: str = Field(..., pattern=r"^[a-f0-9]{64}$")
+
+  @model_validator(mode="after")
+  def checksum_matches_statement(self):
+    if self.checksum != statement_checksum(self.statement):
+      raise ValueError("known statement checksum does not match its normalized text")
+    return self
+
+
+class DeltaClaim(StrictFrozenModel):
+  claim_id: str = Field(..., min_length=1, max_length=128)
+  statement: str = Field(..., min_length=1, max_length=500)
+  relation: Literal[
+    "new_information",
+    "confirmation",
+    "contradiction",
+    "update",
+    "necessary_reminder",
+  ]
+  compared_to_statement_ids: list[str] = Field(default_factory=list, max_length=20)
+  citation_ids: list[str] = Field(default_factory=list, max_length=20)
+  reminder_reason: Literal[
+    "direct_answer",
+    "decision_constraint",
+    "safety_constraint",
+  ] | None = None
+
+  @model_validator(mode="after")
+  def relation_shape_is_explicit(self):
+    if len(self.compared_to_statement_ids) != len(set(self.compared_to_statement_ids)):
+      raise ValueError("compared known statement ids must be unique")
+    if len(self.citation_ids) != len(set(self.citation_ids)):
+      raise ValueError("delta claim citation ids must be unique")
+    if self.relation == "new_information":
+      if self.compared_to_statement_ids or not self.citation_ids:
+        raise ValueError("new information requires citations and cannot reference known statements")
+    elif self.relation == "necessary_reminder":
+      if not self.compared_to_statement_ids or self.reminder_reason is None:
+        raise ValueError("necessary reminder requires known references and an explicit reason")
+    elif not self.compared_to_statement_ids or not self.citation_ids:
+      raise ValueError(f"{self.relation} requires known references and citations")
+    if self.relation != "necessary_reminder" and self.reminder_reason is not None:
+      raise ValueError("reminder_reason is valid only for necessary reminders")
+    return self
+
+
+class InformationDelta(StrictFrozenModel):
+  status: Literal[
+    "new_information",
+    "mixed",
+    "confirmation_only",
+    "no_new_information",
+    "freshness_unverified",
+  ]
+  claims: list[DeltaClaim] = Field(default_factory=list, max_length=12)
+  summary_code: Literal[
+    "grounded_delta_available",
+    "known_information_only",
+    "no_new_information",
+    "current_world_freshness_unverified",
+  ]
+  world_freshness: Literal[WORLD_FRESHNESS_SCOPE] = WORLD_FRESHNESS_SCOPE
+
+  @model_validator(mode="after")
+  def status_matches_claims(self):
+    if len({claim.claim_id for claim in self.claims}) != len(self.claims):
+      raise ValueError("delta claim ids must be unique")
+    relations = {claim.relation for claim in self.claims}
+    knowledge_changing = {"new_information", "contradiction", "update"}
+    if self.status in {"no_new_information", "freshness_unverified"} and self.claims:
+      raise ValueError(f"{self.status} must not contain claims")
+    if self.status == "new_information" and (
+      not self.claims or relations != {"new_information"}
+    ):
+      raise ValueError("new_information status requires only new-information claims")
+    if self.status == "confirmation_only" and (
+      not self.claims or not relations.issubset({"confirmation", "necessary_reminder"})
+    ):
+      raise ValueError("confirmation_only requires confirmations or necessary reminders")
+    if self.status == "mixed" and (
+      len(relations) < 2 or not (relations & knowledge_changing)
+    ):
+      raise ValueError("mixed status requires multiple relations including a knowledge change")
+    expected_summary = {
+      "new_information": "grounded_delta_available",
+      "mixed": "grounded_delta_available",
+      "confirmation_only": "known_information_only",
+      "no_new_information": "no_new_information",
+      "freshness_unverified": "current_world_freshness_unverified",
+    }[self.status]
+    if self.summary_code != expected_summary:
+      raise ValueError("information delta summary code must match its status")
+    return self
+
+
 class ClassificationOutput(StrictFrozenModel):
   status: Literal["classified", "insufficient_evidence"]
   urgent: bool | None
@@ -150,6 +260,7 @@ class ClassificationOutput(StrictFrozenModel):
   explanation: str = Field(..., min_length=1, max_length=2000)
   confidence: float | None = Field(..., ge=0.0, le=1.0)
   no_answer_reason: str | None = Field(default=None, max_length=256)
+  information_delta: InformationDelta | None = None
 
   @model_validator(mode="after")
   def validate_semantics_and_grounding(self):
@@ -181,6 +292,11 @@ class ClassificationOutput(StrictFrozenModel):
         raise ValueError("insufficient_evidence must not claim retrieved evidence")
       if not self.no_answer_reason:
         raise ValueError("insufficient_evidence requires no_answer_reason")
+      if self.information_delta is not None and self.information_delta.status not in {
+        "no_new_information",
+        "freshness_unverified",
+      }:
+        raise ValueError("insufficient_evidence may only report no delta or unverified freshness")
     return self
 
 

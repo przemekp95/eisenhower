@@ -307,16 +307,16 @@ def test_qdrant_ingestion_replaces_stale_document_before_upserting_current_versi
   class Client:
     def __init__(self):
       self.upsert_call = None
-      self.payload_calls = []
+      self.delete_calls = []
       self.call_order = []
 
     def upsert(self, **kwargs):
       self.call_order.append("upsert")
       self.upsert_call = kwargs
 
-    def set_payload(self, **kwargs):
-      self.call_order.append("set_payload")
-      self.payload_calls.append(kwargs)
+    def delete(self, **kwargs):
+      self.call_order.append("delete")
+      self.delete_calls.append(kwargs)
 
   client = Client()
   adapter = QdrantIngestionAdapter(client, collection_name="knowledge-v1")
@@ -352,14 +352,45 @@ def test_qdrant_ingestion_replaces_stale_document_before_upserting_current_versi
   adapter.replace_documents([document], [chunk], [[0.1, 0.2, 0.3]])
 
   point = client.upsert_call["points"][0]
-  assert client.call_order == ["set_payload", "upsert"]
+  assert client.call_order == ["delete", "upsert"]
   assert point.payload["tenant_id"] == "tenant-a"
   assert point.payload["acl_subjects"] == ["user:user-1"]
   assert point.payload["embedding_version"] == "minilm-v1"
   assert point.payload["content_version"] == "v2"
-  assert client.payload_calls[0]["payload"] == {"deleted": True}
-  assert "tenant-a" in repr(client.payload_calls[0]["points"])
-  assert "doc-1" in repr(client.payload_calls[0]["points"])
+  assert "tenant-a" in repr(client.delete_calls[0]["points_selector"])
+  assert "doc-1" in repr(client.delete_calls[0]["points_selector"])
+
+
+def test_qdrant_projection_inspection_returns_only_active_chunk_contracts():
+  class Point:
+    def __init__(self, payload):
+      self.payload = payload
+
+  class Client:
+    def __init__(self):
+      self.calls = 0
+
+    def scroll(self, **kwargs):
+      assert kwargs["collection_name"] == "knowledge-v1"
+      assert "tenant-a" in repr(kwargs["scroll_filter"])
+      assert "doc-1" in repr(kwargs["scroll_filter"])
+      self.calls += 1
+      if self.calls == 1:
+        assert kwargs["offset"] is None
+        return ([
+          Point({"chunk_id": "chunk-1", "checksum": "checksum-1", "content_version": "v2", "deleted": False}),
+          Point({"chunk_id": "chunk-old", "checksum": "checksum-old", "content_version": "v1", "deleted": True}),
+        ], "page-2")
+      assert kwargs["offset"] == "page-2"
+      return ([
+        Point({"chunk_id": "chunk-2", "checksum": "checksum-2", "content_version": "v2", "deleted": False}),
+      ], None)
+
+  adapter = QdrantIngestionAdapter(Client(), collection_name="knowledge-v1")
+  assert adapter.projected_chunks("doc-1", "tenant-a") == {
+    ("chunk-1", "checksum-1", "v2"),
+    ("chunk-2", "checksum-2", "v2"),
+  }
 
 
 def test_generation_circuit_breaker_opens_after_bounded_failures():

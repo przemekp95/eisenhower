@@ -16,10 +16,11 @@ Before activating the workflow:
 
 1. Replace import placeholders and create a dedicated Header Auth credential. Keep n8n private; expose only the single ingress path through the application gateway.
 2. Configure `EISENHOWER_INTERNAL_API_URL` to a private HTTPS/mTLS endpoint and provide a narrowly scoped `EISENHOWER_INTERNAL_API_TOKEN` through n8n credentials/secrets, not workflow JSON.
-3. The verifier endpoint must validate `X-Eisenhower-Timestamp` and `X-Eisenhower-Signature` over the exact raw request bytes, use constant-time HMAC comparison, reject timestamps outside a five-minute window, and atomically reserve `event_id` for longer than the maximum retry period. A signature alone does not stop replay.
-4. Validate the body against the JSON Schema before accepting it. Recompute `content_checksum`; never trust a connector-supplied checksum as proof of content integrity.
-5. Every internal job endpoint must atomically claim `Idempotency-Key`, return the same job/result for duplicates, and return `202` only after durable enqueue. Retries cover network/5xx failures; validation, authentication, tenant mismatch, and permanent 4xx failures go directly to the error workflow or a dead-letter review queue.
-6. Store only minimum execution metadata in n8n. Successful execution data is disabled in the scaffold. Apply retention to failed executions because they can still contain PII.
+3. The source must send `X-Eisenhower-Signature-Version: v1` and calculate lower-case hex HMAC-SHA256 over `v1 + "\\n" + timestamp + "\\n" + "POST" + "\\n" + "/webhook/eisenhower-rag-ingestion" + "\\n" + exact_raw_body`. The timestamp is Unix seconds in `X-Eisenhower-Timestamp`; the digest is `X-Eisenhower-Signature`. Method, production ingress path, version and every body byte are therefore bound by the signature.
+4. The Webhook node has **Raw Body** enabled and exposes those bytes as binary field `data`; the verification HTTP node forwards that binary field without JSON parsing/reserialization. FastAPI accepts only `application/json`, enforces an 8 MiB application limit, rejects invalid UTF-8, duplicate keys, non-finite numbers, unknown fields and schema-invalid envelopes, then uses constant-time comparison, a five-minute signature window and an atomic 24-hour `event_id` reservation. Set self-hosted `N8N_PAYLOAD_SIZE_MAX=8` and the gateway body limit to the same or a smaller value; the app limit remains the final fail-closed check. A signature alone does not stop replay.
+5. Validate the body before accepting it. Recompute `content_checksum`; never trust a connector-supplied checksum as proof of content integrity.
+6. Every internal job endpoint must atomically claim `Idempotency-Key`, return the same job/result for duplicates, and return `202` only after durable enqueue. Retries cover network/5xx failures; validation, authentication, tenant mismatch, and permanent 4xx failures go directly to the error workflow or a dead-letter review queue.
+7. Store only minimum execution metadata in n8n. Successful execution data is disabled in the scaffold. Apply retention to failed executions because they can still contain PII.
 
 The internal API must derive tenant/user authorization from the verified credential and compare it with the envelope; never use the envelope tenant as authorization. Source URIs must be allowlisted and fetched by dedicated connectors to avoid SSRF. Tombstones are versioned events, not immediate destructive deletion: the ingestion worker records the tombstone, removes the document from the next index version, and switches the Qdrant collection alias only after validation.
 
@@ -38,6 +39,7 @@ Start in regular mode. n8n queue mode becomes justified only after measurements 
 Official references:
 
 - [n8n Webhook node and authentication](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.webhook/)
+- [n8n HTTP Request raw and binary bodies](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.httprequest/)
 - [n8n error workflows](https://docs.n8n.io/flow-logic/error-handling/)
 - [n8n queue mode](https://docs.n8n.io/hosting/scaling/queue-mode/)
 - [n8n execution-data configuration](https://docs.n8n.io/hosting/configuration/configuration-examples/execution-data/)

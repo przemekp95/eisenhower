@@ -41,7 +41,7 @@ class Settings:
   vllm_model: str | None = None
   prompt_artifact_dir: Path = DEFAULT_PROMPT_ARTIFACT_DIR
   prompt_id: str = "eisenhower-classifier"
-  prompt_version: str = "1.0.0"
+  prompt_version: str = "1.1.0"
   retrieval_version: str = "retrieval-v1"
   index_version: str = "index-v1"
   internal_api_token: str | None = None
@@ -49,6 +49,17 @@ class Settings:
   webhook_secret: str | None = None
   jobs_database_path: Path | None = None
   evaluation_data_path: Path | None = None
+  mongodb_uri: str | None = None
+  mongodb_database: str = "eisenhower"
+  canonical_documents_collection: str = "rag_documents"
+  corpus_repository_root: Path | None = None
+  corpus_manifest_path: Path | None = None
+  corpus_owner_id: str = "eisenhower-owner"
+  corpus_allowed_projects: tuple[str, ...] = ("eisenhower",)
+  memory_write_enabled: bool = False
+  memory_retrieval_enabled: bool = False
+  memory_response_enabled: bool = False
+  memory_policy_path: Path | None = None
   # MinIO Object Storage
   minio_endpoint: str | None = None
   minio_access_key: str | None = None
@@ -96,6 +107,10 @@ class Settings:
     object.__setattr__(self, "rag_generation_enabled", generation_enabled)
     if generation_enabled and not retrieval_enabled:
       raise ValueError("RAG generation requires RAG retrieval to be enabled.")
+    if self.memory_retrieval_enabled and not self.memory_write_enabled:
+      raise ValueError("Memory retrieval requires governed memory writes.")
+    if self.memory_response_enabled and not self.memory_retrieval_enabled:
+      raise ValueError("Memory response augmentation requires memory retrieval.")
     bounded_thresholds = (
       self.local_model_confidence_threshold,
       self.local_model_minimum_macro_f1,
@@ -126,6 +141,8 @@ class Settings:
       character not in "0123456789abcdef" for character in self.local_model_revision
     ):
       raise ValueError("Local model revision must be a lowercase 40-character hexadecimal commit.")
+    if self.chunking_version != "chars-1200-overlap-160-v1":
+      raise ValueError("Unsupported CHUNKING_VERSION for the configured 1200/160 chunker.")
 
 
 def load_settings(env: dict[str, str] | None = None) -> Settings:
@@ -206,7 +223,7 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
       source.get("PROMPT_ARTIFACT_DIR", str(DEFAULT_PROMPT_ARTIFACT_DIR))
     ),
     prompt_id=source.get("PROMPT_ID", "eisenhower-classifier"),
-    prompt_version=source.get("PROMPT_VERSION", "1.0.0"),
+    prompt_version=source.get("PROMPT_VERSION", "1.1.0"),
     retrieval_version=source.get("RETRIEVAL_VERSION", "retrieval-v1"),
     index_version=source.get("INDEX_VERSION", "index-v1"),
     internal_api_token=internal_api_token,
@@ -218,6 +235,17 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     evaluation_data_path=Path(
       source.get("EVALUATION_DATA_PATH", str(base_dir / "data" / "evaluation_v1.json"))
     ),
+    mongodb_uri=source.get("MONGODB_URI") or None,
+    mongodb_database=source.get("MONGODB_DATABASE", "eisenhower"),
+    canonical_documents_collection=source.get("CANONICAL_DOCUMENTS_COLLECTION", "rag_documents"),
+    corpus_repository_root=(Path(source["CORPUS_REPOSITORY_ROOT"]) if source.get("CORPUS_REPOSITORY_ROOT") else None),
+    corpus_manifest_path=(Path(source["CORPUS_MANIFEST_PATH"]) if source.get("CORPUS_MANIFEST_PATH") else None),
+    corpus_owner_id=source.get("CORPUS_OWNER_ID", "eisenhower-owner"),
+    memory_write_enabled=source.get("MEMORY_WRITE_ENABLED", "false").lower() in ("true", "1", "yes"),
+    memory_retrieval_enabled=source.get("MEMORY_RETRIEVAL_ENABLED", "false").lower() in ("true", "1", "yes"),
+    memory_response_enabled=source.get("MEMORY_RESPONSE_ENABLED", "false").lower() in ("true", "1", "yes"),
+    memory_policy_path=(Path(source["MEMORY_POLICY_PATH"]) if source.get("MEMORY_POLICY_PATH") else None),
+    corpus_allowed_projects=parse_csv_list(source.get("CORPUS_ALLOWED_PROJECTS"), ("eisenhower",)),
     local_model_name=source.get(
       "LOCAL_MODEL_NAME",
       "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",

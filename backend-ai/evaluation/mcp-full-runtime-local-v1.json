@@ -1,0 +1,86 @@
+{
+  "cleanup": {
+    "fastapi_stopped": true,
+    "mcp_stdio_closed": true,
+    "mongo_database_dropped": true,
+    "node_stopped": true,
+    "ports_closed": true,
+    "qdrant_alias_deleted": true,
+    "qdrant_collection_deleted": true
+  },
+  "evidence_boundaries": [
+    "The frozen approved manifest supplies the local demo corpus.",
+    "The two task records are isolated synthetic demo data.",
+    "Retrieval labels and TASK-013 thresholds remain unapproved and are not evaluated here.",
+    "No vLLM, generated response, deployment, public HTTPS or production traffic is claimed.",
+    "The dirty worktree is identified by relevant artifacts, not misrepresented as the base HEAD."
+  ],
+  "ingestion": {
+    "accepted": 19,
+    "conflict": 0,
+    "duplicate": 0,
+    "embedding_version": "minilm-v1",
+    "pending": 0,
+    "projected": 19,
+    "stale": 0
+  },
+  "mcp": {
+    "citation_count": 5,
+    "citation_source_uris": [
+      "eisenhower://repository/docs/PRODUCTION_ACCEPTANCE.md",
+      "eisenhower://repository/docs/ai-rebuild/README.md",
+      "eisenhower://repository/docs/ai-rebuild/methodology-assessment.md",
+      "eisenhower://repository/docs/ai-rebuild/testing-evaluation.md"
+    ],
+    "knowledge_hit_count": 5,
+    "project_task_count": 2,
+    "task_count": 2,
+    "tool_count": 6,
+    "tools_called": [
+      "knowledge_search",
+      "matrix_summary",
+      "priority_explain",
+      "project_context",
+      "task_get",
+      "tasks_search"
+    ],
+    "wrong_project_hit_count": 0
+  },
+  "reconciliation": {
+    "drifted": 0,
+    "pending": 0,
+    "projected": 0
+  },
+  "runtime": {
+    "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "embedding_revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+    "embedding_version": "minilm-v1",
+    "fastapi": "current Python source via one Uvicorn worker",
+    "mcp_sdk": "2.0.0",
+    "mcp_transport": "stdio subprocess with SDK handshake",
+    "mongo": "real local isolated database",
+    "node": "current TypeScript source via tsx",
+    "node_version": "v24.18.0",
+    "pymongo": "4.17.0",
+    "python": "3.12.3",
+    "qdrant_client": "1.12.0",
+    "qdrant_commit": "a0d2eccac0c179116214e7cb3583359c80d41998",
+    "qdrant_version": "1.12.0",
+    "sentence_transformers": "5.7.0",
+    "vector_size": 384
+  },
+  "schema_version": "mcp-full-runtime-local-v1",
+  "source_identity": {
+    "base_head": "1c8e8068cc7c91fc45cbff13a02c3e1e71ab710b",
+    "corpus_snapshot_sha256": "7d52fdd5f973f62a19f3c67a1afcfbe3d4990d80c75439e550b34f5d6188dd43",
+    "fastapi_source_sha256": "6ccb82182ab73747c3735e096630e73b579cb33c65fbaaa31a32d5c254c47d17",
+    "manifest_sha256": "b022333de73442927099881fdb4e327d7edea0feb1eba9ad809511e9ccec9f5f",
+    "mcp_source_sha256": "98b94676228a806dae96b2f2e6772a88f89c6af2617e4a82430468197d742ae6",
+    "node_lock_sha256": "643d5a4b203f3e1af86383a950094a9dc5c1b4301a1d108fd3e7b6202dde2a4e",
+    "node_source_sha256": "ee8a218b4716b597452c00b7d8069a4d54cde4b7635a60281ec12ca5ce0383a6",
+    "python_requirements_sha256": "826ab0f3658a48c9412f3208fb0affd074988fc83f817f5bc97816574dcaf73f",
+    "script_sha256": "4e3908a5259138a1e9c8d4287093b9e8a54cca76e41c47cc9dc1980bd50ca056",
+    "worktree_dirty": true
+  },
+  "status": "local_runtime_verified_not_deployed"
+}

@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from app.config import Settings
-from app.rag.bootstrap import build_rag_service
+from app.rag.bootstrap import build_rag_service, is_private_mongodb_uri
 
 
 class LocalModel:
@@ -13,6 +13,24 @@ class LocalModel:
 
 class Fallback:
   local_model = LocalModel()
+
+
+@pytest.mark.parametrize("uri", [
+  "mongodb://mongodb:27017/eisenhower",
+  "mongodb://127.0.0.1:27017/eisenhower",
+  "mongodb://mongo.internal:27017/eisenhower",
+])
+def test_private_mongodb_uri_accepts_only_local_network_names(uri):
+  assert is_private_mongodb_uri(uri) is True
+
+
+@pytest.mark.parametrize("uri", [
+  "https://mongodb.example.com",
+  "mongodb+srv://cluster.mongodb.net/eisenhower",
+  "mongodb://8.8.8.8:27017/eisenhower",
+])
+def test_private_mongodb_uri_rejects_invalid_or_public_endpoints(uri):
+  assert is_private_mongodb_uri(uri) is False
 
 
 def test_rag_bootstrap_fails_closed_without_generator_configuration(tmp_path):

@@ -19,7 +19,8 @@ Configuration:
 
 | Variable | Required | Meaning |
 | --- | --- | --- |
-| `EISENHOWER_API_BASE_URL` | production | Public API base URL |
+| `EISENHOWER_TASK_API_BASE_URL` | yes | Task API base URL, for example local Node on port 3001 |
+| `EISENHOWER_AI_API_BASE_URL` | yes | AI API base URL, for example local FastAPI on port 8000 |
 | `EISENHOWER_API_TOKEN` | production | Scoped read-only bearer token |
 | `EISENHOWER_API_TIMEOUT_SECONDS` | no | Upstream timeout, default 5 seconds |
 | `MCP_TRANSPORT` | no | `stdio` by default |

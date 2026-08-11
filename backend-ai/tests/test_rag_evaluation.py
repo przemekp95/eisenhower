@@ -64,3 +64,72 @@ def test_evaluation_reports_recall_mrr_grounding_citations_no_answer_and_latency
   assert metrics["calibration"]["brier_score"] == 0.265
   assert metrics["tokens"]["prompt_mean"] == 150.0
   assert metrics["latency_ms"]["p95"] == 300
+
+
+def test_evaluation_reports_duplicate_freshness_isolation_no_hit_and_split_metrics():
+  results = [
+    EvaluationCaseResult(
+      case_id="dev-isolation",
+      relevant_document_ids=["doc-current"],
+      retrieved_document_ids=["doc-current", "doc-current", "doc-forbidden"],
+      retrieved_chunk_ids=["chunk-current", "chunk-current", "chunk-secret"],
+      retrieved_content_versions=["v2", "v1", "v9"],
+      forbidden_document_ids=["doc-forbidden"],
+      stale_document_ids=[],
+      expected_content_versions={"doc-current": "v2"},
+      duplicate_hit_ids=["chunk-current"],
+      allowed_citation_ids=[],
+      actual_citation_ids=[],
+      expected_no_answer=False,
+      actual_no_answer=False,
+      grounded=True,
+      latency_ms=10,
+      split="dev",
+    ),
+    EvaluationCaseResult(
+      case_id="holdout-no-hit",
+      relevant_document_ids=["doc-missing"],
+      retrieved_document_ids=[],
+      stale_document_ids=["doc-old"],
+      allowed_citation_ids=[],
+      actual_citation_ids=[],
+      expected_no_answer=True,
+      actual_no_answer=True,
+      grounded=False,
+      latency_ms=5,
+      split="holdout",
+    ),
+  ]
+
+  metrics = evaluate_results(results, k=3)
+
+  assert metrics["duplicate_hit_rate"] == 0.3333
+  assert metrics["freshness_rate"] == 0.6667
+  assert metrics["stale_hit_rate"] == 0.3333
+  assert metrics["stale_case_rate"] == 0.5
+  assert metrics["forbidden_hit_rate"] == 0.3333
+  assert metrics["isolation_hit_rate"] == 0.3333
+  assert metrics["forbidden_case_rate"] == 0.5
+  assert metrics["isolation_violation_rate"] == 0.5
+  assert metrics["no_hit_rate"] == 0.5
+  assert metrics["by_split"]["dev"]["forbidden_hit_rate"] == 0.3333
+  assert metrics["by_split"]["holdout"]["no_hit_rate"] == 1.0
+
+
+def test_evaluation_derives_duplicate_hits_for_backward_compatible_results():
+  result = EvaluationCaseResult(
+    case_id="legacy",
+    relevant_document_ids=[],
+    retrieved_document_ids=["doc-a", "doc-a"],
+    allowed_citation_ids=[],
+    actual_citation_ids=[],
+    expected_no_answer=False,
+    actual_no_answer=False,
+    grounded=False,
+    latency_ms=0,
+  )
+
+  metrics = evaluate_results([result], k=2)
+
+  assert metrics["duplicate_hit_rate"] == 0.5
+  assert metrics["freshness_rate"] == 1.0

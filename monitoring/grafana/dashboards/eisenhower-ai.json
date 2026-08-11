@@ -1,0 +1,82 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "type": "text",
+      "title": "Evidence boundary",
+      "description": "Operational telemetry only",
+      "gridPos": {"h": 4, "w": 24, "x": 0, "y": 0},
+      "options": {
+        "mode": "markdown",
+        "content": "This dashboard shows online runtime telemetry only. TASK-013 offline evaluation remains a separate, unapproved evidence artifact and is not imported into operational metrics. No tenant, user, prompt, document, chunk, or memory content is used as a metric label."
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "RAG result rate by mode and bounded reason",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "targets": [{"expr": "sum by (mode, reason) (rate(eisenhower_rag_results_total[5m]))", "legendFormat": "{{mode}} / {{reason}}", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Retrieval latency p95",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, stage) (rate(eisenhower_rag_retrieval_duration_seconds_bucket[5m])))", "legendFormat": "{{stage}}", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "End-to-end analysis latency p95",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 12},
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, mode) (rate(eisenhower_rag_analysis_duration_seconds_bucket[5m])))", "legendFormat": "{{mode}}", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Generation outcomes",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 12},
+      "targets": [{"expr": "sum by (outcome) (rate(eisenhower_rag_generation_total[5m]))", "legendFormat": "{{outcome}}", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Schema and citation validation",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 12},
+      "targets": [{"expr": "sum by (kind, outcome) (rate(eisenhower_rag_validation_total[5m]))", "legendFormat": "{{kind}} / {{outcome}}", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Generation input tokens",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 20},
+      "targets": [{"expr": "sum by (outcome) (rate(eisenhower_rag_input_tokens_sum[5m]))", "legendFormat": "{{outcome}}", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Durable job queue",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 20},
+      "targets": [{"expr": "eisenhower_job_queue_depth", "legendFormat": "{{status}}", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Memory outcomes (empty until feature flag/runtime path is enabled)",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 20},
+      "targets": [{"expr": "sum by (operation, outcome) (rate(eisenhower_memory_operations_total[5m]))", "legendFormat": "{{operation}} / {{outcome}}", "refId": "A"}]
+    },
+    {
+      "type": "stat",
+      "title": "Runtime targets up",
+      "gridPos": {"h": 5, "w": 24, "x": 0, "y": 28},
+      "targets": [{"expr": "up{job=~\"eisenhower-ai|qdrant|vllm\"}", "legendFormat": "{{job}}", "refId": "A"}]
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 39,
+  "tags": ["eisenhower", "rag", "private-ai"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "browser",
+  "title": "Eisenhower AI runtime",
+  "uid": "eisenhower-ai-runtime",
+  "version": 1
+}

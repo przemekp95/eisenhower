@@ -77,6 +77,12 @@ def build_chunk_records(
         content_version=document.content_version,
         source_sequence=document.source_sequence,
         embedding_version=embedding_version,
+        extraction_contract_version=document.extraction_contract_version,
+        extraction_checksum=document.extraction_checksum,
+        extractor_name=document.extractor_name,
+        extractor_version=document.extractor_version,
+        ocr_approval_id=document.ocr_approval_id,
+        prompt_injection_detected=document.prompt_injection_detected,
         acl_subjects=document.acl_subjects,
         deleted=document.deleted,
       )

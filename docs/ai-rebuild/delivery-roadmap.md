@@ -17,6 +17,9 @@ TaskPlanner is the executable source of truth for future conversations:
 | TASK-013 | Representative Recall@k/MRR gate | Human-reviewed relevance data exists after the real-Qdrant path is stable. |
 | TASK-014 | Retrieval-only production shadow | All P0 and TASK-010 through TASK-013 gates pass and deployment is explicitly authorized. |
 | TASK-015 | Private vLLM and cited responses | Retrieval shadow proves value and hardware, model, license and privacy decisions are approved. |
+| TASK-018 | Docling/Unstructured extraction | TASK-010 approves document sources/formats; output joins TASK-011's canonical lifecycle. |
+| TASK-019 | Consent-governed MAG | Memory ownership/consent/retention is approved and the grounded RAG baseline is stable. |
+| TASK-020 | Recruiter-facing case study | Publish only verified evidence from TASK-010 through TASK-019 and an explicitly authorized demo SHA. |
 
 TASK-007 remains the decision record for reranking, hybrid search, knowledge graphs and agentic or
 multi-step RAG. Do not create implementation work for them until its evidence trigger and ADR gate
@@ -55,6 +58,7 @@ Goal: build a rebuildable, ACL-filtered, versioned index without generation.
 | Work | Size | Priority | Dependency | Risk | Acceptance |
 | --- | --- | --- | --- | --- | --- |
 | Approve sources, privacy/retention, canonical document store and envelope | M | P0 | user/legal decisions | over-indexing PII/history | corpus manifest and DPIA/privacy sign-off as applicable |
+| Extract approved documents through Docling with bounded Unstructured fallback | L | P1 | approved formats and fixtures | parser exploits, lost structure, silent OCR/PII ingestion | allowlist/resource limits, deterministic PL/EN golden extraction, provenance and rejection evidence |
 | Deterministic normalize/chunk/checksum/tombstone | M | P0 | source fixtures | duplicate/stale chunks | repeat-run IDs and ordering/tombstone tests |
 | Qdrant collections, payload indexes, ACL retrieval and snapshots | L | P0 | target Qdrant runtime | tenant leak/data loss | real Qdrant isolation, backup/restore tests |
 | Versioned reindex, golden evaluation and alias cutover/rollback | L | P0 | complete corpus + goldens | bad index promoted | manifest validation and rehearsed atomic rollback |
@@ -102,7 +106,26 @@ Goal: expose safe queries through a thin API adapter.
 
 **Go:** stdio read-only contracts/security pass. **No-go:** generic tools, direct infrastructure access or remote HTTP without its full security gate.
 
-## Phase 6 — production readiness and progressive rollout
+## Phase 6 — consent-governed Memory-Augmented Generation
+
+Goal: add durable, user-controlled memory without mixing it with RAG knowledge or allowing the
+model/orchestrator to invent consent.
+
+| Work | Size | Priority | Dependency | Risk | Acceptance |
+| --- | --- | --- | --- | --- | --- |
+| Define the memory domain, consent, provenance, TTL, supersession and status contracts | M | P0 | product/privacy owners | unowned or undeletable personal data | reviewed schema, commands/queries and lifecycle tests |
+| Implement explicit-confirmation memory mutations and export/delete | L | P0 | identity, audit and retention policy | silent writes or incomplete erasure | idempotent create/supersede/revoke/delete/export E2E and audit evidence |
+| Build a separate Qdrant memory projection with MongoDB revalidation | L | P0 | stable RAG retrieval and canonical memory store | stale/poisoned/cross-user memory | hard scope/consent/expiry filters, source revalidation and rebuild test |
+| Add bounded memory retrieval and RAG/context fusion | M | P1 | prompt budget and conflict policy | memory overrides current evidence | separate budgets/provenance, conflict surfacing and deterministic fallback |
+| Evaluate and progressively enable MAG | L | P0 | representative corrections and telemetry | false memory, drift, privacy or cost regression | benefit, false-memory, stale/conflict, poisoning, isolation, deletion, latency and token gates |
+
+**Go:** explicit consent and ownership exist; CRUD/export/delete and projection rebuild pass; every
+retrieved memory is current and scope-valid; representative evaluation shows benefit without
+breaching false-memory, privacy, latency or token gates. **No-go:** autonomous writes, silent
+conflict resolution, classifier feedback relabeled as memory, mixed knowledge/memory storage,
+irreversible deletion, or Qdrant treated as memory source of truth.
+
+## Phase 7 — production readiness and progressive rollout
 
 Goal: prove quality, availability, security and reversibility in the target environment.
 
@@ -139,6 +162,9 @@ This slice is small enough to diagnose yet crosses the critical security, corpus
 - A general n8n/MCP workflow executor, arbitrary URL fetch, shell or database tool.
 - Full CQRS/event sourcing without demonstrated scale/consistency need.
 - Blind indexing of full history, chats, mailboxes, attachments or unreviewed OCR.
+- Autonomous memory writes, inferred consent, silent memory conflict resolution or a shared
+  knowledge/memory collection. MAG remains required work through TASK-019, but only with its
+  explicit user-control contract.
 - A reranker before held-out retrieval evaluation establishes the need.
 - Selecting a vLLM model from parameter count alone or calling a local check a deployment.
 
@@ -170,3 +196,5 @@ evidence, compare the simplest viable alternatives and define rollout and rollba
 8. Is MCP local stdio sufficient, or is remote transport a real requirement?
 9. Who owns Qdrant backup/restore, vLLM operations, n8n credentials/workflows, audit and incident response?
 10. Which historical task/training data can be migrated automatically, and which needs human review because of the 1/2 swap?
+11. Which PDF/DOCX/PPTX/HTML sources and layout/OCR cases are approved for Docling and Unstructured, and what extraction confidence requires human review?
+12. Who owns user-memory consent, retention/TTL, conflict, export and deletion policy, and which events may propose—but never silently create—a memory?

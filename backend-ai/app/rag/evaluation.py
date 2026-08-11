@@ -12,6 +12,12 @@ class EvaluationCaseResult(BaseModel):
   case_id: str
   relevant_document_ids: list[str]
   retrieved_document_ids: list[str]
+  retrieved_chunk_ids: list[str] = Field(default_factory=list)
+  retrieved_content_versions: list[str] = Field(default_factory=list)
+  forbidden_document_ids: list[str] = Field(default_factory=list)
+  stale_document_ids: list[str] = Field(default_factory=list)
+  expected_content_versions: dict[str, str] = Field(default_factory=dict)
+  duplicate_hit_ids: list[str] = Field(default_factory=list)
   allowed_citation_ids: list[str]
   actual_citation_ids: list[str]
   expected_no_answer: bool
@@ -19,6 +25,7 @@ class EvaluationCaseResult(BaseModel):
   grounded: bool
   latency_ms: float = Field(..., ge=0)
   language: Literal["pl", "en"] = "en"
+  split: Literal["train", "dev", "holdout"] = "dev"
   expected_quadrant: int | None = Field(default=None, ge=0, le=3)
   actual_quadrant: int | None = Field(default=None, ge=0, le=3)
   raw_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
@@ -56,6 +63,65 @@ def _scores(true_positive: int, false_positive: int, false_negative: int) -> dic
     "precision": round(precision, 4),
     "recall": round(recall, 4),
     "f1": round(f1, 4),
+  }
+
+
+def _duplicate_ids(hit_ids: list[str]) -> list[str]:
+  seen: set[str] = set()
+  duplicates: list[str] = []
+  for hit_id in hit_ids:
+    if hit_id in seen:
+      duplicates.append(hit_id)
+    else:
+      seen.add(hit_id)
+  return duplicates
+
+
+def _retrieval_quality_counts(
+  results: list[EvaluationCaseResult], *, k: int
+) -> dict[str, int]:
+  hit_count = 0
+  duplicate_count = 0
+  forbidden_count = 0
+  stale_count = 0
+  no_hit_count = 0
+  forbidden_case_count = 0
+  stale_case_count = 0
+  for result in results:
+    document_ids = result.retrieved_document_ids[:k]
+    chunk_ids = result.retrieved_chunk_ids[:k]
+    content_versions = result.retrieved_content_versions[:k]
+    hit_count += len(document_ids)
+    no_hit_count += int(not document_ids)
+
+    duplicate_ids = result.duplicate_hit_ids
+    if not duplicate_ids:
+      duplicate_ids = _duplicate_ids(chunk_ids or document_ids)
+    duplicate_count += min(len(duplicate_ids), len(document_ids))
+
+    forbidden = set(result.forbidden_document_ids)
+    forbidden_hits = sum(document_id in forbidden for document_id in document_ids)
+    forbidden_count += forbidden_hits
+    forbidden_case_count += int(forbidden_hits > 0)
+
+    stale = set(result.stale_document_ids)
+    stale_hits = 0
+    for position, document_id in enumerate(document_ids):
+      is_stale = document_id in stale
+      expected_version = result.expected_content_versions.get(document_id)
+      if expected_version is not None and position < len(content_versions):
+        is_stale = is_stale or content_versions[position] != expected_version
+      stale_hits += int(is_stale)
+    stale_count += stale_hits
+    stale_case_count += int(stale_hits > 0)
+  return {
+    "hits": hit_count,
+    "duplicates": duplicate_count,
+    "forbidden": forbidden_count,
+    "stale": stale_count,
+    "no_hit_cases": no_hit_count,
+    "forbidden_cases": forbidden_case_count,
+    "stale_cases": stale_case_count,
   }
 
 
@@ -109,12 +175,13 @@ def evaluate_results(
   for result in results:
     top_k = result.retrieved_document_ids[:k]
     relevant = set(result.relevant_document_ids)
-    recalls.append(len(relevant.intersection(top_k)) / len(relevant) if relevant else 1.0)
-    rank = next(
-      (position for position, document_id in enumerate(top_k, start=1) if document_id in relevant),
-      None,
-    )
-    reciprocal_ranks.append(1.0 / rank if rank else 0.0)
+    if relevant:
+      recalls.append(len(relevant.intersection(top_k)) / len(relevant))
+      rank = next(
+        (position for position, document_id in enumerate(top_k, start=1) if document_id in relevant),
+        None,
+      )
+      reciprocal_ranks.append(1.0 / rank if rank else 0.0)
     actual = set(result.actual_citation_ids)
     allowed = set(result.allowed_citation_ids)
     citation_scores.append(
@@ -145,6 +212,9 @@ def evaluate_results(
   no_answer_fp = sum(not result.expected_no_answer and result.actual_no_answer for result in results)
   no_answer_fn = sum(result.expected_no_answer and not result.actual_no_answer for result in results)
   injection_cases = [result for result in results if result.injection_attempt]
+  retrieval_counts = _retrieval_quality_counts(results, k=k)
+  hit_count = retrieval_counts["hits"]
+  case_count = len(results)
   metrics = {
     "cases": len(results),
     "accuracy": round(correct / len(classified), 4) if classified else 0.0,
@@ -152,6 +222,33 @@ def evaluate_results(
     "per_quadrant": per_quadrant,
     "recall_at_k": round(_mean(recalls), 4),
     "mrr": round(_mean(reciprocal_ranks), 4),
+    "duplicate_hit_rate": round(
+      retrieval_counts["duplicates"] / hit_count, 4
+    ) if hit_count else 0.0,
+    "freshness_rate": round(
+      (hit_count - retrieval_counts["stale"]) / hit_count, 4
+    ) if hit_count else 0.0,
+    "stale_hit_rate": round(
+      retrieval_counts["stale"] / hit_count, 4
+    ) if hit_count else 0.0,
+    "stale_case_rate": round(
+      retrieval_counts["stale_cases"] / case_count, 4
+    ) if case_count else 0.0,
+    "forbidden_hit_rate": round(
+      retrieval_counts["forbidden"] / hit_count, 4
+    ) if hit_count else 0.0,
+    "isolation_hit_rate": round(
+      retrieval_counts["forbidden"] / hit_count, 4
+    ) if hit_count else 0.0,
+    "forbidden_case_rate": round(
+      retrieval_counts["forbidden_cases"] / case_count, 4
+    ) if case_count else 0.0,
+    "isolation_violation_rate": round(
+      retrieval_counts["forbidden_cases"] / case_count, 4
+    ) if case_count else 0.0,
+    "no_hit_rate": round(
+      retrieval_counts["no_hit_cases"] / case_count, 4
+    ) if case_count else 0.0,
     "groundedness": round(_mean([float(result.grounded) for result in results]), 4),
     "citation_correctness": round(_mean(citation_scores), 4),
     "citation_recall": round(_mean(citation_recalls), 4),
@@ -190,5 +287,14 @@ def evaluate_results(
       )
       for language in ("pl", "en")
       if any(result.language == language for result in results)
+    }
+    metrics["by_split"] = {
+      split: evaluate_results(
+        [result for result in results if result.split == split],
+        k=k,
+        include_slices=False,
+      )
+      for split in ("train", "dev", "holdout")
+      if any(result.split == split for result in results)
     }
   return metrics

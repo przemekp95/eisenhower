@@ -1,0 +1,78 @@
+{
+  "alias": {
+    "active_after_rollback": "task012_source_5dc7da97082446908ff34abf86fb1653",
+    "cutover": [
+      "task012_source_5dc7da97082446908ff34abf86fb1653",
+      "task012_restored_5dc7da97082446908ff34abf86fb1653"
+    ],
+    "cutover_hits": [
+      "592fb9bd13c35354770febf08b6b4b292ba732dd648cbad1f6b04269a8dc98eb"
+    ],
+    "cutover_seconds": 0.008311,
+    "previous_collection_retained": true,
+    "rollback": [
+      "task012_restored_5dc7da97082446908ff34abf86fb1653",
+      "task012_source_5dc7da97082446908ff34abf86fb1653"
+    ],
+    "rollback_hits": [
+      "allowed"
+    ],
+    "rollback_seconds": 0.00828
+  },
+  "api_operations": [
+    "create_collection",
+    "create_snapshot",
+    "download_snapshot",
+    "recover_from_uploaded_snapshot",
+    "delete_points_by_tenant_document_filter",
+    "atomic_delete_create_alias_batch"
+  ],
+  "cleanup": {
+    "collections_deleted": true,
+    "snapshot_deleted": true
+  },
+  "evidence_level": "local-container-runtime",
+  "isolation": {
+    "allowed_scope_hits": [
+      "allowed",
+      "delete-me"
+    ],
+    "cross_tenant_hits": [],
+    "wrong_project_hits": [],
+    "wrong_user_hits": []
+  },
+  "manifest_sha256": "b022333de73442927099881fdb4e327d7edea0feb1eba9ad809511e9ccec9f5f",
+  "physical_removal": {
+    "orphan_points": [],
+    "stale_chunk_absent": true,
+    "tombstoned_chunk_absent_from_restored": true,
+    "tombstoned_chunk_absent_from_source": true
+  },
+  "production_recovery_proven": false,
+  "qdrant_client_version": "1.12.0",
+  "qdrant_server": {
+    "commit": "a0d2eccac0c179116214e7cb3583359c80d41998",
+    "version": "1.12.0"
+  },
+  "restore": {
+    "collection": "task012_restored_5dc7da97082446908ff34abf86fb1653",
+    "digest_sha256": "6bd8793833a5294864e916e71482b130a456060caeed8014c69874cafe73231b",
+    "matches_source": true,
+    "points_before_mutation": 5,
+    "restore_seconds": 0.512594
+  },
+  "schema_version": "qdrant-recovery-local-v1",
+  "snapshot": {
+    "independent_download_sha256": "af3bd8c45e2bef02251684991ef1de5dfbd544d809dd46fb4f3bf3c886e40bca",
+    "name": "task012_source_5dc7da97082446908ff34abf86fb1653-8982900766970062-2026-08-11-00-39-24.snapshot",
+    "qdrant_checksum": "af3bd8c45e2bef02251684991ef1de5dfbd544d809dd46fb4f3bf3c886e40bca",
+    "size_bytes": 768512,
+    "snapshot_seconds": 0.291489
+  },
+  "source": {
+    "collection": "task012_source_5dc7da97082446908ff34abf86fb1653",
+    "digest_sha256": "6bd8793833a5294864e916e71482b130a456060caeed8014c69874cafe73231b",
+    "points": 5
+  },
+  "total_seconds": 1.497471
+}

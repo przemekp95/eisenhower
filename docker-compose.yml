@@ -124,11 +124,24 @@ services:
       - EMBEDDING_VERSION=${EMBEDDING_VERSION:-minilm-v1}
       - CHUNKING_VERSION=${CHUNKING_VERSION:-chars-1200-overlap-160-v1}
       - JOBS_DATABASE_PATH=/app/data/jobs.sqlite3
+      - MONGODB_URI=mongodb://mongodb:27017/eisenhower
+      - MONGODB_DATABASE=eisenhower
+      - CANONICAL_DOCUMENTS_COLLECTION=rag_documents
+      - CORPUS_REPOSITORY_ROOT=/corpus
+      - CORPUS_MANIFEST_PATH=/corpus/docs/ai-rebuild/corpus-manifest-v1.json
+      - CORPUS_OWNER_ID=${CORPUS_OWNER_ID:-eisenhower-owner}
+      - CORPUS_ALLOWED_PROJECTS=${CORPUS_ALLOWED_PROJECTS:-eisenhower}
     depends_on:
       qdrant:
         condition: service_healthy
+      mongodb:
+        condition: service_healthy
     volumes:
       - ./backend-ai:/app
+      - ./README.md:/corpus/README.md:ro
+      - ./docs:/corpus/docs:ro
+      - ./.tasks:/corpus/.tasks:ro
+      - ./corpus:/corpus/corpus:ro
     restart: unless-stopped
     profiles:
       - rag
@@ -227,7 +240,7 @@ services:
       - qdrant_snapshots:/qdrant/snapshots
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/6333; printf 'GET /readyz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3; grep -q '200 OK' <&3"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -333,6 +346,7 @@ services:
       - "127.0.0.1:9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'

@@ -1,0 +1,66 @@
+{
+  "policy_version": "eisenhower-memory-consent-v1",
+  "approved_at": "2026-08-10",
+  "review_by": "2026-11-10",
+  "approval_evidence": "Repository owner granted full-scope local implementation authority in the Codex task on 2026-08-10.",
+  "identity": {
+    "scope": ["tenant_id", "user_id"],
+    "cross_tenant_access": false,
+    "cross_user_access": false,
+    "scope_from_request_body": false
+  },
+  "consent": {
+    "explicit_confirmation_required_for": ["create", "supersede", "revoke", "delete"],
+    "confirmation_ttl_seconds": 300,
+    "intent_bound_fields": {
+      "create": ["action", "tenant_id", "user_id", "memory_id", "content", "memory_type", "conflict_key", "source_event_id", "provenance", "confidence", "salience", "retention_class", "expires_at"],
+      "supersede": ["action", "tenant_id", "user_id", "memory_id", "content", "replacement_id"],
+      "revoke": ["action", "tenant_id", "user_id", "memory_id", "content"],
+      "delete": ["action", "tenant_id", "user_id", "memory_id", "content"]
+    },
+    "silent_inference": false,
+    "silent_conflict_resolution": false
+  },
+  "content": {
+    "allowed_memory_types": ["communication_preference", "workflow_preference", "explicit_project_context"],
+    "maximum_characters": 2000,
+    "forbidden_memory_types": ["credential", "secret", "health", "financial", "biometric", "precise_location", "third_party_profile"],
+    "secrets": "reject_without_logging_value",
+    "prompt_injection": "store_only_as_inert_user_data_after_explicit_confirmation"
+  },
+  "retention_classes": {
+    "session": {"maximum_seconds": 86400},
+    "user_controlled": {"maximum_seconds": 2592000}
+  },
+  "lifecycle": {
+    "export_required": true,
+    "delete_sla_hours": 24,
+    "expired_status_is_retrievable": false,
+    "revoked_status_is_retrievable": false,
+    "deleted_body": "physically_remove_from_projection_and_redact_canonical_body",
+    "supersession": "surface_conflicts_and_require_new_confirmation"
+  },
+  "projection": {
+    "canonical_store": "MongoDB memory_records",
+    "qdrant_collection_prefix": "eisenhower-memory-v1",
+    "separate_from_knowledge_collection": true,
+    "qdrant_payload_fields": ["memory_id", "tenant_id", "user_id", "memory_type", "checksum", "projection_version", "expires_at", "status"],
+    "qdrant_raw_content_payload": false,
+    "mongo_revalidation_required": true,
+    "physical_delete_on_revoke_delete_expiry": true
+  },
+  "prompt_budget": {
+    "maximum_memories": 3,
+    "maximum_characters": 1200,
+    "separate_from_knowledge_context": true,
+    "render_as_untrusted_user_data": true
+  },
+  "rollout": {
+    "write_enabled": false,
+    "retrieval_enabled": false,
+    "response_enabled": false,
+    "shadow_before_response": true,
+    "deployment_authorized": false,
+    "publication_authorized": false
+  }
+}

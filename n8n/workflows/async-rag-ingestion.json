@@ -7,7 +7,9 @@
         "path": "eisenhower-rag-ingestion",
         "authentication": "headerAuth",
         "responseMode": "responseNode",
-        "options": {}
+        "options": {
+          "rawBody": true
+        }
       },
       "id": "receive-event",
       "name": "Receive Signed Ingestion Event",
@@ -36,13 +38,32 @@
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "X-Eisenhower-Timestamp",
+              "value": "={{ $json.headers['x-eisenhower-timestamp'] }}"
+            },
+            {
+              "name": "X-Eisenhower-Signature",
+              "value": "={{ $json.headers['x-eisenhower-signature'] }}"
+            },
+            {
+              "name": "X-Eisenhower-Signature-Version",
+              "value": "={{ $json.headers['x-eisenhower-signature-version'] }}"
+            },
+            {
+              "name": "X-Eisenhower-Signed-Method",
+              "value": "POST"
+            },
+            {
+              "name": "X-Eisenhower-Signed-Path",
+              "value": "/webhook/eisenhower-rag-ingestion"
             }
           ]
         },
         "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ timestamp: $json.headers['x-eisenhower-timestamp'], signature: $json.headers['x-eisenhower-signature'], event_id: $json.body.event_id, body: $json.body }) }}",
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
         "options": {
           "timeout": 5000,
           "response": {

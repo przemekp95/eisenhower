@@ -86,21 +86,37 @@ class PromptRenderer:
     schema_tokens = self.token_counter.count_text(schema_text)
     if self.token_counter.count_text(spec.system_template) + schema_tokens > spec.system_budget:
       raise PromptBudgetError("System template exceeds the PromptSpec token budget")
+    known_state = self._known_state(request)
+    known_state_tokens = self.token_counter.count_text(known_state)
+    if request.delta_requested and "{known_state}" not in spec.user_template:
+      raise PromptBudgetError("PromptSpec does not support the required known-state contract")
+    if known_state_tokens > spec.memory_context_budget:
+      raise PromptBudgetError("Known state exceeds the reserved supplemental-context budget")
 
     selected = self._deduplicate_and_cap(request.context)
     while selected and self._context_tokens(selected) > spec.rag_context_budget:
       selected.pop()
 
-    messages = self._messages(spec, request.task, selected)
+    messages = self._messages(spec, request.task, selected, known_state)
     maximum_input = spec.max_model_tokens - spec.output_reserve - spec.safety_reserve
     while selected and (
-      self._serialization_tokens(messages, task_tokens, selected) > spec.serialization_budget
+      self._serialization_tokens(
+        messages,
+        task_tokens,
+        selected,
+        known_state_tokens,
+      ) > spec.serialization_budget
       or self.token_counter.count_messages(messages) + schema_tokens > maximum_input
     ):
       selected.pop()
-      messages = self._messages(spec, request.task, selected)
+      messages = self._messages(spec, request.task, selected, known_state)
 
-    if self._serialization_tokens(messages, task_tokens, selected) > spec.serialization_budget:
+    if self._serialization_tokens(
+      messages,
+      task_tokens,
+      selected,
+      known_state_tokens,
+    ) > spec.serialization_budget:
       raise PromptBudgetError("Serialization delimiters and identifiers exceed their budget")
     input_tokens = self.token_counter.count_messages(messages) + schema_tokens
     if input_tokens > maximum_input:
@@ -110,10 +126,7 @@ class PromptRenderer:
       messages=tuple(messages),
       allowed_chunk_ids=tuple(hit.chunk_id for hit in selected),
       input_tokens=input_tokens,
-      execution_id=spec.execution_fingerprint(
-        retrieval_version=request.retrieval_version,
-        index_version=request.index_version,
-      ),
+      execution_id=self._execution_id(spec, request, selected),
     )
 
   def _deduplicate_and_cap(self, context):
@@ -136,13 +149,19 @@ class PromptRenderer:
   def _context_tokens(self, hits) -> int:
     return sum(self.token_counter.count_text(hit.text) for hit in hits)
 
-  def _serialization_tokens(self, messages, task_tokens: int, hits) -> int:
+  def _serialization_tokens(
+    self,
+    messages,
+    task_tokens: int,
+    hits,
+    known_state_tokens: int,
+  ) -> int:
     user_tokens = self.token_counter.count_text(messages[1]["content"])
-    data_tokens = task_tokens + self._context_tokens(hits)
+    data_tokens = task_tokens + self._context_tokens(hits) + known_state_tokens
     return max(0, user_tokens - data_tokens)
 
   @staticmethod
-  def _messages(spec: PromptSpec, task: str, hits) -> list[dict[str, str]]:
+  def _messages(spec: PromptSpec, task: str, hits, known_state: str) -> list[dict[str, str]]:
     task_data = (
       '<task_data untrusted="true">\n'
       f"{json.dumps(task, ensure_ascii=False)}\n"
@@ -165,8 +184,57 @@ class PromptRenderer:
     user_content = spec.user_template.format(
       task_data=task_data,
       retrieved_context=retrieved_context,
+      known_state=known_state,
     )
     return [
       {"role": "system", "content": spec.system_template},
       {"role": "user", "content": user_content},
     ]
+
+  @staticmethod
+  def _known_state(request) -> str:
+    if not request.delta_requested:
+      return ""
+    payload = {
+      "freshness_requirement": request.freshness_requirement,
+      "known_state": [
+        item.model_dump(mode="json") for item in (request.known_state or [])
+      ],
+      "previous_output_statements": [
+        item.model_dump(mode="json")
+        for item in (request.previous_output_statements or [])
+      ],
+    }
+    return (
+      '<known_state untrusted="true" current_world_verified="false">\n'
+      + json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+      + "\n</known_state>"
+    )
+
+  @staticmethod
+  def _execution_id(spec: PromptSpec, request, selected) -> str:
+    payload = {
+      "configuration_id": spec.execution_fingerprint(
+        retrieval_version=request.retrieval_version,
+        index_version=request.index_version,
+      ),
+      "task_sha256": sha256(request.task.encode("utf-8")).hexdigest(),
+      "context": [
+        {
+          "chunk_id": item.chunk_id,
+          "content_version": item.content_version,
+          "text_sha256": sha256(item.text.encode("utf-8")).hexdigest(),
+        }
+        for item in selected
+      ],
+      "known_state": [
+        (item.statement_id, item.checksum) for item in (request.known_state or [])
+      ],
+      "previous_output_statements": [
+        (item.statement_id, item.checksum)
+        for item in (request.previous_output_statements or [])
+      ],
+      "freshness_requirement": request.freshness_requirement,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return sha256(encoded).hexdigest()

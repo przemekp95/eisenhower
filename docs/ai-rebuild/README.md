@@ -138,12 +138,20 @@ Every cited ID must be among the retrieved chunks for that request. Missing hits
 
 - [Architecture decisions](adr/README.md)
 - [Corpus, ACL and reindex contract](corpus-contract.md)
+- [First RAG corpus owner decision packet](corpus-owner-decision-packet.md)
+- [Approved first-corpus manifest](corpus-manifest-v1.json)
+- [Independent TASK-013 review worksheet](../../backend-ai/evaluation/retrieval-v1/HUMAN_REVIEW_WORKSHEET.md)
+- [TASK-014 retrieval shadow decision packet](shadow-pilot-decision-packet.md)
+- [TASK-015 private vLLM decision packet](vllm-owner-decision-packet.md)
+- [Consent-governed memory policy](memory-policy-v1.json)
 - [Security review](security-review.md)
 - [Operations, observability and rollout](operations.md)
 - [Testing and evaluation](testing-evaluation.md)
 - [Prompt engineering, versioning and evaluation](prompt-engineering.md)
 - [DDD, hexagonal, TDD and BDD assessment](methodology-assessment.md)
 - [Phases, gates and smallest vertical slice](delivery-roadmap.md)
+- [Recruiter-aligned AI delivery plan](recruitment-readiness.md)
+- [Evidence-led private case-study draft](case-study-draft.md)
 
 ## Authoritative external references
 

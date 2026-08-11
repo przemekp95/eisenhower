@@ -122,6 +122,16 @@ describe('AITools', () => {
     mockedApi.getExamplesByQuadrant.mockResolvedValue({
       examples: [{ text: 'urgent outage', quadrant: 0 }],
     });
+    mockedApi.analyzeTaskWithRag.mockResolvedValue({
+      mode: 'fallback',
+      quadrant: 0,
+      quadrant_name: 'Do Now',
+      confidence: 0.8,
+      explanation: 'Classifier fallback.',
+      citations: [],
+      retrieval: { hit_count: 0, top_score: null, embedding_version: null },
+      fallback_reason: 'rag_response_disabled',
+    });
   });
 
   it('runs advanced analysis', async () => {
@@ -130,6 +140,68 @@ describe('AITools', () => {
     fireEvent.click(screen.getByText(/Run advanced analysis/i));
 
     await waitFor(() => expect(screen.getByText(/Critical path/i)).toBeInTheDocument());
+  });
+
+  it('exposes the governed RAG panel with tab semantics', async () => {
+    renderTools();
+
+    const groundedTab = screen.getByRole('tab', { name: 'Grounded RAG' });
+    expect(screen.getByRole('tab', { name: 'Advanced analysis' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+
+    fireEvent.click(groundedTab);
+
+    expect(groundedTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'ai-tab-grounded');
+    fireEvent.click(screen.getByRole('button', { name: 'Run grounded analysis' }));
+    await waitFor(() => expect(screen.getByText('Fallback')).toBeInTheDocument());
+  });
+
+  it('focuses the close action, traps focus, and restores the opener', () => {
+    const opener = document.createElement('button');
+    opener.textContent = 'Open tools';
+    document.body.appendChild(opener);
+    opener.focus();
+
+    const view = renderTools();
+    const close = screen.getByRole('button', { name: 'Close' });
+    const analysis = screen.getByRole('button', { name: 'Run advanced analysis' });
+    expect(close).toHaveFocus();
+
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
+    expect(analysis).toHaveFocus();
+
+    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(close).toHaveFocus();
+
+    screen.getByRole('tab', { name: 'Grounded RAG' }).focus();
+    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(screen.getByRole('tab', { name: 'Grounded RAG' })).toHaveFocus();
+
+    opener.focus();
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
+    expect(analysis).toHaveFocus();
+
+    view.unmount();
+    expect(opener).toHaveFocus();
+    opener.remove();
+  });
+
+  it('keeps focus inside a temporarily empty dialog and tolerates a removed opener', () => {
+    const opener = document.createElement('button');
+    document.body.appendChild(opener);
+    opener.focus();
+    const view = renderTools();
+    const dialog = screen.getByRole('dialog');
+    const query = jest.spyOn(dialog, 'querySelectorAll').mockReturnValueOnce([] as never);
+
+    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(query).toHaveBeenCalled();
+
+    opener.remove();
+    view.unmount();
   });
 
   it('locks page scroll while the modal is open and restores it on unmount', () => {

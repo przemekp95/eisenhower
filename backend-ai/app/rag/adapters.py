@@ -11,7 +11,12 @@ from qdrant_client import models as qmodels
 from ..generation.models import ClassificationOutput, GenerationResult
 from ..generation.registry import PromptRegistry
 from ..generation.renderer import PromptRenderer
-from .errors import GenerationProviderError, GenerationProviderUnavailable, InvalidGenerationOutput
+from .errors import (
+  GenerationProviderError,
+  GenerationProviderUnavailable,
+  InvalidGenerationOutput,
+  ProjectionUnavailable,
+)
 from .models import ChunkRecord, GenerationRequest, RetrievalHit, RetrievalQuery, SourceDocument
 from .ports import EmbeddingProvider
 
@@ -115,12 +120,14 @@ class QdrantIngestionAdapter:
     if any((chunk.tenant_id, chunk.document_id) not in document_keys for chunk in chunks):
       raise ValueError("Every replacement chunk must belong to a supplied document")
     for document in documents:
-      self.client.set_payload(
-        collection_name=self.collection_name,
-        payload={"deleted": True},
-        points=self._document_selector(document.document_id, document.tenant_id),
-        wait=True,
-      )
+      try:
+        self.client.delete(
+          collection_name=self.collection_name,
+          points_selector=self._document_selector(document.document_id, document.tenant_id),
+          wait=True,
+        )
+      except Exception as error:
+        raise ProjectionUnavailable("Qdrant document replacement failed") from error
     points = [
       qmodels.PointStruct(
         id=str(uuid5(NAMESPACE_URL, chunk.chunk_id)),
@@ -130,19 +137,50 @@ class QdrantIngestionAdapter:
       for chunk, vector in zip(chunks, vectors)
     ]
     if points:
-      self.client.upsert(
-        collection_name=self.collection_name,
-        points=points,
-        wait=True,
-      )
+      try:
+        self.client.upsert(
+          collection_name=self.collection_name,
+          points=points,
+          wait=True,
+        )
+      except Exception as error:
+        raise ProjectionUnavailable("Qdrant vector upsert failed") from error
 
   def tombstone(self, document_id: str, tenant_id: str, content_version: str) -> None:
-    self.client.set_payload(
-      collection_name=self.collection_name,
-      payload={"deleted": True, "content_version": content_version},
-      points=self._document_selector(document_id, tenant_id),
-      wait=True,
-    )
+    del content_version  # The canonical tombstone owns the version; Qdrant retains no private body.
+    try:
+      self.client.delete(
+        collection_name=self.collection_name,
+        points_selector=self._document_selector(document_id, tenant_id),
+        wait=True,
+      )
+    except Exception as error:
+      raise ProjectionUnavailable("Qdrant tombstone failed") from error
+
+  def projected_chunks(self, document_id: str, tenant_id: str) -> set[tuple[str, str, str]]:
+    projected = set()
+    offset = None
+    try:
+      while True:
+        points, next_offset = self.client.scroll(
+          collection_name=self.collection_name,
+          scroll_filter=self._document_selector(document_id, tenant_id).filter,
+          limit=1_000,
+          offset=offset,
+          with_payload=True,
+          with_vectors=False,
+        )
+        projected.update(
+          (str(point.payload["chunk_id"]), str(point.payload["checksum"]), str(point.payload["content_version"]))
+          for point in points
+          if point.payload and point.payload.get("deleted") is False
+        )
+        if next_offset is None:
+          break
+        offset = next_offset
+    except Exception as error:
+      raise ProjectionUnavailable("Qdrant projection inspection failed") from error
+    return projected
 
   @staticmethod
   def _document_selector(document_id: str, tenant_id: str) -> qmodels.FilterSelector:

@@ -2,6 +2,9 @@
 
 This is the target corpus contract. The generic `SourceDocument`, deterministic chunker and Qdrant payload model exist locally; source connectors, a complete canonical document store and production reindex orchestration do not.
 
+No real content may enter this contract until the accountable owners complete and approve the
+[first RAG corpus owner decision packet](corpus-owner-decision-packet.md).
+
 ## What is indexed
 
 Index only content that helps prioritize a task or answer project-context questions and has an explicit owner and retention basis:
