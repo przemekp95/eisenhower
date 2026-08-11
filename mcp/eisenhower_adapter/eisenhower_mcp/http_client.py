@@ -5,7 +5,20 @@ import socket
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+
+class _RejectRedirects(HTTPRedirectHandler):
+    def redirect_request(self, request, response, code, message, headers, new_url):
+        del new_url
+        raise HTTPError(request.full_url, code, message, headers, response)
+
+
+_NO_REDIRECT_OPENER = build_opener(_RejectRedirects())
+
+
+def urlopen(request: Request, *, timeout: float):
+    return _NO_REDIRECT_OPENER.open(request, timeout=timeout)
 
 
 class ApiClientError(RuntimeError):
