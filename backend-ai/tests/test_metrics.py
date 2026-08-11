@@ -35,6 +35,15 @@ def test_prometheus_metrics_are_aggregate_and_do_not_leak_tenant_or_prompt():
   assert "prompt" not in rendered
 
 
+def test_prometheus_metrics_exposes_durable_worker_heartbeat_age():
+  metrics = MetricsRegistry()
+  metrics.set_job_queue_enabled(True)
+  metrics.set_job_worker_heartbeat_age(7.25)
+
+  assert "eisenhower_job_queue_enabled 1" in metrics.render()
+  assert "eisenhower_job_worker_heartbeat_age_seconds 7.250000" in metrics.render()
+
+
 def test_prometheus_labels_are_bounded_instead_of_accepting_private_or_cardinal_values():
   metrics = MetricsRegistry()
   metrics.observe_rag_result("private-user-id", "private-document-title")

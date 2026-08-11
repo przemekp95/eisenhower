@@ -16,7 +16,7 @@ Generate or accept a safe `X-Request-ID`/trace ID at the gateway and propagate i
 | Classifier fallback | invocation rate, latency, confidence distribution, model version |
 | Ingestion/jobs | accepted/duplicate/conflict, queue age, attempt count, success/failure/dead-letter, documents/chunks/tombstones, checksum/schema rejection |
 | Qdrant | readiness, query/upsert latency/error, vector count, disk/WAL/snapshot health, collection alias/version |
-| vLLM/GPU | readiness/model, scheduler queue, KV cache, throughput, OOM, GPU memory/utilization/temperature |
+| Private inference/GPU | readiness/model, scheduler queue, KV cache, throughput, OOM, GPU memory/utilization/temperature |
 | n8n | execution status/latency, retry/error-workflow, worker/webhook health when queue mode is enabled |
 | MCP | tool count/latency/error, upstream response class, authorization denial; never tool arguments/content |
 
@@ -48,6 +48,16 @@ Flags are server-side and tenant-aware:
 - `mcp_remote_enabled`: false initially; does not affect local stdio.
 
 Log flag versions and decisions, not sensitive inputs. Default every new environment/tenant to fallback.
+
+The opt-in SQLite RAG worker uses a 300-second lease and renews it every 30 seconds while a
+synchronous handler is running. A second worker cannot reclaim a healthy long-running handler;
+if renewal fails, the first worker refuses to acknowledge completion. The worker also persists a
+content-free heartbeat before handling and with every lease renewal in the shared jobs database. FastAPI exports its age as
+`eisenhower_job_worker_heartbeat_age_seconds`, and the bundled alert rules treat a missing or stale
+heartbeat as a warning only when the durable queue is configured. Private-inference availability is
+likewise gated by the non-disabled generation circuit, so monitoring-only fallback deployments do
+not alarm on intentionally absent experimental services. This remains experimental `rag`-profile evidence, not a production queue or
+message-bus claim.
 
 Recommended progression is `retrieval=false/generation=false/response=false`, then retrieval-only
 shadow, then retrieval plus generation with response still false, and finally an allowlisted

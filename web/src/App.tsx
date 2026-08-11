@@ -7,17 +7,15 @@ import { shouldDisableMotion } from './lib/motion';
 import { replaceTaskById, restoreReadyState } from './lib/uiState';
 import { createTask, deleteTask, getTasks, updateTask } from './services/api';
 import { Task, TaskInput } from './types';
-import { getApiToken, setCredentials, subscribeToApiToken } from './authSession';
+import { clearTokens, getApiToken, setApiToken, subscribeToApiToken } from './authSession';
 
 function CredentialGate() {
   const [token, setToken] = useState('');
-  const [adminToken, setAdminToken] = useState('');
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    setCredentials(token, adminToken);
+    setApiToken(token);
     setToken('');
-    setAdminToken('');
   };
 
   return (
@@ -28,8 +26,8 @@ function CredentialGate() {
       >
         <h1 className="text-2xl font-semibold">Eisenhower Matrix</h1>
         <p className="mt-3 text-sm leading-6 text-white/65">
-          Wpisz token dostępu i osobny token administratora AI. Pozostaną wyłącznie w pamięci tej
-          karty i zostaną usunięte po zamknięciu lub odrzuceniu autoryzacji.
+          Wpisz token dostępu. Pozostanie wyłącznie w pamięci tej karty i zostanie usunięty po
+          zamknięciu, odrzuceniu autoryzacji lub wylogowaniu.
         </p>
         <label htmlFor="api-token" className="mt-6 block text-sm font-medium">
           Token dostępu
@@ -42,20 +40,9 @@ function CredentialGate() {
           onChange={(event) => setToken(event.target.value)}
           className="mt-2 w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 outline-none focus:border-cyan-300"
         />
-        <label htmlFor="admin-token" className="mt-4 block text-sm font-medium">
-          Token administratora AI
-        </label>
-        <input
-          id="admin-token"
-          type="password"
-          autoComplete="off"
-          value={adminToken}
-          onChange={(event) => setAdminToken(event.target.value)}
-          className="mt-2 w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 outline-none focus:border-cyan-300"
-        />
         <button
           type="submit"
-          disabled={!token.trim() || !adminToken.trim()}
+          disabled={!token.trim()}
           className="mt-5 w-full rounded-xl bg-cyan-300 px-4 py-3 font-semibold text-slate-950 disabled:opacity-40"
         >
           Odblokuj
@@ -301,12 +288,17 @@ function AppContent() {
       setError(null);
     } catch (issue) {
       setError(issue instanceof Error ? issue.message : t('status.saveError'));
+      throw issue;
     }
   };
 
   const handleUpdateTask = async (id: string, patch: Partial<TaskInput>) => {
     try {
-      const updated = await updateTask(id, patch);
+      const revision = tasks.find((task) => task._id === id)?.revision;
+      const updated =
+        revision === undefined
+          ? await updateTask(id, patch)
+          : await updateTask(id, patch, revision);
       setTasks((current) => replaceTaskById(current, id, updated));
       setError(null);
     } catch (issue) {
@@ -316,7 +308,12 @@ function AppContent() {
 
   const handleDeleteTask = async (id: string) => {
     try {
-      await deleteTask(id);
+      const revision = tasks.find((task) => task._id === id)?.revision;
+      if (revision === undefined) {
+        await deleteTask(id);
+      } else {
+        await deleteTask(id, revision);
+      }
       setTasks((current) => current.filter((task) => task._id !== id));
       setError(null);
     } catch (issue) {
@@ -327,7 +324,14 @@ function AppContent() {
   const badges = [t('hero.badges.api'), t('hero.badges.ai'), t('hero.badges.motion')];
   const footerCards = [
     { label: t('footer.cards.board'), value: t('footer.cards.boardValue') },
-    { label: t('footer.cards.sync'), value: t('footer.cards.syncValue') },
+    {
+      label: t('footer.cards.sync'),
+      value: loading
+        ? t('footer.cards.syncPending')
+        : error
+          ? t('footer.cards.syncError')
+          : t('footer.cards.syncValue'),
+    },
     { label: t('footer.cards.motion'), value: t('footer.cards.motionValue') },
   ];
 
@@ -344,6 +348,15 @@ function AppContent() {
       />
 
       <div className="relative mx-auto max-w-6xl">
+        <div className="mb-4 flex justify-end">
+          <button
+            type="button"
+            onClick={clearTokens}
+            className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10"
+          >
+            {t('auth.logout')}
+          </button>
+        </div>
         <section
           data-app-shell
           className="hero-shell relative mb-8 overflow-hidden rounded-[2.75rem] border border-white/10 bg-slate-950/[0.65] shadow-[0_32px_120px_rgba(2,6,23,0.62)] backdrop-blur-xl"

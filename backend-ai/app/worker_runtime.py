@@ -59,6 +59,7 @@ def main() -> None:
   signal(SIGINT, lambda *_: stopped.set())
   worker_id = f"{gethostname()}-{getpid()}"
   while not stopped.is_set():
+    worker.queue.record_worker_heartbeat(worker_id)
     if not worker.run_once(worker_id=worker_id):
       stopped.wait(1.0)
 

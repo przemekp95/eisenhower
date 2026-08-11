@@ -36,6 +36,10 @@ export default function AIToolsModal({
   onRunOcr,
   ocrLoading,
   ocrResult,
+  onChangeOcrItem,
+  onImportOcr,
+  ocrLearningConsent,
+  onChangeOcrLearningConsent,
   batchInput,
   onChangeBatchInput,
   onRunBatchAnalyze,
@@ -71,6 +75,14 @@ export default function AIToolsModal({
   aiToolsError,
   aiToolsMessage,
   manageAction,
+  adminAuthenticated,
+  adminTokenInput,
+  onChangeAdminTokenInput,
+  onSubmitAdminToken,
+  onClearAdminToken,
+  clearConfirmationOpen,
+  onRequestClear,
+  onCancelClear,
 }) {
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -91,6 +103,8 @@ export default function AIToolsModal({
               <Pressable
                 key={tab}
                 testID={`ai-tab-${tab}`}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: activeTab === tab }}
                 onPress={() => onTabChange(tab)}
                 style={[styles.tabButton, activeTab === tab && styles.activeTabButton]}
               >
@@ -165,14 +179,62 @@ export default function AIToolsModal({
                 </Pressable>
                 {ocrResult ? (
                   <View style={styles.analysisResult}>
-                    <Text style={styles.analysisMeta}>
-                      {t.aiOcrImported.replace('{count}', String(ocrResult.count))}
-                    </Text>
+                    <Text accessibilityRole="header" style={styles.analysisMeta}>{t.aiOcrReviewTitle}</Text>
                     {ocrResult.items.map((item) => (
-                      <Text key={item.id} style={styles.exampleItemText}>
-                        {item.title}
-                      </Text>
+                      <View key={item.id} style={styles.toolCard}>
+                        <View style={styles.switchRow}>
+                          <Text style={styles.switchLabel}>{t.aiOcrInclude}</Text>
+                          <Switch
+                            testID={`ocr-selected-${item.id}`}
+                            accessibilityLabel={`${t.aiOcrInclude}: ${item.title}`}
+                            value={item.selected}
+                            onValueChange={(selected) => onChangeOcrItem(item.id, { selected })}
+                          />
+                        </View>
+                        <TextInput
+                          testID={`ocr-title-${item.id}`}
+                          accessibilityLabel={t.titlePlaceholder}
+                          value={item.title}
+                          onChangeText={(title) => onChangeOcrItem(item.id, { title })}
+                          style={styles.input}
+                        />
+                        <View accessibilityRole="radiogroup" style={styles.chipRow}>
+                          {quadrantOptions.map((quadrant) => (
+                            <Pressable
+                              key={`${item.id}-${quadrant.value}`}
+                              testID={`ocr-quadrant-${item.id}-${quadrant.value}`}
+                              accessibilityRole="radio"
+                              accessibilityState={{ checked: item.quadrant === quadrant.value }}
+                              accessibilityLabel={`${t.aiOcrQuadrant}: ${quadrant.title}`}
+                              onPress={() => onChangeOcrItem(item.id, { quadrant: quadrant.value })}
+                              style={[styles.chip, item.quadrant === quadrant.value && styles.chipActive]}
+                            >
+                              <Text style={[styles.chipText, item.quadrant === quadrant.value && styles.chipTextActive]}>
+                                {quadrant.title}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      </View>
                     ))}
+                    <View style={styles.switchRow}>
+                      <Text style={styles.switchLabel}>{t.aiOcrLearningConsent}</Text>
+                      <Switch
+                        testID="ocr-learning-consent"
+                        accessibilityLabel={t.aiOcrLearningConsent}
+                        value={ocrLearningConsent}
+                        onValueChange={onChangeOcrLearningConsent}
+                      />
+                    </View>
+                    <Pressable
+                      testID="ocr-import-button"
+                      accessibilityRole="button"
+                      onPress={onImportOcr}
+                      disabled={ocrLoading || !ocrResult.items.some((item) => item.selected && item.title.trim())}
+                      style={styles.primaryButton}
+                    >
+                      <Text style={styles.primaryButtonText}>{t.aiOcrImportReviewed}</Text>
+                    </Pressable>
                   </View>
                 ) : null}
               </View>
@@ -220,8 +282,42 @@ export default function AIToolsModal({
               </View>
             ) : null}
 
-            {activeTab === 'manage' ? (
+            {activeTab === 'manage' && !adminAuthenticated ? (
+              <View style={styles.toolCard}>
+                <Text accessibilityRole="header" style={styles.toolTitle}>{t.aiManageAdminRequired}</Text>
+                <Text style={styles.manageHint}>{t.aiManageAdminExplanation}</Text>
+                <TextInput
+                  testID="manage-admin-token-input"
+                  accessibilityLabel={t.aiManageAdminToken}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={adminTokenInput}
+                  onChangeText={onChangeAdminTokenInput}
+                  style={styles.input}
+                />
+                <Pressable
+                  testID="manage-admin-submit-button"
+                  accessibilityRole="button"
+                  disabled={!adminTokenInput.trim()}
+                  onPress={onSubmitAdminToken}
+                  style={[styles.primaryButton, !adminTokenInput.trim() && styles.disabledButton]}
+                >
+                  <Text style={styles.primaryButtonText}>{t.aiManageUnlock}</Text>
+                </Pressable>
+              </View>
+            ) : null}
+
+            {activeTab === 'manage' && adminAuthenticated ? (
               <View style={styles.manageStack}>
+                <Pressable
+                  testID="manage-forget-admin-button"
+                  accessibilityRole="button"
+                  onPress={onClearAdminToken}
+                  style={styles.secondaryButton}
+                >
+                  <Text style={styles.secondaryButtonText}>{t.aiManageForgetAdmin}</Text>
+                </Pressable>
                 <View style={styles.toolCard}>
                   <Text style={styles.toolTitle}>{t.aiManageTrainingState}</Text>
                   {manageLoading ? (
@@ -398,13 +494,36 @@ export default function AIToolsModal({
                     </Pressable>
                     <Pressable
                       testID="manage-clear-button"
-                      onPress={onClear}
+                      onPress={onRequestClear}
                       disabled={manageAction !== ''}
                       style={[styles.secondaryButton, manageAction !== '' && styles.disabledButton]}
                     >
                       <Text style={styles.secondaryButtonText}>{t.aiManageClearButton}</Text>
                     </Pressable>
                   </View>
+                  {clearConfirmationOpen ? (
+                    <View accessibilityRole="alert" style={styles.analysisResult}>
+                      <Text style={styles.modalError}>{t.aiManageClearConfirm}</Text>
+                      <View style={styles.actions}>
+                        <Pressable
+                          testID="manage-clear-confirm-button"
+                          accessibilityRole="button"
+                          onPress={onClear}
+                          style={styles.deleteButton}
+                        >
+                          <Text style={styles.deleteButtonText}>{t.aiManageClearConfirmAction}</Text>
+                        </Pressable>
+                        <Pressable
+                          testID="manage-clear-cancel-button"
+                          accessibilityRole="button"
+                          onPress={onCancelClear}
+                          style={styles.secondaryButton}
+                        >
+                          <Text style={styles.secondaryButtonText}>{t.cancel}</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : null}
                 </View>
 
                 <View style={styles.toolCard}>

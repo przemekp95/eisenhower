@@ -29,6 +29,18 @@ function createProps(overrides = {}) {
     onRunOcr: jest.fn(),
     ocrLoading: false,
     ocrResult: null,
+    onChangeOcrItem: jest.fn(),
+    onImportOcr: jest.fn(),
+    ocrLearningConsent: false,
+    onChangeOcrLearningConsent: jest.fn(),
+    adminAuthenticated: true,
+    adminTokenInput: '',
+    onChangeAdminTokenInput: jest.fn(),
+    onSubmitAdminToken: jest.fn(),
+    onClearAdminToken: jest.fn(),
+    clearConfirmationOpen: false,
+    onRequestClear: jest.fn(),
+    onCancelClear: jest.fn(),
     batchInput: 'A\nB',
     onChangeBatchInput: jest.fn(),
     onRunBatchAnalyze: jest.fn(),
@@ -100,19 +112,26 @@ describe('AIToolsModal', () => {
       activeTab: 'ocr',
       ocrLoading: false,
       ocrResult: {
-        count: 2,
         items: [
-          { id: '1', title: 'Task one' },
-          { id: '2', title: 'Task two' },
+          { id: '1', title: 'Task one', selected: true, quadrant: 0 },
+          { id: '2', title: 'Task two', selected: false, quadrant: 3 },
         ],
       },
     });
     const { getByTestId, getByText, rerender } = render(<AIToolsModal {...ocrProps} />);
 
     fireEvent.press(getByTestId('ai-ocr-run-button'));
-    expect(getByText('Task one')).toBeTruthy();
-    expect(getByText('OCR zaimportował 2 zadań')).toBeTruthy();
+    fireEvent.changeText(getByTestId('ocr-title-1'), 'Reviewed task');
+    fireEvent.press(getByTestId('ocr-quadrant-1-2'));
+    fireEvent(getByTestId('ocr-learning-consent'), 'valueChange', true);
+    fireEvent.press(getByTestId('ocr-import-button'));
+    expect(getByTestId('ocr-title-1').props.value).toBe('Task one');
+    expect(getByText('Przejrzyj pozycje przed importem')).toBeTruthy();
     expect(ocrProps.onRunOcr).toHaveBeenCalled();
+    expect(ocrProps.onChangeOcrItem).toHaveBeenCalledWith('1', { title: 'Reviewed task' });
+    expect(ocrProps.onChangeOcrItem).toHaveBeenCalledWith('1', { quadrant: 2 });
+    expect(ocrProps.onChangeOcrLearningConsent).toHaveBeenCalledWith(true);
+    expect(ocrProps.onImportOcr).toHaveBeenCalled();
 
     const batchProps = createProps({
       activeTab: 'batch',
@@ -131,7 +150,7 @@ describe('AIToolsModal', () => {
 
     expect(getByText('Task A')).toBeTruthy();
     expect(getByText('Zrób teraz')).toBeTruthy();
-    expect(getByText('Usuń')).toBeTruthy();
+    expect(getByText('Usuń (kwadrant, nie kasowanie)')).toBeTruthy();
     expect(batchProps.onChangeBatchInput).toHaveBeenCalledWith('Task A\nTask B');
     expect(batchProps.onRunBatchAnalyze).toHaveBeenCalled();
   });
@@ -185,9 +204,39 @@ describe('AIToolsModal', () => {
     expect(props.onChangePreserveExperience).toHaveBeenCalledWith(false);
     expect(props.onChangeKeepDefaults).toHaveBeenCalledWith(true);
     expect(props.onRetrain).toHaveBeenCalled();
-    expect(props.onClear).toHaveBeenCalled();
+    expect(props.onRequestClear).toHaveBeenCalled();
     expect(props.onSelectExamplesQuadrant).toHaveBeenCalledWith(3);
     expect(props.onLoadExamples).toHaveBeenCalled();
+  });
+
+  it('requires a separate admin credential only inside management', () => {
+    const props = createProps({
+      activeTab: 'manage',
+      adminAuthenticated: false,
+      adminTokenInput: 'admin-secret',
+    });
+    const { getByTestId, queryByTestId } = render(<AIToolsModal {...props} />);
+
+    expect(queryByTestId('manage-add-example-button')).toBeNull();
+    fireEvent.changeText(getByTestId('manage-admin-token-input'), 'changed-admin-secret');
+    fireEvent.press(getByTestId('manage-admin-submit-button'));
+
+    expect(props.onChangeAdminTokenInput).toHaveBeenCalledWith('changed-admin-secret');
+    expect(props.onSubmitAdminToken).toHaveBeenCalled();
+  });
+
+  it('confirms clearing training data before invoking the destructive action', () => {
+    const props = createProps({ activeTab: 'manage' });
+    const { getByTestId, rerender } = render(<AIToolsModal {...props} />);
+
+    fireEvent.press(getByTestId('manage-clear-button'));
+    expect(props.onRequestClear).toHaveBeenCalled();
+    expect(props.onClear).not.toHaveBeenCalled();
+
+    const confirmingProps = createProps({ activeTab: 'manage', clearConfirmationOpen: true });
+    rerender(<AIToolsModal {...confirmingProps} />);
+    fireEvent.press(getByTestId('manage-clear-confirm-button'));
+    expect(confirmingProps.onClear).toHaveBeenCalled();
   });
 
   it('renders unavailable model state in the manage summary', () => {

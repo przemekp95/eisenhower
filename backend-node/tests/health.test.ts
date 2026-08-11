@@ -85,9 +85,20 @@ describe('health routes', () => {
       .mockRejectedValue(new Error('network down'));
 
     await expect(defaultAiHealthChecker('http://example')).resolves.toBe('unreachable');
-    expect(fetchMock).toHaveBeenCalledWith('http://example', {
+    expect(fetchMock).toHaveBeenCalledWith('http://example/health/ready', {
       headers: { Accept: 'application/json' },
+      signal: expect.any(AbortSignal),
     });
+  });
+
+  it('bounds a stalled AI readiness request with an abort signal', async () => {
+    jest.spyOn(globalThis, 'fetch').mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+    }));
+
+    const startedAt = Date.now();
+    await expect(defaultAiHealthChecker('http://example/', 10)).resolves.toBe('unreachable');
+    expect(Date.now() - startedAt).toBeLessThan(500);
   });
 
   it('maps non-ok upstream responses to unhealthy', async () => {
@@ -105,8 +116,9 @@ describe('health routes', () => {
     } as Response);
 
     await expect(defaultAiHealthChecker()).resolves.toBe('healthy');
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8000', {
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8000/health/ready', {
       headers: { Accept: 'application/json' },
+      signal: expect.any(AbortSignal),
     });
   });
 

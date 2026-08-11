@@ -17,6 +17,7 @@
     "@react-native-async-storage/async-storage": "^2.2.0",
     "expo": "^55.0.28",
     "expo-image-picker": "~55.0.22",
+    "expo-network": "~55.0.16",
     "expo-status-bar": "^55.0.6",
     "react": "19.2.0",
     "react-native": "0.83.10",

@@ -18,6 +18,7 @@ import { runtimeConfig } from '../config';
 import type { Language } from '../i18n/translations';
 import {
   clearApiToken,
+  clearAdminToken,
   clearTokens,
   getAccessToken,
   getAdminToken,
@@ -42,7 +43,7 @@ function getAiApi() {
     accessToken: getAccessToken,
     adminToken: getAdminToken,
     onUnauthorized: clearTokens,
-    onAdminUnauthorized: clearTokens,
+    onAdminUnauthorized: clearAdminToken,
   });
 }
 
@@ -69,12 +70,16 @@ export async function createTask(task: TaskInputDto): Promise<TaskDto> {
   return getTaskApi().createTask(task);
 }
 
-export async function updateTask(id: string, patch: Partial<TaskInputDto>): Promise<TaskDto> {
-  return getTaskApi().updateTask(id, patch);
+export async function updateTask(
+  id: string,
+  patch: Partial<TaskInputDto>,
+  revision?: number
+): Promise<TaskDto> {
+  return getTaskApi().updateTask(id, patch, revision);
 }
 
-export async function deleteTask(id: string): Promise<void> {
-  await getTaskApi().deleteTask(id);
+export async function deleteTask(id: string, revision?: number): Promise<void> {
+  await getTaskApi().deleteTask(id, revision);
 }
 
 export async function classifyTask(title: string): Promise<ClassificationResult> {

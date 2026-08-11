@@ -1,25 +1,88 @@
-import { useEffect, useRef, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import AdvancedAIAnalysis from './ai/AdvancedAIAnalysis';
 import GroundedAIAnalysis from './ai/GroundedAIAnalysis';
 import BatchAnalysis from './ai/BatchAnalysis';
 import AIManagement from './ai/AIManagement';
 import ImageUpload from './ai/ImageUpload';
+import type { OCRImportSummary } from './ai/ImageUpload';
 import { BatchAnalysisResult, LangChainAnalysis, OCRResult } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
+import { clearAdminToken, getAdminToken, setAdminToken, subscribeToApiToken } from '../authSession';
 
 interface Props {
   taskTitle: string;
   onClose: () => void;
   onAnalysisComplete: (analysis: LangChainAnalysis) => void;
   onAnalysisTaskAdd?: (analysis: LangChainAnalysis) => Promise<void> | void;
-  onOCRTasksExtracted?: (result: OCRResult) => Promise<number> | number;
+  onOCRTasksExtracted?: (
+    result: OCRResult,
+    learnFromAccepted: boolean
+  ) => Promise<OCRImportSummary | number | void> | OCRImportSummary | number | void;
 }
 
 type Tab = 'analysis' | 'grounded' | 'ocr' | 'batch' | 'manage';
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function AdminAccessPanel({ children }: { children: React.ReactNode }) {
+  const { language } = useLanguage();
+  const adminToken = useSyncExternalStore(subscribeToApiToken, getAdminToken, getAdminToken);
+  const [credential, setCredential] = useState('');
+  const pl = language === 'pl';
+
+  if (!adminToken) {
+    const submit = (event: FormEvent) => {
+      event.preventDefault();
+      setAdminToken(credential);
+      setCredential('');
+    };
+    return (
+      <form onSubmit={submit} className="space-y-3 rounded-2xl border border-white/10 p-4">
+        <h3 className="font-semibold">{pl ? 'Dostęp administracyjny' : 'Administrator access'}</h3>
+        <p className="text-sm text-white/65">
+          {pl
+            ? 'Token administratora jest wymagany wyłącznie do operacji zarządzania.'
+            : 'The administrator token is requested only for management operations.'}
+        </p>
+        <label htmlFor="ai-admin-token" className="block text-sm">
+          {pl ? 'Token administratora AI' : 'AI administrator token'}
+        </label>
+        <input
+          id="ai-admin-token"
+          type="password"
+          autoComplete="off"
+          value={credential}
+          onChange={(event) => setCredential(event.target.value)}
+          className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3"
+        />
+        <button
+          type="submit"
+          disabled={!credential.trim()}
+          className="rounded-full bg-cyan-300 px-4 py-2 font-semibold text-slate-950 disabled:opacity-40"
+        >
+          {pl ? 'Odblokuj zarządzanie' : 'Unlock management'}
+        </button>
+      </form>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={clearAdminToken}
+          className="rounded-full border border-white/15 px-4 py-2 text-sm"
+        >
+          {pl ? 'Zmień token administratora' : 'Change administrator token'}
+        </button>
+      </div>
+      {children}
+    </div>
+  );
+}
 
 export default function AITools({
   taskTitle,
@@ -126,9 +189,12 @@ export default function AITools({
       : format(t('ai.summary.ocrImported.other'), { count });
   };
 
-  const handleOCR = async (result: OCRResult) => {
-    const importedCount = await onOCRTasksExtracted?.(result);
-    setLastSummary(formatOcrImportedSummary(importedCount ?? result.summary.total_tasks));
+  const handleOCR = async (result: OCRResult, learnFromAccepted: boolean) => {
+    const outcome = await onOCRTasksExtracted?.(result, learnFromAccepted);
+    if (typeof outcome === 'number') {
+      setLastSummary(formatOcrImportedSummary(outcome));
+    }
+    return outcome;
   };
 
   const handleBatch = (result: BatchAnalysisResult) => {
@@ -187,7 +253,17 @@ export default function AITools({
                   id={`ai-tab-${tab.id}`}
                   aria-selected={activeTab === tab.id}
                   aria-controls={`ai-panel-${tab.id}`}
+                  tabIndex={activeTab === tab.id ? 0 : -1}
                   onClick={() => setActiveTab(tab.id)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                    event.preventDefault();
+                    const current = tabs.findIndex((item) => item.id === tab.id);
+                    const direction = event.key === 'ArrowRight' ? 1 : -1;
+                    const next = tabs[(current + direction + tabs.length) % tabs.length];
+                    setActiveTab(next.id);
+                    document.getElementById(`ai-tab-${next.id}`)?.focus();
+                  }}
                   className={`rounded-full px-4 py-2 text-sm transition-all ${
                     activeTab === tab.id
                       ? 'bg-white text-slate-950 hover:bg-white/90'
@@ -226,7 +302,9 @@ export default function AITools({
             ) : null}
             {activeTab === 'manage' ? (
               <div role="tabpanel" id="ai-panel-manage" aria-labelledby="ai-tab-manage">
-                <AIManagement onModelUpdated={() => setLastSummary(t('ai.summary.updated'))} />
+                <AdminAccessPanel>
+                  <AIManagement onModelUpdated={() => setLastSummary(t('ai.summary.updated'))} />
+                </AdminAccessPanel>
               </div>
             ) : null}
             {lastSummary ? (
