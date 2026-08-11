@@ -59,6 +59,11 @@ test('creates, reclassifies and deletes a task through the live API', async ({ p
   await expect(createdCard).toBeVisible();
   await expect(createdCard.getByText(description)).toBeVisible();
 
+  const populatedBoardAccessibility = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(populatedBoardAccessibility.violations).toEqual([]);
+
   await createdCard.getByLabel(`Przełącz ważność zadania ${title}`).click({ force: true });
 
   const delegatedCard = taskCard(delegate, title);
