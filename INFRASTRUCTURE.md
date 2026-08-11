@@ -168,6 +168,9 @@ Current repository-level controls include:
 - protected branch flow through `feature/* -> dev -> master`
 - mandatory CI checks on protected branches
 - Trivy SARIF upload in CI
+- fail-closed Python dependency auditing: `pip-audit` may leave only the exact
+  `torch==2.13.0+cpu` and `torchvision==0.28.0+cpu` blind spots, whose public
+  PyTorch CPU wheel source and SHA-256 resolution are checked separately
 - server-side Bearer authentication on all non-health Node and AI routes, with a separate administrator credential for AI management
 - exact Origin validation on browser state changes in addition to least-privilege CORS; header-based auth uses no cookies, so classical CSRF is not applicable
 - runtime-only user and administrator token entry in web/mobile clients; neither token is bundled or persisted
@@ -176,6 +179,9 @@ Current repository-level controls include:
 
 Recommended production additions that are not fully implemented in this repository:
 
+- built-image vulnerability scanning and an image SBOM; the current Trivy gate
+  scans repository manifests and does not prove that the two PyTorch wheels are
+  free of vulnerabilities
 - centralized secret storage
 - managed TLS termination
 - external log aggregation

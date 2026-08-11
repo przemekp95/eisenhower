@@ -215,6 +215,7 @@ describe('tasks service', () => {
         json: async () => ({
           _id: '507f1f77bcf86cd799439011',
           title: 'Updated',
+          description: '',
           urgent: true,
           important: false,
           revision: 4,
@@ -270,19 +271,21 @@ describe('tasks service', () => {
       status: 200,
       headers: { get: () => 'application/json' },
       json: async () => ({
-        id: '507f1f77bcf86cd799439014',
+        _id: '507f1f77bcf86cd799439014',
+        title: 'Renamed',
+        description: 'Moved',
         urgent: false,
-        important: false,
+        important: true,
       }),
     });
 
     await expect(updateRemoteTask('507f1f77bcf86cd799439014', { title: 'Renamed', description: 'Moved', important: true }, 'pl', 0))
       .resolves.toEqual({
         id: '507f1f77bcf86cd799439014',
-        title: '',
-        description: '',
+        title: 'Renamed',
+        description: 'Moved',
         urgent: false,
-        important: false,
+        important: true,
         locale: 'pl',
         remoteId: '507f1f77bcf86cd799439014',
         syncState: 'synced',

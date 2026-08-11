@@ -7,6 +7,45 @@ jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: jest.fn(),
 }));
 
+const quadrantNames = { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' };
+
+const ocrFixture = (filename, tasks) => {
+  const counts = { 0: 0, 1: 0, 2: 0, 3: 0 };
+  tasks.forEach(({ quadrant }) => {
+    counts[quadrant] += 1;
+  });
+  const total = tasks.length;
+
+  return {
+    filename,
+    image_info: { size_bytes: 128, shape: 'unknown' },
+    ocr: {
+      extracted_text: tasks.map(({ text }) => text).join('\n'),
+      raw_tasks_detected: total,
+      method: 'tesseract',
+    },
+    classified_tasks: tasks.map((task) => ({
+      ...task,
+      quadrant_name: quadrantNames[task.quadrant],
+      confidence: 0.9,
+    })),
+    summary: {
+      total_tasks: total,
+      quadrant_distribution: {
+        counts,
+        percentages: Object.fromEntries(
+          Object.entries(counts).map(([quadrant, count]) => [
+            quadrant,
+            total === 0 ? 0 : (count / total) * 100,
+          ])
+        ),
+        quadrant_names: quadrantNames,
+      },
+    },
+    timestamp: '2026-08-11T12:00:00Z',
+  };
+};
+
 describe('media service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -49,11 +88,9 @@ describe('media service', () => {
     };
     global.fetch.mockResolvedValue({
       ok: true,
-      json: async () => ({
-        classified_tasks: [
-          { text: 'exercise twice a week', quadrant: 2 },
-        ],
-      }),
+      json: async () => ocrFixture('scan.png', [
+        { text: 'exercise twice a week', quadrant: 2 },
+      ]),
     });
 
     const tasks = await scanTasksFromImage('en', adapter);
@@ -103,9 +140,9 @@ describe('media service', () => {
     });
     global.fetch.mockResolvedValue({
       ok: true,
-      json: async () => ({
-        classified_tasks: [{ text: 'critical production incident', quadrant: 0 }],
-      }),
+      json: async () => ocrFixture('default-picker.png', [
+        { text: 'critical production incident', quadrant: 0 },
+      ]),
     });
 
     await expect(scanTasksFromImage('pl')).resolves.toEqual([
@@ -131,10 +168,14 @@ describe('media service', () => {
     });
     global.fetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ classified_tasks: [] }),
+      json: async () => ocrFixture('scan-123.jpg', [
+        { text: 'filed receipt', quadrant: 3 },
+      ]),
     });
 
-    await expect(scanTasksFromImage('pl')).resolves.toEqual([]);
+    await expect(scanTasksFromImage('pl')).resolves.toEqual([
+      expect.objectContaining({ title: 'filed receipt', urgent: false, important: false }),
+    ]);
     expect(global.fetch).toHaveBeenCalledWith(
       `${mobileConfig.aiApiUrl}/extract-tasks-from-image`,
       expect.objectContaining({

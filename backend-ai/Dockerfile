@@ -42,7 +42,7 @@ RUN apt-get update \
 
 USER app
 COPY --chown=app:app requirements.txt .
-RUN pip install --user --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
+RUN pip install --user -r requirements.txt
 RUN python - <<'PY'
 from sentence_transformers import SentenceTransformer
 SentenceTransformer(

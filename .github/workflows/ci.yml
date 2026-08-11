@@ -384,7 +384,7 @@ jobs:
 
       - name: Audit production dependencies
         working-directory: backend-ai
-        run: python -m pip_audit -r requirements.txt
+        run: python scripts/production_dependency_audit.py
 
       - name: Run tests with coverage
         working-directory: backend-ai
