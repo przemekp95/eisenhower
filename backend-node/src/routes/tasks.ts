@@ -1,10 +1,17 @@
 import { NextFunction, Request, Response, Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
-import mongoose from 'mongoose';
-import { TaskModel } from '../models/task';
+import { createTask, IdempotencyKeyReuseError } from '../application/createTask';
+import {
+  StoredTask,
+  TaskPayload,
+  TaskRepository,
+} from '../application/taskRepository';
+import { MongooseTaskRepository } from '../repositories/mongooseTaskRepository';
 
 const DEFAULT_PAGE_LIMIT = 100;
 const MAX_PAGE_LIMIT = 200;
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
+const MONGO_ID_PATTERN = /^[a-f0-9]{24}$/i;
 
 interface TaskCursor {
   createdAt: string;
@@ -27,7 +34,7 @@ const rejectUnexpectedFields = body().custom((value) => {
 const createValidators = [
   rejectUnexpectedFields,
   body('title').isString().trim().notEmpty().isLength({ max: 200 }),
-  body('description').optional().isString().isLength({ max: 2000 }),
+  body('description').optional().isString().trim().isLength({ max: 2000 }),
   body('urgent').optional().isBoolean(),
   body('important').optional().isBoolean(),
 ];
@@ -36,7 +43,7 @@ const updateValidators = [
   param('id').isMongoId(),
   rejectUnexpectedFields,
   body('title').optional().isString().trim().notEmpty().isLength({ max: 200 }),
-  body('description').optional().isString().isLength({ max: 2000 }),
+  body('description').optional().isString().trim().isLength({ max: 2000 }),
   body('urgent').optional().isBoolean(),
   body('important').optional().isBoolean(),
 ];
@@ -45,11 +52,7 @@ const deleteValidators = [param('id').isMongoId()];
 
 function ensureValidRequest(request: Parameters<typeof validationResult>[0]) {
   const errors = validationResult(request);
-  if (!errors.isEmpty()) {
-    return errors.array().map((entry) => entry.msg);
-  }
-
-  return null;
+  return errors.isEmpty() ? null : errors.array().map((entry) => entry.msg);
 }
 
 function taskScope(request: Request) {
@@ -63,30 +66,45 @@ function formatRevisionEtag(revision: number) {
   return `"${revision}"`;
 }
 
-function normalizeTaskRevision<T extends { revision?: number }>(task: T): T & { revision: number } {
-  return { ...task, revision: task.revision ?? 0 };
-}
-
-function revisionFilter(expectedRevision: number | undefined) {
-  if (expectedRevision === undefined) return {};
-  if (expectedRevision === 0) {
-    return { $or: [{ revision: 0 }, { revision: { $exists: false } }] };
-  }
-  return { revision: expectedRevision };
-}
-
 function parseIfMatch(request: Request): number | null | undefined {
   const value = request.get('if-match');
   if (value === undefined) return undefined;
-  const match = /^(?:W\/)?"(\d+)"$/.exec(value.trim());
+  const match = /^"(\d+)"$/.exec(value.trim());
   if (!match) return null;
-  return Number(match[1]);
+  const revision = Number(match[1]);
+  return Number.isSafeInteger(revision) ? revision : null;
 }
 
-function encodeCursor(task: { createdAt?: Date; _id: unknown }) {
+function requireTaskRevision(request: Request, response: Response) {
+  const revision = parseIfMatch(request);
+  if (revision === undefined) {
+    response.status(428).json({
+      error: 'If-Match is required for task mutations',
+      code: 'precondition_required',
+    });
+    return null;
+  }
+  if (revision === null) {
+    response.status(400).json({ error: 'If-Match must contain a strong quoted numeric task revision' });
+    return null;
+  }
+  return revision;
+}
+
+function readIdempotencyKey(request: Request, response: Response) {
+  const value = request.get('idempotency-key');
+  if (value === undefined) return undefined;
+  if (!IDEMPOTENCY_KEY_PATTERN.test(value)) {
+    response.status(400).json({ error: 'Idempotency-Key must contain 1-128 URL-safe characters' });
+    return null;
+  }
+  return value;
+}
+
+function encodeCursor(task: Pick<StoredTask, 'createdAt' | '_id'>) {
   return Buffer.from(JSON.stringify({
-    createdAt: task.createdAt!.toISOString(),
-    id: String(task._id),
+    createdAt: task.createdAt.toISOString(),
+    id: task._id,
   } satisfies TaskCursor)).toString('base64url');
 }
 
@@ -98,7 +116,7 @@ function decodeCursor(value: unknown): TaskCursor | null {
       typeof cursor.createdAt !== 'string' ||
       Number.isNaN(Date.parse(cursor.createdAt)) ||
       typeof cursor.id !== 'string' ||
-      !mongoose.isValidObjectId(cursor.id)
+      !MONGO_ID_PATTERN.test(cursor.id)
     ) {
       return null;
     }
@@ -108,7 +126,9 @@ function decodeCursor(value: unknown): TaskCursor | null {
   }
 }
 
-export function createTasksRouter() {
+export function createTasksRouter(
+  repository: TaskRepository = new MongooseTaskRepository(),
+) {
   const router = Router();
 
   router.get('/', async (req, res, next) => {
@@ -125,32 +145,20 @@ export function createTasksRouter() {
         return res.status(400).json({ error: 'Invalid task cursor' });
       }
 
-      const scope = taskScope(req);
-      const filter = cursor ? {
-        ...scope,
-        $or: [
-          { createdAt: { $lt: new Date(cursor.createdAt) } },
-          { createdAt: new Date(cursor.createdAt), _id: { $lt: cursor.id } },
-        ],
-      } : scope;
-      const query = TaskModel.find(filter).sort({ createdAt: -1, _id: -1 });
-      if (requestedLimit === undefined && cursor === undefined) {
-        const tasks = await query.lean();
-        return res.json(tasks.map(normalizeTaskRevision));
-      }
-
       const limit = requestedLimit ?? DEFAULT_PAGE_LIMIT;
-      const page = await query.limit(limit + 1).lean();
-      const hasNextPage = page.length > limit;
-      const tasks = hasNextPage ? page.slice(0, limit) : page;
-      if (hasNextPage) {
-        const nextCursor = encodeCursor(tasks[tasks.length - 1]);
+      const page = await repository.listPage(
+        taskScope(req),
+        limit,
+        cursor ? { createdAt: new Date(cursor.createdAt), id: cursor.id } : undefined,
+      );
+      if (page.hasNextPage) {
+        const nextCursor = encodeCursor(page.tasks[page.tasks.length - 1]);
         res.set('X-Next-Cursor', nextCursor);
-        res.links({ next: `${req.baseUrl}?limit=${limit}&cursor=${encodeURIComponent(nextCursor)}` });
+        res.set('Link', `<?limit=${limit}&cursor=${encodeURIComponent(nextCursor)}>; rel="next"`);
       }
-      res.json(tasks.map(normalizeTaskRevision));
+      return res.json(page.tasks);
     } catch (error) {
-      next(error);
+      return next(error);
     }
   });
 
@@ -159,19 +167,27 @@ export function createTasksRouter() {
     if (errors) {
       return res.status(400).json({ error: 'Validation failed', details: errors });
     }
+    const clientOperationId = readIdempotencyKey(req, res);
+    if (clientOperationId === null) return;
+
+    const payload: TaskPayload = {
+      title: req.body.title,
+      description: req.body.description ?? '',
+      urgent: req.body.urgent ?? false,
+      important: req.body.important ?? false,
+    };
 
     try {
-      const task = await TaskModel.create({
-        tenantId: req.auth!.tenantId,
-        ownerId: req.auth!.userId,
-        title: req.body.title,
-        description: req.body.description ?? '',
-        urgent: req.body.urgent ?? false,
-        important: req.body.important ?? false,
-      });
-
-      return res.status(201).set('ETag', formatRevisionEtag(task.revision)).json(task.toJSON());
+      const result = await createTask(repository, taskScope(req), payload, clientOperationId);
+      if (result.replayed) res.set('Idempotency-Replayed', 'true');
+      return res
+        .status(result.replayed ? 200 : 201)
+        .set('ETag', formatRevisionEtag(result.task.revision))
+        .json(result.task);
     } catch (error) {
+      if (error instanceof IdempotencyKeyReuseError) {
+        return res.status(409).json({ error: error.message, code: error.code });
+      }
       return next(error);
     }
   });
@@ -181,28 +197,14 @@ export function createTasksRouter() {
     if (errors) {
       return res.status(400).json({ error: 'Validation failed', details: errors });
     }
+    const expectedRevision = requireTaskRevision(req, res);
+    if (expectedRevision === null) return;
 
     try {
-      const expectedRevision = parseIfMatch(req);
-      if (expectedRevision === null) {
-        return res.status(400).json({ error: 'If-Match must contain a quoted numeric task revision' });
-      }
       const scope = taskScope(req);
-      const task = await TaskModel.findOneAndUpdate(
-        {
-          _id: req.params.id,
-          ...scope,
-          ...revisionFilter(expectedRevision),
-        },
-        { $set: req.body, $inc: { revision: 1 } },
-        {
-          returnDocument: 'after',
-          runValidators: true,
-        }
-      );
-
+      const task = await repository.update(scope, req.params.id, expectedRevision, req.body);
       if (!task) {
-        if (expectedRevision !== undefined && await TaskModel.exists({ _id: req.params.id, ...scope })) {
+        if (await repository.exists(scope, req.params.id)) {
           return res.status(412).json({
             error: 'Task revision conflict',
             code: 'task_revision_conflict',
@@ -211,7 +213,7 @@ export function createTasksRouter() {
         return res.status(404).json({ error: 'Task not found' });
       }
 
-      return res.set('ETag', formatRevisionEtag(task.revision)).json(task.toJSON());
+      return res.set('ETag', formatRevisionEtag(task.revision)).json(task);
     } catch (error) {
       return next(error);
     }
@@ -222,20 +224,14 @@ export function createTasksRouter() {
     if (errors) {
       return res.status(400).json({ error: 'Validation failed', details: errors });
     }
+    const expectedRevision = requireTaskRevision(req, res);
+    if (expectedRevision === null) return;
 
     try {
-      const expectedRevision = parseIfMatch(req);
-      if (expectedRevision === null) {
-        return res.status(400).json({ error: 'If-Match must contain a quoted numeric task revision' });
-      }
       const scope = taskScope(req);
-      const task = await TaskModel.findOneAndDelete({
-        _id: req.params.id,
-        ...scope,
-        ...revisionFilter(expectedRevision),
-      });
+      const task = await repository.delete(scope, req.params.id, expectedRevision);
       if (!task) {
-        if (expectedRevision !== undefined && await TaskModel.exists({ _id: req.params.id, ...scope })) {
+        if (await repository.exists(scope, req.params.id)) {
           return res.status(412).json({
             error: 'Task revision conflict',
             code: 'task_revision_conflict',

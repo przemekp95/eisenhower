@@ -8,6 +8,7 @@
     "dev": "tsx watch src/server.ts",
     "dev:e2e": "tsx scripts/e2e-server.ts",
     "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "test": "jest --runInBand",
     "test:bdd": "tsc -p tsconfig.bdd.json && NODE_ENV=test node --import tsx ./node_modules/@cucumber/cucumber/bin/cucumber.js --config cucumber.mjs",

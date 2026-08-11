@@ -1,5 +1,6 @@
 import {
   TASK_SYNC_STATE,
+  createClientOperationId,
   createPendingTask,
   getTaskRemoteId,
   hasPendingTasks,
@@ -14,6 +15,7 @@ import {
   normalizeStoredTasks,
   removeTask,
   resolveTaskConflict,
+  runSingleFlight,
   taskToRemotePayload,
   upsertTask,
 } from './taskSync';
@@ -40,6 +42,7 @@ describe('taskSync', () => {
       locale: 'pl',
       remoteId: '507f1f77bcf86cd799439011',
       syncState: TASK_SYNC_STATE.synced,
+      revision: 0,
     });
   });
 
@@ -68,6 +71,7 @@ describe('taskSync', () => {
     ).toMatchObject({
       remoteId: null,
       syncState: TASK_SYNC_STATE.pendingCreate,
+      clientOperationId: 'mobile-local-1',
     });
   });
 
@@ -89,6 +93,7 @@ describe('taskSync', () => {
     ).toMatchObject({
       remoteId: null,
       syncState: TASK_SYNC_STATE.pendingCreate,
+      clientOperationId: 'mobile-local-1',
     });
 
     expect(
@@ -130,6 +135,7 @@ describe('taskSync', () => {
       locale: 'pl',
       remoteId: null,
       syncState: TASK_SYNC_STATE.pendingCreate,
+      clientOperationId: 'mobile-local-1',
     });
 
     expect(
@@ -348,14 +354,16 @@ describe('taskSync', () => {
 
     expect(createRemoteTask).toHaveBeenCalledWith(
       { title: 'Offline', description: 'draft', urgent: false, important: true },
-      'pl'
+      'pl',
+      'mobile-local-1'
     );
     expect(updateRemoteTask).toHaveBeenCalledWith(
       '507f1f77bcf86cd799439012',
       { title: 'Update me', description: 'refresh', urgent: true, important: false },
-      'pl'
+      'pl',
+      0
     );
-    expect(deleteRemoteTask).toHaveBeenCalledWith('507f1f77bcf86cd799439013');
+    expect(deleteRemoteTask).toHaveBeenCalledWith('507f1f77bcf86cd799439013', 0);
     expect(resolvedTasks).toEqual([
       normalizeStoredTask({
         id: '507f1f77bcf86cd799439012',
@@ -598,5 +606,86 @@ describe('taskSync', () => {
     });
     expect(resolveTaskConflict(missing, 'remote')).toBeNull();
     expect(resolveTaskConflict(missing, 'unsupported')).toEqual(missing);
+  });
+
+  it('preserves one stable client operation id across normalization and retries', async () => {
+    const pending = createPendingTask(
+      'pl',
+      { title: 'Stable retry', clientOperationId: 'mobile-explicit-operation' },
+      'local-stable'
+    );
+    const reloaded = normalizeStoredTask(JSON.parse(JSON.stringify(pending)));
+    const createRemoteTask = jest.fn().mockRejectedValue(new Error('response lost'));
+
+    await reconcilePendingTasks({
+      cachedTasks: [reloaded],
+      remoteTasks: [],
+      createRemoteTask,
+      updateRemoteTask: jest.fn(),
+      deleteRemoteTask: jest.fn(),
+    });
+    await reconcilePendingTasks({
+      cachedTasks: [reloaded],
+      remoteTasks: [],
+      createRemoteTask,
+      updateRemoteTask: jest.fn(),
+      deleteRemoteTask: jest.fn(),
+    });
+
+    expect(reloaded.clientOperationId).toBe('mobile-explicit-operation');
+    expect(createRemoteTask).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ title: 'Stable retry' }),
+      'pl',
+      'mobile-explicit-operation'
+    );
+    expect(createRemoteTask).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ title: 'Stable retry' }),
+      'pl',
+      'mobile-explicit-operation'
+    );
+  });
+
+  it('coalesces concurrent sync triggers into one in-flight operation', async () => {
+    const inFlightRef = { current: null };
+    let release;
+    const operation = jest.fn(() => new Promise((resolve) => {
+      release = resolve;
+    }));
+
+    const first = runSingleFlight(inFlightRef, operation);
+    const second = runSingleFlight(inFlightRef, operation);
+    const third = runSingleFlight(inFlightRef, operation);
+
+    expect(first).toBe(second);
+    expect(second).toBe(third);
+    expect(operation).toHaveBeenCalledTimes(1);
+    release(true);
+    await expect(first).resolves.toBe(true);
+    await expect(runSingleFlight(inFlightRef, async () => false)).resolves.toBe(false);
+  });
+
+  it('converts synchronous sync failures to a rejected promise and clears the flight', async () => {
+    const inFlightRef = { current: null };
+
+    await expect(runSingleFlight(inFlightRef, () => {
+      throw new Error('sync failed synchronously');
+    })).rejects.toThrow('sync failed synchronously');
+    expect(inFlightRef.current).toBeNull();
+  });
+
+  it('creates a non-empty operation id without a native UUID implementation', () => {
+    const originalCrypto = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+    Object.defineProperty(globalThis, 'crypto', { configurable: true, value: {} });
+    try {
+      expect(createClientOperationId()).toMatch(/^mobile-[a-z0-9]+-[a-z0-9]+-[a-z0-9]+$/);
+    } finally {
+      if (originalCrypto) {
+        Object.defineProperty(globalThis, 'crypto', originalCrypto);
+      } else {
+        delete globalThis.crypto;
+      }
+    }
   });
 });

@@ -10,6 +10,14 @@ import {
 } from './tasks';
 
 describe('tasks service', () => {
+  const jsonHeaders = (nextCursor = null) => ({
+    get: (name) => {
+      if (String(name).toLowerCase() === 'content-type') return 'application/json';
+      if (String(name).toLowerCase() === 'x-next-cursor') return nextCursor;
+      return null;
+    },
+  });
+
   beforeEach(() => {
     global.fetch = jest.fn();
     setAccessToken('test-api-token');
@@ -19,7 +27,7 @@ describe('tasks service', () => {
     global.fetch.mockResolvedValue({
       ok: true,
       status: 200,
-      headers: { get: () => 'application/json' },
+      headers: jsonHeaders(),
       json: async () => [
         { _id: '507f1f77bcf86cd799439011', title: 'Remote', description: 'desc', urgent: true, important: false },
       ],
@@ -35,14 +43,85 @@ describe('tasks service', () => {
         locale: 'en',
         remoteId: '507f1f77bcf86cd799439011',
         syncState: 'synced',
+        revision: 0,
       },
     ]);
     expect(global.fetch).toHaveBeenCalledWith(
-      `${mobileConfig.apiUrl}/tasks`,
+      `${mobileConfig.apiUrl}/tasks?limit=200`,
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: 'Bearer test-api-token' }),
       })
     );
+  });
+
+  it('follows bounded task pages until the server omits the next cursor', async () => {
+    global.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: jsonHeaders('cursor-2'),
+        json: async () => [{ _id: '507f1f77bcf86cd799439011', title: 'First' }],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: jsonHeaders(),
+        json: async () => [{ _id: '507f1f77bcf86cd799439012', title: 'Second' }],
+      });
+
+    await expect(fetchRemoteTasks('pl')).resolves.toHaveLength(2);
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      `${mobileConfig.apiUrl}/tasks?limit=200`,
+      expect.any(Object)
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      `${mobileConfig.apiUrl}/tasks?limit=200&cursor=cursor-2`,
+      expect.any(Object)
+    );
+  });
+
+  it('fails closed when the server repeats a pagination cursor', async () => {
+    global.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: jsonHeaders('repeated'),
+        json: async () => [],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: jsonHeaders('repeated'),
+        json: async () => [],
+      });
+
+    await expect(fetchRemoteTasks()).rejects.toThrow('Task pagination cursor repeated');
+  });
+
+  it('rejects a non-array task page', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: jsonHeaders(),
+      json: async () => ({ tasks: [] }),
+    });
+
+    await expect(fetchRemoteTasks()).rejects.toThrow('Task list response must be an array');
+  });
+
+  it('fails closed after the bounded maximum number of task pages', async () => {
+    let page = 0;
+    global.fetch.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      headers: jsonHeaders(`cursor-${page += 1}`),
+      json: async () => [],
+    }));
+
+    await expect(fetchRemoteTasks()).rejects.toThrow('Task pagination exceeded the safe page limit');
+    expect(global.fetch).toHaveBeenCalledTimes(1000);
   });
 
   it('creates and updates remote tasks', async () => {
@@ -73,7 +152,11 @@ describe('tasks service', () => {
       });
 
     await expect(
-      createRemoteTask({ title: 'Created', description: '', urgent: false, important: true }, 'pl')
+      createRemoteTask(
+        { title: 'Created', description: '', urgent: false, important: true },
+        'pl',
+        'mobile-create-operation-1'
+      )
     ).resolves.toMatchObject({
       id: '507f1f77bcf86cd799439011',
       urgent: false,
@@ -81,12 +164,23 @@ describe('tasks service', () => {
     });
 
     await expect(
-      updateRemoteTask('507f1f77bcf86cd799439011', { urgent: true }, 'pl')
+      updateRemoteTask('507f1f77bcf86cd799439011', { urgent: true }, 'pl', 0)
     ).resolves.toMatchObject({
       id: '507f1f77bcf86cd799439011',
       urgent: true,
       important: true,
     });
+
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      `${mobileConfig.apiUrl}/tasks`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer test-api-token',
+          'Idempotency-Key': 'mobile-create-operation-1',
+        }),
+      })
+    );
   });
 
   it('deletes remote tasks and exposes ID helpers', async () => {
@@ -97,7 +191,7 @@ describe('tasks service', () => {
       json: async () => null,
     });
 
-    await expect(deleteRemoteTask('507f1f77bcf86cd799439011')).resolves.toBeUndefined();
+    await expect(deleteRemoteTask('507f1f77bcf86cd799439011', 0)).resolves.toBeUndefined();
     expect(isRemoteTaskId('507f1f77bcf86cd799439011')).toBe(true);
     expect(isRemoteTaskId('local-1')).toBe(false);
     expect(normalizeRemoteTask({ id: '1', title: 'Task', urgent: false, important: false }, 'pl')).toEqual({
@@ -109,6 +203,7 @@ describe('tasks service', () => {
       locale: 'pl',
       remoteId: '1',
       syncState: 'synced',
+      revision: 0,
     });
   });
 
@@ -166,7 +261,7 @@ describe('tasks service', () => {
       headers: { get: () => 'text/plain' },
     });
 
-    await expect(deleteRemoteTask('507f1f77bcf86cd799439011')).rejects.toThrow('Task request failed');
+    await expect(deleteRemoteTask('507f1f77bcf86cd799439011', 0)).rejects.toThrow('Task request failed');
   });
 
   it('covers default task normalization and optional update fields', async () => {
@@ -181,7 +276,7 @@ describe('tasks service', () => {
       }),
     });
 
-    await expect(updateRemoteTask('507f1f77bcf86cd799439014', { title: 'Renamed', description: 'Moved', important: true }))
+    await expect(updateRemoteTask('507f1f77bcf86cd799439014', { title: 'Renamed', description: 'Moved', important: true }, 'pl', 0))
       .resolves.toEqual({
         id: '507f1f77bcf86cd799439014',
         title: '',
@@ -191,6 +286,7 @@ describe('tasks service', () => {
         locale: 'pl',
         remoteId: '507f1f77bcf86cd799439014',
         syncState: 'synced',
+        revision: 0,
       });
 
     expect(normalizeRemoteTask({ _id: '507f1f77bcf86cd799439015', title: null, description: null, urgent: 0, important: 1 })).toEqual({
@@ -202,6 +298,7 @@ describe('tasks service', () => {
       locale: 'pl',
       remoteId: '507f1f77bcf86cd799439015',
       syncState: 'synced',
+      revision: 0,
     });
   });
 
@@ -216,7 +313,7 @@ describe('tasks service', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        headers: { get: () => 'application/json' },
+        headers: jsonHeaders(),
         json: async () => [payload],
       })
       .mockResolvedValueOnce({
@@ -229,8 +326,26 @@ describe('tasks service', () => {
     await expect(fetchRemoteTasks()).resolves.toEqual([
       expect.objectContaining({ locale: 'pl' }),
     ]);
-    await expect(createRemoteTask({ title: 'Default locale' })).resolves.toEqual(
+    await expect(createRemoteTask({ title: 'Default locale' }, 'pl', 'mobile-default-operation')).resolves.toEqual(
       expect.objectContaining({ locale: 'pl' })
     );
+  });
+
+  it('fails closed before update or delete when the current revision is missing', async () => {
+    await expect(
+      updateRemoteTask('507f1f77bcf86cd799439011', { urgent: true })
+    ).rejects.toMatchObject({ status: 428, code: 'task_revision_required' });
+    await expect(
+      deleteRemoteTask('507f1f77bcf86cd799439011')
+    ).rejects.toMatchObject({ status: 428, code: 'task_revision_required' });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('requires a stable operation id before creating a remote task', async () => {
+    await expect(createRemoteTask({ title: 'Unsafe create' }, 'pl')).rejects.toMatchObject({
+      status: 400,
+      code: 'client_operation_required',
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 });

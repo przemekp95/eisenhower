@@ -53,6 +53,7 @@ export class EisenhowerWorld extends World {
   app!: Express;
   response?: Response;
   taskId?: string;
+  taskRevision?: number;
 
   constructor(options: IWorldOptions) {
     super(options);
@@ -73,6 +74,7 @@ Before(function (this: EisenhowerWorld) {
   });
   this.response = undefined;
   this.taskId = undefined;
+  this.taskRevision = undefined;
 });
 
 After(async () => {

@@ -54,6 +54,11 @@ Then('the response advertises bearer authentication', function (this: Eisenhower
   assert.equal(this.response.headers['www-authenticate'], 'Bearer');
 });
 
+Then('the response advertises an invalid bearer token', function (this: EisenhowerWorld) {
+  assert.ok(this.response, 'An authentication response must exist');
+  assert.equal(this.response.headers['www-authenticate'], 'Bearer error="invalid_token"');
+});
+
 Then(
   'the validation details include {string}',
   function (this: EisenhowerWorld, expectedDetail: string) {

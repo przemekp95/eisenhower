@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { TaskModel } from './models/task';
 
 let activeUri: string | null = null;
 
@@ -12,6 +13,7 @@ export async function connectToDatabase(uri: string) {
   }
 
   await mongoose.connect(uri);
+  await TaskModel.init();
   activeUri = uri;
   return mongoose.connection;
 }

@@ -3,6 +3,7 @@ import express from 'express';
 import request from 'supertest';
 import { createApp } from '../src/app';
 import { TaskModel } from '../src/models/task';
+import { MongooseTaskRepository } from '../src/repositories/mongooseTaskRepository';
 import { createTasksRouter } from '../src/routes/tasks';
 import { clearMongo, startMongo, stopMongo } from './helpers/mongo';
 
@@ -55,8 +56,8 @@ describe('task routes', () => {
     });
 
     const listed = await api.get('/tasks');
-    const updated = await api.put(`/tasks/${foreign.id}`).send({ urgent: false });
-    const deleted = await api.delete(`/tasks/${foreign.id}`);
+    const updated = await api.put(`/tasks/${foreign.id}`).set('If-Match', '"0"').send({ urgent: false });
+    const deleted = await api.delete(`/tasks/${foreign.id}`).set('If-Match', '"0"');
 
     expect(listed.body).toEqual([]);
     expect(updated.status).toBe(404);
@@ -81,8 +82,8 @@ describe('task routes', () => {
     oidcApp.use('/tasks', createTasksRouter());
 
     const listed = await request(oidcApp).get('/tasks');
-    const updated = await request(oidcApp).put(`/tasks/${foreign.id}`).send({ urgent: false });
-    const deleted = await request(oidcApp).delete(`/tasks/${foreign.id}`);
+    const updated = await request(oidcApp).put(`/tasks/${foreign.id}`).set('If-Match', '"0"').send({ urgent: false });
+    const deleted = await request(oidcApp).delete(`/tasks/${foreign.id}`).set('If-Match', '"0"');
 
     expect(listed.body).toEqual([]);
     expect(updated.status).toBe(404);
@@ -102,6 +103,128 @@ describe('task routes', () => {
       important: false,
       revision: 0,
     });
+  });
+
+  it('serializes stored project ids while hiding internal idempotency metadata', async () => {
+    const task = await TaskModel.create({
+      title: 'Scoped project task',
+      projectId: 'project-a',
+      createOperationId: 'internal-operation',
+      createOperationDigest: 'internal-digest',
+    });
+
+    const serialized = task.toJSON();
+    expect(serialized._id).toBe(task.id);
+    expect(serialized).not.toHaveProperty('createOperationId');
+    expect(serialized).not.toHaveProperty('createOperationDigest');
+
+    const listed = await api.get('/tasks');
+    expect(listed.body[0]).toMatchObject({
+      _id: task.id,
+      projectId: 'project-a',
+    });
+  });
+
+  it('replays an idempotent create without creating a second task', async () => {
+    const first = await api
+      .post('/tasks')
+      .set('Idempotency-Key', 'mobile-create-operation-1')
+      .send({ title: 'Retry-safe task', urgent: true });
+    const replay = await api
+      .post('/tasks')
+      .set('Idempotency-Key', 'mobile-create-operation-1')
+      .send({ title: 'Retry-safe task', urgent: true });
+
+    expect(first.status).toBe(201);
+    expect(replay.status).toBe(200);
+    expect(replay.headers['idempotency-replayed']).toBe('true');
+    expect(replay.body._id).toBe(first.body._id);
+    await expect(TaskModel.countDocuments({ title: 'Retry-safe task' })).resolves.toBe(1);
+  });
+
+  it('collapses concurrent creates with one operation key to one owner-scoped task', async () => {
+    const responses = await Promise.all(
+      Array.from({ length: 16 }, () => api
+        .post('/tasks')
+        .set('Idempotency-Key', 'mobile-concurrent-operation-1')
+        .send({ title: 'Concurrent task', description: 'same payload', important: true })),
+    );
+
+    expect(responses.filter((response) => response.status === 201)).toHaveLength(1);
+    expect(responses.filter((response) => response.status === 200)).toHaveLength(15);
+    expect(new Set(responses.map((response) => response.body._id)).size).toBe(1);
+    await expect(TaskModel.countDocuments({ title: 'Concurrent task' })).resolves.toBe(1);
+  });
+
+  it('rejects reusing an operation key for a different payload', async () => {
+    await api
+      .post('/tasks')
+      .set('Idempotency-Key', 'mobile-payload-operation-1')
+      .send({ title: 'Original payload' });
+    const response = await api
+      .post('/tasks')
+      .set('Idempotency-Key', 'mobile-payload-operation-1')
+      .send({ title: 'Changed payload' });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({
+      error: 'Idempotency key was already used with a different task payload',
+      code: 'idempotency_key_reused',
+    });
+  });
+
+  it('fails closed when an idempotent upsert cannot be read back', async () => {
+    jest.spyOn(TaskModel, 'findOne').mockReturnValue({
+      select: () => ({ lean: async () => null }),
+    } as never);
+    const repository = new MongooseTaskRepository();
+
+    await expect(repository.create(
+      { tenantId: 'local', ownerId: 'local-user' },
+      { title: 'Unreadable create', description: '', urgent: false, important: false },
+      { id: 'unreadable-operation', payloadDigest: 'digest' },
+    )).rejects.toThrow('Idempotent task create did not return a task');
+  });
+
+  it('scopes an idempotency key by both tenant and owner', async () => {
+    const scopedApp = express();
+    scopedApp.use(express.json());
+    scopedApp.use((req, _res, next) => {
+      req.auth = {
+        tenantId: String(req.get('x-test-tenant')),
+        userId: String(req.get('x-test-owner')),
+        roles: ['user'],
+        projectIds: [],
+      };
+      next();
+    });
+    scopedApp.use('/tasks', createTasksRouter());
+
+    const createFor = (tenantId: string, ownerId: string) => request(scopedApp)
+      .post('/tasks')
+      .set('X-Test-Tenant', tenantId)
+      .set('X-Test-Owner', ownerId)
+      .set('Idempotency-Key', 'shared-operation-key')
+      .send({ title: `${tenantId}/${ownerId}` });
+    const [tenantAOwnerA, tenantAOwnerB, tenantBOwnerA] = await Promise.all([
+      createFor('tenant-a', 'owner-a'),
+      createFor('tenant-a', 'owner-b'),
+      createFor('tenant-b', 'owner-a'),
+    ]);
+
+    expect([tenantAOwnerA.status, tenantAOwnerB.status, tenantBOwnerA.status]).toEqual([201, 201, 201]);
+    expect(new Set([tenantAOwnerA.body._id, tenantAOwnerB.body._id, tenantBOwnerA.body._id]).size).toBe(3);
+    await expect(TaskModel.countDocuments({ createOperationId: 'shared-operation-key' })).resolves.toBe(3);
+  });
+
+  it('rejects malformed idempotency keys', async () => {
+    const response = await api
+      .post('/tasks')
+      .set('Idempotency-Key', 'contains spaces')
+      .send({ title: 'Unsafe key' });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('Idempotency-Key must contain 1-128 URL-safe characters');
   });
 
   it('rejects invalid payloads', async () => {
@@ -139,6 +262,7 @@ describe('task routes', () => {
 
     const response = await api
       .put(`/tasks/${task.id}`)
+      .set('If-Match', '"0"')
       .send({ urgent: true, important: true });
 
     expect(response.status).toBe(200);
@@ -169,7 +293,6 @@ describe('task routes', () => {
       tenantId: 'local',
       ownerId: 'local-user',
       title: 'Legacy task',
-      description: '',
       urgent: false,
       important: true,
       createdAt: new Date(),
@@ -205,6 +328,27 @@ describe('task routes', () => {
     expect(second.status).toBe(200);
     expect(second.body).toHaveLength(1);
     expect(new Set([...first.body, ...second.body].map((task) => task._id)).size).toBe(3);
+  });
+
+  it('bounds the default list and emits a proxy-prefix-safe next-page contract', async () => {
+    await TaskModel.insertMany(
+      Array.from({ length: 101 }, (_, index) => ({
+        title: `default-page-${index}`,
+        urgent: false,
+        important: false,
+      })),
+    );
+
+    const first = await api.get('/tasks');
+
+    expect(first.status).toBe(200);
+    expect(first.body).toHaveLength(100);
+    expect(first.headers['x-next-cursor']).toEqual(expect.any(String));
+    expect(first.headers.link).toMatch(/^<\?limit=100&cursor=[^>]+>; rel="next"$/);
+
+    const second = await api.get(`/tasks?limit=100&cursor=${encodeURIComponent(first.headers['x-next-cursor'])}`);
+    expect(second.body).toHaveLength(1);
+    expect(new Set([...first.body, ...second.body].map((task) => task._id)).size).toBe(101);
   });
 
   it.each(['0', '201', '1.5', 'not-a-number'])(
@@ -253,10 +397,32 @@ describe('task routes', () => {
 
   it('returns 404 for a missing task on update', async () => {
     const id = new mongoose.Types.ObjectId().toString();
-    const response = await api.put(`/tasks/${id}`).send({ urgent: true });
+    const response = await api.put(`/tasks/${id}`).set('If-Match', '"0"').send({ urgent: true });
 
     expect(response.status).toBe(404);
     expect(response.body.error).toBe('Task not found');
+  });
+
+  it('requires If-Match for update and rejects a weak task revision', async () => {
+    const task = await TaskModel.create({ title: 'Guarded update' });
+    const missing = await api.put(`/tasks/${task.id}`).send({ urgent: true });
+    const weak = await api.put(`/tasks/${task.id}`).set('If-Match', 'W/"0"').send({ urgent: true });
+
+    expect(missing.status).toBe(428);
+    expect(missing.body.code).toBe('precondition_required');
+    expect(weak.status).toBe(400);
+    expect(weak.body.error).toContain('strong quoted numeric task revision');
+  });
+
+  it('rejects an If-Match revision outside the safe integer range', async () => {
+    const task = await TaskModel.create({ title: 'Unsafe revision' });
+    const response = await api
+      .put(`/tasks/${task.id}`)
+      .set('If-Match', '"9007199254740992"')
+      .send({ urgent: true });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('strong quoted numeric task revision');
   });
 
   it('rejects malformed If-Match on update', async () => {
@@ -285,10 +451,18 @@ describe('task routes', () => {
 
   it('returns 404 for a missing task on delete', async () => {
     const id = new mongoose.Types.ObjectId().toString();
-    const response = await api.delete(`/tasks/${id}`);
+    const response = await api.delete(`/tasks/${id}`).set('If-Match', '"0"');
 
     expect(response.status).toBe(404);
     expect(response.body.error).toBe('Task not found');
+  });
+
+  it('requires If-Match for delete', async () => {
+    const task = await TaskModel.create({ title: 'Guarded delete' });
+    const response = await api.delete(`/tasks/${task.id}`);
+
+    expect(response.status).toBe(428);
+    expect(response.body.code).toBe('precondition_required');
   });
 
   it('rejects malformed If-Match on delete', async () => {
@@ -301,7 +475,7 @@ describe('task routes', () => {
 
   it('rejects a stale conditional delete and accepts the current revision', async () => {
     const task = await TaskModel.create({ title: 'Conditional delete', urgent: false, important: false });
-    await api.put(`/tasks/${task.id}`).set('If-Match', 'W/"0"').send({ urgent: true });
+    await api.put(`/tasks/${task.id}`).set('If-Match', '"0"').send({ urgent: true });
 
     const stale = await api.delete(`/tasks/${task.id}`).set('If-Match', '"0"');
     expect(stale.status).toBe(412);
@@ -318,7 +492,7 @@ describe('task routes', () => {
       important: false,
     });
 
-    const response = await api.delete(`/tasks/${task.id}`);
+    const response = await api.delete(`/tasks/${task.id}`).set('If-Match', '"0"');
 
     expect(response.status).toBe(204);
     await expect(TaskModel.findById(task.id)).resolves.toBeNull();
@@ -334,9 +508,11 @@ describe('task routes', () => {
   it('returns 500 when listing tasks fails', async () => {
     jest.spyOn(TaskModel, 'find').mockReturnValue({
       sort: () => ({
-        lean: async () => {
-          throw 'list failure';
-        },
+        limit: () => ({
+          lean: async () => {
+            throw 'list failure';
+          },
+        }),
       }),
     } as never);
 
@@ -359,7 +535,7 @@ describe('task routes', () => {
     jest.spyOn(TaskModel, 'findOneAndUpdate').mockRejectedValue(new Error('update failure'));
     const id = new mongoose.Types.ObjectId().toString();
 
-    const response = await api.put(`/tasks/${id}`).send({ urgent: true });
+    const response = await api.put(`/tasks/${id}`).set('If-Match', '"0"').send({ urgent: true });
 
     expect(response.status).toBe(500);
     expect(response.body.error).toBe('update failure');
@@ -369,7 +545,7 @@ describe('task routes', () => {
     jest.spyOn(TaskModel, 'findOneAndDelete').mockRejectedValue(new Error('delete failure'));
     const id = new mongoose.Types.ObjectId().toString();
 
-    const response = await api.delete(`/tasks/${id}`);
+    const response = await api.delete(`/tasks/${id}`).set('If-Match', '"0"');
 
     expect(response.status).toBe(500);
     expect(response.body.error).toBe('delete failure');

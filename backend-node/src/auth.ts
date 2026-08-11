@@ -27,12 +27,18 @@ function tokensMatch(actual: string, expected: string) {
 
 function readBearer(request: Request, response: Response): string | null {
   const authorization = request.get('authorization');
-  if (!authorization?.startsWith('Bearer ')) {
+  const match = authorization ? /^Bearer[ \t]+(.+)$/i.exec(authorization) : null;
+  if (!match) {
     response.set('WWW-Authenticate', 'Bearer');
     response.status(401).json({ error: 'Authentication required' });
     return null;
   }
-  return authorization.slice('Bearer '.length);
+  return match[1];
+}
+
+function rejectInvalidBearer(response: Response) {
+  response.set('WWW-Authenticate', 'Bearer error="invalid_token"');
+  response.status(401).json({ error: 'Invalid bearer token' });
 }
 
 export function requireBearerToken(expectedToken: string) {
@@ -40,7 +46,7 @@ export function requireBearerToken(expectedToken: string) {
     const token = readBearer(request, response);
     if (token === null) return;
     if (!tokensMatch(token, expectedToken)) {
-      response.status(403).json({ error: 'Access denied' });
+      rejectInvalidBearer(response);
       return;
     }
     request.auth = {
@@ -108,7 +114,7 @@ export function requireOidcToken(verifier: (token: string) => Promise<AuthPrinci
       request.auth = await verifier(token);
       next();
     } catch {
-      response.status(403).json({ error: 'Access denied' });
+      rejectInvalidBearer(response);
     }
   };
 }

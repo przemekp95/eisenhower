@@ -86,4 +86,33 @@ describe('mobile config', () => {
       'EXPO_PUBLIC_API_URL or EXPO_PUBLIC_APP_ORIGIN_URL is required in production builds.'
     );
   });
+
+  it.each([
+    ['EXPO_PUBLIC_API_URL', 'not-a-url', 'must be an absolute HTTP(S) URL'],
+    ['EXPO_PUBLIC_API_URL', 'ftp://api.example.com', 'must be an absolute HTTP(S) URL'],
+    ['EXPO_PUBLIC_API_URL', 'http://api.example.com', 'must use HTTPS in production builds'],
+    ['EXPO_PUBLIC_API_URL', 'https://user:pass@api.example.com', 'must not include credentials'],
+    ['EXPO_PUBLIC_API_URL', 'https://api.example.com/tasks?all=true', 'must not include a query or fragment'],
+    ['EXPO_PUBLIC_AI_API_URL', 'https://ai.example.com/#status', 'must not include a query or fragment'],
+    ['EXPO_PUBLIC_API_URL', 'https://127.0.0.1/api', 'must not use a loopback or emulator host'],
+    ['EXPO_PUBLIC_API_URL', 'https://10.0.2.2/api', 'must not use a loopback or emulator host'],
+  ])('rejects unsafe production %s value %s', (name, value, message) => {
+    process.env.NODE_ENV = 'production';
+    global.__DEV__ = false;
+    process.env.EXPO_PUBLIC_API_URL = 'https://api.example.com';
+    process.env.EXPO_PUBLIC_AI_API_URL = 'https://ai.example.com';
+    process.env[name] = value;
+
+    expect(() => require('./config')).toThrow(`${name} ${message}.`);
+  });
+
+  it('requires the shared production value to be an origin without a path', () => {
+    process.env.NODE_ENV = 'production';
+    global.__DEV__ = false;
+    process.env.EXPO_PUBLIC_APP_ORIGIN_URL = 'https://example.com/nested';
+
+    expect(() => require('./config')).toThrow(
+      'EXPO_PUBLIC_APP_ORIGIN_URL must be an origin without a path, query, or fragment.'
+    );
+  });
 });

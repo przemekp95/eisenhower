@@ -10,7 +10,8 @@ Feature: Protect access to task management
 
   Scenario: Reject invalid bearer credentials
     When I list tasks with bearer token "wrong-token"
-    Then the request fails with status 403 and error "Access denied"
+    Then the request fails with status 401 and error "Invalid bearer token"
+    And the response advertises an invalid bearer token
 
   Scenario: Allow a state change from the configured browser origin
     Given the configured browser origin is "https://tasks.example.com"

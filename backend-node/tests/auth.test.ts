@@ -112,7 +112,8 @@ describe('OIDC bearer verification', () => {
     const accepted = await request(app).get('/protected').set('Authorization', 'Bearer valid');
 
     expect(missing.status).toBe(401);
-    expect(rejected.status).toBe(403);
+    expect(rejected.status).toBe(401);
+    expect(rejected.headers['www-authenticate']).toBe('Bearer error="invalid_token"');
     expect(accepted.body).toMatchObject({ tenantId: 'tenant-a', userId: 'user-1' });
   });
 });

@@ -28,6 +28,7 @@ describe('media service', () => {
         locale: 'pl',
         remoteId: null,
         syncState: 'pending_create',
+        clientOperationId: 'mobile-ocr-123-0',
       },
     ]);
   });
@@ -74,6 +75,7 @@ describe('media service', () => {
         locale: 'en',
         remoteId: null,
         syncState: 'pending_create',
+        clientOperationId: expect.stringMatching(/^mobile-ocr-\d+-0$/),
       },
     ]);
   });
@@ -116,6 +118,7 @@ describe('media service', () => {
         locale: 'pl',
         remoteId: null,
         syncState: 'pending_create',
+        clientOperationId: expect.stringMatching(/^mobile-ocr-\d+-0$/),
       },
     ]);
   });

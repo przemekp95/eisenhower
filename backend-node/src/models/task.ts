@@ -9,6 +9,8 @@ export interface Task {
   urgent: boolean;
   important: boolean;
   revision: number;
+  createOperationId?: string;
+  createOperationDigest?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -42,6 +44,14 @@ const taskSchema = new Schema<Task>(
       type: Boolean,
       default: false,
     },
+    createOperationId: {
+      type: String,
+      select: false,
+    },
+    createOperationDigest: {
+      type: String,
+      select: false,
+    },
   },
   {
     timestamps: true,
@@ -50,11 +60,24 @@ const taskSchema = new Schema<Task>(
 );
 
 taskSchema.index({ tenantId: 1, ownerId: 1, createdAt: -1, _id: -1 });
+taskSchema.index(
+  { tenantId: 1, ownerId: 1, createOperationId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { createOperationId: { $type: 'string' } },
+  },
+);
 
 taskSchema.set('toJSON', {
   transform: (_doc, ret) => {
-    const serialized = ret as unknown as { _id: string };
+    const serialized = ret as unknown as {
+      _id: string;
+      createOperationId?: string;
+      createOperationDigest?: string;
+    };
     serialized._id = String(ret._id);
+    delete serialized.createOperationId;
+    delete serialized.createOperationDigest;
     return ret;
   },
 });

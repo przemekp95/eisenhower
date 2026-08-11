@@ -63,6 +63,7 @@ function remoteTask(overrides = {}) {
     locale: 'pl',
     remoteId: resolvedId,
     syncState: 'synced',
+    revision: 0,
     ...overrides,
   };
 }
@@ -99,7 +100,7 @@ afterEach(() => {
 });
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
 
     storage.loadLanguage.mockResolvedValue('pl');
     storage.loadTasks.mockResolvedValue([remoteTask({ id: 'local-1' })]);
@@ -243,6 +244,48 @@ afterEach(() => {
 
     await waitFor(() => expect(tasksApi.fetchRemoteTasks).toHaveBeenCalledTimes(2), { timeout: ASYNC_TIMEOUT });
     await waitFor(() => expect(tasksApi.createRemoteTask).toHaveBeenCalled(), { timeout: ASYNC_TIMEOUT });
+  });
+
+  it('coalesces bootstrap, foreground, network, and manual sync triggers', async () => {
+    let onAppStateChange;
+    let onNetworkStateChange;
+    let resolveRemoteTasks;
+    const appStateSpy = jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
+      onAppStateChange = listener;
+      return { remove: jest.fn() };
+    });
+    mockAddNetworkStateListener.mockImplementation((listener) => {
+      onNetworkStateChange = listener;
+      return { remove: jest.fn() };
+    });
+    storage.loadTasks.mockResolvedValue([{
+      id: 'local-single-flight',
+      title: 'One operation',
+      syncState: 'pending_create',
+    }]);
+    tasksApi.fetchRemoteTasks.mockReturnValue(new Promise((resolve) => {
+      resolveRemoteTasks = resolve;
+    }));
+    tasksApi.createRemoteTask.mockResolvedValue(remoteTask({ title: 'One operation' }));
+
+    const { getByTestId } = render(<App />);
+    await waitFor(() => expect(tasksApi.fetchRemoteTasks).toHaveBeenCalledTimes(1), { timeout: ASYNC_TIMEOUT });
+    await waitFor(() => expect(onAppStateChange).toBeDefined(), { timeout: ASYNC_TIMEOUT });
+    await waitFor(() => expect(onNetworkStateChange).toBeDefined(), { timeout: ASYNC_TIMEOUT });
+
+    fireEvent.press(getByTestId('retry-sync-button'));
+    await act(async () => {
+      onAppStateChange('active');
+      onNetworkStateChange({ isConnected: false, isInternetReachable: false });
+      onNetworkStateChange({ isConnected: true, isInternetReachable: true });
+    });
+    expect(tasksApi.fetchRemoteTasks).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveRemoteTasks([]);
+    });
+    await waitFor(() => expect(tasksApi.createRemoteTask).toHaveBeenCalledTimes(1), { timeout: ASYNC_TIMEOUT });
+    appStateSpy.mockRestore();
   });
 
   it('keeps the fresh server version when the user resolves an update conflict remotely', async () => {
@@ -401,7 +444,8 @@ afterEach(() => {
         urgent: false,
         important: true,
       }),
-      'pl'
+      'pl',
+      'mobile-local-1'
     ), {
       timeout: ASYNC_TIMEOUT,
     });
@@ -450,9 +494,10 @@ afterEach(() => {
         urgent: true,
         important: true,
       }),
-      'pl'
+      'pl',
+      expect.stringMatching(/^mobile-/)
     );
-    expect(tasksApi.deleteRemoteTask).toHaveBeenCalledWith('507f1f77bcf86cd799439012');
+    expect(tasksApi.deleteRemoteTask).toHaveBeenCalledWith('507f1f77bcf86cd799439012', 0);
   });
 
   it('requests quick AI suggestions, toggles remote flags and changes language', async () => {
@@ -474,7 +519,8 @@ afterEach(() => {
       expect(tasksApi.updateRemoteTask).toHaveBeenCalledWith(
         '507f1f77bcf86cd799439011',
         { urgent: false },
-        'pl'
+        'pl',
+        0
       ),
       { timeout: ASYNC_TIMEOUT }
     );
@@ -526,7 +572,8 @@ afterEach(() => {
         urgent: true,
         important: true,
       }),
-      'pl'
+      'pl',
+      expect.stringMatching(/^mobile-/)
     ), {
       timeout: ASYNC_TIMEOUT,
     });
@@ -732,7 +779,8 @@ afterEach(() => {
         title: 'Scanned task',
         important: true,
       }),
-      'pl'
+      'pl',
+      expect.stringMatching(/^mobile-/)
     ), {
       timeout: ASYNC_TIMEOUT,
     });
@@ -885,14 +933,14 @@ afterEach(() => {
     });
   });
 
-  it('falls back through the bootstrap catch when startup throws synchronously', async () => {
+  it('keeps cached state when the initial remote fetch throws synchronously', async () => {
     tasksApi.fetchRemoteTasks.mockImplementationOnce(() => {
       throw new Error('sync bootstrap failure');
     });
 
     const { getByText } = render(<App />);
 
-    await waitFor(() => expect(getByText(getSampleTasks('pl')[0].title)).toBeTruthy(), {
+    await waitFor(() => expect(getByText('Seed task')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
   });
@@ -1096,6 +1144,12 @@ afterEach(() => {
     await waitFor(() => expect(getByText('Offline scan')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
-    expect(getByTestId('sync-pending-ocr-1')).toBeTruthy();
+    expect(storage.saveTasks).toHaveBeenLastCalledWith([
+      expect.objectContaining({
+        title: 'Offline scan',
+        syncState: 'pending_create',
+        clientOperationId: expect.stringMatching(/^mobile-/),
+      }),
+    ]);
   });
 });

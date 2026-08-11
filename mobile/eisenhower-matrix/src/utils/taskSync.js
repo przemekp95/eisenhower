@@ -67,6 +67,14 @@ export function normalizeStoredTask(task, language = 'pl') {
       : TASK_SYNC_STATE.pendingCreate;
   }
 
+  const clientOperationId = syncState === TASK_SYNC_STATE.pendingCreate
+    ? (
+      typeof task?.clientOperationId === 'string' && task.clientOperationId.trim()
+        ? task.clientOperationId.trim()
+        : `mobile-${id.replace(/[^A-Za-z0-9._:-]/g, '_')}`.slice(0, 128)
+    )
+    : null;
+
   return {
     id,
     title: String(task?.title || '').trim(),
@@ -76,7 +84,12 @@ export function normalizeStoredTask(task, language = 'pl') {
     locale: task?.locale || language,
     remoteId,
     syncState,
-    ...(Number.isInteger(task?.revision) ? { revision: task.revision } : {}),
+    ...(clientOperationId ? { clientOperationId } : {}),
+    ...(Number.isInteger(task?.revision)
+      ? { revision: task.revision }
+      : remoteId
+        ? { revision: 0 }
+        : {}),
     ...(task?.syncError === 'conflict' || task?.syncError === 'error'
       ? { syncError: task.syncError }
       : {}),
@@ -106,9 +119,36 @@ export function createPendingTask(language, task, id) {
       locale: language,
       remoteId: null,
       syncState: TASK_SYNC_STATE.pendingCreate,
+      clientOperationId: task.clientOperationId,
     },
     language
   );
+}
+
+export function createClientOperationId() {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  if (uuid) return `mobile-${uuid}`;
+  return `mobile-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
+export function runSingleFlight(inFlightRef, operation) {
+  if (inFlightRef.current) {
+    return inFlightRef.current;
+  }
+  let operationResult;
+  try {
+    operationResult = operation();
+  } catch (error) {
+    operationResult = Promise.reject(error);
+  }
+  const promise = Promise.resolve(operationResult);
+  const trackedPromise = promise.finally(() => {
+      if (inFlightRef.current === trackedPromise) {
+        inFlightRef.current = null;
+      }
+    });
+  inFlightRef.current = trackedPromise;
+  return trackedPromise;
 }
 
 export function markTaskPendingUpdate(task, patch = {}) {
@@ -275,7 +315,11 @@ export async function reconcilePendingTasks({
   for (const task of normalizedCachedTasks.filter((item) => isTaskPendingSync(item))) {
     if (task.syncState === TASK_SYNC_STATE.pendingCreate) {
       try {
-        const createdTask = await createRemoteTask(taskToRemotePayload(task), language);
+        const createdTask = await createRemoteTask(
+          taskToRemotePayload(task),
+          language,
+          task.clientOperationId,
+        );
         resolvedTasks = upsertTask(resolvedTasks, createdTask);
       } catch (error) {
         resolvedTasks = upsertTask(resolvedTasks, markTaskSyncFailed(task, error));
@@ -285,10 +329,15 @@ export async function reconcilePendingTasks({
 
     if (task.syncState === TASK_SYNC_STATE.pendingUpdate) {
       const remoteId = getTaskRemoteId(task);
+      const freshRemote = resolvedTasks.find((candidate) => getTaskRemoteId(candidate) === remoteId);
+      const revision = Number.isInteger(task.revision) ? task.revision : freshRemote?.revision;
       try {
-        const updatedTask = Number.isInteger(task.revision)
-          ? await updateRemoteTask(remoteId, taskToRemotePayload(task), language, task.revision)
-          : await updateRemoteTask(remoteId, taskToRemotePayload(task), language);
+        const updatedTask = await updateRemoteTask(
+          remoteId,
+          taskToRemotePayload(task),
+          language,
+          revision,
+        );
         resolvedTasks = upsertTask(resolvedTasks, updatedTask);
       } catch (error) {
         resolvedTasks = upsertTask(
@@ -303,13 +352,11 @@ export async function reconcilePendingTasks({
 
     if (task.syncState === TASK_SYNC_STATE.pendingDelete) {
       const remoteId = getTaskRemoteId(task);
+      const freshRemote = resolvedTasks.find((candidate) => getTaskRemoteId(candidate) === remoteId);
+      const revision = Number.isInteger(task.revision) ? task.revision : freshRemote?.revision;
 
       try {
-        if (Number.isInteger(task.revision)) {
-          await deleteRemoteTask(remoteId, task.revision);
-        } else {
-          await deleteRemoteTask(remoteId);
-        }
+        await deleteRemoteTask(remoteId, revision);
         resolvedTasks = removeTask(resolvedTasks, task);
       } catch (error) {
         resolvedTasks = upsertTask(

@@ -23,6 +23,11 @@ Feature: Manage tasks in the Eisenhower matrix
     Then the request succeeds with status 200
     And the returned task is in the "Do Now" quadrant
 
+  Scenario: Retry one mobile creation operation safely
+    When I retry creating the task "Retry-safe plan" twice with operation key "mobile-bdd-operation-1"
+    Then the request succeeds with status 200
+    And exactly one task named "Retry-safe plan" exists
+
   Scenario: Delete a task
     Given my task "Remove obsolete note" is in the "Delete" quadrant
     When I delete the task
