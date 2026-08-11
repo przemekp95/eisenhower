@@ -19,6 +19,10 @@ Resolve the repository-wide architecture audit findings without introducing spec
 - Do not modify `master`, deploy, publish, enable gated RAG/MAG/generation flags, or claim live production evidence.
 - Keep independent-human and physical-device gates fail-closed; local and CI evidence do not satisfy them.
 
+### Progress
+
+Independent pre-merge review found and corrected three integration regressions: command-local RAG projection pending state, bounded cursor traversal in the shared web/API and MCP clients, and delayed idempotent create replay after deletion. The latter now retains only a redacted operation tombstone and returns `410` instead of recreating private task data. Focused tests captured each prior red state and passed after the fixes; full exact-candidate verification and CI remain required before promotion.
+
 ---
 
 ## TASK-013: Approve representative retrieval quality gates

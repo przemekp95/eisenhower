@@ -227,6 +227,12 @@ the response exposes `X-Next-Cursor` and an RFC 8288-style `Link` header. In OID
 and delete operations always scope records by both `tenantId` and `ownerId`; the static profile maps
 to the fixed local principal described above.
 
+`POST /tasks` accepts a scoped `Idempotency-Key`. An exact replay returns the original task, while
+reusing the key with another payload returns `409`. Deleting an idempotently created task retains
+only a redacted operation tombstone: later exact replays return
+`410 code=idempotency_result_deleted` and cannot recreate the deleted task or recover its private
+title or description.
+
 - `DOCKER_HUB_USERNAME`: Docker Hub namespace used for images
 - `DOCKER_HUB_TOKEN`: Docker Hub token required for a publishable release and Mikrus deployment
 - `MIKRUS_HOST`: server host (IPv6 is supported)

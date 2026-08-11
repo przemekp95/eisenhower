@@ -13,6 +13,7 @@ import { Task, TaskModel } from '../models/task';
 type PersistedTask = Task & {
   _id: unknown;
   createOperationDigest?: string;
+  deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -42,13 +43,14 @@ function toStoredTask(task: PersistedTask): StoredTask {
 
 export class MongooseTaskRepository implements TaskRepository {
   async listPage(scope: TaskScope, limit: number, cursor?: TaskPageCursor) {
+    const activeScope = { ...scope, deletedAt: { $exists: false } };
     const filter: QueryFilter<Task> = cursor ? {
-      ...scope,
+      ...activeScope,
       $or: [
         { createdAt: { $lt: cursor.createdAt } },
         { createdAt: cursor.createdAt, _id: { $lt: cursor.id } },
       ],
-    } : scope;
+    } : activeScope;
     const page = await TaskModel.find(filter)
       .sort({ createdAt: -1, _id: -1 })
       .limit(limit + 1)
@@ -84,7 +86,7 @@ export class MongooseTaskRepository implements TaskRepository {
       { upsert: true, runValidators: true, setDefaultsOnInsert: true },
     );
     const task = await TaskModel.findOne({ ...scope, createOperationId: operation.id })
-      .select('+createOperationDigest')
+      .select('+createOperationDigest +deletedAt')
       .lean() as PersistedTask | null;
     if (!task) {
       throw new Error('Idempotent task create did not return a task');
@@ -94,6 +96,7 @@ export class MongooseTaskRepository implements TaskRepository {
       task: toStoredTask(task),
       replayed: result.upsertedCount === 0,
       storedPayloadDigest: task.createOperationDigest,
+      operationDeleted: task.deletedAt instanceof Date,
     };
   }
 
@@ -104,7 +107,7 @@ export class MongooseTaskRepository implements TaskRepository {
     patch: Partial<TaskPayload>,
   ) {
     const task = await TaskModel.findOneAndUpdate(
-      { _id: id, ...scope, ...revisionFilter(expectedRevision) },
+      { _id: id, ...scope, deletedAt: { $exists: false }, ...revisionFilter(expectedRevision) },
       { $set: patch, $inc: { revision: 1 } },
       { returnDocument: 'after', runValidators: true },
     );
@@ -112,15 +115,31 @@ export class MongooseTaskRepository implements TaskRepository {
   }
 
   async delete(scope: TaskScope, id: string, expectedRevision: number) {
-    const task = await TaskModel.findOneAndDelete({
+    const filter = {
       _id: id,
       ...scope,
+      deletedAt: { $exists: false },
       ...revisionFilter(expectedRevision),
-    });
+    };
+    const idempotentTask = await TaskModel.findOneAndUpdate(
+      { ...filter, createOperationId: { $type: 'string' } },
+      {
+        $set: {
+          title: '[deleted]',
+          description: '',
+          urgent: false,
+          important: false,
+          deletedAt: new Date(),
+        },
+        $inc: { revision: 1 },
+      },
+      { returnDocument: 'before', runValidators: true },
+    );
+    const task = idempotentTask ?? await TaskModel.findOneAndDelete(filter);
     return task ? toStoredTask(task.toObject() as PersistedTask) : null;
   }
 
   async exists(scope: TaskScope, id: string) {
-    return Boolean(await TaskModel.exists({ _id: id, ...scope }));
+    return Boolean(await TaskModel.exists({ _id: id, ...scope, deletedAt: { $exists: false } }));
   }
 }

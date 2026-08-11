@@ -9,9 +9,10 @@ from eisenhower_mcp.http_client import ApiClientError, EisenhowerApiClient
 
 
 class FakeResponse:
-    def __init__(self, status: int, payload: object) -> None:
+    def __init__(self, status: int, payload: object, headers: dict[str, str] | None = None) -> None:
         self.status = status
         self._payload = json.dumps(payload).encode("utf-8")
+        self.headers = headers or {}
 
     def read(self, _limit: int = -1) -> bytes:
         return self._payload
@@ -95,6 +96,69 @@ class EisenhowerApiClientTest(unittest.TestCase):
         self.assertEqual(request.full_url, "https://api.example.test/tasks")
         self.assertEqual(request.headers["Authorization"], "Bearer secret-token")
         self.assertNotIn("X-tenant-id", request.headers)
+
+    @patch("eisenhower_mcp.http_client.urlopen")
+    def test_list_tasks_follows_encoded_cursors_with_bearer_and_aggregates_pages(self, mocked_open) -> None:
+        mocked_open.side_effect = [
+            FakeResponse(200, [{"_id": "task-1"}], {"X-Next-Cursor": "next cursor/+?"}),
+            FakeResponse(200, [{"_id": "task-2"}]),
+        ]
+        client = EisenhowerApiClient(
+            "https://api.example.test",
+            "https://ai.example.test",
+            bearer_token="secret-token",
+        )
+
+        tasks = client.list_tasks()
+
+        self.assertEqual(tasks, [{"_id": "task-1"}, {"_id": "task-2"}])
+        requests = [call.args[0] for call in mocked_open.call_args_list]
+        self.assertEqual(requests[0].full_url, "https://api.example.test/tasks")
+        self.assertEqual(
+            requests[1].full_url,
+            "https://api.example.test/tasks?cursor=next%20cursor%2F%2B%3F",
+        )
+        self.assertTrue(all(request.headers["Authorization"] == "Bearer secret-token" for request in requests))
+
+    @patch("eisenhower_mcp.http_client.urlopen")
+    def test_list_tasks_validates_every_page_and_rejects_repeated_cursor(self, mocked_open) -> None:
+        client = EisenhowerApiClient("https://api.example.test", "https://ai.example.test")
+        mocked_open.side_effect = [
+            FakeResponse(200, [{"_id": "task-1"}], {"X-Next-Cursor": "page-2"}),
+            FakeResponse(200, {"not": "a list"}),
+        ]
+        with self.assertRaisesRegex(ApiClientError, "invalid response"):
+            client.list_tasks()
+
+        mocked_open.reset_mock()
+        mocked_open.side_effect = [
+            FakeResponse(200, [{"_id": "task-1"}], {"X-Next-Cursor": "same"}),
+            FakeResponse(200, [{"_id": "task-2"}], {"X-Next-Cursor": "same"}),
+        ]
+        with self.assertRaisesRegex(ApiClientError, "cursor"):
+            client.list_tasks()
+
+    @patch("eisenhower_mcp.http_client.urlopen")
+    def test_list_tasks_enforces_page_limit_and_response_size_per_page(self, mocked_open) -> None:
+        client = EisenhowerApiClient(
+            "https://api.example.test",
+            "https://ai.example.test",
+            max_response_bytes=40,
+        )
+        mocked_open.side_effect = [
+            FakeResponse(200, [], {"X-Next-Cursor": f"page-{page + 1}"})
+            for page in range(100)
+        ]
+        with self.assertRaisesRegex(ApiClientError, "page limit"):
+            client.list_tasks()
+
+        mocked_open.reset_mock()
+        mocked_open.side_effect = [
+            FakeResponse(200, [], {"X-Next-Cursor": "page-2"}),
+            FakeResponse(200, [{"payload": "x" * 100}]),
+        ]
+        with self.assertRaisesRegex(ApiClientError, "size limit"):
+            client.list_tasks()
 
     def test_rejects_non_https_remote_api(self) -> None:
         with self.assertRaisesRegex(ValueError, "HTTPS"):
