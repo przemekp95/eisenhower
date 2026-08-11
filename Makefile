@@ -4,7 +4,7 @@ BACKEND_AI_VENV ?= backend-ai/venv
 BACKEND_AI_PYTHON ?= $(BACKEND_AI_VENV)/bin/python
 BACKEND_AI_PIP ?= $(BACKEND_AI_VENV)/bin/pip
 
-.PHONY: setup test test-ai lint lint-ai format format-web format-check format-check-web build audit-production verify dev-web dev-api dev-ai dev-mobile
+.PHONY: setup test test-bdd test-ai lint lint-ai format format-web format-check format-check-web build audit-production verify dev-web dev-api dev-ai dev-mobile
 
 setup:
 	cd backend-node && $(NPM) ci
@@ -15,9 +15,13 @@ setup:
 
 test:
 	cd backend-node && $(NPM) test
+	$(MAKE) test-bdd
 	cd web && $(NPM) test
 	COVERAGE_RCFILE=backend-ai/.coveragerc $(BACKEND_AI_PYTHON) -m pytest backend-ai/tests
 	cd mobile/eisenhower-matrix && $(NPM) test
+
+test-bdd:
+	cd backend-node && $(NPM) run test:bdd
 
 test-ai:
 	COVERAGE_RCFILE=backend-ai/.coveragerc $(BACKEND_AI_PYTHON) -m pytest backend-ai/tests
@@ -55,6 +59,7 @@ verify:
 	$(MAKE) audit-production
 	$(MAKE) lint-ai
 	cd backend-node && $(NPM) run build && $(NPM) run test:coverage
+	$(MAKE) test-bdd
 	cd web && $(NPM) run format:check && $(NPM) run build && $(NPM) run test:coverage && $(NPM) run test:integration
 	COVERAGE_RCFILE=backend-ai/.coveragerc $(BACKEND_AI_PYTHON) -m pytest backend-ai/tests
 	cd mobile/eisenhower-matrix && $(NPM) run test:coverage
