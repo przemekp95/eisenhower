@@ -13,6 +13,14 @@ export class IdempotencyKeyReuseError extends Error {
   }
 }
 
+export class IdempotencyResultDeletedError extends Error {
+  readonly code = 'idempotency_result_deleted';
+
+  constructor() {
+    super('The task created by this idempotency key was deleted');
+  }
+}
+
 function payloadDigest(payload: TaskPayload) {
   return createHash('sha256').update(JSON.stringify({
     title: payload.title,
@@ -39,6 +47,9 @@ export async function createTask(
 
   if (digest && result.storedPayloadDigest !== digest) {
     throw new IdempotencyKeyReuseError();
+  }
+  if (result.operationDeleted) {
+    throw new IdempotencyResultDeletedError();
   }
 
   return result;

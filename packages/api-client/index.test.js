@@ -165,6 +165,70 @@ test('rejects malformed task payloads at the public API boundary', async () => {
   );
 });
 
+test('listTasks follows encoded pagination cursors with bearer auth and aggregates validated pages', async () => {
+  const calls = [];
+  const responses = [
+    jsonResponse([taskFixture({ _id: 'task-1' })], {
+      headers: { get: (name) => name.toLowerCase() === 'x-next-cursor' ? 'next cursor/+?' : null },
+    }),
+    jsonResponse([taskFixture({ _id: 'task-2' })], {
+      headers: { get: () => null },
+    }),
+  ];
+  const api = createTaskApi('https://api.example.com', {
+    accessToken: 'access-token',
+    fetch: async (...args) => {
+      calls.push(args);
+      return responses.shift();
+    },
+  });
+
+  const tasks = await api.listTasks();
+
+  assert.deepEqual(tasks.map((task) => task._id), ['task-1', 'task-2']);
+  assert.equal(calls[0][0], 'https://api.example.com/tasks');
+  assert.equal(calls[1][0], 'https://api.example.com/tasks?cursor=next%20cursor%2F%2B%3F');
+  assert.equal(calls[0][1].headers.Authorization, 'Bearer access-token');
+  assert.equal(calls[1][1].headers.Authorization, 'Bearer access-token');
+});
+
+test('listTasks rejects malformed later pages and repeated cursors', async () => {
+  const page = (payload, cursor) => jsonResponse(payload, {
+    headers: { get: () => cursor },
+  });
+
+  const malformedApi = createTaskApi('https://api.example.com', async () =>
+    malformedApi.calls++ === 0
+      ? page([taskFixture()], 'page-2')
+      : page([taskFixture({ urgent: 'yes' })], null)
+  );
+  malformedApi.calls = 0;
+  await assert.rejects(malformedApi.listTasks(), (error) => error.code === 'invalid_response');
+
+  const responses = [page([taskFixture()], 'same'), page([taskFixture()], 'same')];
+  const repeatedApi = createTaskApi('https://api.example.com', async () => responses.shift());
+  await assert.rejects(
+    repeatedApi.listTasks(),
+    (error) => error.code === 'invalid_response' && /cursor/i.test(error.message)
+  );
+});
+
+test('listTasks enforces a bounded page limit', async () => {
+  let calls = 0;
+  const api = createTaskApi('https://api.example.com', async () => {
+    calls += 1;
+    return jsonResponse([taskFixture({ _id: `task-${calls}` })], {
+      headers: { get: () => `page-${calls + 1}` },
+    });
+  });
+
+  await assert.rejects(
+    api.listTasks(),
+    (error) => error.code === 'invalid_response' && /page limit/i.test(error.message)
+  );
+  assert.ok(calls > 1 && calls < 1000);
+});
+
 test('rejects drifted quadrant semantics at the public AI boundary', async () => {
   const api = createAiApi('https://api.example.com', async () =>
     jsonResponse({

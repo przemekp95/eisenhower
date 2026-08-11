@@ -1,6 +1,10 @@
 import { NextFunction, Request, Response, Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
-import { createTask, IdempotencyKeyReuseError } from '../application/createTask';
+import {
+  createTask,
+  IdempotencyKeyReuseError,
+  IdempotencyResultDeletedError,
+} from '../application/createTask';
 import {
   StoredTask,
   TaskPayload,
@@ -187,6 +191,9 @@ export function createTasksRouter(
     } catch (error) {
       if (error instanceof IdempotencyKeyReuseError) {
         return res.status(409).json({ error: error.message, code: error.code });
+      }
+      if (error instanceof IdempotencyResultDeletedError) {
+        return res.status(410).json({ error: error.message, code: error.code });
       }
       return next(error);
     }
