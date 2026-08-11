@@ -1,6 +1,6 @@
 # Done
 
-## TASK-024: Add executable BDD for task behavior
+## TASK-029: Add executable BDD for task behavior
 **Priority:** P2 | **Tags:** testing, bdd, cucumber, backend-node
 
 Add a real executable Gherkin workflow for the user-visible task lifecycle without relabeling ordinary Jest tests as BDD.
@@ -14,7 +14,31 @@ Add a real executable Gherkin workflow for the user-visible task lifecycle witho
 
 ### Outcome
 
-Added a Node 20/24-compatible Cucumber 12.9 executable acceptance layer with typed TypeScript steps driving the real Express app through Supertest and isolated MongoDB. Fifteen Gherkin scenarios and 59 steps now cover all four canonical quadrants, task movement/deletion, tenant isolation, missing and invalid bearer credentials, trusted and untrusted browser origins, title limits, unexpected-field rejection, and missing-resource behavior. The harness pins and restores auth/OIDC/CORS environment state and passed with deliberately hostile inherited variables. Added `test:bdd` and `make test-bdd`, included BDD in root test/verify and the existing backend CI job, and documented that this is a bounded living-behavior slice rather than repository-wide BDD, DDD, CQRS, hexagonal architecture, or historical TDD evidence. Fresh `make verify` passed production audits, Node 66 tests at 100% plus BDD 15/15, web 135 at 100% plus 2 integration tests, backend AI 414 with 6 opt-in skips at 89.49% coverage, and mobile 95 tests.
+Added a Node 20/24-compatible Cucumber 12.9 executable acceptance layer with typed TypeScript steps driving the real Express app through Supertest and isolated MongoDB. Fifteen Gherkin scenarios and 59 steps now cover all four canonical quadrants, task movement/deletion, tenant isolation, missing and invalid bearer credentials, trusted and untrusted browser origins, title limits, unexpected-field rejection, and missing-resource behavior. The harness pins and restores auth/OIDC/CORS environment state and passed with deliberately hostile inherited variables. Added `test:bdd` and `make test-bdd`, included BDD in root test/verify and the existing backend CI job, and documented that this is a bounded living-behavior slice rather than repository-wide BDD, DDD, CQRS, hexagonal architecture, or historical TDD evidence. The pre-integration `make verify` passed production audits, Node 66 tests at 100% plus BDD 15/15, web 135 at 100% plus 2 integration tests, backend AI 414 with 6 opt-in skips at 89.49% coverage, and mobile 95 tests; the package must be reverified after integrating current `origin/dev`.
+
+---
+
+## TASK-024: Harden supported task runtime and client reliability contracts
+**Priority:** P0 | **Tags:** production, auth, tasks, web, mobile, reliability
+
+Implemented the safely decidable engineering and functional remediations from the fresh read-only audit without deploying, publishing, weakening gates, or implying multi-user production readiness.
+
+### Plan
+
+- Prove and fix the exact Mikrus static-auth runtime contract and Node AI readiness timeout behavior.
+- Preserve failed web drafts and accurate partial import/feedback behavior; split user/admin credentials, add logout, OCR review/consent, destructive confirmations, and accessible interaction contracts.
+- Add mobile reconnect/retry, honest sync states, logout, OCR review/consent, destructive confirmations, and regression coverage.
+- Enforce owner-scoped OIDC task access, optimistic concurrency, backward-compatible pagination, and a supporting database index.
+- Bound or renew experimental job leases, align monitoring with the real topology, and add focused multi-worker/alert coverage.
+- Record strict red-green evidence, run focused checks, full `make verify`, Playwright E2E, Compose/runtime smoke, and document architecture/security/methodology conclusions.
+
+### Outcome
+
+Mikrus now renders and boots the supported static single-tenant contract, while Node readiness uses `/health/ready` with a bounded abort timeout. OIDC task reads and writes are owner-scoped inside the tenant; revision ETags, optional `If-Match` conflicts, cursor pagination and the compound owner/sort index preserve legacy clients while updated web/mobile clients use guarded writes. Web and mobile now separate access/admin credentials, retain failed drafts and pending work, expose logout/recredential, provide editable/selected OCR review with independent feedback consent, report partial persistence honestly, localize changed accessibility surfaces, confirm destructive actions and distinguish quadrant Delete from physical deletion. Playwright now includes a WCAG A/AA axe gate on desktop and mobile. Mobile additionally retries on refresh, foreground and network recovery, and exposes explicit conflict resolution against the fresh server revision.
+
+The experimental SQLite worker renews long leases and durable heartbeats, refuses acknowledgement after renewal loss, and has multi-worker coverage. Prometheus now scrapes the real optional inference target and gates inference/worker alerts on configured runtimes; `promtool` validated the config and all 9 rules. Schedule reminders, Delegate workflow, lifecycle states and RAG/camera parity remain separate TASK-025 through TASK-028 product decisions.
+
+TDD evidence was recorded from failing contracts for Compose boot, readiness timeout/unready, owner isolation/concurrency/pagination, web/mobile mutations and OCR, reconnect/conflicts, worker lease/heartbeat and topology-gated alerts, followed by focused green runs. Final local verification: `make verify` passed Node 87/87 at 100% coverage, web 150/150 at 100% plus 2 integration tests, backend AI 415 passed/7 skipped at 89.40%, and mobile 115/115 above every coverage threshold. Playwright passed 6/6 desktop/mobile checks; the exact rendered Mikrus environment passed 19 focused deployment/readiness tests and the Node production config loader; system `pytest 7.4.4` is installed. No deployment, public runtime, physical-device, live inference, n8n/job/webhook production, commit, push or PR evidence is claimed.
 
 ---
 

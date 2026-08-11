@@ -1,4 +1,8 @@
 from datetime import datetime, timedelta, timezone
+from threading import Event, Thread
+from time import sleep
+
+import pytest
 
 from app.job_worker import JobWorker, PermanentJobError
 from app.jobs import SqliteJobQueue
@@ -71,3 +75,51 @@ def test_expired_worker_lease_can_be_reclaimed(tmp_path):
   reclaimed = queue.claim_next("worker-b", now=now + timedelta(seconds=11))
   assert reclaimed.job_id == queued.job_id
   assert reclaimed.attempts == 2
+
+
+def test_long_handler_renews_lease_so_second_worker_cannot_duplicate_it(tmp_path):
+  queue = SqliteJobQueue(tmp_path / "jobs.sqlite3")
+  queued = queue.enqueue("event-long", "rag.upsert", {})
+  entered = Event()
+  release = Event()
+  calls = []
+
+  def slow_handler(_payload):
+    calls.append("worker-a")
+    entered.set()
+    assert release.wait(3)
+
+  worker = JobWorker(
+    queue,
+    {"rag.upsert": slow_handler},
+    lease_seconds=1,
+    lease_renewal_seconds=0.1,
+  )
+  thread = Thread(target=lambda: worker.run_once(worker_id="worker-a"), daemon=True)
+  thread.start()
+  assert entered.wait(1)
+  sleep(1.2)
+
+  assert queue.claim_next("worker-b", lease_seconds=1) is None
+  heartbeat_age = queue.latest_worker_heartbeat_age_seconds()
+  assert heartbeat_age is not None
+  assert heartbeat_age < 0.5
+  release.set()
+  thread.join(timeout=2)
+
+  assert calls == ["worker-a"]
+  assert queue.get(queued.job_id).status == "completed"
+
+
+def test_lease_renewal_and_worker_heartbeat_are_owned_and_observable(tmp_path):
+  queue = SqliteJobQueue(tmp_path / "jobs.sqlite3")
+  queued = queue.enqueue("event-heartbeat", "rag.upsert", {})
+  now = datetime.now(timezone.utc)
+  queue.claim_next("worker-a", now=now, lease_seconds=10)
+
+  queue.renew_lease(queued.job_id, "worker-a", now=now + timedelta(seconds=5), lease_seconds=10)
+  with pytest.raises(RuntimeError, match="no longer owned"):
+    queue.renew_lease(queued.job_id, "worker-b", now=now + timedelta(seconds=6))
+
+  queue.record_worker_heartbeat("worker-a", now=now)
+  assert queue.latest_worker_heartbeat_age_seconds(now=now + timedelta(seconds=7)) == 7

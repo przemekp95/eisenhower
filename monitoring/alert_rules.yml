@@ -50,10 +50,22 @@ groups:
           severity: critical
         annotations:
           summary: "Qdrant is unavailable"
-      - alert: VllmUnavailable
-        expr: up{job="vllm"} == 0
+      - alert: PrivateInferenceUnavailable
+        expr: >-
+          (absent(up{job="inference"}) or up{job="inference"} == 0)
+          and on() eisenhower_generation_circuit_state{state!="disabled"} == 1
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "vLLM is unavailable; classifier fallback should be active"
+          summary: "Private inference is unavailable; classifier fallback should be active"
+      - alert: EisenhowerRagWorkerStale
+        expr: >-
+          (absent(eisenhower_job_worker_heartbeat_age_seconds)
+          or eisenhower_job_worker_heartbeat_age_seconds > 90)
+          and on() eisenhower_job_queue_enabled == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RAG worker heartbeat is missing or stale"

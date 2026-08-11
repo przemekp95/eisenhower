@@ -72,6 +72,9 @@ describe('app middleware', () => {
 
     expect(allowed.headers['access-control-allow-origin']).toBe('https://tasks.example.com');
     expect(allowed.headers['access-control-allow-headers']).toContain('Authorization');
+    expect(allowed.headers['access-control-allow-headers']).toContain('If-Match');
+    expect(allowed.headers['access-control-expose-headers']).toContain('ETag');
+    expect(allowed.headers['access-control-expose-headers']).toContain('X-Next-Cursor');
     expect(rejected.headers['access-control-allow-origin']).toBeUndefined();
   });
 

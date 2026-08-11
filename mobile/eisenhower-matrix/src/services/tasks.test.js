@@ -112,6 +112,42 @@ describe('tasks service', () => {
     });
   });
 
+  it('preserves revisions and sends If-Match for conflict-safe mutations', async () => {
+    global.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          _id: '507f1f77bcf86cd799439011',
+          title: 'Updated',
+          urgent: true,
+          important: false,
+          revision: 4,
+        }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 204, json: async () => null });
+
+    await expect(
+      updateRemoteTask('507f1f77bcf86cd799439011', { urgent: true }, 'pl', 3)
+    ).resolves.toMatchObject({ revision: 4 });
+    await deleteRemoteTask('507f1f77bcf86cd799439011', 4);
+
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      `${mobileConfig.apiUrl}/tasks/507f1f77bcf86cd799439011`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'If-Match': '"3"' }),
+      })
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      `${mobileConfig.apiUrl}/tasks/507f1f77bcf86cd799439011`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'If-Match': '"4"' }),
+      })
+    );
+  });
+
   it('surfaces backend errors', async () => {
     global.fetch.mockResolvedValue({
       ok: false,
@@ -167,5 +203,34 @@ describe('tasks service', () => {
       remoteId: '507f1f77bcf86cd799439015',
       syncState: 'synced',
     });
+  });
+
+  it('uses the default locale for list and create calls', async () => {
+    const payload = {
+      id: '507f1f77bcf86cd799439016',
+      title: 'Default locale',
+      urgent: false,
+      important: true,
+    };
+    global.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => [payload],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        headers: { get: () => 'application/json' },
+        json: async () => payload,
+      });
+
+    await expect(fetchRemoteTasks()).resolves.toEqual([
+      expect.objectContaining({ locale: 'pl' }),
+    ]);
+    await expect(createRemoteTask({ title: 'Default locale' })).resolves.toEqual(
+      expect.objectContaining({ locale: 'pl' })
+    );
   });
 });

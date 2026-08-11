@@ -3,6 +3,7 @@ export const TASK_SYNC_STATE = {
   pendingCreate: 'pending_create',
   pendingUpdate: 'pending_update',
   pendingDelete: 'pending_delete',
+  conflict: 'conflict',
   localSeed: 'local_seed',
 };
 
@@ -75,6 +76,14 @@ export function normalizeStoredTask(task, language = 'pl') {
     locale: task?.locale || language,
     remoteId,
     syncState,
+    ...(Number.isInteger(task?.revision) ? { revision: task.revision } : {}),
+    ...(task?.syncError === 'conflict' || task?.syncError === 'error'
+      ? { syncError: task.syncError }
+      : {}),
+    ...(task?.pendingIntent && typeof task.pendingIntent === 'object'
+      ? { pendingIntent: task.pendingIntent }
+      : {}),
+    ...(task?.remoteMissing === true ? { remoteMissing: true } : {}),
   };
 }
 
@@ -114,6 +123,8 @@ export function markTaskPendingUpdate(task, patch = {}) {
       ...task,
       ...patch,
       syncState: nextSyncState,
+      syncError: undefined,
+      pendingIntent: undefined,
     },
     task.locale
   );
@@ -128,9 +139,70 @@ export function markTaskPendingDelete(task) {
     {
       ...task,
       syncState: TASK_SYNC_STATE.pendingDelete,
+      syncError: undefined,
+      pendingIntent: undefined,
     },
     task.locale
   );
+}
+
+export function markTaskSyncFailed(task, error) {
+  const status = Number(error?.status || error?.response?.status || 0);
+  return {
+    ...task,
+    syncError: status === 409 || status === 412 ? 'conflict' : 'error',
+  };
+}
+
+function isRevisionConflict(error) {
+  const status = Number(error?.status || error?.response?.status || 0);
+  return status === 409 || status === 412;
+}
+
+function createConflictTask(resolvedTasks, localTask, type) {
+  const remoteId = getTaskRemoteId(localTask);
+  const freshRemote = resolvedTasks.find((task) => getTaskRemoteId(task) === remoteId);
+  const visibleTask = freshRemote || localTask;
+
+  return {
+    ...visibleTask,
+    syncState: TASK_SYNC_STATE.conflict,
+    syncError: 'conflict',
+    pendingIntent: {
+      type,
+      baseRevision: localTask.revision,
+      ...(type === 'update' ? { payload: taskToRemotePayload(localTask) } : {}),
+    },
+  };
+}
+
+export function resolveTaskConflict(task, resolution) {
+  if (task?.syncState !== TASK_SYNC_STATE.conflict || !task.pendingIntent) {
+    return task;
+  }
+
+  const { pendingIntent: intent, syncError: _syncError, ...freshRemote } = task;
+
+  if (resolution === 'remote') {
+    if (task.remoteMissing) {
+      return null;
+    }
+    return { ...freshRemote, syncState: TASK_SYNC_STATE.synced };
+  }
+
+  if (resolution === 'local' && intent.type === 'update') {
+    return {
+      ...freshRemote,
+      ...intent.payload,
+      syncState: TASK_SYNC_STATE.pendingUpdate,
+    };
+  }
+
+  if (resolution === 'local' && intent.type === 'delete') {
+    return { ...freshRemote, syncState: TASK_SYNC_STATE.pendingDelete };
+  }
+
+  return task;
 }
 
 export function taskToRemotePayload(task) {
@@ -184,14 +256,29 @@ export async function reconcilePendingTasks({
   deleteRemoteTask,
 }) {
   let resolvedTasks = normalizeStoredTasks(remoteTasks, language);
+  const normalizedCachedTasks = normalizeStoredTasks(cachedTasks, language);
 
-  for (const task of normalizeStoredTasks(cachedTasks, language).filter((item) => isTaskPendingSync(item))) {
+  for (const conflictTask of normalizedCachedTasks.filter(
+    (task) => task.syncState === TASK_SYNC_STATE.conflict
+  )) {
+    const remoteId = getTaskRemoteId(conflictTask);
+    const freshRemote = resolvedTasks.find((task) => getTaskRemoteId(task) === remoteId);
+    resolvedTasks = upsertTask(resolvedTasks, {
+      ...(freshRemote || conflictTask),
+      syncState: TASK_SYNC_STATE.conflict,
+      syncError: 'conflict',
+      pendingIntent: conflictTask.pendingIntent,
+      ...(!freshRemote ? { remoteMissing: true } : {}),
+    });
+  }
+
+  for (const task of normalizedCachedTasks.filter((item) => isTaskPendingSync(item))) {
     if (task.syncState === TASK_SYNC_STATE.pendingCreate) {
       try {
         const createdTask = await createRemoteTask(taskToRemotePayload(task), language);
         resolvedTasks = upsertTask(resolvedTasks, createdTask);
-      } catch {
-        resolvedTasks = upsertTask(resolvedTasks, task);
+      } catch (error) {
+        resolvedTasks = upsertTask(resolvedTasks, markTaskSyncFailed(task, error));
       }
       continue;
     }
@@ -199,10 +286,17 @@ export async function reconcilePendingTasks({
     if (task.syncState === TASK_SYNC_STATE.pendingUpdate) {
       const remoteId = getTaskRemoteId(task);
       try {
-        const updatedTask = await updateRemoteTask(remoteId, taskToRemotePayload(task), language);
+        const updatedTask = Number.isInteger(task.revision)
+          ? await updateRemoteTask(remoteId, taskToRemotePayload(task), language, task.revision)
+          : await updateRemoteTask(remoteId, taskToRemotePayload(task), language);
         resolvedTasks = upsertTask(resolvedTasks, updatedTask);
-      } catch {
-        resolvedTasks = upsertTask(resolvedTasks, task);
+      } catch (error) {
+        resolvedTasks = upsertTask(
+          resolvedTasks,
+          isRevisionConflict(error)
+            ? createConflictTask(resolvedTasks, task, 'update')
+            : markTaskSyncFailed(task, error)
+        );
       }
       continue;
     }
@@ -210,12 +304,20 @@ export async function reconcilePendingTasks({
     if (task.syncState === TASK_SYNC_STATE.pendingDelete) {
       const remoteId = getTaskRemoteId(task);
 
-      resolvedTasks = removeTask(resolvedTasks, task);
-
       try {
-        await deleteRemoteTask(remoteId);
-      } catch {
-        resolvedTasks = upsertTask(resolvedTasks, task);
+        if (Number.isInteger(task.revision)) {
+          await deleteRemoteTask(remoteId, task.revision);
+        } else {
+          await deleteRemoteTask(remoteId);
+        }
+        resolvedTasks = removeTask(resolvedTasks, task);
+      } catch (error) {
+        resolvedTasks = upsertTask(
+          resolvedTasks,
+          isRevisionConflict(error)
+            ? createConflictTask(resolvedTasks, task, 'delete')
+            : markTaskSyncFailed(task, error)
+        );
       }
     }
   }
@@ -224,5 +326,7 @@ export async function reconcilePendingTasks({
 }
 
 export function hasPendingTasks(tasks) {
-  return tasks.some((task) => isTaskPendingSync(task));
+  return tasks.some(
+    (task) => isTaskPendingSync(task) || task?.syncState === TASK_SYNC_STATE.conflict
+  );
 }

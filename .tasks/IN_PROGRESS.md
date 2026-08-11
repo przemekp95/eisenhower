@@ -1,9 +1,9 @@
 # In Progress
 
-## TASK-025: Promote executable BDD to green dev
+## TASK-030: Promote executable BDD to green dev
 **Priority:** P1 | **Tags:** bdd, delivery, dev, ci
 
-Publish the completed TASK-024 BDD package through a pull request to `dev`, require every repository check to pass, merge only after green CI, and verify the resulting remote `dev` commit. Do not modify `master` or deploy production.
+Publish the completed TASK-029 BDD package through a pull request to `dev`, require every repository check to pass, merge only after green CI, and verify the resulting remote `dev` commit. Do not modify `master` or deploy production.
 
 ### Plan
 

@@ -1,8 +1,10 @@
 # Completion log
 
-2026-08-11 — TASK-024: Expanded executable BDD to 15 scenarios/59 steps for task behavior, bearer and browser-origin protection, validation and environment isolation; the hostile-env check and full `make verify` gate passed.
+2026-08-11 — TASK-029: Expanded executable BDD to 15 scenarios/59 steps for task behavior, bearer and browser-origin protection, validation and environment isolation; the hostile-env check and pre-integration full `make verify` gate passed.
 
-2026-08-11 — TASK-024: Added executable Cucumber/Gherkin BDD for the four task quadrants, lifecycle and tenant isolation; 7 scenarios/37 steps and the full `make verify` gate passed, with the claim explicitly bounded to this acceptance slice.
+2026-08-11 — TASK-029: Added executable Cucumber/Gherkin BDD for the four task quadrants, lifecycle and tenant isolation; 7 scenarios/37 steps and the full `make verify` gate passed, with the claim explicitly bounded to this acceptance slice.
+
+2026-08-11 — TASK-024: Hardened the supported static Mikrus runtime, owner-scoped/versioned task API, web/mobile mutation, OCR, auth, reconnect, conflict, accessibility and destructive-action contracts plus experimental lease/monitoring safety; full `make verify`, 6 Playwright checks, Compose runtime smoke and `promtool` passed locally without deployment or publication.
 
 2026-08-11 — TASK-022: Added the vendor/location-neutral private OpenAI-compatible generation boundary, typed fallback/circuit observability, honest runtime detection and disabled NVIDIA/AMD profiles; full `make verify` passed while all live GPU/model/performance/deployment gates remain open.
 

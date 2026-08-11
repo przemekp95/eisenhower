@@ -36,4 +36,17 @@ describe('in-memory credentials', () => {
     expect(getAdminToken()).toBeNull();
     expect(listener).toHaveBeenCalledTimes(2);
   });
+
+  it('notifies subscribers when both credentials are cleared together or admin is cleared', () => {
+    const listener = jest.fn();
+    const unsubscribe = subscribeToApiToken(listener);
+
+    setCredentials(null, undefined);
+    clearAdminToken();
+
+    expect(getApiToken()).toBeNull();
+    expect(getAdminToken()).toBeNull();
+    expect(listener).toHaveBeenCalledTimes(2);
+    unsubscribe();
+  });
 });

@@ -225,10 +225,13 @@ function createTaskApi(baseUrl, optionsOrFetch) {
         errorCode: 'task_request_failed',
       });
     },
-    async updateTask(id, patch) {
+    async updateTask(id, patch, revision) {
+      const revisionHeaders = Number.isInteger(revision) && revision >= 0
+        ? { 'If-Match': `"${revision}"` }
+        : {};
       const response = await request(buildUrl(baseUrl, `${TASK_API_PATHS.tasks}/${encodeURIComponent(id)}`), {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...revisionHeaders },
         body: JSON.stringify(toTaskPatchDto(patch)),
       });
       return readJson(response, {
@@ -236,9 +239,13 @@ function createTaskApi(baseUrl, optionsOrFetch) {
         errorCode: 'task_request_failed',
       });
     },
-    async deleteTask(id) {
+    async deleteTask(id, revision) {
+      const revisionHeaders = Number.isInteger(revision) && revision >= 0
+        ? { 'If-Match': `"${revision}"` }
+        : {};
       const response = await request(buildUrl(baseUrl, `${TASK_API_PATHS.tasks}/${encodeURIComponent(id)}`), {
         method: 'DELETE',
+        headers: revisionHeaders,
       });
       return readJson(response, {
         defaultError: 'Task request failed',

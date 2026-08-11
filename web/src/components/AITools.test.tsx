@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AITools from './AITools';
 import { LanguageProvider } from '../i18n/LanguageContext';
 import * as api from '../services/api';
+import { clearAdminToken, setAdminToken } from '../authSession';
 
 jest.mock('../services/api');
 
@@ -50,6 +51,7 @@ function ocrPayload(count: number) {
 describe('AITools', () => {
   beforeEach(() => {
     localStorage.setItem('eisenhower-language', 'en');
+    setAdminToken('test-admin-token');
     mockedApi.analyzeTask.mockResolvedValue({
       task: 'urgent roadmap',
       langchain_analysis: {
@@ -134,6 +136,23 @@ describe('AITools', () => {
     });
   });
 
+  afterEach(() => clearAdminToken());
+
+  it('requests the admin credential only after entering management and allows recredentialing', () => {
+    clearAdminToken();
+    renderTools();
+
+    expect(screen.queryByLabelText('AI administrator token')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
+    fireEvent.change(screen.getByLabelText('AI administrator token'), {
+      target: { value: 'admin-only' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Unlock management' }));
+    expect(screen.getByRole('button', { name: 'Change administrator token' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Change administrator token' }));
+    expect(screen.getByLabelText('AI administrator token')).toBeInTheDocument();
+  });
+
   it('runs advanced analysis', async () => {
     renderTools();
 
@@ -157,6 +176,37 @@ describe('AITools', () => {
     expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'ai-tab-grounded');
     fireEvent.click(screen.getByRole('button', { name: 'Run grounded analysis' }));
     await waitFor(() => expect(screen.getByText('Fallback')).toBeInTheDocument());
+  });
+
+  it('supports arrow-key tab navigation in both directions', () => {
+    renderTools();
+    const advanced = screen.getByRole('tab', { name: 'Advanced analysis' });
+    const grounded = screen.getByRole('tab', { name: 'Grounded RAG' });
+
+    fireEvent.keyDown(advanced, { key: 'Enter' });
+    expect(advanced).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(advanced, { key: 'ArrowRight' });
+    expect(grounded).toHaveAttribute('aria-selected', 'true');
+    expect(grounded).toHaveFocus();
+    fireEvent.keyDown(grounded, { key: 'ArrowLeft' });
+    expect(advanced).toHaveAttribute('aria-selected', 'true');
+    expect(advanced).toHaveFocus();
+  });
+
+  it('localizes the deferred administrator credential gate', () => {
+    localStorage.setItem('eisenhower-language', 'pl');
+    clearAdminToken();
+    renderTools();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Zarządzanie' }));
+    expect(screen.getByText('Dostęp administracyjny')).toBeInTheDocument();
+    expect(screen.getByLabelText('Token administratora AI')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Odblokuj zarządzanie' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Token administratora AI'), {
+      target: { value: 'polski-admin' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Odblokuj zarządzanie' }));
+    expect(screen.getByRole('button', { name: 'Zmień token administratora' })).toBeInTheDocument();
   });
 
   it('focuses the close action, traps focus, and restores the opener', () => {
@@ -337,9 +387,8 @@ describe('AITools', () => {
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [file] },
     });
-    await waitFor(() =>
-      expect(screen.getByText(/Extracted 1 task from tasks.txt/i)).toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.getByDisplayValue('urgent outage')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
     await waitFor(() => expect(onOCRTasksExtracted).toHaveBeenCalledTimes(1));
     expect(screen.getByText(/OCR added 1 task to the matrix/i)).toBeInTheDocument();
   });
@@ -356,10 +405,9 @@ describe('AITools', () => {
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [file] },
     });
-
-    await waitFor(() =>
-      expect(screen.getByText(/OCR added 1 task to the matrix/i)).toBeInTheDocument()
-    );
+    await screen.findByDisplayValue('urgent outage');
+    fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
+    await waitFor(() => expect(screen.getByText(/Persisted: 0. Failed: 1/i)).toBeInTheDocument());
   });
 
   it('uses the plural English OCR import summary', async () => {
@@ -372,7 +420,8 @@ describe('AITools', () => {
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [file] },
     });
-
+    await screen.findByDisplayValue('task 1');
+    fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
     await waitFor(() =>
       expect(screen.getByText(/OCR added 3 tasks to the matrix/i)).toBeInTheDocument()
     );
@@ -389,7 +438,8 @@ describe('AITools', () => {
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [file] },
     });
-
+    await screen.findByDisplayValue('task 1');
+    fireEvent.click(screen.getByRole('button', { name: 'Importuj wybrane' }));
     await waitFor(() =>
       expect(screen.getByText(/OCR dodał 1 zadanie do macierzy/i)).toBeInTheDocument()
     );
@@ -406,7 +456,8 @@ describe('AITools', () => {
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [file] },
     });
-
+    await screen.findByDisplayValue('task 1');
+    fireEvent.click(screen.getByRole('button', { name: 'Importuj wybrane' }));
     await waitFor(() =>
       expect(screen.getByText(/OCR dodał 2 zadania do macierzy/i)).toBeInTheDocument()
     );
@@ -423,7 +474,8 @@ describe('AITools', () => {
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [file] },
     });
-
+    await screen.findByDisplayValue('task 1');
+    fireEvent.click(screen.getByRole('button', { name: 'Importuj wybrane' }));
     await waitFor(() =>
       expect(screen.getByText(/OCR dodał 5 zadań do macierzy/i)).toBeInTheDocument()
     );
@@ -440,7 +492,8 @@ describe('AITools', () => {
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [file] },
     });
-
+    await screen.findByDisplayValue('task 1');
+    fireEvent.click(screen.getByRole('button', { name: 'Importuj wybrane' }));
     await waitFor(() =>
       expect(screen.getByText(/OCR dodał 12 zadań do macierzy/i)).toBeInTheDocument()
     );
@@ -474,6 +527,7 @@ describe('AITools', () => {
     await waitFor(() => expect(mockedApi.retrainModel).toHaveBeenCalledWith(true));
 
     fireEvent.click(screen.getByText(/Clear training data/i));
+    fireEvent.click(screen.getByText(/Confirm clearing training data/i));
     await waitFor(() => expect(mockedApi.clearTrainingData).toHaveBeenCalledWith(true));
 
     fireEvent.click(screen.getByText(/Load examples/i));

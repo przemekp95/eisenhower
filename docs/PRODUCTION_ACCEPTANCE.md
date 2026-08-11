@@ -10,7 +10,9 @@ The candidate is locally acceptable only when all of the following pass from a c
 
 - `make verify`, including production dependency policy, builds, formatting, unit tests, integration tests and coverage gates.
 - `cd web && npm run test:e2e` against the isolated real Node/Mongo test stack.
-- `docker compose config --quiet` and the equivalent Mikrus Compose validation with all required variables supplied.
+- `docker compose config --quiet` and a Mikrus runtime-config smoke that parses the exactly rendered
+  `api-service` environment and executes the Node configuration loader against it. Plain Compose
+  interpolation alone is insufficient because it does not prove that production authentication can boot.
 - an Expo Android export and a native APK build from a disposable copy of the mobile project;
 - the production-signing path is exercised with a disposable non-debug certificate, while the real production certificate remains an external release gate.
 - `git diff --check`.
@@ -22,6 +24,16 @@ Security behavior must also be covered by executable tests:
 - unsafe browser requests from an untrusted `Origin` receive `403`;
 - CORS uses an explicit production allowlist and never enables credentials;
 - credentials are entered at runtime and are not persisted or embedded in web/mobile bundles.
+
+The current Mikrus Compose profile is intentionally static single-tenant: it must render
+`NODE_ENV=production`, `AUTH_MODE=static`, a strong `EISENHOWER_API_TOKEN`, and the production CORS
+allowlist. It maps all task access to `local/local-user`; it is not evidence of OIDC or multi-user
+production. An OIDC candidate additionally requires negative tests proving that two subjects in one
+tenant cannot list, update, or delete one another's tasks.
+
+Task-write acceptance includes the additive `ETag`/`If-Match` contract: a stale conditional write
+returns `412` without overwriting the stored revision. Cursor pagination must preserve the legacy
+array response for existing clients and use the compound owner/sort index.
 
 ## 2. CI candidate
 

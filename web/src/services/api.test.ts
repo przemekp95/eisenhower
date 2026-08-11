@@ -72,7 +72,7 @@ describe('api service', () => {
     expect((global.fetch as jest.Mock).mock.calls[1][1]?.headers?.Authorization).toBeUndefined();
   });
 
-  it('returns to the credential gate after rejected administrator credentials', async () => {
+  it('clears only the admin credential after rejected administrator credentials', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: false,
       status: 403,
@@ -81,7 +81,7 @@ describe('api service', () => {
 
     await expect(getTrainingStats()).rejects.toThrow('Administrator access required');
 
-    expect(getApiToken()).toBeNull();
+    expect(getApiToken()).toBe('runtime-only-test-token');
     expect(getAdminToken()).toBeNull();
   });
 
@@ -97,14 +97,14 @@ describe('api service', () => {
 
     await getTasks();
     await createTask({ title: 'Task', description: '', urgent: false, important: false });
-    await updateTask('1', { urgent: true });
+    await updateTask('1', { urgent: true }, 3);
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       status: 204,
       headers: new Headers(),
       json: async () => undefined,
     });
-    await deleteTask('1');
+    await deleteTask('1', 4);
 
     expect(global.fetch).toHaveBeenCalledWith(
       `${runtimeConfig.apiUrl}/tasks`,
@@ -118,7 +118,17 @@ describe('api service', () => {
     );
     expect(global.fetch).toHaveBeenCalledWith(
       `${runtimeConfig.apiUrl}/tasks/1`,
-      expect.objectContaining({ method: 'PUT' })
+      expect.objectContaining({
+        method: 'PUT',
+        headers: expect.objectContaining({ 'If-Match': '"3"' }),
+      })
+    );
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${runtimeConfig.apiUrl}/tasks/1`,
+      expect.objectContaining({
+        method: 'DELETE',
+        headers: expect.objectContaining({ 'If-Match': '"4"' }),
+      })
     );
   });
 

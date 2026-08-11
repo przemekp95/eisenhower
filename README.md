@@ -203,6 +203,30 @@ The integration suite renders the React app in JSDOM, but talks to a real Expres
 
 A successful `CI` push run on `master` triggers `release.yml`, which builds immutable commit-SHA images and can deploy them to Mikrus over SSH when secrets are configured.
 
+The existing `deploy/mikrus/docker-compose.yml` topology deliberately runs `backend-node` with
+`AUTH_MODE=static` and the shared `EISENHOWER_API_TOKEN`. It is a static, single-tenant deployment:
+the authenticated principal is always `tenantId=local`, `ownerId=local-user`. This profile is not
+OIDC, does not establish per-person accounts, and must not be described as multi-user production.
+An OIDC deployment must instead supply the issuer, audience and same-origin HTTPS JWKS settings and
+isolate every task by both the authenticated tenant and subject.
+
+Node readiness calls the AI service's `/health/ready` endpoint with a bounded timeout. The Mikrus
+API container healthcheck also uses `/health/ready`, so liveness alone cannot admit a container whose
+MongoDB or AI dependency is unready.
+
+### Task HTTP concurrency and pagination
+
+Task responses expose a numeric `revision` and an `ETag` containing that revision. Updated clients
+can send the received ETag in `If-Match` on `PUT /tasks/:id` or `DELETE /tasks/:id`; a stale revision
+returns `412` with `code=task_revision_conflict` and does not mutate the task. For compatibility,
+legacy requests without `If-Match` remain accepted while clients migrate to conditional writes.
+
+`GET /tasks` still returns the historical JSON array. Optional `limit` (1-200) and opaque `cursor`
+query parameters add cursor pagination without changing that body shape. When another page exists,
+the response exposes `X-Next-Cursor` and an RFC 8288-style `Link` header. In OIDC mode list, update
+and delete operations always scope records by both `tenantId` and `ownerId`; the static profile maps
+to the fixed local principal described above.
+
 - `DOCKER_HUB_USERNAME`: Docker Hub namespace used for images
 - `DOCKER_HUB_TOKEN`: Docker Hub token required for a publishable release and Mikrus deployment
 - `MIKRUS_HOST`: server host (IPv6 is supported)

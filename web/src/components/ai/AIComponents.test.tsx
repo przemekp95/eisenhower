@@ -15,6 +15,26 @@ function renderWithLanguage(ui: React.ReactElement) {
   return render(<LanguageProvider>{ui}</LanguageProvider>);
 }
 
+function reviewedOcrPayload() {
+  return {
+    filename: 'tasks.txt',
+    image_info: { size_bytes: 12, shape: 'unknown' },
+    ocr: { extracted_text: 'first\nsecond', raw_tasks_detected: 2, method: 'lazy-ocr' },
+    classified_tasks: [
+      { text: 'first', quadrant: 0 as const, quadrant_name: 'Do Now', confidence: 0.8 },
+      { text: 'second', quadrant: 2 as const, quadrant_name: 'Schedule', confidence: 0.7 },
+    ],
+    summary: {
+      total_tasks: 2,
+      quadrant_distribution: {
+        counts: { 0: 1, 1: 0, 2: 1, 3: 0 },
+        percentages: { 0: 50, 1: 0, 2: 50, 3: 0 },
+        quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
+      },
+    },
+  };
+}
+
 describe('AI component error paths', () => {
   beforeEach(() => {
     jest.resetAllMocks();
@@ -336,6 +356,131 @@ describe('AI component error paths', () => {
     await waitFor(() => expect(screen.getByText('OCR unavailable')).toBeInTheDocument());
   });
 
+  it('requires OCR review and explicit import before persisting selected edited tasks', async () => {
+    const onTasksExtracted = jest
+      .fn()
+      .mockResolvedValue({ imported: 1, failed: 0, learned: false });
+    mockedApi.extractTasksFromImage.mockResolvedValueOnce({
+      filename: 'tasks.txt',
+      image_info: { size_bytes: 12, shape: 'unknown' },
+      ocr: { extracted_text: 'draft', raw_tasks_detected: 1, method: 'lazy-ocr' },
+      classified_tasks: [{ text: 'draft', quadrant: 3, quadrant_name: 'Delete', confidence: 0.8 }],
+      summary: {
+        total_tasks: 1,
+        quadrant_distribution: {
+          counts: { 0: 0, 1: 0, 2: 0, 3: 1 },
+          percentages: { 0: 0, 1: 0, 2: 0, 3: 100 },
+          quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
+        },
+      },
+      timestamp: new Date().toISOString(),
+    });
+
+    render(
+      <LanguageProvider>
+        <ImageUpload onTasksExtracted={onTasksExtracted} />
+      </LanguageProvider>
+    );
+    fireEvent.change(screen.getByTestId('image-upload-input'), {
+      target: { files: [new File(['draft'], 'tasks.txt', { type: 'text/plain' })] },
+    });
+
+    await screen.findByDisplayValue('draft');
+    expect(onTasksExtracted).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByDisplayValue('draft'), { target: { value: 'edited task' } });
+    fireEvent.change(screen.getByLabelText(/Quadrant for edited task/i), {
+      target: { value: '2' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Import selected/i }));
+
+    await waitFor(() =>
+      expect(onTasksExtracted).toHaveBeenCalledWith(
+        expect.objectContaining({
+          classified_tasks: [expect.objectContaining({ text: 'edited task', quadrant: 2 })],
+        }),
+        false
+      )
+    );
+  });
+
+  it('reports empty review, import failures, feedback failures, and explicit learning state', async () => {
+    const onTasksExtracted = jest
+      .fn()
+      .mockRejectedValueOnce('offline')
+      .mockRejectedValueOnce(new Error('Import unavailable'))
+      .mockResolvedValueOnce({
+        imported: 1,
+        failed: 0,
+        learned: false,
+        feedbackError: 'Feedback unavailable',
+      });
+    mockedApi.extractTasksFromImage.mockResolvedValueOnce({
+      filename: 'tasks.txt',
+      image_info: { size_bytes: 12, shape: 'unknown' },
+      ocr: { extracted_text: 'draft', raw_tasks_detected: 1, method: 'lazy-ocr' },
+      classified_tasks: [{ text: 'draft', quadrant: 0, quadrant_name: 'Do Now', confidence: 0.8 }],
+      summary: {
+        total_tasks: 1,
+        quadrant_distribution: {
+          counts: { 0: 1, 1: 0, 2: 0, 3: 0 },
+          percentages: { 0: 100, 1: 0, 2: 0, 3: 0 },
+          quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
+        },
+      },
+    });
+
+    renderWithLanguage(<ImageUpload onTasksExtracted={onTasksExtracted} />);
+    fireEvent.change(screen.getByTestId('image-upload-input'), {
+      target: { files: [new File(['draft'], 'tasks.txt', { type: 'text/plain' })] },
+    });
+    const include = await screen.findByLabelText(/Include task: draft/i);
+    fireEvent.click(include);
+    fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
+    expect(screen.getByText('Select at least one non-empty task.')).toBeInTheDocument();
+
+    fireEvent.click(include);
+    fireEvent.click(screen.getByText(/Send persisted tasks as explicit training feedback/i));
+    fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
+    await waitFor(() => expect(screen.getByText('OCR failed')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
+    await waitFor(() => expect(screen.getByText('Import unavailable')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
+    await waitFor(() => expect(screen.getByText('Feedback unavailable')).toBeInTheDocument());
+    expect(onTasksExtracted).toHaveBeenLastCalledWith(expect.any(Object), true);
+  });
+
+  it.each([
+    ['en', 'Feedback: sent.'],
+    ['pl', 'Feedback: wysłany.'],
+  ] as const)('reports explicit learned feedback in %s', async (language, expected) => {
+    localStorage.setItem('eisenhower-language', language);
+    mockedApi.extractTasksFromImage.mockResolvedValueOnce(reviewedOcrPayload());
+    const onTasksExtracted = jest.fn().mockResolvedValue({ imported: 1, failed: 1, learned: true });
+
+    renderWithLanguage(<ImageUpload onTasksExtracted={onTasksExtracted} />);
+    fireEvent.change(screen.getByTestId('image-upload-input'), {
+      target: { files: [new File(['tasks'], 'tasks.txt', { type: 'text/plain' })] },
+    });
+    const second = await screen.findByLabelText(
+      language === 'pl' ? /Uwzględnij zadanie: second/i : /Include task: second/i
+    );
+    fireEvent.click(second);
+    fireEvent.click(
+      screen.getByText(
+        language === 'pl'
+          ? /Wyślij zapisane zadania jako świadomy feedback/i
+          : /Send persisted tasks as explicit training feedback/i
+      )
+    );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: language === 'pl' ? 'Importuj wybrane' : 'Import selected',
+      })
+    );
+
+    await waitFor(() => expect(screen.getByText(new RegExp(expected))).toBeInTheDocument());
+  });
+
   it('ignores empty OCR selections, opens the file picker, and falls back on unknown OCR failures', async () => {
     const inputClickSpy = jest
       .spyOn(HTMLInputElement.prototype, 'click')
@@ -460,6 +605,10 @@ describe('AI component error paths', () => {
     await waitFor(() => expect(mockedApi.retrainModel).toHaveBeenCalledWith(false));
 
     fireEvent.click(screen.getByText(/Clear training data/i));
+    fireEvent.click(screen.getByText(/^Cancel$/i));
+    expect(mockedApi.clearTrainingData).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText(/Clear training data/i));
+    fireEvent.click(screen.getByText(/Confirm clearing training data/i));
     await waitFor(() => expect(mockedApi.clearTrainingData).toHaveBeenCalledWith(false));
 
     fireEvent.change(screen.getAllByRole('combobox')[3], {

@@ -269,9 +269,11 @@ def create_app(
 
   @app.get("/metrics", include_in_schema=False)
   def prometheus_metrics():
+    metrics.set_job_queue_enabled(job_queue is not None)
     if job_queue is not None:
       for status, count in job_queue.counts_by_status().items():
         metrics.set_job_depth(status, count)
+      metrics.set_job_worker_heartbeat_age(job_queue.latest_worker_heartbeat_age_seconds())
     generation_status = (
       resolved_rag_service.generation_status()
       if resolved_rag_service is not None and hasattr(resolved_rag_service, "generation_status")

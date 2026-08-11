@@ -70,6 +70,6 @@ describe('aiUi helpers', () => {
     expect(getSuggestedQuadrant({})).toBe(3);
 
     expect(getQuadrantTitleByValue(options, 2, t.quadrantEliminate)).toBe('Zaplanuj');
-    expect(getQuadrantTitleByValue(options, 99, t.quadrantEliminate)).toBe('Usuń');
+    expect(getQuadrantTitleByValue(options, 99, t.quadrantEliminate)).toBe('Usuń (kwadrant, nie kasowanie)');
   });
 });
