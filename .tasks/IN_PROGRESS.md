@@ -1,19 +1,5 @@
 # In Progress
 
-## TASK-038: Add deterministic change-impact CI planning
-**Priority:** P1 | **Tags:** ci, reliability, performance, security
-
-Reduce pull-request CI cost with a versioned, fail-closed impact plan while preserving stable required checks and full release-quality coverage for risky or unknown changes.
-
-### Plan
-
-- Add a deterministic merge-base and changed-path planner with rename/delete, manifest, workflow, root, infrastructure and dependency-graph handling plus multi-label reasons and an input digest.
-- Keep every required context successful through explicit not-applicable paths, while forcing full CI for `master`, release, schedules, workflows, lockfiles, infrastructure, unknown inputs and planner errors.
-- Add focused red-green planner/rules tests, actionlint and missing n8n/MCP/API-client checks; optimize safe setup/cache paths and document measured baseline boundaries.
-- Coordinate sync, release, production-acceptance and ruleset contracts, then run fresh local verification and update the existing PR to `dev` without merging or touching production.
-
----
-
 ## TASK-013: Approve representative retrieval quality gates
 **Priority:** P1 | **Tags:** rag, evaluation, recall, mrr, human-gate
 
