@@ -214,4 +214,16 @@ test("required contexts stay synchronized and expose explicit not-applicable job
 
   assert.equal((workflow.match(/- name: Not applicable/g) ?? []).length, 10);
   assert.doesNotMatch(workflow, /^\s+if:.*skip_full_ci/m);
+  assert.match(
+    workflow,
+    /- name: Enforce clean Python lint gate\n\s+if: \$\{\{ needs\.resolve-run-mode\.outputs\.backend_ai == 'true' \}\}/,
+  );
+  assert.doesNotMatch(workflow, /- name: Run Trivy scan\n\s+if:/);
+  assert.doesNotMatch(workflow, /security scan not applicable/i);
+
+  const dependencyAuditSteps = workflow.match(
+    /- name: (?:Audit production dependencies|Audit API client production dependencies|Enforce mobile production audit policy)\n\s+if: [^\n]+/g,
+  );
+  assert.equal(dependencyAuditSteps?.length, 5);
+  for (const step of dependencyAuditSteps) assert.match(step, /dependency_audit == 'true'/);
 });

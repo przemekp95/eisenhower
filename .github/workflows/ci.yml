@@ -108,7 +108,6 @@ jobs:
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.11
 
       - name: Run Trivy scan
-        if: ${{ needs.resolve-run-mode.outputs.security_lint == 'true' }}
         id: trivy-scan
         shell: bash
         run: |
@@ -131,20 +130,16 @@ jobs:
           exit 0
 
       - name: Upload SARIF
-        if: ${{ always() && needs.resolve-run-mode.outputs.security_lint == 'true' && hashFiles('trivy-results.sarif') != '' }}
+        if: ${{ always() && hashFiles('trivy-results.sarif') != '' }}
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
 
       - name: Enforce Trivy gate
-        if: ${{ needs.resolve-run-mode.outputs.security_lint == 'true' && steps.trivy-scan.outputs.exit_code != '0' }}
+        if: ${{ steps.trivy-scan.outputs.exit_code != '0' }}
         run: |
           echo "::error::Trivy detected HIGH or CRITICAL findings."
           exit 1
-
-      - name: Record security scan not applicable
-        if: ${{ needs.resolve-run-mode.outputs.security_lint != 'true' }}
-        run: echo "Trivy is not applicable to this impact plan; planner and actionlint passed."
 
   test-backend-node:
     name: test-backend-node
@@ -590,6 +585,7 @@ jobs:
           retention-days: 14
 
       - name: Enforce clean Python lint gate
+        if: ${{ needs.resolve-run-mode.outputs.backend_ai == 'true' }}
         run: make lint-ai BACKEND_AI_PYTHON=python
 
   test-mobile:
