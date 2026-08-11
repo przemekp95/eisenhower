@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eisenhower.invalid/schemas/ci-impact-model-v1.json",
+  "additionalProperties": false,
+  "properties": {
+    "biases": {"additionalProperties": {"type": "number"}, "type": "object"},
+    "checksum": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+    "feature_names": {"items": {"type": "string"}, "minItems": 1, "type": "array", "uniqueItems": true},
+    "job_ids": {"items": {"pattern": "^[a-z0-9][a-z0-9-]{1,127}$", "type": "string"}, "minItems": 1, "type": "array", "uniqueItems": true},
+    "schema_version": {"const": "ci-impact-model-v1"},
+    "training_dataset_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+    "weights": {"additionalProperties": {"additionalProperties": {"type": "number"}, "type": "object"}, "type": "object"}
+  },
+  "required": ["schema_version", "job_ids", "feature_names", "weights", "biases", "training_dataset_sha256", "checksum"],
+  "title": "Eisenhower CI impact multilabel model",
+  "type": "object"
+}

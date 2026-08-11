@@ -1,0 +1,82 @@
+{
+  "all_jobs": [
+    "security-lint",
+    "test-backend-node",
+    "test-api-client",
+    "test-mcp-adapter",
+    "test-frontend",
+    "test-frontend-integration",
+    "test-frontend-e2e",
+    "test-backend-ai",
+    "test-mobile",
+    "test-mobile-native-android"
+  ],
+  "deterministic_jobs": [
+    "security-lint"
+  ],
+  "known_path_prefixes": [
+    ".github/",
+    ".tasks/",
+    "backend-ai/",
+    "backend-node/",
+    "docs/",
+    "mobile/",
+    "mcp/",
+    "packages/",
+    "web/"
+  ],
+  "probability_thresholds": {
+    "security-lint": 0.95,
+    "test-api-client": 0.9,
+    "test-backend-ai": 0.9,
+    "test-backend-node": 0.9,
+    "test-frontend": 0.9,
+    "test-frontend-e2e": 0.9,
+    "test-frontend-integration": 0.9,
+    "test-mobile": 0.9,
+    "test-mobile-native-android": 0.9,
+    "test-mcp-adapter": 0.9
+  },
+  "rule_paths": {
+    "backend-ai/": [
+      "test-backend-ai"
+    ],
+    "backend-node/": [
+      "test-backend-node",
+      "test-frontend-integration",
+      "test-frontend-e2e"
+    ],
+    "mcp/": [
+      "test-mcp-adapter"
+    ],
+    "mobile/": [
+      "test-mobile",
+      "test-mobile-native-android"
+    ],
+    "packages/api-client/": [
+      "test-api-client",
+      "test-backend-node",
+      "test-frontend",
+      "test-frontend-integration",
+      "test-frontend-e2e",
+      "test-mobile",
+      "test-mobile-native-android"
+    ],
+    "web/": [
+      "test-frontend",
+      "test-frontend-integration",
+      "test-frontend-e2e"
+    ]
+  },
+  "required_context_jobs": [
+    "security-lint",
+    "test-backend-node",
+    "test-frontend",
+    "test-frontend-integration",
+    "test-frontend-e2e",
+    "test-backend-ai",
+    "test-mobile",
+    "test-mobile-native-android"
+  ],
+  "schema_version": "ci-impact-jobs-v1"
+}

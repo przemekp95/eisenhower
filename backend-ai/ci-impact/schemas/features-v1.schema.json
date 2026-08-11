@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eisenhower.invalid/schemas/ci-impact-features-v1.json",
+  "additionalProperties": false,
+  "properties": {
+    "checksum": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+    "dependency_impacts": {"items": {"type": "string"}, "type": "array"},
+    "schema_version": {"const": "ci-impact-features-v1"},
+    "unknown_paths": {"items": {"type": "string"}, "type": "array"},
+    "values": {
+      "additionalProperties": {"type": "number"},
+      "propertyNames": {"pattern": "^(change|dependency|diff|path|aux)\\."},
+      "type": "object"
+    }
+  },
+  "required": ["schema_version", "values", "unknown_paths", "dependency_impacts", "checksum"],
+  "title": "Eisenhower CI impact feature vector",
+  "type": "object"
+}

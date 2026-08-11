@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eisenhower.invalid/schemas/ci-impact-shadow-plan-v1.json",
+  "additionalProperties": false,
+  "properties": {
+    "abstain": {"type": "boolean"},
+    "classifier_jobs": {"items": {"type": "string"}, "type": "array"},
+    "deterministic_jobs": {"items": {"type": "string"}, "type": "array"},
+    "effective_jobs": {"items": {"type": "string"}, "type": "array"},
+    "full_ci": {"type": "boolean"},
+    "mode": {"const": "shadow"},
+    "model_checksum": {"type": ["string", "null"]},
+    "probabilities": {"additionalProperties": {"maximum": 1, "minimum": 0, "type": "number"}, "type": "object"},
+    "reasons": {"items": {"type": "string"}, "type": "array"},
+    "schema_version": {"const": "ci-impact-shadow-plan-v1"}
+  },
+  "required": ["schema_version", "mode", "probabilities", "deterministic_jobs", "classifier_jobs", "effective_jobs", "abstain", "full_ci", "reasons", "model_checksum"],
+  "title": "Eisenhower counterfactual CI shadow plan",
+  "type": "object"
+}

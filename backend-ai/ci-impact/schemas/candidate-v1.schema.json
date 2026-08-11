@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eisenhower.invalid/schemas/ci-impact-candidate-v1.json",
+  "additionalProperties": false,
+  "properties": {
+    "blockers": {"items": {"type": "string"}, "type": "array"},
+    "candidate_id": {"pattern": "^[a-z0-9][a-z0-9._-]{2,127}$", "type": "string"},
+    "checksum": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+    "created_at": {"format": "date-time", "type": "string"},
+    "dataset_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+    "evaluation": {"type": "object"},
+    "feature_schema_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+    "git_sha": {"pattern": "^[a-f0-9]{40}$", "type": "string"},
+    "git_dirty": {"type": "boolean"},
+    "job_config_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+    "model": {"type": "object"},
+    "promotion_eligible": {"type": "boolean"},
+    "runtime": {"type": "object"},
+    "schema_version": {"const": "ci-impact-candidate-v1"},
+    "workflow_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"}
+  },
+  "required": ["schema_version", "candidate_id", "created_at", "git_sha", "git_dirty", "dataset_sha256", "feature_schema_sha256", "job_config_sha256", "workflow_sha256", "runtime", "model", "evaluation", "promotion_eligible", "blockers", "checksum"],
+  "title": "Eisenhower CI impact immutable candidate",
+  "type": "object"
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eisenhower.invalid/schemas/ci-impact-promotion-evidence-v1.json",
+  "additionalProperties": false,
+  "properties": {
+    "blockers": {"items": {"type": "string"}, "type": "array"},
+    "checksum": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+    "dataset_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+    "evaluation_checksum": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+    "job_config_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+    "model_checksum": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+    "passed": {"type": "boolean"},
+    "schema_version": {"const": "ci-impact-promotion-evidence-v1"},
+    "workflow_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"}
+  },
+  "required": ["schema_version", "dataset_sha256", "model_checksum", "job_config_sha256", "workflow_sha256", "evaluation_checksum", "passed", "blockers", "checksum"],
+  "title": "Eisenhower CI impact promotion evidence",
+  "type": "object"
+}

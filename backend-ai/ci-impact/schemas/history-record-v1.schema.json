@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eisenhower.invalid/schemas/ci-impact-history-record-v1.json",
+  "additionalProperties": false,
+  "properties": {
+    "changes": {"type": "object"},
+    "job_results": {"items": {"type": "object"}, "type": "array"},
+    "labels": {
+      "additionalProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence": {"type": ["string", "null"]},
+          "provenance": {"enum": ["manual_review", "manual_adjudication", "manual_review_required"]},
+          "reviewer_id": {"type": ["string", "null"]},
+          "value": {"enum": ["required", "safe_to_skip", "unknown"]}
+        },
+        "required": ["value", "provenance", "reviewer_id", "evidence"],
+        "type": "object"
+      },
+      "type": "object"
+    },
+    "merged_at": {"format": "date-time", "type": "string"},
+    "pull_request_number": {"minimum": 1, "type": "integer"},
+    "schema_version": {"const": "ci-impact-history-record-v1"},
+    "workflow_sha": {"type": ["string", "null"]}
+  },
+  "required": ["schema_version", "pull_request_number", "merged_at", "changes", "job_results", "labels", "workflow_sha"],
+  "title": "Eisenhower CI impact history record",
+  "type": "object"
+}

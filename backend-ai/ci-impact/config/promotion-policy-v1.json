@@ -1,0 +1,20 @@
+{
+  "maximum_abstention_coverage": 0.8,
+  "maximum_brier_score": 0.15,
+  "maximum_expected_calibration_error": 0.1,
+  "maximum_unsafe_skip_rate": 0.0,
+  "minimum_precision": 0.5,
+  "minimum_required_recall": 1.0,
+  "minimum_required_support": 10,
+  "minimum_safe_to_skip_support": 10,
+  "minimum_stability": 0.99,
+  "owner_approved": false,
+  "required_epochs": [
+    "dependency",
+    "workflow",
+    "lockfile",
+    "rename",
+    "binary",
+    "unknown_paths"
+  ]
+}
