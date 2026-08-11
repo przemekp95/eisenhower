@@ -108,6 +108,9 @@ def _validate_ragops_report(report: dict[str, Any]) -> None:
       report["ingestion"]["failed"] == 0,
       all(reconciled[key] == 0 for key in ("missing", "stale", "orphan")),
       restore["verified"] is True and restore["checksum_match"] is True and restore["isolated"] is True,
+      restore["source_collection"] == report["collection"]["name"],
+      restore["restored_collection"] != restore["source_collection"],
+      restore["source_digest_sha256"] == restore["restored_digest_sha256"],
       report["alias_promoted"] is False,
       bool(report["evaluation"]["dataset"]),
       bool(report["collection"]["name"]),
@@ -191,7 +194,11 @@ def _validate_llmops_report(report: dict[str, Any]) -> str:
       report["safety"]["prompt_injection"]["passed"] is True,
       report["safety"]["citation_fabrication"]["passed"] is True,
       report["structured_output"]["passed"] is True,
+      report["structured_output"]["validated_cases"] > 0,
+      report["structured_output"]["schema_rejections"] == 0,
       report["regression"]["passed"] is True,
+      report["regression"]["cases"] == report["regression"]["exact_matches"],
+      report["prompt_contracts"]["passed"] is True,
       report["candidate_gate"]["passed"] is True,
     )
   except (KeyError, TypeError) as issue:
@@ -216,6 +223,7 @@ def register_llmops_candidate(
   prompt_paths: list[Path],
   schema_path: Path,
   golden_path: Path,
+  output_path: Path,
   report: dict[str, Any],
 ) -> CandidateManifest:
   evidence_level = _validate_llmops_report(report)
@@ -228,6 +236,7 @@ def register_llmops_candidate(
   )
   schema = registry.register_file(schema_path, name="output-schema", revision=specs[0].output_schema_version)
   golden = registry.register_file(golden_path, name="llm-golden", revision=golden_path.name)
+  outputs = registry.register_file(output_path, name="llm-mock-outputs", revision=output_path.name)
   matrix = {
     "models": sorted({(spec.model_id, spec.model_revision) for spec in specs}),
     "tokenizers": sorted({(spec.tokenizer_id, spec.tokenizer_revision) for spec in specs}),
@@ -250,7 +259,7 @@ def register_llmops_candidate(
     evidence_level=evidence_level,
     created_at=datetime.now(UTC),
     git=GitLineage(commit_sha=git_sha, dirty=git_dirty),
-    datasets=LineageGroup(items=(golden,)),
+    datasets=LineageGroup(items=(golden, outputs)),
     models=LineageGroup(items=(model,)),
     prompts=LineageGroup(items=prompt_refs),
     schemas=LineageGroup(items=(schema,)),

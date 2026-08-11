@@ -11,10 +11,13 @@ REPOSITORY_ROOT = PROJECT_ROOT.parent
 if str(PROJECT_ROOT) not in sys.path:
   sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.artifacts.registry import ImmutableArtifactRegistry
+from app.artifacts.registry import (
+  ImmutableArtifactRegistry,
+  write_private_bytes,
+  write_public_commitment,
+)
 from app.ops.candidates import register_ragops_candidate
-from run_retrieval_candidate import run as run_retrieval
-from verify_qdrant_recovery import run_verification
+from scripts.run_retrieval_candidate import run as run_retrieval
 
 
 def main() -> int:
@@ -30,8 +33,8 @@ def main() -> int:
   )
   args = parser.parse_args()
   snapshot_path = args.output.parent / "qdrant-candidate.snapshot"
-  retrieval = run_retrieval(args.golden)
-  recovery = run_verification(snapshot_path)
+  retrieval = run_retrieval(args.golden, snapshot_output=snapshot_path)
+  recovery = retrieval["snapshot_restore"]
   report = {
     "canonical_before_vector": True,
     "ingestion": {
@@ -45,15 +48,18 @@ def main() -> int:
     },
     "evaluation": retrieval["evaluation"],
     "snapshot_restore": {
-      "verified": recovery["restore"]["matches_source"],
+      "verified": recovery["matches_source"],
       "checksum_match": (
-        recovery["snapshot"]["qdrant_checksum"]
-        == recovery["snapshot"]["independent_download_sha256"]
+        recovery["qdrant_checksum"] == recovery["independent_download_sha256"]
       ),
-      "isolated": recovery["isolation"]["cross_tenant_hits"] == [],
+      "isolated": recovery["isolated_restore"],
+      "source_collection": recovery["source_collection"],
+      "restored_collection": recovery["restored_collection"],
+      "source_digest_sha256": recovery["source_digest_sha256"],
+      "restored_digest_sha256": recovery["restored_digest_sha256"],
     },
     "collection": {
-      "name": recovery["source"]["collection"],
+      "name": retrieval["collection"]["name"],
       "revision": retrieval["model"]["embedding_version"],
     },
     "runtime": {
@@ -61,7 +67,7 @@ def main() -> int:
       "mongo_version": retrieval["runtime"]["pymongo_version"],
     },
     "alias_promoted": False,
-    "cleanup": {"retrieval": retrieval["cleanup"], "recovery": recovery["cleanup"]},
+    "cleanup": {"retrieval": retrieval["cleanup"]},
     "representative_human_gate": {"passed": False, "reason": "TASK-013 pending"},
   }
   manifest = register_ragops_candidate(
@@ -74,8 +80,8 @@ def main() -> int:
     snapshot_path=snapshot_path,
     report=report,
   )
-  args.output.parent.mkdir(parents=True, exist_ok=True)
-  args.output.write_text(manifest.model_dump_json(indent=2) + "\n", encoding="utf-8")
+  write_private_bytes(args.output, (manifest.model_dump_json(indent=2) + "\n").encode())
+  write_public_commitment(manifest, args.output.with_name("ragops-commitment.json"))
   print(json.dumps({"candidate_id": manifest.candidate_id, "manifest_checksum": manifest.manifest_checksum}))
   return 0
 

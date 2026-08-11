@@ -1,13 +1,13 @@
 import { createAiApi } from '@eisenhower/api-client';
 import { mobileConfig } from '../config';
-import { clearTokens, getAccessToken, getAdminToken } from '../authSession';
+import { clearAdminToken, clearTokens, getAccessToken, getAdminToken } from '../authSession';
 
 function getAiApi() {
   return createAiApi(mobileConfig.aiApiUrl, {
     accessToken: getAccessToken,
     adminToken: getAdminToken,
     onUnauthorized: clearTokens,
-    onAdminUnauthorized: clearTokens,
+    onAdminUnauthorized: clearAdminToken,
   });
 }
 

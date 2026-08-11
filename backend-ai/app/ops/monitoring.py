@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from hashlib import sha256
 import json
+import math
 import platform
 from typing import Any
 
@@ -28,6 +29,18 @@ class MonitoringContractError(RuntimeError):
   """Raised when a quality report could expose sensitive or malformed data."""
 
 
+def _finite_number(value: Any, *, field: str) -> float:
+  if isinstance(value, bool):
+    raise MonitoringContractError(f"{field} must be a finite numeric value")
+  try:
+    number = float(value)
+  except (TypeError, ValueError) as issue:
+    raise MonitoringContractError(f"{field} must be a finite numeric value") from issue
+  if not math.isfinite(number):
+    raise MonitoringContractError(f"{field} must be a finite numeric value")
+  return number
+
+
 def _reject_sensitive_fields(value: Any, path: tuple[str, ...] = ()) -> None:
   if isinstance(value, dict):
     for key, nested in value.items():
@@ -47,6 +60,9 @@ def build_quality_drift_report(
   snapshots: dict[str, Any],
   maximum_absolute_drift: float,
 ) -> dict[str, Any]:
+  maximum_absolute_drift = _finite_number(
+    maximum_absolute_drift, field="maximum_absolute_drift"
+  )
   if not 0 <= maximum_absolute_drift <= 1:
     raise MonitoringContractError("maximum_absolute_drift must be between zero and one")
   _reject_sensitive_fields(snapshots)
@@ -62,7 +78,14 @@ def build_quality_drift_report(
       current = snapshot["current"]
       sample_count = int(snapshot["sample_count"])
       slices = snapshot["slices"]
-      deltas = {key: round(float(current[key]) - float(value), 8) for key, value in baseline.items()}
+      deltas = {
+        key: round(
+          _finite_number(current[key], field=f"{phase}.current.{key}")
+          - _finite_number(value, field=f"{phase}.baseline.{key}"),
+          8,
+        )
+        for key, value in baseline.items()
+      }
     except (KeyError, TypeError, ValueError) as issue:
       raise MonitoringContractError(f"invalid aggregate snapshot for {phase}") from issue
     if sample_count <= 0:
@@ -70,10 +93,16 @@ def build_quality_drift_report(
     for metric, delta in deltas.items():
       if abs(delta) > maximum_absolute_drift:
         reasons.append({"code": "metric_drift", "phase": phase, "metric": metric, "delta": delta})
-    baseline_quality = float(baseline.get("quality", 0.0))
+    baseline_quality = _finite_number(
+      baseline.get("quality", 0.0), field=f"{phase}.baseline.quality"
+    )
     slice_deltas = {}
     for slice_name, metrics in sorted(slices.items()):
-      delta = round(float(metrics["quality"]) - baseline_quality, 8)
+      delta = round(
+        _finite_number(metrics["quality"], field=f"{phase}.slices.{slice_name}.quality")
+        - baseline_quality,
+        8,
+      )
       slice_deltas[slice_name] = delta
       if abs(delta) > maximum_absolute_drift:
         reasons.append({

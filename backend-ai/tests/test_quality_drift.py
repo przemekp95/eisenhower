@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from app.artifacts.registry import ImmutableArtifactRegistry
@@ -65,6 +67,20 @@ def test_quality_drift_report_rejects_sensitive_fields(sensitive_key):
   snapshots["classifier"][sensitive_key] = "secret"
 
   with pytest.raises(MonitoringContractError, match="sensitive field"):
+    build_quality_drift_report(
+      baseline_candidate_id="baseline-v1",
+      current_candidate_id="candidate-v2",
+      snapshots=snapshots,
+      maximum_absolute_drift=0.05,
+    )
+
+
+@pytest.mark.parametrize("invalid_value", [math.nan, math.inf, -math.inf])
+def test_quality_drift_report_rejects_non_finite_metrics(invalid_value):
+  snapshots = _snapshots()
+  snapshots["retrieval"]["current"]["quality"] = invalid_value
+
+  with pytest.raises(MonitoringContractError, match="finite numeric"):
     build_quality_drift_report(
       baseline_candidate_id="baseline-v1",
       current_candidate_id="candidate-v2",

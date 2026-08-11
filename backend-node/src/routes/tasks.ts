@@ -1,6 +1,15 @@
 import { NextFunction, Request, Response, Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
+import mongoose from 'mongoose';
 import { TaskModel } from '../models/task';
+
+const DEFAULT_PAGE_LIMIT = 100;
+const MAX_PAGE_LIMIT = 200;
+
+interface TaskCursor {
+  createdAt: string;
+  id: string;
+}
 
 const taskFields = new Set(['title', 'description', 'urgent', 'important']);
 const rejectUnexpectedFields = body().custom((value) => {
@@ -43,15 +52,103 @@ function ensureValidRequest(request: Parameters<typeof validationResult>[0]) {
   return null;
 }
 
+function taskScope(request: Request) {
+  return {
+    tenantId: request.auth!.tenantId,
+    ownerId: request.auth!.userId,
+  };
+}
+
+function formatRevisionEtag(revision: number) {
+  return `"${revision}"`;
+}
+
+function normalizeTaskRevision<T extends { revision?: number }>(task: T): T & { revision: number } {
+  return { ...task, revision: task.revision ?? 0 };
+}
+
+function revisionFilter(expectedRevision: number | undefined) {
+  if (expectedRevision === undefined) return {};
+  if (expectedRevision === 0) {
+    return { $or: [{ revision: 0 }, { revision: { $exists: false } }] };
+  }
+  return { revision: expectedRevision };
+}
+
+function parseIfMatch(request: Request): number | null | undefined {
+  const value = request.get('if-match');
+  if (value === undefined) return undefined;
+  const match = /^(?:W\/)?"(\d+)"$/.exec(value.trim());
+  if (!match) return null;
+  return Number(match[1]);
+}
+
+function encodeCursor(task: { createdAt?: Date; _id: unknown }) {
+  return Buffer.from(JSON.stringify({
+    createdAt: task.createdAt!.toISOString(),
+    id: String(task._id),
+  } satisfies TaskCursor)).toString('base64url');
+}
+
+function decodeCursor(value: unknown): TaskCursor | null {
+  if (typeof value !== 'string' || !value) return null;
+  try {
+    const cursor = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as Partial<TaskCursor>;
+    if (
+      typeof cursor.createdAt !== 'string' ||
+      Number.isNaN(Date.parse(cursor.createdAt)) ||
+      typeof cursor.id !== 'string' ||
+      !mongoose.isValidObjectId(cursor.id)
+    ) {
+      return null;
+    }
+    return cursor as TaskCursor;
+  } catch {
+    return null;
+  }
+}
+
 export function createTasksRouter() {
   const router = Router();
 
   router.get('/', async (req, res, next) => {
     try {
-      const tasks = await TaskModel.find({ tenantId: req.auth!.tenantId })
-        .sort({ createdAt: -1, _id: -1 })
-        .lean();
-      res.json(tasks);
+      const requestedLimit = req.query.limit === undefined ? undefined : Number(req.query.limit);
+      if (
+        requestedLimit !== undefined &&
+        (!Number.isInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > MAX_PAGE_LIMIT)
+      ) {
+        return res.status(400).json({ error: `limit must be an integer from 1 to ${MAX_PAGE_LIMIT}` });
+      }
+      const cursor = req.query.cursor === undefined ? undefined : decodeCursor(req.query.cursor);
+      if (req.query.cursor !== undefined && !cursor) {
+        return res.status(400).json({ error: 'Invalid task cursor' });
+      }
+
+      const scope = taskScope(req);
+      const filter = cursor ? {
+        ...scope,
+        $or: [
+          { createdAt: { $lt: new Date(cursor.createdAt) } },
+          { createdAt: new Date(cursor.createdAt), _id: { $lt: cursor.id } },
+        ],
+      } : scope;
+      const query = TaskModel.find(filter).sort({ createdAt: -1, _id: -1 });
+      if (requestedLimit === undefined && cursor === undefined) {
+        const tasks = await query.lean();
+        return res.json(tasks.map(normalizeTaskRevision));
+      }
+
+      const limit = requestedLimit ?? DEFAULT_PAGE_LIMIT;
+      const page = await query.limit(limit + 1).lean();
+      const hasNextPage = page.length > limit;
+      const tasks = hasNextPage ? page.slice(0, limit) : page;
+      if (hasNextPage) {
+        const nextCursor = encodeCursor(tasks[tasks.length - 1]);
+        res.set('X-Next-Cursor', nextCursor);
+        res.links({ next: `${req.baseUrl}?limit=${limit}&cursor=${encodeURIComponent(nextCursor)}` });
+      }
+      res.json(tasks.map(normalizeTaskRevision));
     } catch (error) {
       next(error);
     }
@@ -73,7 +170,7 @@ export function createTasksRouter() {
         important: req.body.important ?? false,
       });
 
-      return res.status(201).json(task.toJSON());
+      return res.status(201).set('ETag', formatRevisionEtag(task.revision)).json(task.toJSON());
     } catch (error) {
       return next(error);
     }
@@ -86,20 +183,35 @@ export function createTasksRouter() {
     }
 
     try {
+      const expectedRevision = parseIfMatch(req);
+      if (expectedRevision === null) {
+        return res.status(400).json({ error: 'If-Match must contain a quoted numeric task revision' });
+      }
+      const scope = taskScope(req);
       const task = await TaskModel.findOneAndUpdate(
-        { _id: req.params.id, tenantId: req.auth!.tenantId },
-        req.body,
         {
-        returnDocument: 'after',
-        runValidators: true,
+          _id: req.params.id,
+          ...scope,
+          ...revisionFilter(expectedRevision),
+        },
+        { $set: req.body, $inc: { revision: 1 } },
+        {
+          returnDocument: 'after',
+          runValidators: true,
         }
       );
 
       if (!task) {
+        if (expectedRevision !== undefined && await TaskModel.exists({ _id: req.params.id, ...scope })) {
+          return res.status(412).json({
+            error: 'Task revision conflict',
+            code: 'task_revision_conflict',
+          });
+        }
         return res.status(404).json({ error: 'Task not found' });
       }
 
-      return res.json(task.toJSON());
+      return res.set('ETag', formatRevisionEtag(task.revision)).json(task.toJSON());
     } catch (error) {
       return next(error);
     }
@@ -112,11 +224,23 @@ export function createTasksRouter() {
     }
 
     try {
+      const expectedRevision = parseIfMatch(req);
+      if (expectedRevision === null) {
+        return res.status(400).json({ error: 'If-Match must contain a quoted numeric task revision' });
+      }
+      const scope = taskScope(req);
       const task = await TaskModel.findOneAndDelete({
         _id: req.params.id,
-        tenantId: req.auth!.tenantId,
+        ...scope,
+        ...revisionFilter(expectedRevision),
       });
       if (!task) {
+        if (expectedRevision !== undefined && await TaskModel.exists({ _id: req.params.id, ...scope })) {
+          return res.status(412).json({
+            error: 'Task revision conflict',
+            code: 'task_revision_conflict',
+          });
+        }
         return res.status(404).json({ error: 'Task not found' });
       }
 

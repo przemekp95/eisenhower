@@ -26,11 +26,14 @@ though prompts, corpus text and identifiers are excluded.
   Qdrant snapshot/download/isolated restore/alias rollback proof supplies the retained candidate
   snapshot. The candidate alias is never promoted and the temporary services are cleaned up.
 - `run_llmops_candidate.py` validates checksum-bound PL/EN PromptSpecs, budgets, schema and
-  adversarial golden coverage after the test suite. Its evidence level is `ci_in_process` and it
-  explicitly records that no model ran. It cannot satisfy the live-model gate.
+  independently frozen mock outputs against adversarial golden cases. This is an in-process
+  schema/safety/regression contract probe, explicitly not a model-quality evaluation. Its evidence
+  level is `ci_in_process`, it records that no model ran and cannot satisfy the live-model gate.
 
-GitHub Actions uploads the private registry and manifests for 14 days. These are CI candidates for
-the exact workflow SHA, not deployed or public artifacts.
+GitHub Actions never uploads the private registry, full manifests, datasets, prompts or snapshots
+from this public repository. It retains for 14 days only allowlisted public commitment receipts
+binding candidate id, workflow, Git SHA and manifest checksum. The full immutable registry remains
+private in the local filesystem; configuring durable private CI storage is an external owner gate.
 
 The RAGOps CI step is additionally fail-closed behind `ENABLE_RAGOPS_CANDIDATE=true`. Enable it only
 after the owner re-freezes the current 19-file corpus snapshot and the physical checksum matches the
@@ -55,7 +58,8 @@ are rejected before serialization.
 
 Legal progression is `disabled -> shadow -> canary -> enabled`. Every transition requires an
 immutable registered candidate, a matching fresh checksummed green report and an out-of-band owner
-approval receipt. Stable canary assignment uses only a caller-supplied pseudonym and stores no
+approval receipt authenticated with an owner-controlled HMAC key file (`0600`, at least 32 bytes).
+Stable canary assignment uses only a caller-supplied pseudonym and stores no
 subject identifier. `--apply` changes only the local atomic pointer; it never deploys. Previous
 pointers are retained for rollback.
 

@@ -3,11 +3,42 @@ import http from 'node:http';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { loadConfig } from '../src/config';
 
 const repositoryRoot = path.resolve(__dirname, '../..');
 const execFileAsync = promisify(execFile);
 
 describe('production deployment boundaries', () => {
+  it('renders a bootable static single-tenant API environment for Mikrus', async () => {
+    const composeFile = path.join(repositoryRoot, 'deploy/mikrus/docker-compose.yml');
+    const environment = {
+      ...process.env,
+      DOCKER_HUB_USERNAME: 'example',
+      IMAGE_TAG: 'sha256-test',
+      EISENHOWER_API_TOKEN: 'production-api-token-at-least-32-characters',
+      EISENHOWER_ADMIN_TOKEN: 'production-admin-token-at-least-32-characters',
+      CORS_ALLOW_ORIGINS: 'https://tasks.example.com',
+      LOCAL_MODEL_APPROVED_EVALUATION_SHA256: '0'.repeat(64),
+      AI_EVALUATION_FILE: '/tmp/production-evaluation.json',
+    };
+    const { stdout } = await execFileAsync(
+      'docker',
+      ['compose', '-f', composeFile, 'config', '--format', 'json'],
+      { cwd: repositoryRoot, env: environment }
+    );
+    const rendered = JSON.parse(stdout) as {
+      services: { 'api-service': { environment: Record<string, string> } };
+    };
+    const apiEnvironment = rendered.services['api-service'].environment;
+
+    expect(apiEnvironment).toMatchObject({
+      NODE_ENV: 'production',
+      AUTH_MODE: 'static',
+      EISENHOWER_API_TOKEN: environment.EISENHOWER_API_TOKEN,
+    });
+    expect(() => loadConfig(apiEnvironment)).not.toThrow();
+  });
+
   it('does not publish backend service ports from the Mikrus compose file', () => {
     const compose = fs.readFileSync(
       path.join(repositoryRoot, 'deploy/mikrus/docker-compose.yml'),

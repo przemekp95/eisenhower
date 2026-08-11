@@ -4,6 +4,7 @@ export interface TaskDto {
   description: string;
   urgent: boolean;
   important: boolean;
+  revision?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -280,8 +281,8 @@ export interface TaskApiClient {
   paths: typeof TASK_API_PATHS;
   listTasks(): Promise<TaskDto[]>;
   createTask(task: TaskInputDto): Promise<TaskDto>;
-  updateTask(id: string, patch: Partial<TaskInputDto>): Promise<TaskDto>;
-  deleteTask(id: string): Promise<null>;
+  updateTask(id: string, patch: Partial<TaskInputDto>, revision?: number): Promise<TaskDto>;
+  deleteTask(id: string, revision?: number): Promise<null>;
   getHealth(): Promise<HealthResponseDto>;
   getReadiness(): Promise<HealthResponseDto>;
 }

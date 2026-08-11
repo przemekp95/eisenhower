@@ -5,9 +5,30 @@ const {
   AI_API_PATHS,
   QUADRANT_DEFINITIONS,
   createAiApi,
+  createTaskApi,
   getAnalyzeTaskPath,
   isTaskAnalysisDto,
 } = require('./index');
+
+test('sends optional task revisions through If-Match without breaking legacy calls', async () => {
+  const calls = [];
+  const api = createTaskApi('https://api.example.com', async (...args) => {
+    calls.push(args);
+    return {
+      ok: true,
+      status: args[1]?.method === 'DELETE' ? 204 : 200,
+      json: async () => ({ _id: 'task-1', title: 'Updated', revision: 4 }),
+    };
+  });
+
+  await api.updateTask('task-1', { title: 'Updated' }, 3);
+  await api.deleteTask('task-1', 4);
+  await api.updateTask('legacy-task', { important: true });
+
+  assert.equal(calls[0][1].headers['If-Match'], '"3"');
+  assert.equal(calls[1][1].headers['If-Match'], '"4"');
+  assert.equal(calls[2][1].headers['If-Match'], undefined);
+});
 
 test('publishes one canonical quadrant contract', () => {
   assert.deepEqual(QUADRANT_DEFINITIONS, [

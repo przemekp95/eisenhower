@@ -13,7 +13,12 @@ from app.artifacts.models import (
   LineageGroup,
   RuntimeLineage,
 )
-from app.artifacts.registry import ArtifactConflictError, ImmutableArtifactRegistry
+from app.artifacts.registry import (
+  ArtifactConflictError,
+  ImmutableArtifactRegistry,
+  PUBLIC_COMMITMENT_KEYS,
+  public_candidate_commitment,
+)
 from app.artifacts.cli import main as registry_cli
 
 
@@ -112,6 +117,21 @@ def test_registry_rejects_public_or_unsafe_artifact_uris():
     ArtifactReference(
       name="report", revision="v1", sha256="f" * 64, uri="https://example.com/report.json"
     )
+
+
+def test_public_commitment_is_allowlisted_checksummed_and_bound_to_manifest():
+  manifest = _manifest("f" * 64)
+  receipt = public_candidate_commitment(manifest)
+  payload = {key: value for key, value in receipt.items() if key != "receipt_checksum"}
+  from hashlib import sha256
+  import json
+
+  assert set(receipt) == PUBLIC_COMMITMENT_KEYS
+  assert receipt["git_sha"] == manifest.git.commit_sha
+  assert receipt["manifest_checksum"] == manifest.manifest_checksum
+  assert receipt["receipt_checksum"] == sha256(
+    json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+  ).hexdigest()
 
 
 def test_registry_cli_registers_file_manifest_and_verifies_candidate(tmp_path, capsys):

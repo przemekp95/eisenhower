@@ -80,7 +80,7 @@ describe('media service', () => {
 
   it('returns empty list when permission is denied or picker is cancelled', async () => {
     ImagePicker.requestMediaLibraryPermissionsAsync.mockResolvedValue({ granted: false });
-    await expect(scanTasksFromImage('pl')).resolves.toEqual([]);
+    await expect(scanTasksFromImage()).resolves.toEqual([]);
 
     ImagePicker.requestMediaLibraryPermissionsAsync.mockResolvedValue({ granted: true });
     ImagePicker.launchImageLibraryAsync.mockResolvedValue({ canceled: true, assets: [] });

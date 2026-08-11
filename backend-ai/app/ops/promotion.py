@@ -4,14 +4,24 @@ from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 import fcntl
 from hashlib import sha256
+import hmac
 import json
 import os
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
+from app.artifacts.models import CandidateManifest
+
 
 PHASES = ("retrieval", "generation", "response", "mag")
 TRANSITIONS = {"disabled": {"shadow"}, "shadow": {"canary"}, "canary": {"enabled"}, "enabled": set()}
+PHASE_WORKFLOWS = {
+  "retrieval": "ragops",
+  "generation": "llmops",
+  "response": "llmops",
+  "mag": "llmops",
+}
+AUTOMATED_APPROVER_IDENTITIES = {"self", "automation", "bot", "ci", "system", "unknown"}
 
 
 class PromotionBlocked(RuntimeError):
@@ -27,6 +37,16 @@ def stable_canary_assignment(subject_pseudonym: str, candidate_id: str, phase: s
   return bucket < percent * 100
 
 
+def verify_hmac_approval(approval: dict[str, Any], key: bytes) -> bool:
+  signature = approval.get("signature")
+  if not isinstance(signature, str) or len(signature) != 64:
+    return False
+  payload = {name: value for name, value in approval.items() if name != "signature"}
+  encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+  expected = hmac.new(key, encoded, sha256).hexdigest()
+  return hmac.compare_digest(signature, expected)
+
+
 class PromotionController:
   """Atomic local pointer controller; deployment and traffic routing remain external."""
 
@@ -35,12 +55,14 @@ class PromotionController:
     root: str | Path,
     *,
     candidate_verifier: Callable[[str], Any] | None = None,
+    approval_verifier: Callable[[dict[str, Any]], bool] | None = None,
   ):
     self.root = Path(root).resolve()
     self.history = self.root / "history"
     self.current_path = self.root / "current.json"
     self.lock_path = self.root / ".lock"
     self.candidate_verifier = candidate_verifier
+    self.approval_verifier = approval_verifier
     for directory in (self.root, self.history):
       directory.mkdir(parents=True, exist_ok=True, mode=0o700)
       directory.chmod(0o700)
@@ -131,8 +153,12 @@ class PromotionController:
       verified = self.candidate_verifier(candidate_id)
     except Exception as issue:
       raise PromotionBlocked("immutable candidate verification failed") from issue
-    if verified is None or verified is False:
+    if not isinstance(verified, CandidateManifest):
       raise PromotionBlocked("immutable candidate verification failed")
+    if verified.candidate_id != candidate_id:
+      raise PromotionBlocked("immutable candidate identity mismatch")
+    if verified.workflow != PHASE_WORKFLOWS[phase]:
+      raise PromotionBlocked("candidate workflow does not match promotion phase")
     current_mode = current["phases"][phase]["mode"]
     if target_mode not in TRANSITIONS.get(current_mode, set()):
       raise PromotionBlocked(f"illegal transition from {current_mode} to {target_mode}")
@@ -159,12 +185,39 @@ class PromotionController:
       generated_at = datetime.fromisoformat(str(report["generated_at"]))
     except (KeyError, ValueError) as issue:
       raise PromotionBlocked("quality report timestamp is invalid") from issue
-    if generated_at.tzinfo is None or datetime.now(UTC) - generated_at.astimezone(UTC) > timedelta(hours=24):
+    now = datetime.now(UTC)
+    if generated_at.tzinfo is None:
+      raise PromotionBlocked("quality report timestamp is invalid")
+    generated_at_utc = generated_at.astimezone(UTC)
+    if generated_at_utc > now + timedelta(minutes=5):
+      raise PromotionBlocked("quality report timestamp is in the future")
+    if now - generated_at_utc > timedelta(hours=24):
       raise PromotionBlocked("quality report is stale")
     if approval.get("phase") != phase or approval.get("candidate_id") != candidate_id:
       raise PromotionBlocked("approval does not match phase and candidate")
-    if not approval.get("approved_by") or not approval.get("approved_at"):
+    if approval.get("approval_source") != "owner_out_of_band" or approval.get("decision") != "approved":
+      raise PromotionBlocked("approval is not an explicit out-of-band owner decision")
+    approved_by = str(approval.get("approved_by", "")).strip()
+    if not approved_by or approved_by.casefold() in AUTOMATED_APPROVER_IDENTITIES:
       raise PromotionBlocked("approval receipt is incomplete")
+    try:
+      approved_at = datetime.fromisoformat(str(approval["approved_at"]))
+    except (KeyError, ValueError) as issue:
+      raise PromotionBlocked("approval timestamp is invalid") from issue
+    if approved_at.tzinfo is None:
+      raise PromotionBlocked("approval timestamp must be timezone-aware")
+    now = datetime.now(UTC)
+    approved_at_utc = approved_at.astimezone(UTC)
+    if approved_at_utc > now + timedelta(minutes=5):
+      raise PromotionBlocked("approval timestamp is in the future")
+    if self.approval_verifier is None:
+      raise PromotionBlocked("trusted human approval verifier is not configured")
+    try:
+      approval_verified = self.approval_verifier(approval)
+    except Exception as issue:
+      raise PromotionBlocked("trusted human approval verification failed") from issue
+    if approval_verified is not True:
+      raise PromotionBlocked("trusted human approval verification failed")
 
   def _write_history(self, state: dict[str, Any]) -> None:
     target = self.history / f"{state['revision']}.json"

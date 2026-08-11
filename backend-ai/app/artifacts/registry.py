@@ -8,6 +8,41 @@ from pathlib import Path
 from .models import ArtifactReference, CandidateManifest
 
 
+PUBLIC_COMMITMENT_KEYS = {
+  "receipt_version", "candidate_id", "workflow", "git_sha", "manifest_checksum",
+  "receipt_checksum",
+}
+
+
+def write_private_bytes(target: str | Path, data: bytes) -> Path:
+  path = Path(target)
+  path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+  path.parent.chmod(0o700)
+  ImmutableArtifactRegistry._exclusive_write(path, data)
+  return path
+
+
+def public_candidate_commitment(manifest: CandidateManifest) -> dict[str, str]:
+  payload = {
+    "receipt_version": "ai-public-commitment-v1",
+    "candidate_id": manifest.candidate_id,
+    "workflow": manifest.workflow,
+    "git_sha": manifest.git.commit_sha,
+    "manifest_checksum": manifest.manifest_checksum,
+  }
+  encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+  return {**payload, "receipt_checksum": sha256(encoded).hexdigest()}
+
+
+def write_public_commitment(manifest: CandidateManifest, target: str | Path) -> Path:
+  payload = public_candidate_commitment(manifest)
+  if set(payload) != PUBLIC_COMMITMENT_KEYS:
+    raise ArtifactConflictError("public commitment contains non-allowlisted metadata")
+  return write_private_bytes(
+    target, (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+  )
+
+
 class ArtifactConflictError(RuntimeError):
   """Raised when immutable registry state is missing, conflicting or corrupted."""
 

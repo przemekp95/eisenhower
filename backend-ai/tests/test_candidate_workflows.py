@@ -11,6 +11,7 @@ from app.ops.candidates import (
   register_llmops_candidate,
   register_ragops_candidate,
 )
+from scripts.run_llmops_candidate import _contract_report
 
 
 def _mlops_report() -> dict:
@@ -102,7 +103,15 @@ def _ragops_report() -> dict:
     "ingestion": {"documents": 19, "failed": 0},
     "reconciliation": {"missing": 0, "stale": 0, "orphan": 0},
     "evaluation": {"dataset": "retrieval-v1", "recall_at_k": 0.66, "mrr_at_k": 0.54},
-    "snapshot_restore": {"verified": True, "checksum_match": True, "isolated": True},
+    "snapshot_restore": {
+      "verified": True,
+      "checksum_match": True,
+      "isolated": True,
+      "source_collection": "eisenhower_candidate_v1",
+      "restored_collection": "eisenhower_candidate_v1_restored",
+      "source_digest_sha256": "d" * 64,
+      "restored_digest_sha256": "d" * 64,
+    },
     "collection": {"name": "eisenhower_candidate_v1", "revision": "minilm-v1"},
     "runtime": {"qdrant_version": "1.12.0", "mongo_version": "7.0"},
     "alias_promoted": False,
@@ -136,7 +145,9 @@ def test_ragops_candidate_registers_recovery_lineage_without_alias_promotion(tmp
   assert {item.name for item in manifest.reports.items} == {"ragops-report", "qdrant-snapshot"}
 
 
-@pytest.mark.parametrize("field", ["ordering", "reconciliation", "restore", "alias"])
+@pytest.mark.parametrize(
+  "field", ["ordering", "reconciliation", "restore", "alias", "collection", "digest"]
+)
 def test_ragops_candidate_fails_closed_on_integrity_or_promotion_violation(tmp_path, field):
   report = _ragops_report()
   if field == "ordering":
@@ -145,6 +156,10 @@ def test_ragops_candidate_fails_closed_on_integrity_or_promotion_violation(tmp_p
     report["reconciliation"]["orphan"] = 1
   elif field == "restore":
     report["snapshot_restore"]["checksum_match"] = False
+  elif field == "collection":
+    report["snapshot_restore"]["source_collection"] = "different_collection"
+  elif field == "digest":
+    report["snapshot_restore"]["restored_digest_sha256"] = "e" * 64
   else:
     report["alias_promoted"] = True
   corpus = tmp_path / "corpus.json"
@@ -172,11 +187,50 @@ def _llmops_report() -> dict:
     "evidence_level": "local_in_process",
     "languages": {"pl": {"passed": True}, "en": {"passed": True}},
     "safety": {"prompt_injection": {"passed": True}, "citation_fabrication": {"passed": True}},
-    "structured_output": {"passed": True, "schema_rejections": 0},
-    "regression": {"passed": True, "champion_checksum": "c" * 64},
+    "structured_output": {"passed": True, "validated_cases": 10, "schema_rejections": 0},
+    "regression": {"passed": True, "cases": 10, "exact_matches": 10, "champion_checksum": "c" * 64},
+    "prompt_contracts": {"passed": True, "count": 2},
     "live_model": {"executed": False, "passed": False},
     "candidate_gate": {"passed": True, "reasons": []},
   }
+
+
+def test_llmops_contract_probe_executes_all_golden_outputs_without_live_model():
+  repository = Path(__file__).resolve().parents[2]
+  prompt_root = repository / "backend-ai" / "prompts" / "eisenhower-classifier" / "1.0.0"
+  report = _contract_report(
+    repository / "backend-ai" / "evaluation" / "golden-v1.jsonl",
+    repository / "backend-ai" / "evaluation" / "golden-mock-outputs-v1.jsonl",
+    [prompt_root / "pl.json", prompt_root / "en.json"],
+  )
+
+  assert report["probe_kind"] == "frozen_mock_outputs_not_live_model"
+  assert report["regression"]["cases"] == report["regression"]["exact_matches"] > 0
+  assert report["structured_output"]["validated_cases"] == report["regression"]["cases"]
+  assert report["safety"]["prompt_injection"]["cases"] > 0
+  assert report["live_model"] == {"executed": False, "passed": False}
+
+
+def test_llmops_contract_probe_detects_independent_mock_output_regression(tmp_path):
+  repository = Path(__file__).resolve().parents[2]
+  source = repository / "backend-ai" / "evaluation" / "golden-mock-outputs-v1.jsonl"
+  records = source.read_text(encoding="utf-8").splitlines()
+  records[0] = records[0].replace(
+    '"urgent":true,"important":true,"quadrant":0',
+    '"urgent":false,"important":true,"quadrant":2',
+  )
+  changed = tmp_path / "changed-outputs.jsonl"
+  changed.write_text("\n".join(records) + "\n", encoding="utf-8")
+  prompt_root = repository / "backend-ai" / "prompts" / "eisenhower-classifier" / "1.0.0"
+
+  report = _contract_report(
+    repository / "backend-ai" / "evaluation" / "golden-v1.jsonl",
+    changed,
+    [prompt_root / "pl.json", prompt_root / "en.json"],
+  )
+
+  assert report["regression"]["passed"] is False
+  assert report["candidate_gate"]["passed"] is False
 
 
 def test_llmops_candidate_registers_prompt_schema_and_golden_with_honest_evidence(tmp_path):
@@ -196,11 +250,13 @@ def test_llmops_candidate_registers_prompt_schema_and_golden_with_honest_evidenc
     prompt_paths=prompts,
     schema_path=schema,
     golden_path=repository / "backend-ai" / "evaluation" / "golden-v1.jsonl",
+    output_path=repository / "backend-ai" / "evaluation" / "golden-mock-outputs-v1.jsonl",
     report=_llmops_report(),
   )
 
   assert manifest.workflow == "llmops"
   assert manifest.evidence_level == "local_in_process"
+  assert {item.name for item in manifest.datasets.items} == {"llm-golden", "llm-mock-outputs"}
   assert {item.name for item in manifest.prompts.items} == {"prompt-pl", "prompt-en"}
   assert {item.name for item in manifest.schemas.items} == {"output-schema"}
   assert manifest.qdrant_collections.not_applicable_reason
@@ -236,5 +292,6 @@ def test_llmops_candidate_fails_closed_on_missing_gate_or_fake_live_claim(tmp_pa
       prompt_paths=prompts,
       schema_path=schema,
       golden_path=repository / "backend-ai" / "evaluation" / "golden-v1.jsonl",
+      output_path=repository / "backend-ai" / "evaluation" / "golden-mock-outputs-v1.jsonl",
       report=report,
     )

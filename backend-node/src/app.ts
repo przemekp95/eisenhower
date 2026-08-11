@@ -19,12 +19,19 @@ export interface CreateAppOptions {
   databaseStatusResolver?: () => 'connected' | 'disconnected';
 }
 
-export async function defaultAiHealthChecker(url = loadConfig().aiServiceUrl): Promise<HealthState> {
+const DEFAULT_AI_READINESS_TIMEOUT_MS = 3_000;
+
+export async function defaultAiHealthChecker(
+  url = loadConfig().aiServiceUrl,
+  timeoutMs = DEFAULT_AI_READINESS_TIMEOUT_MS,
+): Promise<HealthState> {
   try {
-    const response = await fetch(url, {
+    const readinessUrl = `${url.replace(/\/+$/, '')}/health/ready`;
+    const response = await fetch(readinessUrl, {
       headers: {
         Accept: 'application/json',
       },
+      signal: AbortSignal.timeout(timeoutMs),
     });
 
     return response.ok ? 'healthy' : 'unhealthy';
@@ -79,7 +86,8 @@ export function createApp(options: CreateAppOptions = {}) {
       origin: config.corsAllowOrigins,
       credentials: false,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Authorization', 'Content-Type'],
+      allowedHeaders: ['Authorization', 'Content-Type', 'If-Match'],
+      exposedHeaders: ['ETag', 'X-Next-Cursor', 'Link'],
     })
   );
   app.use(requireTrustedBrowserOrigin(config.corsAllowOrigins));

@@ -86,6 +86,8 @@ class MetricsRegistry:
     self._memory_duration_sum = Counter()
     self._memory_duration_buckets = Counter()
     self._job_depth: dict[str, int] = {}
+    self._job_queue_enabled = False
+    self._job_worker_heartbeat_age_seconds: float | None = None
 
   def observe_http(self, method: str, route: str, status: int, duration_seconds: float) -> None:
     key = (method.upper(), route, str(status))
@@ -180,6 +182,16 @@ class MetricsRegistry:
   def set_job_depth(self, status: str, count: int) -> None:
     with self._lock:
       self._job_depth[status] = max(0, int(count))
+
+  def set_job_queue_enabled(self, enabled: bool) -> None:
+    with self._lock:
+      self._job_queue_enabled = bool(enabled)
+
+  def set_job_worker_heartbeat_age(self, age_seconds: float | None) -> None:
+    with self._lock:
+      self._job_worker_heartbeat_age_seconds = (
+        None if age_seconds is None else max(0.0, float(age_seconds))
+      )
 
   def set_generation_status(self, state: str, *, failures: int) -> None:
     with self._lock:
@@ -353,9 +365,21 @@ class MetricsRegistry:
           f"{self._memory_duration_sum[key]:.6f}"
         )
       lines.extend([
+        "# HELP eisenhower_job_queue_enabled Whether the durable job runtime is configured.",
+        "# TYPE eisenhower_job_queue_enabled gauge",
+        f"eisenhower_job_queue_enabled {int(self._job_queue_enabled)}",
         "# HELP eisenhower_job_queue_depth Durable jobs by lifecycle status.",
         "# TYPE eisenhower_job_queue_depth gauge",
       ])
       for status, value in sorted(self._job_depth.items()):
         lines.append(f"eisenhower_job_queue_depth{{{_labels(status=status)}}} {value}")
+      lines.extend([
+        "# HELP eisenhower_job_worker_heartbeat_age_seconds Age of the latest durable worker heartbeat.",
+        "# TYPE eisenhower_job_worker_heartbeat_age_seconds gauge",
+      ])
+      if self._job_worker_heartbeat_age_seconds is not None:
+        lines.append(
+          "eisenhower_job_worker_heartbeat_age_seconds "
+          f"{self._job_worker_heartbeat_age_seconds:.6f}"
+        )
       return "\n".join(lines) + "\n"

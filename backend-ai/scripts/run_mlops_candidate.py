@@ -10,11 +10,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
   sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.artifacts.registry import ImmutableArtifactRegistry
-from app.config import load_settings
-from app.ops.candidates import CandidateWorkflowError, register_mlops_candidate
-from app.local_model import LocalMiniLMClassifier
 from benchmark_classifier import run_benchmark
+
+from app.artifacts.registry import (
+  ImmutableArtifactRegistry,
+  write_private_bytes,
+  write_public_commitment,
+)
+from app.config import load_settings
+from app.local_model import LocalMiniLMClassifier
+from app.ops.candidates import CandidateWorkflowError, register_mlops_candidate
 
 
 def main() -> int:
@@ -40,9 +45,9 @@ def main() -> int:
       report=report,
       current_pointer_path=LocalMiniLMClassifier(settings).current_pointer_path,
     )
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(manifest.model_dump_json(indent=2) + "\n", encoding="utf-8")
-    print(manifest.model_dump_json())
+    write_private_bytes(args.output, (manifest.model_dump_json(indent=2) + "\n").encode())
+    write_public_commitment(manifest, args.output.with_name("mlops-commitment.json"))
+    print(json.dumps({"candidate_id": manifest.candidate_id, "manifest_checksum": manifest.manifest_checksum}))
     return 0
   except (CandidateWorkflowError, OSError, ValueError) as issue:
     print(f"mlops-candidate-blocked: {issue}", file=sys.stderr)

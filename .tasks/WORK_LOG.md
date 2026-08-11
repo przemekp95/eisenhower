@@ -1,16 +1,18 @@
 # Completion log
 
-2026-08-11 — TASK-029: Added a fail-closed atomic retrieval/generation/response/MAG promotion state machine with immutable-candidate, fresh quality, approval, dependency, stable canary and rollback gates; 17 tests passed and pylint scored 10.00/10 without applying any runtime or deployment change.
+2026-08-11 — TASK-034: Added a fail-closed atomic retrieval/generation/response/MAG promotion state machine with immutable-candidate, fresh quality, approval, dependency, stable canary and rollback gates; 17 tests passed and pylint scored 10.00/10 without applying any runtime or deployment change.
 
-2026-08-11 — TASK-028: Added checksummed aggregate-only classifier/retrieval/generation/response/MAG drift reports with fail-closed missing/drift handling and recursive rejection of prompt/token/content/PII/private identifiers; 12 tests passed and pylint scored 10.00/10.
+2026-08-11 — TASK-033: Added checksummed aggregate-only classifier/retrieval/generation/response/MAG drift reports with fail-closed missing/drift handling and recursive rejection of prompt/token/content/PII/private identifiers; 12 tests passed and pylint scored 10.00/10.
 
-2026-08-11 — TASK-027: Added a checksummed PL/EN PromptSpec/schema/golden/safety/regression LLMOps candidate and CI runner with enforced mock/in-process versus live-model evidence levels; 35 tests, local manifest verification and pylint 10.00/10 passed without executing vLLM.
+2026-08-11 — TASK-032: Added a checksummed PL/EN PromptSpec/schema/golden workflow with independently frozen mock outputs, schema/citation-safety/regression comparisons and honest non-live evidence; real model evaluation remains an owner/model gate.
 
-2026-08-11 — TASK-026: Added a candidate-only RAGOps registrar for canonical ingestion, zero-drift reconciliation, evaluation, versioned Qdrant and verified snapshot/restore with an explicit no-alias-promotion gate; 30 tests passed, one live opt-in skipped and pylint scored 10.00/10.
+2026-08-11 — TASK-031: Added a candidate-only RAGOps registrar for canonical ingestion, zero-drift reconciliation, evaluation, versioned Qdrant and verified snapshot/restore with an explicit no-alias-promotion gate; 30 tests passed, one live opt-in skipped and pylint scored 10.00/10.
 
-2026-08-11 — TASK-025: Added deterministic candidate-only MLOps composition and CI artifact upload over the existing grouped-CV/five-seed/leakage/slice/baseline/incumbent gates; 13 tests passed and pylint scored 10.00/10 without changing the model pointer or human/production gates.
+2026-08-11 — TASK-030: Added deterministic candidate-only MLOps composition over grouped-CV/five-seed/leakage/slice/baseline/incumbent gates; public CI uploads only an allowlisted commitment while full private lineage stays runner-local, without changing model or human/production gates.
 
-2026-08-11 — TASK-024: Added the dependency-light immutable AI candidate manifest and private content-addressed registry/CLI with complete explicit lineage, overwrite/conflict/tamper rejection and no promotion semantics; 45 focused/regression tests passed and pylint rated the new code 10.00/10.
+2026-08-11 — TASK-029: Added the dependency-light immutable AI candidate manifest and private content-addressed registry/CLI with complete explicit lineage, overwrite/conflict/tamper rejection and no promotion semantics; 45 focused/regression tests passed and pylint rated the new code 10.00/10.
+
+2026-08-11 — TASK-024: Hardened the supported static Mikrus runtime, owner-scoped/versioned task API, web/mobile mutation, OCR, auth, reconnect, conflict, accessibility and destructive-action contracts plus experimental lease/monitoring safety; full `make verify`, 6 Playwright checks, Compose runtime smoke and `promtool` passed locally without deployment or publication.
 
 2026-08-11 — TASK-022: Added the vendor/location-neutral private OpenAI-compatible generation boundary, typed fallback/circuit observability, honest runtime detection and disabled NVIDIA/AMD profiles; full `make verify` passed while all live GPU/model/performance/deployment gates remain open.
 

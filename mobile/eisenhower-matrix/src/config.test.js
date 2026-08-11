@@ -27,6 +27,15 @@ describe('mobile config', () => {
     });
   });
 
+  it('falls back to NODE_ENV when the React Native development flag is unavailable', () => {
+    delete global.__DEV__;
+
+    const { mobileConfig } = require('./config');
+
+    expect(mobileConfig.apiUrl).toBe('http://127.0.0.1:3001');
+    expect(mobileConfig.aiApiUrl).toBe('http://127.0.0.1:8000');
+  });
+
   it('derives API urls from a shared production origin', () => {
     process.env.EXPO_PUBLIC_APP_ORIGIN_URL = 'https://example.com/';
 

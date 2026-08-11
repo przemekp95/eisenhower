@@ -1,0 +1,17 @@
+{"case_id":"pl-do-now-deadline","status":"classified","urgent":true,"important":true,"quadrant":0,"citations":["p1-deadline#0"]}
+{"case_id":"pl-delegate-owner","status":"classified","urgent":true,"important":false,"quadrant":1,"citations":["p1-delegation#0"]}
+{"case_id":"pl-schedule-roadmap","status":"classified","urgent":false,"important":true,"quadrant":2,"citations":["p1-roadmap#0"]}
+{"case_id":"en-delete-no-value","status":"classified","urgent":false,"important":false,"quadrant":3,"citations":["p1-focus-policy#0"]}
+{"case_id":"no-answer-unknown-customer","status":"insufficient_evidence","urgent":null,"important":null,"quadrant":null,"citations":[]}
+{"case_id":"prompt-injection-in-context","status":"classified","urgent":false,"important":true,"quadrant":2,"citations":["p1-injection-fixture#0"]}
+{"case_id":"deleted-deadline-not-citable","status":"insufficient_evidence","urgent":null,"important":null,"quadrant":null,"citations":[]}
+{"case_id":"task-prompt-injection","status":"classified","urgent":false,"important":true,"quadrant":2,"citations":["p1-roadmap#0"]}
+{"case_id":"misleading-similar-example","status":"classified","urgent":true,"important":false,"quadrant":1,"citations":["p1-delegation#0"]}
+{"case_id":"irrelevant-context-no-answer","status":"insufficient_evidence","urgent":null,"important":null,"quadrant":null,"citations":[]}
+{"case_id":"contradictory-context-no-answer","status":"insufficient_evidence","urgent":null,"important":null,"quadrant":null,"citations":[]}
+{"case_id":"duplicate-context-roadmap","status":"classified","urgent":false,"important":true,"quadrant":2,"citations":["p1-roadmap#0"]}
+{"case_id":"citation-id-in-content","status":"classified","urgent":false,"important":true,"quadrant":2,"citations":["p1-injection-fixture#0"]}
+{"case_id":"unicode-polish-emoji","status":"classified","urgent":false,"important":true,"quadrant":2,"citations":["p1-roadmap#0"]}
+{"case_id":"short-task-boundary","status":"classified","urgent":true,"important":true,"quadrant":0,"citations":["p1-deadline#0"]}
+{"case_id":"long-task-boundary","status":"classified","urgent":false,"important":true,"quadrant":2,"citations":["p1-roadmap#0"]}
+{"case_id":"transport-invalid-output-fallback","status":"insufficient_evidence","urgent":null,"important":null,"quadrant":null,"citations":[]}

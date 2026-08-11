@@ -374,17 +374,14 @@ jobs:
             --git-sha "${GITHUB_SHA}" \
             --output "${RUNNER_TEMP}/eisenhower-ai-candidates/ragops-manifest.json"
 
-      - name: Upload immutable AI candidates
+      - name: Upload non-sensitive AI candidate commitments
         uses: actions/upload-artifact@v7
         with:
-          name: mlops-candidate-${{ github.sha }}
+          name: ai-candidate-commitments-${{ github.sha }}
           path: |
-            ${{ runner.temp }}/eisenhower-ai-registry
-            ${{ runner.temp }}/eisenhower-ai-candidates/mlops-manifest.json
-            ${{ runner.temp }}/eisenhower-ai-candidates/llmops-manifest.json
-            ${{ runner.temp }}/eisenhower-ai-candidates/ragops-manifest.json
-            ${{ runner.temp }}/eisenhower-ai-candidates/classification-output-schema.json
-            ${{ runner.temp }}/eisenhower-ai-candidates/qdrant-candidate.snapshot
+            ${{ runner.temp }}/eisenhower-ai-candidates/mlops-commitment.json
+            ${{ runner.temp }}/eisenhower-ai-candidates/llmops-commitment.json
+            ${{ runner.temp }}/eisenhower-ai-candidates/ragops-commitment.json
           if-no-files-found: error
           retention-days: 14
 

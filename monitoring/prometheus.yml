@@ -21,3 +21,9 @@ scrape_configs:
   - job_name: 'qdrant'
     static_configs:
       - targets: ['qdrant:6333']
+
+  # Present only with an explicitly enabled private inference profile.
+  - job_name: 'inference'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['inference:8000']

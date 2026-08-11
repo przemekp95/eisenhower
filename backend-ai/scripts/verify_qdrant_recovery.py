@@ -97,6 +97,61 @@ def _hit_ids(retriever, *, tenant: str, user: str, project: str) -> list[str]:
   return sorted(hit.chunk_id for hit in hits)
 
 
+def verify_candidate_collection_snapshot(
+  client: QdrantClient,
+  manager: QdrantCollectionManager,
+  source_collection: str,
+  snapshot_output: Path,
+) -> dict:
+  """Snapshot and independently restore the exact collection evaluated by a candidate run."""
+  restored_collection = f"{source_collection}_restore_{uuid4().hex}"
+  artifact = None
+  try:
+    source_points = _all_points(client, source_collection)
+    if not source_points:
+      raise AssertionError("Evaluated candidate collection is empty")
+    source_digest = _digest(source_points)
+    artifact = manager.create_snapshot(source_collection)
+    response = httpx.get(
+      f"{QDRANT_URL}/collections/{source_collection}/snapshots/{artifact.name}", timeout=30,
+    )
+    response.raise_for_status()
+    snapshot_bytes = response.content
+    independent_checksum = sha256(snapshot_bytes).hexdigest()
+    if independent_checksum != artifact.checksum:
+      raise AssertionError("Downloaded candidate snapshot checksum differs from Qdrant metadata")
+    snapshot_output.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    snapshot_output.parent.chmod(0o700)
+    snapshot_output.write_bytes(snapshot_bytes)
+    snapshot_output.chmod(0o600)
+    manager.restore_uploaded_snapshot(
+      restored_collection, BytesIO(snapshot_bytes), checksum=artifact.checksum,
+    )
+    restored_points = _all_points(client, restored_collection)
+    restored_digest = _digest(restored_points)
+    if restored_digest != source_digest:
+      raise AssertionError("Restored candidate collection differs from evaluated collection")
+    return {
+      "source_collection": source_collection,
+      "restored_collection": restored_collection,
+      "source_points": len(source_points),
+      "restored_points": len(restored_points),
+      "source_digest_sha256": source_digest,
+      "restored_digest_sha256": restored_digest,
+      "qdrant_checksum": artifact.checksum,
+      "independent_download_sha256": independent_checksum,
+      "matches_source": True,
+      "isolated_restore": restored_collection != source_collection,
+    }
+  finally:
+    if client.collection_exists(restored_collection):
+      client.delete_collection(collection_name=restored_collection)
+    if artifact is not None:
+      existing = {item.name for item in client.list_snapshots(source_collection)}
+      if artifact.name in existing:
+        manager.delete_snapshot(artifact)
+
+
 def run_verification(snapshot_output: Path | None = None) -> dict:
   suffix = uuid4().hex
   source = f"task012_source_{suffix}"
@@ -157,8 +212,10 @@ def run_verification(snapshot_output: Path | None = None) -> dict:
     snapshot_response.raise_for_status()
     snapshot_bytes = snapshot_response.content
     if snapshot_output is not None:
-      snapshot_output.parent.mkdir(parents=True, exist_ok=True)
+      snapshot_output.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+      snapshot_output.parent.chmod(0o700)
       snapshot_output.write_bytes(snapshot_bytes)
+      snapshot_output.chmod(0o600)
     independent_sha = sha256(snapshot_bytes).hexdigest()
     if independent_sha != artifact.checksum:
       raise AssertionError("Downloaded snapshot checksum differs from Qdrant metadata")

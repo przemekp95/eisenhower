@@ -7,11 +7,13 @@ import {
   isTaskPendingSync,
   isTaskVisible,
   markTaskPendingDelete,
+  markTaskSyncFailed,
   markTaskPendingUpdate,
   reconcilePendingTasks,
   normalizeStoredTask,
   normalizeStoredTasks,
   removeTask,
+  resolveTaskConflict,
   taskToRemotePayload,
   upsertTask,
 } from './taskSync';
@@ -70,7 +72,9 @@ describe('taskSync', () => {
   });
 
   it('normalizes invalid sync metadata and empty inputs', () => {
+    expect(isRemoteTaskId()).toBe(false);
     expect(getTaskRemoteId(null)).toBeNull();
+    expect(getTaskRemoteId({ id: 'local-blank', remoteId: '   ' })).toBeNull();
     expect(normalizeStoredTasks(null)).toEqual([]);
 
     expect(
@@ -100,6 +104,14 @@ describe('taskSync', () => {
       remoteId: null,
       syncState: TASK_SYNC_STATE.localSeed,
     });
+
+    expect(
+      normalizeStoredTask({
+        id: 'local-update',
+        title: 'Unsaved update',
+        syncState: TASK_SYNC_STATE.pendingUpdate,
+      })
+    ).toMatchObject({ syncState: TASK_SYNC_STATE.pendingCreate });
   });
 
   it('creates, updates and deletes pending tasks', () => {
@@ -155,6 +167,11 @@ describe('taskSync', () => {
       )
     ).toMatchObject({
       important: true,
+      syncState: TASK_SYNC_STATE.pendingCreate,
+    });
+
+    expect(markTaskPendingUpdate(pendingCreateTask)).toMatchObject({
+      title: 'Offline',
       syncState: TASK_SYNC_STATE.pendingCreate,
     });
 
@@ -241,6 +258,28 @@ describe('taskSync', () => {
     expect(removeTask([remoteTask, pendingCreateTask], '507f1f77bcf86cd799439011')).toEqual([
       pendingCreateTask,
     ]);
+  });
+
+  it('keeps pending changes and distinguishes conflicts from transport failures', () => {
+    const task = normalizeStoredTask({
+      id: '507f1f77bcf86cd799439011',
+      title: 'Remote',
+      urgent: true,
+      important: false,
+      syncState: TASK_SYNC_STATE.pendingUpdate,
+    });
+
+    expect(markTaskSyncFailed(task, { status: 412 })).toMatchObject({
+      syncState: TASK_SYNC_STATE.pendingUpdate,
+      syncError: 'conflict',
+    });
+    expect(markTaskSyncFailed(task, { response: { status: 409 } })).toMatchObject({
+      syncError: 'conflict',
+    });
+    expect(markTaskSyncFailed(task, new Error('offline'))).toMatchObject({
+      syncState: TASK_SYNC_STATE.pendingUpdate,
+      syncError: 'error',
+    });
   });
 
   it('reconciles pending tasks against the remote API when sync succeeds', async () => {
@@ -372,10 +411,192 @@ describe('taskSync', () => {
     });
 
     expect(resolvedTasks).toEqual([
-      pendingDeleteTask,
-      pendingUpdateTask,
-      pendingCreateTask,
+      { ...pendingDeleteTask, syncError: 'error' },
+      { ...pendingUpdateTask, syncError: 'error' },
+      { ...pendingCreateTask, syncError: 'error' },
     ]);
     expect(hasPendingTasks(resolvedTasks)).toBe(true);
+  });
+
+  it('uses revisions during default-language reconciliation and remote identity matching', async () => {
+    const remoteId = '507f1f77bcf86cd799439099';
+    const pendingUpdate = normalizeStoredTask({
+      id: 'local-alias',
+      remoteId,
+      title: 'Revision update',
+      revision: 7,
+      syncState: TASK_SYNC_STATE.pendingUpdate,
+    });
+    const pendingDelete = normalizeStoredTask({
+      id: remoteId,
+      title: 'Revision delete',
+      revision: 8,
+      syncState: TASK_SYNC_STATE.pendingDelete,
+    });
+    const updateRemoteTask = jest.fn().mockResolvedValue({
+      ...pendingUpdate,
+      id: remoteId,
+      syncState: TASK_SYNC_STATE.synced,
+      revision: 8,
+    });
+    const deleteRemoteTask = jest.fn().mockRejectedValue({ response: { status: 412 } });
+
+    const resolved = await reconcilePendingTasks({
+      cachedTasks: [pendingUpdate, pendingDelete],
+      remoteTasks: [{ ...pendingUpdate, id: remoteId, title: 'Old remote' }],
+      createRemoteTask: jest.fn(),
+      updateRemoteTask,
+      deleteRemoteTask,
+    });
+
+    expect(updateRemoteTask).toHaveBeenCalledWith(
+      remoteId,
+      expect.objectContaining({ title: 'Revision update' }),
+      'pl',
+      7
+    );
+    expect(deleteRemoteTask).toHaveBeenCalledWith(remoteId, 8);
+    expect(resolved).toEqual([
+      expect.objectContaining({
+        title: 'Revision update',
+        revision: 8,
+        syncState: TASK_SYNC_STATE.conflict,
+        syncError: 'conflict',
+        pendingIntent: { type: 'delete', baseRevision: 8 },
+      }),
+    ]);
+
+    expect(
+      upsertTask(
+        [{ id: 'old-local-id', remoteId, title: 'Old' }],
+        { id: 'new-local-id', remoteId, title: 'New' }
+      )
+    ).toEqual([{ id: 'new-local-id', remoteId, title: 'New' }]);
+  });
+
+  it('keeps the fresh remote revision visible on 412 update and preserves local intent', async () => {
+    const remoteId = '507f1f77bcf86cd799439081';
+    const cached = normalizeStoredTask({
+      id: remoteId,
+      title: 'My offline edit',
+      description: 'local intent',
+      urgent: true,
+      important: false,
+      revision: 7,
+      syncState: TASK_SYNC_STATE.pendingUpdate,
+    });
+    const freshRemote = normalizeStoredTask({
+      id: remoteId,
+      title: 'New server value',
+      description: 'changed elsewhere',
+      urgent: false,
+      important: true,
+      revision: 8,
+    });
+
+    const [conflict] = await reconcilePendingTasks({
+      cachedTasks: [cached],
+      remoteTasks: [freshRemote],
+      updateRemoteTask: jest.fn().mockRejectedValue({ status: 412 }),
+      createRemoteTask: jest.fn(),
+      deleteRemoteTask: jest.fn(),
+    });
+
+    expect(conflict).toMatchObject({
+      title: 'New server value',
+      revision: 8,
+      syncState: TASK_SYNC_STATE.conflict,
+      syncError: 'conflict',
+      pendingIntent: {
+        type: 'update',
+        baseRevision: 7,
+        payload: { title: 'My offline edit', description: 'local intent' },
+      },
+    });
+    expect(isTaskVisible(conflict)).toBe(true);
+    expect(hasPendingTasks([conflict])).toBe(true);
+
+    expect(resolveTaskConflict(conflict, 'remote')).toMatchObject({
+      title: 'New server value',
+      revision: 8,
+      syncState: TASK_SYNC_STATE.synced,
+    });
+    expect(resolveTaskConflict(conflict, 'local')).toMatchObject({
+      title: 'My offline edit',
+      revision: 8,
+      syncState: TASK_SYNC_STATE.pendingUpdate,
+    });
+
+    const updateRemoteTask = jest.fn();
+    const [rolledConflict] = await reconcilePendingTasks({
+      cachedTasks: [conflict],
+      remoteTasks: [{ ...freshRemote, title: 'Even newer server value', revision: 9 }],
+      updateRemoteTask,
+      createRemoteTask: jest.fn(),
+      deleteRemoteTask: jest.fn(),
+    });
+    expect(rolledConflict).toMatchObject({
+      title: 'Even newer server value',
+      revision: 9,
+      syncState: TASK_SYNC_STATE.conflict,
+      pendingIntent: {
+        type: 'update',
+        payload: { title: 'My offline edit' },
+      },
+    });
+    expect(updateRemoteTask).not.toHaveBeenCalled();
+  });
+
+  it('keeps a fresh remote task visible when a revision-safe delete conflicts', async () => {
+    const remoteId = '507f1f77bcf86cd799439082';
+    const cached = normalizeStoredTask({
+      id: remoteId,
+      title: 'Delete my old copy',
+      revision: 2,
+      syncState: TASK_SYNC_STATE.pendingDelete,
+    });
+    const freshRemote = normalizeStoredTask({
+      id: remoteId,
+      title: 'Server edited this task',
+      description: 'must be reviewed',
+      revision: 3,
+    });
+
+    const [conflict] = await reconcilePendingTasks({
+      cachedTasks: [cached],
+      remoteTasks: [freshRemote],
+      deleteRemoteTask: jest.fn().mockRejectedValue({ response: { status: 412 } }),
+      createRemoteTask: jest.fn(),
+      updateRemoteTask: jest.fn(),
+    });
+
+    expect(conflict).toMatchObject({
+      title: 'Server edited this task',
+      revision: 3,
+      syncState: TASK_SYNC_STATE.conflict,
+      pendingIntent: { type: 'delete', baseRevision: 2 },
+    });
+    expect(isTaskVisible(conflict)).toBe(true);
+    expect(resolveTaskConflict(conflict, 'local')).toMatchObject({
+      title: 'Server edited this task',
+      revision: 3,
+      syncState: TASK_SYNC_STATE.pendingDelete,
+    });
+  });
+
+  it('handles no-op, remote-missing and invalid conflict resolutions safely', () => {
+    expect(resolveTaskConflict(null, 'remote')).toBeNull();
+
+    const missing = normalizeStoredTask({
+      id: '507f1f77bcf86cd799439083',
+      title: 'Gone remotely',
+      revision: 4,
+      syncState: TASK_SYNC_STATE.conflict,
+      syncError: 'conflict',
+      remoteMissing: true,
+      pendingIntent: { type: 'delete', baseRevision: 3 },
+    });
+    expect(resolveTaskConflict(missing, 'remote')).toBeNull();
+    expect(resolveTaskConflict(missing, 'unsupported')).toEqual(missing);
   });
 });
