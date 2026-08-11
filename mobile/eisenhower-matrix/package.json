@@ -14,7 +14,7 @@
     "@babel/runtime": "^7.28.6",
     "@eisenhower/api-client": "file:../../packages/api-client",
     "@react-native-async-storage/async-storage": "^2.1.0",
-    "expo": "^55.0.5",
+    "expo": "^55.0.28",
     "expo-image-picker": "~55.0.11",
     "expo-status-bar": "^55.0.4",
     "react": "19.2.0",
