@@ -14,8 +14,10 @@ class GoldenCase(BaseModel):
   tenant_id: str
   user_id: str
   project_ids: list[str] = Field(default_factory=list)
+  query_project_id: str | None = Field(default=None, min_length=1, max_length=128)
   roles: list[str] = Field(default_factory=list)
   language: Literal["pl", "en"] = "pl"
+  split: Literal["train", "dev", "holdout"] = "dev"
   task: str
   corpus_version: str = "synthetic-corpus-v1"
   index_version: str = "synthetic-index-v1"
@@ -25,6 +27,8 @@ class GoldenCase(BaseModel):
   answerability: Literal["answerable", "no_answer"]
   relevant_document_ids: list[str] = Field(default_factory=list)
   forbidden_document_ids: list[str] = Field(default_factory=list)
+  stale_document_ids: list[str] = Field(default_factory=list)
+  expected_content_versions: dict[str, str] = Field(default_factory=dict)
   allowed_citation_ids: list[str] = Field(default_factory=list)
   forbidden_citation_ids: list[str] = Field(default_factory=list)
   allowed_facts: list[str] = Field(default_factory=list)
@@ -48,12 +52,22 @@ class GoldenCase(BaseModel):
       values.setdefault("expected_important", important)
     return values
 
+  @model_validator(mode="after")
+  def validate_query_project(self):
+    if self.query_project_id is not None and self.query_project_id not in self.project_ids:
+      raise ValueError("query_project_id must belong to project_ids")
+    return self
+
 
 def load_golden_dataset(path: str | Path) -> list[GoldenCase]:
   source = Path(path)
+  return parse_golden_dataset(source.read_text(encoding="utf-8"))
+
+
+def parse_golden_dataset(content: str) -> list[GoldenCase]:
   cases = [
     GoldenCase.model_validate_json(line)
-    for line in source.read_text(encoding="utf-8").splitlines()
+    for line in content.splitlines()
     if line.strip()
   ]
   if not cases:

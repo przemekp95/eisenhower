@@ -1,0 +1,40 @@
+{
+  "dataset_version": "retrieval-review-candidate-v1-unapproved",
+  "approval_status": "human_review_required",
+  "k": 5,
+  "global": {
+    "recall_at_k_min": 0.9,
+    "mrr_at_k_min": 0.8,
+    "no_hit_accuracy_min": 1.0,
+    "duplicate_hit_rate_max": 0.02,
+    "freshness_rate_min": 1.0,
+    "stale_hit_rate_max": 0.0,
+    "forbidden_hit_rate_max": 0.0,
+    "isolation_violation_rate_max": 0.0
+  },
+  "required_slices": {
+    "language_pl": {
+      "recall_at_k_min": 0.85,
+      "mrr_at_k_min": 0.75
+    },
+    "language_en": {
+      "recall_at_k_min": 0.85,
+      "mrr_at_k_min": 0.75
+    },
+    "split_holdout": {
+      "recall_at_k_min": 0.85,
+      "mrr_at_k_min": 0.75,
+      "no_hit_accuracy_min": 1.0
+    }
+  },
+  "latency_observation": {
+    "metric": "warm_local_p95_ms",
+    "proposed_max": 250,
+    "acceptance_scope": "local_reference_hardware_only"
+  },
+  "notes": [
+    "Any forbidden, cross-tenant, cross-project or stale hit is a release blocker.",
+    "Latency measured locally is not production latency evidence.",
+    "Thresholds are proposals until an independent human reviewer approves them."
+  ]
+}

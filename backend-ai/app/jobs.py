@@ -37,6 +37,13 @@ class Job:
   last_error: str | None = None
 
 
+class JobConflictError(RuntimeError):
+  """Raised when an idempotency key is reused for a different command."""
+
+  def __init__(self):
+    super().__init__("Idempotency key is already bound to a different job request.")
+
+
 class SqliteJobQueue:
   """Durable, leased command queue for a small single-site deployment."""
 
@@ -110,6 +117,15 @@ class SqliteJobQueue:
         f"SELECT {JOB_COLUMNS} FROM jobs WHERE idempotency_key = ?",
         (idempotency_key,),
       ).fetchone()
+      if row is None:
+        raise RuntimeError("Enqueued job could not be read back")
+      existing_payload = json.dumps(
+        json.loads(row[3]),
+        sort_keys=True,
+        separators=(",", ":"),
+      )
+      if row[2] != job_type or existing_payload != serialized:
+        raise JobConflictError()
     return self._row_to_job(row)
 
   def get(self, job_id: str) -> Job | None:

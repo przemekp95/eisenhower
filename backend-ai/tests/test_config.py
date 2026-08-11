@@ -17,8 +17,13 @@ def test_load_settings_uses_defaults():
   assert settings.rag_generation_enabled is False
   assert settings.prompt_artifact_dir.name == "prompts"
   assert settings.prompt_id == "eisenhower-classifier"
-  assert settings.prompt_version == "1.0.0"
+  assert settings.prompt_version == "1.1.0"
   assert settings.local_model_revision == "e8f8c211226b894fcb81acc59f3b34ba3efd5f42"
+  assert settings.mongodb_uri is None
+  assert settings.canonical_documents_collection == "rag_documents"
+  assert settings.memory_write_enabled is False
+  assert settings.memory_retrieval_enabled is False
+  assert settings.memory_response_enabled is False
 
 
 def test_load_settings_accepts_overrides(tmp_path: Path):
@@ -42,6 +47,16 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
       "INDEX_VERSION": "index-v3",
       "RAG_RETRIEVAL_ENABLED": "true",
       "RAG_GENERATION_ENABLED": "false",
+      "MONGODB_URI": "mongodb://mongodb:27017/eisenhower",
+      "MONGODB_DATABASE": "eisenhower-test",
+      "CANONICAL_DOCUMENTS_COLLECTION": "canonical-test",
+      "CORPUS_REPOSITORY_ROOT": str(tmp_path / "corpus"),
+      "CORPUS_MANIFEST_PATH": str(tmp_path / "manifest.json"),
+      "CORPUS_OWNER_ID": "owner-1",
+      "MEMORY_WRITE_ENABLED": "true",
+      "MEMORY_RETRIEVAL_ENABLED": "true",
+      "MEMORY_RESPONSE_ENABLED": "false",
+      "MEMORY_POLICY_PATH": str(tmp_path / "memory-policy.json"),
     }
   )
 
@@ -63,6 +78,16 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
   assert settings.index_version == "index-v3"
   assert settings.rag_retrieval_enabled is True
   assert settings.rag_generation_enabled is False
+  assert settings.mongodb_uri == "mongodb://mongodb:27017/eisenhower"
+  assert settings.mongodb_database == "eisenhower-test"
+  assert settings.canonical_documents_collection == "canonical-test"
+  assert settings.corpus_repository_root == tmp_path / "corpus"
+  assert settings.corpus_manifest_path == tmp_path / "manifest.json"
+  assert settings.corpus_owner_id == "owner-1"
+  assert settings.memory_write_enabled is True
+  assert settings.memory_retrieval_enabled is True
+  assert settings.memory_response_enabled is False
+  assert settings.memory_policy_path == tmp_path / "memory-policy.json"
 
 
 def test_production_oidc_requires_issuer_audience_and_explicit_cors():
@@ -102,6 +127,17 @@ def test_generation_cannot_be_enabled_without_retrieval(tmp_path: Path):
       model_cache_dir=tmp_path / "runtime",
       rag_generation_enabled=True,
     )
+
+
+def test_memory_flags_fail_closed_in_rollout_order(tmp_path: Path):
+  common = {
+    "training_data_path": tmp_path / "training.json",
+    "model_cache_dir": tmp_path / "runtime",
+  }
+  with pytest.raises(ValueError, match="governed memory writes"):
+    Settings(**common, memory_retrieval_enabled=True)
+  with pytest.raises(ValueError, match="memory retrieval"):
+    Settings(**common, memory_write_enabled=True, memory_response_enabled=True)
 
 
 def test_production_static_auth_requires_distinct_long_tokens():

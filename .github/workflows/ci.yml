@@ -275,6 +275,11 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Install governed extraction system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends tesseract-ocr tesseract-ocr-eng
+
       - name: Cache pip
         uses: actions/cache@v5
         with:

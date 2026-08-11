@@ -1,0 +1,95 @@
+{
+  "schema_version": "observability-runtime-local-v1",
+  "status": "local_runtime_verified_not_deployed",
+  "observed_at_utc": "2026-08-10T23:24:31Z",
+  "git": {
+    "base_head": "1c8e8068cc7c91fc45cbff13a02c3e1e71ab710b",
+    "worktree_dirty": true,
+    "interpretation": "The base commit is not an immutable identity for the bind-mounted worktree changes; exact relevant file hashes are recorded below."
+  },
+  "runtime_scope": {
+    "ai_service": "Current worktree source bind-mounted read-write into a previously built dependency image; one Uvicorn worker; RAG retrieval, generation and responses disabled.",
+    "prometheus": "Ephemeral local container on loopback; real scrape of the AI service and Qdrant.",
+    "grafana": "Ephemeral local container on loopback; provisioned datasource and dashboard queried through the Grafana API.",
+    "mcp": "Official MCP SDK with two real loopback TCP/HTTP fixture upstreams; not Node/FastAPI/Qdrant data.",
+    "excluded_claims": [
+      "deployed runtime",
+      "production traffic",
+      "public HTTPS",
+      "live vLLM",
+      "approved TASK-013 retrieval quality",
+      "same-commit container image",
+      "public demo"
+    ]
+  },
+  "images": {
+    "ai_dependency_image": "eisenhower-ai@sha256:50fe2a02e225b23bebb17a6cd66d7517e6242a7fdeb6bc20bc49275853182031",
+    "prometheus": "prom/prometheus@sha256:508729e0e2d18e11fd742a5a5ca70e557b940a93948c3c95fd0123a6fd538b69",
+    "grafana": "grafana/grafana@sha256:ab5cb380e3ff3172d6c8bd2e7cfd31cce977d2881b260e1f5bc089bf0b759b43",
+    "grafana_version": "13.1.3",
+    "grafana_commit": "45a27d64b64a82d666b06aa5c5bb3521587edb0d"
+  },
+  "file_sha256": {
+    "backend-ai/app/main.py": "7c335e821c7361dd867fce0157924bf7a7197544533bea908dce4c08e214f18d",
+    "backend-ai/app/metrics.py": "5a3a465f56f91304c593d61989b61b638fa14f60d268436042680c8314b17b74",
+    "backend-ai/Dockerfile": "2044fee246d2bcfa15dcdf9111a1ffedd15bcad15c63e23fde66bd0c1bf04147",
+    "monitoring/prometheus.yml": "9dc8359aae95412d3751e47d73ae282f93f19e2a9da7b074c89f6a6c0a467fd9",
+    "monitoring/alert_rules.yml": "f25ee3705b33cfd3324b2a41f832ad07f410eda51815913f0a0a4bed1b165e4f",
+    "monitoring/grafana/dashboards/eisenhower-ai.json": "34e073cad91825f1f83c29f38b8cb47dadd8dd689c8d0d85227aea781cf1d7d9",
+    "mcp/eisenhower_adapter/eisenhower_mcp/http_client.py": "a40fa0af8c7cad4b96e7a569acf05fbdcaccce7aa0f1eef1f00789e43e0ae675",
+    "mcp/eisenhower_adapter/eisenhower_mcp/server.py": "d1675f5e6081462d708313f98098ad0b7b2bb8767517d9b2e328a86f57042e9a",
+    "mcp/eisenhower_adapter/tests/test_http_mcp_integration.py": "9bd9e46fd7f16097c8df93fbd41f0a5c7d29d85067b6eaf1c9e0b9c5cfa43f5a",
+    "mcp/eisenhower_adapter/uv.lock": "ca7ecec7127e65d28e6866120a7adb13868c9a928f01bf1e22ec9627525de79b"
+  },
+  "observations": {
+    "prometheus_config": "promtool success; one rule group and eight rules loaded by the running server",
+    "grafana_database": "ok",
+    "grafana_dashboard_uid": "eisenhower-ai-runtime",
+    "grafana_datasource_uid": "eisenhower-prometheus",
+    "grafana_datasource_health": "OK; Successfully queried the Prometheus API.",
+    "ai_service_up": 1,
+    "qdrant_up": 1,
+    "vllm_up": 0,
+    "vllm_interpretation": "Expected: no model/GPU approval and no vLLM runtime was started.",
+    "request_result": {
+      "mode": "fallback",
+      "quadrant": 2,
+      "fallback_reason": "rag_disabled"
+    },
+    "scraped_metric": "eisenhower_rag_results_total{mode=\"fallback\",reason=\"rag_disabled\"} 1",
+    "grafana_query_value": 1,
+    "private_value_scan": "No task text, local bearer values, tenant/user IDs, prompt, document/chunk IDs or memory IDs were found in the live metrics response."
+  },
+  "regression_found": {
+    "problem": "The CPU production image used two Uvicorn workers while metrics, provider state and the loaded classifier are process-local, allowing requests and metrics reads to observe different state.",
+    "fix": "Use one worker per container for CPU and CUDA production images; horizontal scaling must use separate instances scraped by Prometheus.",
+    "proof": "A live request followed by metrics initially lost the event under two workers and consistently exposed it under one worker; a Dockerfile regression test was added."
+  },
+  "mcp_verification": {
+    "tests": 21,
+    "warnings_policy": "PYTHONWARNINGS=error",
+    "real_components": [
+      "loopback TCP sockets",
+      "HTTP request/response transport",
+      "separate task and AI routing",
+      "Bearer header handling",
+      "HTTP 401 and 403",
+      "timeout",
+      "official MCP SDK dispatcher",
+      "all six read-only tool calls",
+      "server and socket cleanup"
+    ],
+    "fixture_components": [
+      "task records",
+      "knowledge citations"
+    ]
+  },
+  "cleanup": {
+    "ai_evidence_container_removed": true,
+    "prometheus_container_removed": true,
+    "grafana_container_removed": true,
+    "prometheus_test_volume_removed": true,
+    "grafana_test_volume_removed": true,
+    "preexisting_mongodb_and_qdrant_preserved": true
+  }
+}

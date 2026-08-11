@@ -4,6 +4,7 @@ import json
 import pytest
 
 from app.job_worker import PermanentJobError
+from app.jobs import ALLOWED_JOB_TYPES
 from app.rag.job_handlers import RagJobHandlers
 
 
@@ -16,8 +17,8 @@ class RecordingIngestion:
   def ingest(self, documents):
     self.documents.extend(documents)
 
-  def tombstone(self, document_ids, *, tenant_id, content_version):
-    self.tombstones.append((document_ids, tenant_id, content_version))
+  def tombstone(self, document_ids, *, tenant_id, content_version, source_sequence):
+    self.tombstones.append((document_ids, tenant_id, content_version, source_sequence))
 
 
 class RecordingVersions:
@@ -29,6 +30,11 @@ class RecordingVersions:
 
   def record(self, tenant_id, document_id, source_sequence):
     self.versions[(tenant_id, document_id)] = source_sequence
+
+
+def test_handler_registry_exactly_matches_queue_allowlist():
+  handlers = RagJobHandlers(RecordingIngestion(), None, chunking_version="char-v1")
+  assert set(handlers.registry) == ALLOWED_JOB_TYPES
 
 
 def checksum(value) -> str:
@@ -110,7 +116,7 @@ def test_tombstone_is_tenant_scoped_and_reindex_evaluation_are_explicit_callback
   handlers.reindex_project({"project_id": "project-a"})
   handlers.evaluate({"dataset_version": "gold-v1"})
 
-  assert ingestion.tombstones == [(["doc-1"], "tenant-a", "v9")]
+  assert ingestion.tombstones == [(["doc-1"], "tenant-a", "v9", 9)]
   assert calls == [("reindex", "project-a"), ("evaluate", "gold-v1")]
 
 

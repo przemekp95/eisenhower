@@ -244,7 +244,7 @@ def test_rag_analysis_falls_back_when_generation_output_is_invalid():
   result = service.analyze("Task", AccessScope(tenant_id="tenant-a", user_id="user-1"))
 
   assert result.mode == "fallback"
-  assert result.fallback_reason == "generation_unavailable"
+  assert result.fallback_reason == "invalid_generation_output"
 
 
 def test_rag_analysis_does_not_hide_unexpected_programming_errors():

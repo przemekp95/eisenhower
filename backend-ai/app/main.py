@@ -8,26 +8,28 @@ from typing import Literal
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .auth import AuthError, OIDCVerifier, ServiceTokenVerifier, StaticTokenVerifier, TokenVerifier
 from .config import Settings, load_settings
 from .device import get_device
 from .defaults import QUADRANT_NAMES
 from .local_model import ModelNotReadyError
-from .jobs import SqliteJobQueue
+from .generation.models import KnownStatement
+from .jobs import JobConflictError, SqliteJobQueue
 from .metrics import MetricsRegistry
-from .rag.models import AccessScope, AnalyzeResult, RetrievalSummary
+from .rag.models import AccessScope, AnalyzeResult, Citation, RetrievalSummary
 from .service import ProviderDisabledError, QuadrantAIService
 from .security_controls import SlidingWindowRateLimiter
 from .store import TrainingStore
-from .webhooks import WebhookReplayVerifier
+from .webhooks import WebhookReplayVerifier, parse_webhook_envelope
 
 request_logger = logging.getLogger("uvicorn.error")
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 MAX_TASK_LENGTH = 500
 MAX_BATCH_TASKS = 100
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_WEBHOOK_BYTES = 8 * 1024 * 1024
 
 
 class StrictRequest(BaseModel):
@@ -37,6 +39,19 @@ class StrictRequest(BaseModel):
 class RagAnalyzeRequest(StrictRequest):
   task: str = Field(..., min_length=1, max_length=MAX_TASK_LENGTH)
   language: Literal["en", "pl"] = "en"
+  known_state: list[KnownStatement] | None = Field(default=None, max_length=40)
+  previous_output_statements: list[KnownStatement] | None = Field(default=None, max_length=40)
+  freshness_requirement: Literal["snapshot_sufficient", "current_world_required"] = (
+    "snapshot_sufficient"
+  )
+
+  @model_validator(mode="after")
+  def statement_ids_are_globally_unique(self):
+    statements = (self.known_state or []) + (self.previous_output_statements or [])
+    identifiers = [item.statement_id for item in statements]
+    if len(identifiers) != len(set(identifiers)):
+      raise ValueError("known and previous-output statement ids must be globally unique")
+    return self
 
 
 class ClassifyRequest(StrictRequest):
@@ -55,11 +70,12 @@ class KnowledgeSearchRequest(StrictRequest):
   limit: int = Field(default=5, ge=1, le=20)
 
 
-class WebhookVerificationRequest(StrictRequest):
-  timestamp: str
-  signature: str
-  event_id: str = Field(..., min_length=1, max_length=128)
-  body: dict
+class KnowledgeSearchResponse(StrictRequest):
+  query: str
+  answer: str | None = None
+  citations: list[Citation] = Field(default_factory=list)
+  retrieval: RetrievalSummary = Field(default_factory=RetrievalSummary)
+  no_answer_reason: str | None = None
 
 
 class InternalJobRequest(StrictRequest):
@@ -274,6 +290,7 @@ def create_app(
 
   @app.post("/v2/ai/analyze", response_model=AnalyzeResult)
   def analyze_with_rag(request: RagAnalyzeRequest, http_request: Request):
+    analysis_started = time.perf_counter()
     principal = http_request.state.principal
     if "*" not in principal.scopes and "ai:analyze" not in principal.scopes:
       raise HTTPException(status_code=403, detail="Missing ai:analyze scope.")
@@ -291,21 +308,50 @@ def create_app(
       resolved_rag_service is not None
       and getattr(resolved_rag_service, "generation_enabled", True)
     )
+    current_world_abstention = (
+      resolved_rag_service is not None
+      and tenant_enabled
+      and request.freshness_requirement == "current_world_required"
+    )
     if (
       resolved_rag_service is not None
       and generation_enabled
       and resolved_settings.rag_response_enabled
       and tenant_enabled
-    ):
-      result = resolved_rag_service.analyze(request.task, scope, language=request.language)
+    ) or current_world_abstention:
+      delta_requested = (
+        request.known_state is not None
+        or request.previous_output_statements is not None
+        or request.freshness_requirement == "current_world_required"
+      )
+      if delta_requested:
+        result = resolved_rag_service.analyze(
+          request.task,
+          scope,
+          language=request.language,
+          known_state=request.known_state,
+          previous_output_statements=request.previous_output_statements,
+          freshness_requirement=request.freshness_requirement,
+        )
+      else:
+        result = resolved_rag_service.analyze(request.task, scope, language=request.language)
     else:
       if resolved_rag_service is not None and tenant_enabled:
+        retrieval_started = time.perf_counter()
         try:
           shadow = resolved_rag_service.retrieve_summary(request.task, scope)
-          metrics.observe_rag_retrieval("shadow", hit_count=shadow.hit_count)
+          metrics.observe_rag_retrieval(
+            "shadow",
+            hit_count=shadow.hit_count,
+            duration_seconds=time.perf_counter() - retrieval_started,
+          )
         except Exception:
           request_logger.warning("Optional shadow retrieval failed", exc_info=True)
-          metrics.observe_rag_retrieval("shadow", hit_count=None)
+          metrics.observe_rag_retrieval(
+            "shadow",
+            hit_count=None,
+            duration_seconds=time.perf_counter() - retrieval_started,
+          )
       classification = resolved_ai_service.classify_task(request.task, use_rag=False)
       if resolved_rag_service is None:
         fallback_reason = "rag_disabled"
@@ -324,10 +370,36 @@ def create_app(
         retrieval=RetrievalSummary(),
         fallback_reason=fallback_reason,
       )
+    analysis_duration = time.perf_counter() - analysis_started
     metrics.observe_rag_result(result.mode, result.fallback_reason)
+    metrics.observe_rag_analysis(result.mode, duration_seconds=analysis_duration)
+    if result.information_delta is not None:
+      metrics.observe_information_delta(result.information_delta.status)
+      metrics.observe_rag_validation("information_delta", "accepted")
+    if result.generation is not None:
+      generation_outcome = "no_answer" if result.mode == "no_answer" else "success"
+      metrics.observe_generation(
+        generation_outcome,
+        duration_seconds=analysis_duration,
+        input_tokens=result.generation.input_tokens,
+      )
+      metrics.observe_rag_validation("schema", "accepted")
+      if result.mode == "rag":
+        metrics.observe_rag_validation("citations", "accepted")
+    elif result.fallback_reason == "invalid_generation_output":
+      metrics.observe_generation("rejected", duration_seconds=analysis_duration, input_tokens=0)
+      metrics.observe_rag_validation("schema", "rejected")
+    elif result.fallback_reason == "invalid_citations":
+      metrics.observe_generation("rejected", duration_seconds=analysis_duration, input_tokens=0)
+      metrics.observe_rag_validation("citations", "rejected")
+    elif result.fallback_reason == "invalid_information_delta":
+      metrics.observe_generation("rejected", duration_seconds=analysis_duration, input_tokens=0)
+      metrics.observe_rag_validation("information_delta", "rejected")
+    elif result.fallback_reason == "generation_unavailable":
+      metrics.observe_generation("unavailable", duration_seconds=analysis_duration, input_tokens=0)
     return result
 
-  @app.post("/v2/knowledge/search")
+  @app.post("/v2/knowledge/search", response_model=KnowledgeSearchResponse)
   def search_knowledge(request: KnowledgeSearchRequest, http_request: Request):
     principal = http_request.state.principal
     if "*" not in principal.scopes and not ({"knowledge:read", "ai:analyze"} & set(principal.scopes)):
@@ -351,36 +423,80 @@ def create_app(
         "retrieval": RetrievalSummary(),
         "no_answer_reason": "rag_disabled",
       }
-    result = resolved_rag_service.search(
-      request.query,
-      scope,
-      limit=request.limit,
-      project_id=request.project_id,
+    retrieval_started = time.perf_counter()
+    try:
+      result = resolved_rag_service.search(
+        request.query,
+        scope,
+        limit=request.limit,
+        project_id=request.project_id,
+      )
+    except Exception:
+      metrics.observe_rag_retrieval(
+        "search",
+        hit_count=None,
+        duration_seconds=time.perf_counter() - retrieval_started,
+      )
+      raise
+    metrics.observe_rag_retrieval(
+      "search",
+      hit_count=result["retrieval"].hit_count,
+      duration_seconds=time.perf_counter() - retrieval_started,
     )
-    metrics.observe_rag_retrieval("search", hit_count=result["retrieval"].hit_count)
     return result
 
   @app.post("/internal/webhooks/n8n/verify")
-  def verify_n8n_webhook(request: WebhookVerificationRequest, http_request: Request):
+  async def verify_n8n_webhook(http_request: Request):
     if "rag:ingest" not in http_request.state.principal.scopes or webhook_verifier is None:
       raise HTTPException(status_code=403, detail="Webhook ingestion is disabled.")
-    accepted = webhook_verifier.verify(
-      request.timestamp,
-      request.signature,
-      request.event_id,
-      request.body,
-    )
-    if not accepted:
+    media_type = http_request.headers.get("content-type", "").partition(";")[0].strip().lower()
+    if media_type != "application/json":
+      raise HTTPException(status_code=415, detail="Webhook body must use application/json.")
+    content_length = http_request.headers.get("content-length")
+    if content_length is not None:
+      try:
+        declared_length = int(content_length)
+      except ValueError as exception:
+        raise HTTPException(status_code=400, detail="Invalid Content-Length header.") from exception
+      if declared_length < 0:
+        raise HTTPException(status_code=400, detail="Invalid Content-Length header.")
+      if declared_length > MAX_WEBHOOK_BYTES:
+        raise HTTPException(status_code=413, detail="Webhook body exceeds the 8 MiB limit.")
+    body_buffer = bytearray()
+    async for chunk in http_request.stream():
+      if len(body_buffer) + len(chunk) > MAX_WEBHOOK_BYTES:
+        raise HTTPException(status_code=413, detail="Webhook body exceeds the 8 MiB limit.")
+      body_buffer.extend(chunk)
+    raw_body = bytes(body_buffer)
+    timestamp = http_request.headers.get("x-eisenhower-timestamp", "")
+    signature = http_request.headers.get("x-eisenhower-signature", "")
+    version = http_request.headers.get("x-eisenhower-signature-version", "")
+    signed_method = http_request.headers.get("x-eisenhower-signed-method", "")
+    signed_path = http_request.headers.get("x-eisenhower-signed-path", "")
+    if not webhook_verifier.verify_signature(
+      timestamp,
+      signature,
+      raw_body,
+      method=signed_method,
+      path=signed_path,
+      version=version,
+    ):
       return {"accepted": False}
-    tenant_id = str(request.body.get("tenant_id", ""))
-    operation = str(request.body.get("operation", ""))
-    if not tenant_id or operation not in {"upsert", "tombstone", "reindex_project", "start_rag_evaluation"}:
-      raise HTTPException(status_code=422, detail="Invalid ingestion envelope.")
+    try:
+      envelope = parse_webhook_envelope(raw_body)
+    except (UnicodeDecodeError, ValueError) as exception:
+      raise HTTPException(status_code=422, detail="Invalid ingestion envelope.") from exception
+    event_id = str(envelope.event_id)
+    if not webhook_verifier.reserve_event(event_id):
+      return {"accepted": False}
+    tenant_id = envelope.tenant_id
+    operation = envelope.operation
+    payload = envelope.model_dump(mode="json", exclude_none=True)
     return {
       "accepted": True,
-      "envelope": request.body,
+      "envelope": payload,
       "internal_signature": webhook_verifier.sign_internal_dispatch(
-        request.event_id,
+        event_id,
         tenant_id,
         operation,
       ),
@@ -402,7 +518,10 @@ def create_app(
     idempotency_key = http_request.headers.get("idempotency-key", "")
     if idempotency_key != envelope.event_id:
       raise HTTPException(status_code=400, detail="Idempotency-Key must equal event_id.")
-    job = job_queue.enqueue(idempotency_key, job_type, envelope.model_dump(exclude_none=True))
+    try:
+      job = job_queue.enqueue(idempotency_key, job_type, envelope.model_dump(exclude_none=True))
+    except JobConflictError as exception:
+      raise HTTPException(status_code=409, detail=str(exception)) from exception
     return JSONResponse(
       status_code=202,
       content={"job_id": job.job_id, "status": job.status},
@@ -422,6 +541,8 @@ def create_app(
 
   @app.post("/internal/rag/reindex", status_code=202)
   def enqueue_reindex(envelope: InternalJobRequest, http_request: Request):
+    if not envelope.project_id:
+      raise HTTPException(status_code=422, detail="project_id is required.")
     return enqueue_internal_job("reindex_project", "rag.reindex_project", envelope, http_request)
 
   @app.post("/internal/rag/evaluations", status_code=202)

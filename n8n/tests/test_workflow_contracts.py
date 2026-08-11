@@ -29,10 +29,29 @@ class IngestionWorkflowContractTest(unittest.TestCase):
         self.assertEqual(webhook["parameters"]["httpMethod"], "POST")
         self.assertEqual(webhook["parameters"]["authentication"], "headerAuth")
         self.assertEqual(webhook["parameters"]["responseMode"], "responseNode")
+        self.assertTrue(webhook["parameters"]["options"]["rawBody"])
         self.assertNotIn("/analyze", serialized)
         self.assertNotIn("analyze-langchain", serialized)
         self.assertIn("Verify Signature And Replay Window", nodes)
         self.assertIn("Respond 202 Accepted", nodes)
+
+        verification = nodes["Verify Signature And Replay Window"]["parameters"]
+        self.assertEqual(verification["contentType"], "binaryData")
+        self.assertEqual(verification["inputDataFieldName"], "data")
+        self.assertNotIn("body", verification)
+        verification_headers = {
+            entry["name"]: entry["value"]
+            for entry in verification["headerParameters"]["parameters"]
+        }
+        self.assertEqual(verification_headers["X-Eisenhower-Signed-Method"], "POST")
+        self.assertEqual(
+            verification_headers["X-Eisenhower-Signed-Path"],
+            "/webhook/eisenhower-rag-ingestion",
+        )
+        self.assertIn(
+            "x-eisenhower-signature-version",
+            verification_headers["X-Eisenhower-Signature-Version"],
+        )
 
     def test_routes_only_named_ingestion_operations(self) -> None:
         workflow = load_workflow("async-rag-ingestion.json")

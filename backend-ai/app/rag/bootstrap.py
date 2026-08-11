@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import re
+from ipaddress import ip_address
+from urllib.parse import urlparse
 
 from qdrant_client import QdrantClient
 
 from ..config import Settings
 from ..generation.registry import PromptRegistry
 from ..generation.renderer import HuggingFaceTokenCounter, PromptRenderer
+from ..generation.delta import EmbeddingStatementSimilarity, InformationDeltaValidator
 from .adapters import (
   CircuitBreakerGenerationProvider,
   MiniLMEmbeddingProvider,
@@ -16,8 +19,23 @@ from .adapters import (
   is_private_service_url,
 )
 from .application import RagAnalysisService
+from .canonical import CanonicalIngestionApplication
 from .collections import QdrantCollectionManager
-from .ingestion import DeterministicChunker, IngestionApplication
+from .ingestion import DeterministicChunker
+from .mongo_document_store import MongoCanonicalDocumentStore
+
+
+def is_private_mongodb_uri(uri: str) -> bool:
+  parsed = urlparse(uri)
+  if parsed.scheme not in {"mongodb", "mongodb+srv"} or not parsed.hostname:
+    return False
+  hostname = parsed.hostname.lower()
+  if hostname in {"localhost", "127.0.0.1", "::1"}:
+    return True
+  try:
+    return ip_address(hostname).is_private
+  except ValueError:
+    return "." not in hostname or hostname.endswith((".internal", ".local"))
 
 
 def build_rag_service(settings: Settings, fallback_classifier) -> RagAnalysisService:
@@ -46,6 +64,7 @@ def build_rag_service(settings: Settings, fallback_classifier) -> RagAnalysisSer
     fallback_classifier,
     retrieval_version=settings.retrieval_version,
     index_version=settings.index_version,
+    delta_validator=InformationDeltaValidator(EmbeddingStatementSimilarity(embedding)),
   )
 
 
@@ -94,14 +113,24 @@ def _build_generation_provider(settings: Settings):
   )
 
 
-def build_ingestion_application(settings: Settings, ai_service) -> IngestionApplication:
+def build_ingestion_application(
+  settings: Settings,
+  ai_service,
+  *,
+  qdrant_client=None,
+  mongo_client=None,
+) -> CanonicalIngestionApplication:
   if not is_private_service_url(settings.qdrant_url):
     raise ValueError("Qdrant must use a private-network endpoint")
+  if not settings.mongodb_uri and mongo_client is None:
+    raise ValueError("MONGODB_URI is required for canonical RAG ingestion")
+  if settings.mongodb_uri and not is_private_mongodb_uri(settings.mongodb_uri):
+    raise ValueError("MongoDB must use a fixed private-network endpoint")
   embedding = MiniLMEmbeddingProvider(
     ai_service.local_model,
     version=settings.embedding_version,
   )
-  qdrant = QdrantClient(
+  qdrant = qdrant_client or QdrantClient(
     url=settings.qdrant_url,
     api_key=settings.qdrant_api_key,
     timeout=10,
@@ -118,8 +147,17 @@ def build_ingestion_application(settings: Settings, ai_service) -> IngestionAppl
     qdrant,
     collection_name=settings.qdrant_collection_alias,
   )
-  return IngestionApplication(
+  if mongo_client is None:
+    from pymongo import MongoClient
+
+    mongo_client = MongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=5000)
+  mongo_client.admin.command("ping")
+  canonical_store = MongoCanonicalDocumentStore(
+    mongo_client[settings.mongodb_database][settings.canonical_documents_collection]
+  )
+  return CanonicalIngestionApplication(
     embedding,
+    canonical_store,
     adapter,
     DeterministicChunker(max_chars=1200, overlap_chars=160),
   )

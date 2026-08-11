@@ -22,6 +22,27 @@ groups:
           severity: warning
         annotations:
           summary: "RAG ingestion dead-letter queue is not empty"
+      - alert: EisenhowerRagStructuredOutputRejected
+        expr: increase(eisenhower_rag_validation_total{outcome="rejected"}[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Private generation failed schema or citation validation"
+      - alert: EisenhowerRagRetrievalLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le) (rate(eisenhower_rag_retrieval_duration_seconds_bucket[10m]))) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RAG retrieval p95 exceeds 500 milliseconds"
+      - alert: EisenhowerMemoryOperationErrors
+        expr: increase(eisenhower_memory_operations_total{outcome="error"}[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consent-governed memory operation failed"
       - alert: QdrantUnavailable
         expr: up{job="qdrant"} == 0
         for: 5m

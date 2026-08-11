@@ -75,9 +75,16 @@ export default function AdvancedAIAnalysis({
       >
         {loading ? t('ai.analysis.running') : t('ai.analysis.run')}
       </button>
-      {error ? <p className="text-sm text-red-200">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="text-sm text-red-200">
+          {error}
+        </p>
+      ) : null}
       {analysis ? (
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white">
+        <div
+          aria-live="polite"
+          className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white"
+        >
           <p>{analysis.langchain_analysis.reasoning}</p>
           <p className="mt-2 text-white/70">
             {t('ai.analysis.suggestedQuadrant').replace(

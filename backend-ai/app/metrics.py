@@ -4,6 +4,41 @@ from collections import Counter
 from threading import Lock
 
 
+RAG_MODES = {"rag", "fallback", "no_answer"}
+RAG_REASONS = {
+  "none",
+  "no_retrieval_hits",
+  "generation_disabled",
+  "generation_unavailable",
+  "invalid_generation_output",
+  "invalid_citations",
+  "invalid_information_delta",
+  "current_world_freshness_unverified",
+  "rag_disabled",
+  "rag_response_disabled",
+  "tenant_not_enabled",
+  "vllm_timeout",
+}
+RETRIEVAL_STAGES = {"shadow", "search", "online", "evaluation"}
+VALIDATION_KINDS = {"schema", "citations", "grounding", "information_delta"}
+VALIDATION_OUTCOMES = {"accepted", "rejected"}
+GENERATION_OUTCOMES = {"success", "no_answer", "unavailable", "rejected"}
+MEMORY_OPERATIONS = {"create", "supersede", "revoke", "delete", "search", "reconcile", "export"}
+MEMORY_OUTCOMES = {"success", "conflict", "rejected", "error", "no_hit"}
+INFORMATION_DELTA_STATUSES = {
+  "new_information",
+  "mixed",
+  "confirmation_only",
+  "no_new_information",
+  "freshness_unverified",
+}
+LATENCY_BUCKETS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0)
+
+
+def _bounded(value: str, allowed: set[str]) -> str:
+  return value if value in allowed else "other"
+
+
 def _escape(value: str) -> str:
   return str(value).replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
 
@@ -22,6 +57,26 @@ class MetricsRegistry:
     self._http_duration_sum = Counter()
     self._rag = Counter()
     self._rag_retrieval = Counter()
+    self._rag_retrieval_duration_count = Counter()
+    self._rag_retrieval_duration_sum = Counter()
+    self._rag_retrieval_duration_buckets = Counter()
+    self._rag_retrieved_chunks_count = Counter()
+    self._rag_retrieved_chunks_sum = Counter()
+    self._rag_analysis_duration_count = Counter()
+    self._rag_analysis_duration_sum = Counter()
+    self._rag_analysis_duration_buckets = Counter()
+    self._rag_input_tokens_count = Counter()
+    self._rag_input_tokens_sum = Counter()
+    self._rag_validation = Counter()
+    self._rag_generation = Counter()
+    self._rag_generation_duration_count = Counter()
+    self._rag_generation_duration_sum = Counter()
+    self._rag_generation_duration_buckets = Counter()
+    self._information_delta = Counter()
+    self._memory = Counter()
+    self._memory_duration_count = Counter()
+    self._memory_duration_sum = Counter()
+    self._memory_duration_buckets = Counter()
     self._job_depth: dict[str, int] = {}
 
   def observe_http(self, method: str, route: str, status: int, duration_seconds: float) -> None:
@@ -33,13 +88,86 @@ class MetricsRegistry:
       self._http_duration_sum[duration_key] += max(0.0, duration_seconds)
 
   def observe_rag_result(self, mode: str, reason: str | None = None) -> None:
+    bounded_mode = _bounded(mode, RAG_MODES)
+    bounded_reason = _bounded(reason or "none", RAG_REASONS)
     with self._lock:
-      self._rag[(mode, reason or "none")] += 1
+      self._rag[(bounded_mode, bounded_reason)] += 1
 
-  def observe_rag_retrieval(self, stage: str, *, hit_count: int | None) -> None:
+  def observe_rag_retrieval(
+    self,
+    stage: str,
+    *,
+    hit_count: int | None,
+    duration_seconds: float = 0.0,
+  ) -> None:
+    bounded_stage = _bounded(stage, RETRIEVAL_STAGES)
     outcome = "error" if hit_count is None else ("hit" if hit_count > 0 else "no_hit")
     with self._lock:
-      self._rag_retrieval[(stage, outcome)] += 1
+      self._rag_retrieval[(bounded_stage, outcome)] += 1
+      self._rag_retrieval_duration_count[(bounded_stage, outcome)] += 1
+      self._rag_retrieval_duration_sum[(bounded_stage, outcome)] += max(0.0, duration_seconds)
+      self._observe_latency_buckets(
+        self._rag_retrieval_duration_buckets,
+        (bounded_stage, outcome),
+        duration_seconds,
+      )
+      if hit_count is not None:
+        self._rag_retrieved_chunks_count[bounded_stage] += 1
+        self._rag_retrieved_chunks_sum[bounded_stage] += max(0, int(hit_count))
+
+  def observe_rag_analysis(self, mode: str, *, duration_seconds: float) -> None:
+    bounded_mode = _bounded(mode, RAG_MODES)
+    with self._lock:
+      self._rag_analysis_duration_count[bounded_mode] += 1
+      self._rag_analysis_duration_sum[bounded_mode] += max(0.0, duration_seconds)
+      self._observe_latency_buckets(
+        self._rag_analysis_duration_buckets,
+        (bounded_mode,),
+        duration_seconds,
+      )
+
+  def observe_rag_validation(self, kind: str, outcome: str) -> None:
+    key = (_bounded(kind, VALIDATION_KINDS), _bounded(outcome, VALIDATION_OUTCOMES))
+    with self._lock:
+      self._rag_validation[key] += 1
+
+  def observe_generation(self, outcome: str, *, duration_seconds: float, input_tokens: int) -> None:
+    bounded_outcome = _bounded(outcome, GENERATION_OUTCOMES)
+    with self._lock:
+      self._rag_generation[bounded_outcome] += 1
+      self._rag_generation_duration_count[bounded_outcome] += 1
+      self._rag_generation_duration_sum[bounded_outcome] += max(0.0, duration_seconds)
+      self._observe_latency_buckets(
+        self._rag_generation_duration_buckets,
+        (bounded_outcome,),
+        duration_seconds,
+      )
+      self._rag_input_tokens_count[bounded_outcome] += 1
+      self._rag_input_tokens_sum[bounded_outcome] += max(0, int(input_tokens))
+
+  def observe_information_delta(self, status: str) -> None:
+    bounded_status = _bounded(status, INFORMATION_DELTA_STATUSES)
+    with self._lock:
+      self._information_delta[bounded_status] += 1
+
+  def observe_memory(self, operation: str, outcome: str, *, duration_seconds: float) -> None:
+    key = (
+      _bounded(operation, MEMORY_OPERATIONS),
+      _bounded(outcome, MEMORY_OUTCOMES),
+    )
+    with self._lock:
+      self._memory[key] += 1
+      self._memory_duration_count[key] += 1
+      self._memory_duration_sum[key] += max(0.0, duration_seconds)
+      self._observe_latency_buckets(self._memory_duration_buckets, key, duration_seconds)
+
+  @staticmethod
+  def _observe_latency_buckets(counter: Counter, key: tuple[str, ...], duration_seconds: float) -> None:
+    value = max(0.0, duration_seconds)
+    for bucket in LATENCY_BUCKETS:
+      if value <= bucket:
+        counter[(*key, bucket)] += 1
+    counter[(*key, float("inf"))] += 1
 
   def set_job_depth(self, status: str, count: int) -> None:
     with self._lock:
@@ -81,6 +209,127 @@ class MetricsRegistry:
       for (stage, outcome), value in sorted(self._rag_retrieval.items()):
         lines.append(
           f"eisenhower_rag_retrieval_total{{{_labels(stage=stage, outcome=outcome)}}} {value}"
+        )
+      lines.extend([
+        "# HELP eisenhower_rag_retrieval_duration_seconds Retrieval duration summary by bounded stage and outcome.",
+        "# TYPE eisenhower_rag_retrieval_duration_seconds histogram",
+      ])
+      for key, value in sorted(self._rag_retrieval_duration_count.items()):
+        stage, outcome = key
+        for bucket in (*LATENCY_BUCKETS, float("inf")):
+          bucket_label = "+Inf" if bucket == float("inf") else f"{bucket:.3f}"
+          labels = _labels(stage=stage, outcome=outcome, le=bucket_label)
+          lines.append(
+            f"eisenhower_rag_retrieval_duration_seconds_bucket{{{labels}}} "
+            f"{self._rag_retrieval_duration_buckets[(*key, bucket)]}"
+          )
+        labels = _labels(stage=stage, outcome=outcome)
+        lines.append(f"eisenhower_rag_retrieval_duration_seconds_count{{{labels}}} {value}")
+        lines.append(
+          f"eisenhower_rag_retrieval_duration_seconds_sum{{{labels}}} "
+          f"{self._rag_retrieval_duration_sum[key]:.6f}"
+        )
+      lines.extend([
+        "# HELP eisenhower_rag_retrieved_chunks Retrieved chunk count summary without content labels.",
+        "# TYPE eisenhower_rag_retrieved_chunks summary",
+      ])
+      for stage, value in sorted(self._rag_retrieved_chunks_count.items()):
+        labels = _labels(stage=stage)
+        lines.append(f"eisenhower_rag_retrieved_chunks_count{{{labels}}} {value}")
+        lines.append(
+          f"eisenhower_rag_retrieved_chunks_sum{{{labels}}} "
+          f"{self._rag_retrieved_chunks_sum[stage]}"
+        )
+      lines.extend([
+        "# HELP eisenhower_rag_analysis_duration_seconds End-to-end RAG analysis duration summary.",
+        "# TYPE eisenhower_rag_analysis_duration_seconds histogram",
+      ])
+      for mode, value in sorted(self._rag_analysis_duration_count.items()):
+        for bucket in (*LATENCY_BUCKETS, float("inf")):
+          bucket_label = "+Inf" if bucket == float("inf") else f"{bucket:.3f}"
+          labels = _labels(mode=mode, le=bucket_label)
+          lines.append(
+            f"eisenhower_rag_analysis_duration_seconds_bucket{{{labels}}} "
+            f"{self._rag_analysis_duration_buckets[(mode, bucket)]}"
+          )
+        labels = _labels(mode=mode)
+        lines.append(f"eisenhower_rag_analysis_duration_seconds_count{{{labels}}} {value}")
+        lines.append(
+          f"eisenhower_rag_analysis_duration_seconds_sum{{{labels}}} "
+          f"{self._rag_analysis_duration_sum[mode]:.6f}"
+        )
+      lines.extend([
+        "# HELP eisenhower_rag_input_tokens Input token count summary by bounded outcome.",
+        "# TYPE eisenhower_rag_input_tokens summary",
+      ])
+      for outcome, value in sorted(self._rag_input_tokens_count.items()):
+        labels = _labels(outcome=outcome)
+        lines.append(f"eisenhower_rag_input_tokens_count{{{labels}}} {value}")
+        lines.append(f"eisenhower_rag_input_tokens_sum{{{labels}}} {self._rag_input_tokens_sum[outcome]}")
+      lines.extend([
+        "# HELP eisenhower_rag_validation_total Structured generation validation outcomes.",
+        "# TYPE eisenhower_rag_validation_total counter",
+      ])
+      for (kind, outcome), value in sorted(self._rag_validation.items()):
+        lines.append(
+          f"eisenhower_rag_validation_total{{{_labels(kind=kind, outcome=outcome)}}} {value}"
+        )
+      lines.extend([
+        "# HELP eisenhower_information_delta_total Validated source-relative delta outcomes.",
+        "# TYPE eisenhower_information_delta_total counter",
+      ])
+      for status, value in sorted(self._information_delta.items()):
+        lines.append(
+          f"eisenhower_information_delta_total{{{_labels(status=status)}}} {value}"
+        )
+      lines.extend([
+        "# HELP eisenhower_rag_generation_total Private generation outcomes.",
+        "# TYPE eisenhower_rag_generation_total counter",
+        "# HELP eisenhower_rag_generation_duration_seconds Generation-path duration including retrieval.",
+        "# TYPE eisenhower_rag_generation_duration_seconds histogram",
+      ])
+      for outcome, value in sorted(self._rag_generation.items()):
+        labels = _labels(outcome=outcome)
+        lines.append(f"eisenhower_rag_generation_total{{{labels}}} {value}")
+        for bucket in (*LATENCY_BUCKETS, float("inf")):
+          bucket_label = "+Inf" if bucket == float("inf") else f"{bucket:.3f}"
+          bucket_labels = _labels(outcome=outcome, le=bucket_label)
+          lines.append(
+            f"eisenhower_rag_generation_duration_seconds_bucket{{{bucket_labels}}} "
+            f"{self._rag_generation_duration_buckets[(outcome, bucket)]}"
+          )
+        lines.append(
+          f"eisenhower_rag_generation_duration_seconds_count{{{labels}}} "
+          f"{self._rag_generation_duration_count[outcome]}"
+        )
+        lines.append(
+          f"eisenhower_rag_generation_duration_seconds_sum{{{labels}}} "
+          f"{self._rag_generation_duration_sum[outcome]:.6f}"
+        )
+      lines.extend([
+        "# HELP eisenhower_memory_operations_total Consent-governed memory outcomes.",
+        "# TYPE eisenhower_memory_operations_total counter",
+        "# HELP eisenhower_memory_operation_duration_seconds Memory operation duration summary.",
+        "# TYPE eisenhower_memory_operation_duration_seconds histogram",
+      ])
+      for key, value in sorted(self._memory.items()):
+        operation, outcome = key
+        labels = _labels(operation=operation, outcome=outcome)
+        lines.append(f"eisenhower_memory_operations_total{{{labels}}} {value}")
+        for bucket in (*LATENCY_BUCKETS, float("inf")):
+          bucket_label = "+Inf" if bucket == float("inf") else f"{bucket:.3f}"
+          bucket_labels = _labels(operation=operation, outcome=outcome, le=bucket_label)
+          lines.append(
+            f"eisenhower_memory_operation_duration_seconds_bucket{{{bucket_labels}}} "
+            f"{self._memory_duration_buckets[(*key, bucket)]}"
+          )
+        lines.append(
+          f"eisenhower_memory_operation_duration_seconds_count{{{labels}}} "
+          f"{self._memory_duration_count[key]}"
+        )
+        lines.append(
+          f"eisenhower_memory_operation_duration_seconds_sum{{{labels}}} "
+          f"{self._memory_duration_sum[key]:.6f}"
         )
       lines.extend([
         "# HELP eisenhower_job_queue_depth Durable jobs by lifecycle status.",

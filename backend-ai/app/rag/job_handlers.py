@@ -27,7 +27,7 @@ class RagJobHandlers:
   def __init__(
     self,
     ingestion_application,
-    version_store: DocumentVersionStore,
+    version_store: DocumentVersionStore | None,
     *,
     chunking_version: str,
     reindex_project: Callable[[dict], None] | None = None,
@@ -70,9 +70,12 @@ class RagJobHandlers:
     ]
     if not accepted:
       return
-    self.ingestion.ingest(accepted)
+    result = self.ingestion.ingest(accepted)
+    if result and result.get("conflict", 0):
+      raise PermanentJobError("canonical source sequence conflict")
     for document in accepted:
-      self.versions.record(document.tenant_id, document.document_id, source_sequence)
+      if self.versions is not None:
+        self.versions.record(document.tenant_id, document.document_id, source_sequence)
 
   def tombstone(self, payload: dict) -> None:
     document_ids = payload.get("document_ids")
@@ -87,13 +90,17 @@ class RagJobHandlers:
     ]
     if not accepted:
       return
-    self.ingestion.tombstone(
+    result = self.ingestion.tombstone(
       accepted,
       tenant_id=str(tenant_id),
       content_version=str(content_version),
+      source_sequence=source_sequence,
     )
+    if result and result.get("conflict", 0):
+      raise PermanentJobError("canonical tombstone sequence conflict")
     for document_id in accepted:
-      self.versions.record(str(tenant_id), document_id, source_sequence)
+      if self.versions is not None:
+        self.versions.record(str(tenant_id), document_id, source_sequence)
 
   def reindex_project(self, payload: dict) -> None:
     if self._reindex_project is None:
@@ -144,5 +151,7 @@ class RagJobHandlers:
     return value
 
   def _is_newer(self, tenant_id: str, document_id: str, source_sequence: int) -> bool:
+    if self.versions is None:
+      return True
     current = self.versions.current(tenant_id, document_id)
     return current is None or source_sequence > current

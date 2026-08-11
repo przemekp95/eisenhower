@@ -20,14 +20,22 @@ export default defineConfig({
   },
   outputDir: './output/playwright/test-results',
   reporter: [['list'], ['html', { open: 'never', outputFolder: './output/playwright/report' }]],
+  projects: [
+    {
+      name: 'desktop-chromium',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 1200 } },
+    },
+    {
+      name: 'mobile-chromium',
+      use: { ...devices['Pixel 7'] },
+    },
+  ],
   use: {
-    ...devices['Desktop Chrome'],
     baseURL: frontendUrl,
     reducedMotion: 'reduce',
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
     video: 'retain-on-failure',
-    viewport: { width: 1440, height: 1200 },
   },
   webServer: [
     {

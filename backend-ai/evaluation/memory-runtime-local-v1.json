@@ -1,0 +1,55 @@
+{
+  "schema_version": "memory-runtime-local-v1",
+  "evidence_level": "local-container-runtime",
+  "deployment_proven": false,
+  "public_evidence_proven": false,
+  "response_augmentation_enabled": false,
+  "policy": {
+    "version": "eisenhower-memory-consent-v1",
+    "file_sha256": "da0cd36588863d6c3faba3345d4cb83abc477db33f521c9d4fdec5de3bfc3942",
+    "canonical_sha256": "163f3c7c48256936c77150e89bcb11f693afcf8f8d3c46965384de946769d40c"
+  },
+  "source_sha256": {
+    "application": "37a85d318a633bb12a8e0129e5b3d19323585633846f4730097548b58f7a08a7",
+    "adapters": "0f16aaba1095295e22472946f610c5047030f79956625fc8eab70eb76106ee4e",
+    "models": "61acd176213be66d01268022be54c6d4d2ac664eaeded1a51d65e8c23f2ce5ef",
+    "policy": "9f77264a00f2c0941aa9b3e7e355f6b5abeb0c0fe598d03504dd2ee96cd294f5",
+    "reconciliation": "26aef0274ac7aa57afab4f929c8586dd39a41fa0da6c85092f3739c3e685b726"
+  },
+  "test": {
+    "path": "backend-ai/tests/test_memory_runtime_integration.py",
+    "sha256": "bf7a1e6d1dcb5c3f63bda0de3599c1e574fc407f70c712271594e9feb4e0183e",
+    "result": "1 passed",
+    "duration_seconds": 1.33
+  },
+  "runtime": {
+    "mongo_image": "mongo:7-jammy",
+    "mongo_image_id": "sha256:04582c3a144d088f841c446abfc19f79adcefa8bd00ad4a7fb18e27b9585c5d6",
+    "mongo_mode": "isolated_single-node-replica-set",
+    "qdrant_version": "1.12.0",
+    "qdrant_commit": "a0d2eccac0c179116214e7cb3583359c80d41998",
+    "qdrant_image_id": "sha256:dd037bc4175c162e23b87c8f584bff72fba65a49e2ff4540ae7e9ac76ed3fd73"
+  },
+  "verified": {
+    "hmac_intent_bound_confirmation": true,
+    "durable_idempotent_create": true,
+    "durable_transition_replay_after_clock_advance": true,
+    "atomic_supersession": true,
+    "active_conflict_unique_index": true,
+    "duplicate_conflict_transaction_rollback": true,
+    "tenant_user_isolation": true,
+    "cross_tenant_isolation": true,
+    "mongo_revalidation": true,
+    "tampered_projection_checksum_rejected": true,
+    "canonical_projection_reconciliation": true,
+    "orphan_projection_cleanup": true,
+    "qdrant_payload_excludes_raw_content": true,
+    "physical_projection_delete": true,
+    "canonical_deleted_body_redacted": true
+  },
+  "cleanup": {
+    "isolated_mongo_container_removed": true,
+    "isolated_mongo_database_dropped": true,
+    "orphan_qdrant_collections": []
+  }
+}

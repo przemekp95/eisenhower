@@ -1,0 +1,51 @@
+{
+  "schema_version": "vllm-hardware-local-v1",
+  "observed_at_utc": "2026-08-10T23:48:13Z",
+  "status": "local_hardware_compatible_candidate_not_model_validated",
+  "host": {
+    "os": "Ubuntu 24.04.4 LTS",
+    "kernel": "7.0.0-28-generic",
+    "architecture": "x86_64",
+    "docker_engine": "29.1.3"
+  },
+  "device": {
+    "marketing_name": "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S",
+    "gpu_name": "AMD Radeon Graphics",
+    "pci_id": "1002:1586",
+    "pci_subsystem_id": "2014:801d",
+    "gfx_target": "gfx1151",
+    "compute_units": 40,
+    "vram_bytes": 17179869184,
+    "vram_mebibytes_reported_by_amd_smi": 16384,
+    "vram_bus_width_bits": 256,
+    "kernel_driver": "amdgpu",
+    "kfd_device": "/dev/kfd",
+    "render_device": "/dev/dri/renderD128",
+    "user_has_video_and_render_groups": true
+  },
+  "probe": {
+    "image": "rocm/dev-ubuntu-24.04:7.0.2",
+    "image_digest": "sha256:183efd7bba5d73e9c0715a86383537c0177466cbc6ba502f90f54cb34200af26",
+    "transport": "ephemeral Docker container with explicit /dev/kfd and renderD128 passthrough",
+    "tools": [
+      "rocminfo",
+      "amd-smi static --asic --vram --driver"
+    ],
+    "container_removed": true,
+    "host_rocm_userland_installed": false
+  },
+  "compatibility_basis": {
+    "vllm_documentation": "https://docs.vllm.ai/en/latest/getting_started/installation/gpu/",
+    "documented_supported_target": "Ryzen AI MAX / AI 300 Series (gfx1151/1150)",
+    "documented_minimum_rocm_for_family": "7.0.2",
+    "probe_rocm": "7.0.2",
+    "hardware_requirement_match": true
+  },
+  "evidence_boundaries": [
+    "The probe proves the local kernel exposes a vLLM-documented AMD target to ROCm 7.0.2.",
+    "It does not prove that vLLM imports, starts, loads a model or serves structured output.",
+    "The 16 GiB allocation is not a measured model, KV-cache, concurrency or OOM limit.",
+    "This host is a local validation candidate and has not been approved as the private deployment target.",
+    "TASK-013 and TASK-014 remain earlier gates; no generation or response flag was enabled."
+  ]
+}

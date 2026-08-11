@@ -8,3 +8,7 @@ class GenerationProviderUnavailable(GenerationProviderError):
 
 class InvalidGenerationOutput(GenerationProviderError):
   """The provider response violated the structured generation contract."""
+
+
+class ProjectionUnavailable(RuntimeError):
+  """The vector projection could not complete because its runtime was unavailable."""

@@ -7,12 +7,13 @@ from socket import gethostname
 from threading import Event
 
 from .config import load_settings
-from .document_versions import SqliteDocumentVersionStore
 from .job_worker import JobWorker
 from .jobs import SqliteJobQueue
 from .rag.bootstrap import build_ingestion_application, build_rag_service
+from .rag.corpus_manifest import CorpusManifest, RepositoryCorpusConnector
 from .rag.golden_runner import RepositoryEvaluationHandler
 from .rag.job_handlers import RagJobHandlers
+from .rag.reindex import RepositoryReindexHandler
 from .service import QuadrantAIService
 from .store import TrainingStore
 
@@ -22,6 +23,18 @@ def build_worker():
   store = TrainingStore(settings.training_data_path)
   ai_service = QuadrantAIService(settings=settings, store=store)
   ingestion = build_ingestion_application(settings, ai_service)
+  if settings.corpus_repository_root is None or settings.corpus_manifest_path is None:
+    raise ValueError("CORPUS_REPOSITORY_ROOT and CORPUS_MANIFEST_PATH are required for the RAG worker")
+  connector = RepositoryCorpusConnector(
+    settings.corpus_repository_root,
+    CorpusManifest.load(settings.corpus_manifest_path),
+  )
+  reindex_handler = RepositoryReindexHandler(
+    connector,
+    ingestion,
+    owner_id=settings.corpus_owner_id,
+    allowed_projects=settings.corpus_allowed_projects,
+  )
   backend_dir = Path(__file__).resolve().parent.parent
   evaluation_handler = RepositoryEvaluationHandler(
     service_factory=lambda: build_rag_service(settings, ai_service),
@@ -30,8 +43,9 @@ def build_worker():
   )
   handlers = RagJobHandlers(
     ingestion,
-    SqliteDocumentVersionStore(settings.jobs_database_path),
+    None,
     chunking_version=settings.chunking_version,
+    reindex_project=reindex_handler,
     evaluate=evaluation_handler,
   )
   queue = SqliteJobQueue(settings.jobs_database_path)

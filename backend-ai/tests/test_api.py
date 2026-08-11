@@ -7,11 +7,18 @@ import json
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.generation.models import InformationDelta, statement_checksum
 from app.local_model import LocalMiniLMClassifier, LocalPrediction, ModelNotReadyError, SimilarExample
 from app.main import create_app
 from app.rag.models import AnalyzeResult, RetrievalSummary
 from app.service import QuadrantAIService
 from app.store import TrainingStore
+from app.webhooks import (
+  WEBHOOK_INGRESS_METHOD,
+  WEBHOOK_INGRESS_PATH,
+  WEBHOOK_SIGNATURE_VERSION,
+  WebhookReplayVerifier,
+)
 
 
 class FakeLocalModel:
@@ -136,8 +143,21 @@ class FakeRagService:
     self.search_calls = []
     self.generation_enabled = True
 
-  def analyze(self, task, scope, *, language="en"):
-    self.calls.append((task, scope, language))
+  def analyze(self, task, scope, *, language="en", **delta_inputs):
+    self.calls.append((task, scope, language, delta_inputs))
+    if delta_inputs.get("freshness_requirement") == "current_world_required":
+      return AnalyzeResult(
+        mode="no_answer",
+        explanation="The frozen corpus cannot verify current-world freshness.",
+        citations=[],
+        retrieval=RetrievalSummary(hit_count=1, top_score=0.9, embedding_version="minilm-v1"),
+        fallback_reason="current_world_freshness_unverified",
+        information_delta=InformationDelta(
+          status="freshness_unverified",
+          claims=[],
+          summary_code="current_world_freshness_unverified",
+        ),
+      )
     return AnalyzeResult(
       mode="rag",
       quadrant=2,
@@ -182,6 +202,77 @@ def test_v2_rag_contract_uses_authenticated_scope_not_client_tenant(tmp_path: Pa
   assert response.json()["retrieval"]["embedding_version"] == "minilm-v1"
   assert rag.calls[0][1].tenant_id == "local"
   assert rag.calls[0][1].user_id == "local-user"
+
+
+def test_v2_rag_contract_forwards_bounded_known_state_and_rejects_duplicate_ids(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  rag = FakeRagService()
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service, rag_service=rag),
+    headers={"Authorization": "Bearer test-api-token"},
+  )
+  text = "Termin upływa 15 sierpnia."
+  statement = {
+    "statement_id": "known-1",
+    "statement": text,
+    "language": "pl",
+    "checksum": statement_checksum(text),
+  }
+
+  response = client.post(
+    "/v2/ai/analyze",
+    json={"task": "Jaki jest termin?", "language": "pl", "known_state": [statement]},
+  )
+  duplicate = client.post(
+    "/v2/ai/analyze",
+    json={
+      "task": "Jaki jest termin?",
+      "known_state": [statement],
+      "previous_output_statements": [statement],
+    },
+  )
+
+  assert response.status_code == 200
+  assert rag.calls[0][3]["known_state"][0].statement_id == "known-1"
+  assert duplicate.status_code == 422
+
+
+def test_v2_current_world_request_abstains_even_when_generation_is_disabled(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    rag_retrieval_enabled=True,
+    rag_generation_enabled=False,
+    rag_response_enabled=False,
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  rag = FakeRagService()
+  rag.generation_enabled = False
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service, rag_service=rag),
+    headers={"Authorization": "Bearer test-api-token"},
+  )
+
+  response = client.post(
+    "/v2/ai/analyze",
+    json={
+      "task": "Jaki jest termin dzisiaj?",
+      "language": "pl",
+      "freshness_requirement": "current_world_required",
+    },
+  )
+
+  assert response.status_code == 200
+  assert response.json()["mode"] == "no_answer"
+  assert response.json()["information_delta"]["status"] == "freshness_unverified"
+  assert response.json()["fallback_reason"] == "current_world_freshness_unverified"
+  assert rag.calls[0][3]["freshness_requirement"] == "current_world_required"
 
 
 def test_v2_rag_response_flag_and_tenant_cohort_fall_back_safely(tmp_path: Path):
@@ -239,6 +330,8 @@ def test_v2_shadow_retrieval_runs_without_exposing_hits_or_calling_generation(tm
   assert rag.calls == []
   assert len(rag.shadow_calls) == 1
   assert 'eisenhower_rag_retrieval_total{stage="shadow",outcome="hit"} 1' in metrics.text
+  assert 'eisenhower_rag_retrieval_duration_seconds_count{stage="shadow",outcome="hit"} 1' in metrics.text
+  assert 'eisenhower_rag_analysis_duration_seconds_count{mode="fallback"} 1' in metrics.text
 
 
 def test_v2_knowledge_search_forwards_the_authorized_project_filter(tmp_path: Path):
@@ -260,10 +353,13 @@ def test_v2_knowledge_search_forwards_the_authorized_project_filter(tmp_path: Pa
     "/v2/knowledge/search",
     json={"query": "roadmap", "project_id": "local-project", "limit": 3},
   )
+  metrics = client.get("/metrics")
 
   assert response.status_code == 200
   assert rag.search_calls[0][2:] == (3, "local-project")
   assert rag.search_calls[0][1].project_ids == ["local-project"]
+  assert 'eisenhower_rag_retrieval_duration_seconds_count{stage="search",outcome="hit"} 1' in metrics.text
+  assert 'eisenhower_rag_retrieved_chunks_sum{stage="search"} 1' in metrics.text
 
 
 def test_non_root_endpoint_requires_bearer_token(tmp_path: Path):
@@ -314,7 +410,8 @@ def test_signed_internal_ingestion_is_replay_safe_and_idempotently_queued(tmp_pa
     headers={"Authorization": "Bearer internal-token"},
   )
   event = {
-    "event_id": "event-1",
+    "schema_version": "2",
+    "event_id": "00000000-0000-4000-8000-000000000001",
     "operation": "upsert",
     "tenant_id": "tenant-a",
     "project_id": "project-1",
@@ -323,25 +420,44 @@ def test_signed_internal_ingestion_is_replay_safe_and_idempotently_queued(tmp_pa
     "content_checksum": f"sha256:{'a' * 64}",
     "embedding_version": "minilm-v1",
     "chunking_version": "chars-v1",
-    "documents": [{"document_id": "doc-1"}],
+    "documents": [
+      {
+        "document_id": "doc-1",
+        "source_type": "task",
+        "title": "One",
+        "content": "Task body",
+        "acl": {"owner_id": "owner-1"},
+      }
+    ],
   }
   timestamp = str(int(datetime.now(timezone.utc).timestamp()))
-  canonical = json.dumps(event, sort_keys=True, separators=(",", ":")).encode()
-  signature = hmac.new(secret.encode(), timestamp.encode() + b"." + canonical, sha256).hexdigest()
+  raw_body = json.dumps(event, indent=2).encode("utf-8")
+  signature_message = WebhookReplayVerifier.signature_message(timestamp, raw_body)
+  signature = hmac.new(secret.encode(), signature_message, sha256).hexdigest()
+  webhook_headers = {
+    "Content-Type": "application/json; charset=utf-8",
+    "X-Eisenhower-Timestamp": timestamp,
+    "X-Eisenhower-Signature": signature,
+    "X-Eisenhower-Signature-Version": WEBHOOK_SIGNATURE_VERSION,
+    "X-Eisenhower-Signed-Method": WEBHOOK_INGRESS_METHOD,
+    "X-Eisenhower-Signed-Path": WEBHOOK_INGRESS_PATH,
+  }
 
   verified = client.post(
     "/internal/webhooks/n8n/verify",
-    json={"timestamp": timestamp, "signature": signature, "event_id": "event-1", "body": event},
+    content=raw_body,
+    headers=webhook_headers,
   )
   replay = client.post(
     "/internal/webhooks/n8n/verify",
-    json={"timestamp": timestamp, "signature": signature, "event_id": "event-1", "body": event},
+    content=raw_body,
+    headers=webhook_headers,
   )
   dispatched = client.post(
     "/internal/rag/ingestion/upsert",
-    json={key: value for key, value in event.items() if key != "operation"},
+    json={key: value for key, value in event.items() if key not in {"operation", "schema_version"}},
     headers={
-      "Idempotency-Key": "event-1",
+      "Idempotency-Key": event["event_id"],
       "X-Eisenhower-Signature": verified.json()["internal_signature"],
     },
   )
@@ -350,6 +466,195 @@ def test_signed_internal_ingestion_is_replay_safe_and_idempotently_queued(tmp_pa
   assert replay.json()["accepted"] is False
   assert dispatched.status_code == 202
   assert dispatched.json()["status"] == "queued"
+
+
+def test_webhook_verification_fails_closed_before_reserving_event_id(tmp_path: Path):
+  secret = "webhook-secret"
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    internal_api_token="internal-token",
+    internal_allowed_tenants=("tenant-a",),
+    webhook_secret=secret,
+    jobs_database_path=tmp_path / "jobs.sqlite3",
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service),
+    headers={"Authorization": "Bearer internal-token"},
+  )
+  event_id = "00000000-0000-4000-8000-000000000002"
+  valid_event = {
+    "schema_version": "2",
+    "event_id": event_id,
+    "operation": "reindex_project",
+    "tenant_id": "tenant-a",
+    "project_id": "project-1",
+    "source_version": "v1",
+    "source_sequence": 1,
+    "content_checksum": f"sha256:{'a' * 64}",
+    "embedding_version": "minilm-v1",
+    "chunking_version": "chars-v1",
+  }
+  timestamp = str(int(datetime.now(timezone.utc).timestamp()))
+
+  def headers_for(raw_body: bytes) -> dict[str, str]:
+    signature = hmac.new(
+      secret.encode(),
+      WebhookReplayVerifier.signature_message(timestamp, raw_body),
+      sha256,
+    ).hexdigest()
+    return {
+      "Content-Type": "application/json",
+      "X-Eisenhower-Timestamp": timestamp,
+      "X-Eisenhower-Signature": signature,
+      "X-Eisenhower-Signature-Version": WEBHOOK_SIGNATURE_VERSION,
+      "X-Eisenhower-Signed-Method": WEBHOOK_INGRESS_METHOD,
+      "X-Eisenhower-Signed-Path": WEBHOOK_INGRESS_PATH,
+    }
+
+  invalid_raw = json.dumps({**valid_event, "unexpected": True}).encode("utf-8")
+  invalid = client.post(
+    "/internal/webhooks/n8n/verify",
+    content=invalid_raw,
+    headers=headers_for(invalid_raw),
+  )
+  valid_raw = json.dumps(valid_event, separators=(",", ":")).encode("utf-8")
+  accepted = client.post(
+    "/internal/webhooks/n8n/verify",
+    content=valid_raw,
+    headers=headers_for(valid_raw),
+  )
+  duplicate_raw = valid_raw.replace(b'"project-1"', b'"project-1","project_id":"project-1"')
+  duplicate = client.post(
+    "/internal/webhooks/n8n/verify",
+    content=duplicate_raw,
+    headers=headers_for(duplicate_raw),
+  )
+  wrong_media_type = client.post(
+    "/internal/webhooks/n8n/verify",
+    content=valid_raw,
+    headers={**headers_for(valid_raw), "Content-Type": "text/plain"},
+  )
+  unsigned_malformed = client.post(
+    "/internal/webhooks/n8n/verify",
+    content=b"{",
+    headers={"Content-Type": "application/json"},
+  )
+
+  assert invalid.status_code == 422
+  assert invalid.json() == {"error": "Invalid ingestion envelope."}
+  assert accepted.status_code == 200
+  assert accepted.json()["accepted"] is True
+  assert duplicate.status_code == 422
+  assert wrong_media_type.status_code == 415
+  assert unsigned_malformed.status_code == 200
+  assert unsigned_malformed.json() == {"accepted": False}
+
+
+def test_webhook_verification_rejects_oversized_declared_body(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    internal_api_token="internal-token",
+    webhook_secret="webhook-secret",
+    jobs_database_path=tmp_path / "jobs.sqlite3",
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service),
+    headers={"Authorization": "Bearer internal-token"},
+  )
+
+  response = client.post(
+    "/internal/webhooks/n8n/verify",
+    content=b"{}",
+    headers={"Content-Type": "application/json", "Content-Length": str(8 * 1024 * 1024 + 1)},
+  )
+
+  assert response.status_code == 413
+  assert response.json() == {"error": "Webhook body exceeds the 8 MiB limit."}
+
+
+def test_internal_job_idempotency_key_reuse_with_a_different_request_returns_conflict(
+  tmp_path: Path,
+):
+  secret = "webhook-secret"
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    internal_api_token="internal-token",
+    internal_allowed_tenants=("tenant-a",),
+    webhook_secret=secret,
+    jobs_database_path=tmp_path / "jobs.sqlite3",
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service),
+    headers={"Authorization": "Bearer internal-token"},
+  )
+  base_event = {
+    "event_id": "event-conflict",
+    "tenant_id": "tenant-a",
+    "project_id": "project-1",
+    "source_version": "v1",
+    "source_sequence": 1,
+    "content_checksum": f"sha256:{'a' * 64}",
+    "embedding_version": "minilm-v1",
+    "chunking_version": "chars-v1",
+  }
+  upsert_signature = hmac.new(
+    secret.encode(),
+    b"event-conflict|tenant-a|upsert",
+    sha256,
+  ).hexdigest()
+  upsert_headers = {
+    "Idempotency-Key": "event-conflict",
+    "X-Eisenhower-Signature": upsert_signature,
+  }
+  initial_payload = {**base_event, "documents": [{"document_id": "doc-1"}]}
+
+  created = client.post(
+    "/internal/rag/ingestion/upsert",
+    json=initial_payload,
+    headers=upsert_headers,
+  )
+  replay = client.post(
+    "/internal/rag/ingestion/upsert",
+    json=initial_payload,
+    headers=upsert_headers,
+  )
+  changed_payload = client.post(
+    "/internal/rag/ingestion/upsert",
+    json={**initial_payload, "content_checksum": f"sha256:{'b' * 64}"},
+    headers=upsert_headers,
+  )
+  tombstone_signature = hmac.new(
+    secret.encode(),
+    b"event-conflict|tenant-a|tombstone",
+    sha256,
+  ).hexdigest()
+  changed_type = client.post(
+    "/internal/rag/ingestion/tombstone",
+    json={**base_event, "document_ids": ["doc-1"]},
+    headers={
+      "Idempotency-Key": "event-conflict",
+      "X-Eisenhower-Signature": tombstone_signature,
+    },
+  )
+
+  assert created.status_code == 202
+  assert replay.status_code == 202
+  assert replay.json() == created.json()
+  assert changed_payload.status_code == 409
+  assert changed_payload.json() == {
+    "error": "Idempotency key is already bound to a different job request."
+  }
+  assert changed_type.status_code == 409
+  assert changed_type.json() == changed_payload.json()
 
 
 def test_root_and_capabilities(real_model_bundle):

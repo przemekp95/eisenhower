@@ -3,6 +3,7 @@ import { getAdminToken, getApiToken, setAdminToken } from '../authSession';
 import {
   addTrainingExample,
   analyzeTask,
+  analyzeTaskWithRag,
   batchAnalyzeTasks,
   clearTrainingData,
   classifyTask,
@@ -193,6 +194,25 @@ describe('api service', () => {
     );
     expect((global.fetch as jest.Mock).mock.calls[8][1].headers.Authorization).toBe(
       'Bearer runtime-only-admin-token'
+    );
+  });
+
+  it('uses the governed v2 analysis endpoint', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ mode: 'fallback', citations: [] }),
+    });
+
+    await analyzeTaskWithRag('ground this task');
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${runtimeConfig.aiApiUrl}/v2/ai/analyze`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ task: 'ground this task' }),
+      })
     );
   });
 

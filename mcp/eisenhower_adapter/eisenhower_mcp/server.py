@@ -10,54 +10,67 @@ from .service import EisenhowerMcpService
 
 
 def _service_from_environment() -> EisenhowerMcpService:
-    base_url = os.environ.get("EISENHOWER_API_BASE_URL", "http://127.0.0.1:3000")
+    task_base_url = os.environ.get("EISENHOWER_TASK_API_BASE_URL")
+    ai_base_url = os.environ.get("EISENHOWER_AI_API_BASE_URL")
+    if not task_base_url or not ai_base_url:
+        raise RuntimeError(
+            "EISENHOWER_TASK_API_BASE_URL and EISENHOWER_AI_API_BASE_URL are required"
+        )
     return EisenhowerMcpService(
         EisenhowerApiClient(
-            base_url,
+            task_base_url,
+            ai_base_url,
             bearer_token=os.environ.get("EISENHOWER_API_TOKEN"),
             timeout_seconds=float(os.environ.get("EISENHOWER_API_TIMEOUT_SECONDS", "5")),
         )
     )
 
 
-service = _service_from_environment()
+service: EisenhowerMcpService | None = None
 mcp = MCPServer("Eisenhower Matrix")
+
+
+def _service() -> EisenhowerMcpService:
+    global service
+    if service is None:
+        service = _service_from_environment()
+    return service
 
 
 @mcp.tool()
 def matrix_summary() -> dict[str, Any]:
     """Summarize task counts in the four canonical Eisenhower quadrants."""
-    return service.matrix_summary()
+    return _service().matrix_summary()
 
 
 @mcp.tool()
 def tasks_search(query: str = "", limit: int = 20) -> dict[str, Any]:
     """Search existing tasks by title or description; never changes tasks."""
-    return service.tasks_search(query, limit)
+    return _service().tasks_search(query, limit)
 
 
 @mcp.tool()
 def task_get(task_id: str) -> dict[str, Any]:
     """Return one existing task by identifier using the public tasks API."""
-    return service.task_get(task_id)
+    return _service().task_get(task_id)
 
 
 @mcp.tool()
 def project_context(project_id: str, limit: int = 100) -> dict[str, Any]:
     """Return task context associated with a project identifier."""
-    return service.project_context(project_id, limit)
+    return _service().project_context(project_id, limit)
 
 
 @mcp.tool()
 def knowledge_search(query: str, project_id: str | None = None, limit: int = 5) -> dict[str, Any]:
     """Search indexed project knowledge and preserve source citations."""
-    return service.knowledge_search(query, project_id, limit)
+    return _service().knowledge_search(query, project_id, limit)
 
 
 @mcp.tool()
 def priority_explain(task_id: str) -> dict[str, Any]:
     """Explain a task's priority using deterministic Eisenhower rules."""
-    return service.priority_explain(task_id)
+    return _service().priority_explain(task_id)
 
 
 def main() -> None:

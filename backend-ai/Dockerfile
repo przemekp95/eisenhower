@@ -1,7 +1,7 @@
 # Multi-stage build for Python AI service (CPU + CUDA targets)
 
 # Bazowy obraz wspólny dla wszystkich wersji
-FROM python:3.11-slim as base
+FROM python:3.11-slim AS base
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -31,6 +31,8 @@ RUN apt-get update \
         git \
         libffi-dev \
         libgomp1 \
+        libmagic1 \
+        poppler-utils \
         tesseract-ocr \
         tesseract-ocr-pol \
         libtesseract-dev \
@@ -57,6 +59,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
         libgomp1 \
+        libmagic1 \
+        poppler-utils \
         tesseract-ocr \
         tesseract-ocr-pol \
     && apt-get clean \
@@ -71,7 +75,9 @@ RUN mkdir -p /app/data /app/logs /home/app/.cache/huggingface
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health/ready || exit 1
 EXPOSE 8000
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+# Metrics, provider toggles and the loaded classifier are process-local. Keep one
+# worker per container; scale with separate instances scraped by Prometheus.
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
 
 # ------------------------------------------------------------------------------
 # Target: Dependencies (CUDA 12.4 - wersja akcelerowana GPU)
@@ -101,6 +107,8 @@ RUN apt-get update \
         git \
         libffi-dev \
         libgomp1 \
+        libmagic1 \
+        poppler-utils \
         tesseract-ocr \
         tesseract-ocr-pol \
         libtesseract-dev \
