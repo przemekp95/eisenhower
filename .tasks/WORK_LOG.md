@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-11 — TASK-030: Merged green PR #154 with executable BDD to `dev` as `0721ca8f2edbeb4216622f315b23d62119cb5d83` after all required checks, including native Android, passed; `master` and production were unchanged.
+
 2026-08-11 — TASK-029: Expanded executable BDD to 15 scenarios/59 steps for task behavior, bearer and browser-origin protection, validation and environment isolation; after current `origin/dev` integration the hostile-env check, full `make verify`, actionlint and YAML parsing passed.
 
 2026-08-11 — TASK-029: Added executable Cucumber/Gherkin BDD for the four task quadrants, lifecycle and tenant isolation; 7 scenarios/37 steps and the full `make verify` gate passed, with the claim explicitly bounded to this acceptance slice.
