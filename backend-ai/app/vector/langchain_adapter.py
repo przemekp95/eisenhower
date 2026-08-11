@@ -115,7 +115,7 @@ class LangChainQdrantAdapter(VectorStore):
         query: str,
         k: int = 4,
         filter: Optional[Dict[str, Any]] = None,
-        **kwargs: Any
+        **_kwargs: Any
     ) -> List[Document]:
         query_vector = self._embeddings.embed_query(query)
 
@@ -136,7 +136,7 @@ class LangChainQdrantAdapter(VectorStore):
         query: str,
         k: int = 4,
         filter: Optional[Dict[str, Any]] = None,
-        **kwargs: Any
+        **_kwargs: Any
     ) -> List[tuple[Document, float]]:
         query_vector = self._embeddings.embed_query(query)
 
