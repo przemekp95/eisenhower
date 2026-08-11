@@ -97,6 +97,7 @@ Root commands:
 
 - `make setup`
 - `make test`
+- `make test-bdd`
 - `make build`
 - `make verify`
 - `make dev-web`
@@ -106,7 +107,7 @@ Root commands:
 
 Before starting the root Docker Compose stack, copy `.env.example` to `.env` and replace every placeholder with a unique local credential.
 
-`make verify` mirrors the local release-quality sweep used most often in CI: backend-node build + coverage, web build + coverage + integration, backend-ai pytest, and mobile coverage.
+`make verify` mirrors the local release-quality sweep used most often in CI: backend-node build + coverage + executable Cucumber/Gherkin BDD, web build + coverage + integration, backend-ai pytest, and mobile coverage. The current BDD slice documents the task lifecycle, tenant isolation, bearer/browser-origin protection, and request validation under `backend-node/features/`; it is intentionally narrower than repository-wide BDD.
 
 The standard backend AI development environment installs `requirements-dev.txt`, which includes core runtime and test/audit tools but excludes research frameworks. Install `requirements-experimental.txt` separately only to run the opt-in LangChain/MinIO experiments.
 

@@ -70,7 +70,7 @@ The current Expo/Metro build chain carries two high-severity `image-size` adviso
 
 - New security, deployment and dependency-policy work must show a failing test before the implementation and a passing test afterward. Historical repository-wide TDD adoption is not proven by the presence of tests.
 - The system is a pragmatic layered monorepo. It has useful domain names and service boundaries, but no evidenced bounded-context model, aggregate discipline, or strict domain/application/infrastructure separation; it must not be marketed as full DDD.
-- The repository has integration and end-to-end tests but no Gherkin, executable Given-When-Then scenarios, or living feature documentation; it must not be marketed as BDD.
+- The backend Node task lifecycle has a bounded executable Cucumber/Gherkin acceptance slice covering all four quadrants, movement, deletion, tenant isolation, bearer authentication, browser-origin protection, and request validation. This is living feature documentation for that supported behavior, not evidence of repository-wide BDD; the cross-service AI/RAG scenarios remain specified but not executable.
 - The supported runtime uses direct HTTP request/response calls. Experimental code contains a signed webhook, a durable SQLite job queue, a worker and RAG-oriented ports/adapters, but none is activated in the supported Mikrus topology; it is therefore not evidence of a production message bus, webhook pipeline or strict repository-wide hexagonal architecture.
 - There is no CQRS read/write model split or event sourcing. The MiniLM/OCR release path remains pragmatic layered code; the experimental RAG package has useful ports and adapters but does not make the whole monorepo hexagonal.
 

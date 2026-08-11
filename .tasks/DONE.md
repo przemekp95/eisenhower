@@ -1,5 +1,23 @@
 # Done
 
+## TASK-024: Add executable BDD for task behavior
+**Priority:** P2 | **Tags:** testing, bdd, cucumber, backend-node
+
+Add a real executable Gherkin workflow for the user-visible task lifecycle without relabeling ordinary Jest tests as BDD.
+
+### Plan
+
+- Preserve the existing seven lifecycle/quadrant scenarios and typed Express/Supertest/Mongo harness.
+- Add bounded living scenarios for bearer authentication, trusted browser origins, request validation, and missing-resource behavior.
+- Keep unit-level edge cases, experimental AI/RAG, messaging, and physical-device acceptance outside this BDD slice.
+- Run focused BDD/backend verification and the complete root release-quality gate, then update the documented evidence boundary.
+
+### Outcome
+
+Added a Node 20/24-compatible Cucumber 12.9 executable acceptance layer with typed TypeScript steps driving the real Express app through Supertest and isolated MongoDB. Fifteen Gherkin scenarios and 59 steps now cover all four canonical quadrants, task movement/deletion, tenant isolation, missing and invalid bearer credentials, trusted and untrusted browser origins, title limits, unexpected-field rejection, and missing-resource behavior. The harness pins and restores auth/OIDC/CORS environment state and passed with deliberately hostile inherited variables. Added `test:bdd` and `make test-bdd`, included BDD in root test/verify and the existing backend CI job, and documented that this is a bounded living-behavior slice rather than repository-wide BDD, DDD, CQRS, hexagonal architecture, or historical TDD evidence. Fresh `make verify` passed production audits, Node 66 tests at 100% plus BDD 15/15, web 135 at 100% plus 2 integration tests, backend AI 414 with 6 opt-in skips at 89.49% coverage, and mobile 95 tests.
+
+---
+
 ## TASK-022: Implement a portable private generation boundary
 **Priority:** P2 | **Tags:** rag, generation, gpu, portability, security
 
