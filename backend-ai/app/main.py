@@ -428,6 +428,13 @@ def create_app(
       not resolved_settings.rag_allowed_tenants
       or principal.tenant_id in resolved_settings.rag_allowed_tenants
     )
+    user_enabled = (
+      (
+        resolved_settings.app_env != "production"
+        and not resolved_settings.rag_response_allowed_users
+      )
+      or principal.user_id in resolved_settings.rag_response_allowed_users
+    )
     generation_enabled = bool(
       resolved_rag_service is not None
       and getattr(resolved_rag_service, "generation_enabled", True)
@@ -437,11 +444,15 @@ def create_app(
       and tenant_enabled
       and request.freshness_requirement == "current_world_required"
     )
-    if (
-      resolved_rag_service is not None
-      and generation_enabled
+    response_enabled = (
+      generation_enabled
       and resolved_settings.rag_response_enabled
       and tenant_enabled
+      and user_enabled
+    )
+    if (
+      resolved_rag_service is not None
+      and response_enabled
     ) or current_world_abstention:
       delta_requested = (
         request.known_state is not None
@@ -460,7 +471,36 @@ def create_app(
       else:
         result = resolved_rag_service.analyze(request.task, scope, language=request.language)
     else:
-      if resolved_rag_service is not None and tenant_enabled:
+      if resolved_rag_service is not None and tenant_enabled and generation_enabled:
+        generation_started = time.perf_counter()
+        try:
+          shadow_result = resolved_rag_service.analyze(
+            request.task,
+            scope,
+            language=request.language,
+          )
+          shadow_outcome = "no_answer" if shadow_result.mode == "no_answer" else "success"
+          metrics.observe_generation(
+            shadow_outcome,
+            duration_seconds=time.perf_counter() - generation_started,
+            input_tokens=(
+              shadow_result.generation.input_tokens
+              if shadow_result.generation is not None
+              else 0
+            ),
+          )
+          if shadow_result.generation is not None:
+            metrics.observe_rag_validation("schema", "accepted")
+            if shadow_result.mode == "rag":
+              metrics.observe_rag_validation("citations", "accepted")
+        except Exception:
+          request_logger.warning("Optional generation shadow failed", exc_info=True)
+          metrics.observe_generation(
+            "unavailable",
+            duration_seconds=time.perf_counter() - generation_started,
+            input_tokens=0,
+          )
+      elif resolved_rag_service is not None and tenant_enabled:
         retrieval_started = time.perf_counter()
         try:
           shadow = resolved_rag_service.retrieve_summary(request.task, scope)
@@ -483,6 +523,8 @@ def create_app(
         fallback_reason = "rag_response_disabled"
       elif not generation_enabled:
         fallback_reason = "generation_disabled"
+      elif not user_enabled:
+        fallback_reason = "user_not_enabled"
       else:
         fallback_reason = "tenant_not_enabled"
       result = AnalyzeResult(

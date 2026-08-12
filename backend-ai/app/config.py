@@ -34,10 +34,14 @@ class Settings:
   rag_generation_enabled: bool | None = None
   rag_response_enabled: bool = False
   rag_allowed_tenants: tuple[str, ...] = ()
+  rag_response_allowed_users: tuple[str, ...] = ()
   qdrant_url: str = "http://qdrant:6333"
   qdrant_api_key: str | None = None
   qdrant_collection_alias: str = "eisenhower-knowledge-active"
   embedding_version: str = "minilm-v1"
+  rag_embedding_model_name: str | None = None
+  rag_embedding_model_revision: str | None = None
+  rag_embedding_device: str | None = None
   chunking_version: str = "chars-1200-overlap-160-v1"
   inference_base_url: str = "http://inference:8000/v1"
   inference_api_key: str | None = None
@@ -119,6 +123,14 @@ class Settings:
     object.__setattr__(self, "rag_generation_enabled", generation_enabled)
     if generation_enabled and not retrieval_enabled:
       raise ValueError("RAG generation requires RAG retrieval to be enabled.")
+    if self.app_env == "production" and self.rag_response_enabled and not generation_enabled:
+      raise ValueError("RAG responses require RAG generation to be enabled.")
+    if (
+      self.app_env == "production"
+      and self.rag_response_enabled
+      and (not self.rag_allowed_tenants or not self.rag_response_allowed_users)
+    ):
+      raise ValueError("Production RAG responses require explicit tenant and user allowlists.")
     timeout_values = (
       self.inference_connect_timeout_seconds,
       self.inference_read_timeout_seconds,
@@ -130,6 +142,8 @@ class Settings:
       raise ValueError("Inference timeouts and circuit reset must be finite and positive.")
     if self.inference_circuit_failure_threshold < 1:
       raise ValueError("Inference circuit failure threshold must be positive.")
+    if bool(self.rag_embedding_model_name) != bool(self.rag_embedding_model_revision):
+      raise ValueError("RAG embedding model name and revision must be configured together.")
     if self.memory_retrieval_enabled and not self.memory_write_enabled:
       raise ValueError("Memory retrieval requires governed memory writes.")
     if self.memory_response_enabled and not self.memory_retrieval_enabled:
@@ -257,12 +271,16 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     ),
     rag_response_enabled=source.get("RAG_RESPONSE_ENABLED", "false").lower() in ("true", "1", "yes"),
     rag_allowed_tenants=parse_csv_list(source.get("RAG_ALLOWED_TENANTS"), ()),
+    rag_response_allowed_users=parse_csv_list(source.get("RAG_RESPONSE_ALLOWED_USERS"), ()),
     qdrant_url=source.get("QDRANT_URL", "http://qdrant:6333"),
     qdrant_api_key=source.get("QDRANT_API_KEY") or None,
     qdrant_collection_alias=source.get(
       "QDRANT_COLLECTION_ALIAS", "eisenhower-knowledge-active"
     ),
     embedding_version=source.get("EMBEDDING_VERSION", "minilm-v1"),
+    rag_embedding_model_name=source.get("RAG_EMBEDDING_MODEL_NAME") or None,
+    rag_embedding_model_revision=source.get("RAG_EMBEDDING_MODEL_REVISION") or None,
+    rag_embedding_device=source.get("RAG_EMBEDDING_DEVICE") or None,
     chunking_version=source.get("CHUNKING_VERSION", "chars-1200-overlap-160-v1"),
     inference_base_url=source.get(
       "INFERENCE_BASE_URL",

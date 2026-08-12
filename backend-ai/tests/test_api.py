@@ -402,6 +402,61 @@ def test_v2_shadow_retrieval_runs_without_exposing_hits_or_calling_generation(tm
   assert 'eisenhower_rag_analysis_duration_seconds_count{mode="fallback"} 1' in metrics.text
 
 
+def test_v2_generation_shadow_validates_and_discards_model_output(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    rag_retrieval_enabled=True,
+    rag_generation_enabled=True,
+    rag_response_enabled=False,
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  rag = FakeRagService()
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service, rag_service=rag),
+    headers={"Authorization": "Bearer test-api-token"},
+  )
+
+  response = client.post("/v2/ai/analyze", json={"task": "Prepare roadmap"})
+  metrics = client.get("/metrics")
+
+  assert response.status_code == 200
+  assert response.json()["mode"] == "fallback"
+  assert response.json()["fallback_reason"] == "rag_response_disabled"
+  assert response.json()["citations"] == []
+  assert response.json()["generation"] is None
+  assert len(rag.calls) == 1
+  assert not rag.shadow_calls
+  assert 'eisenhower_rag_generation_total{outcome="success"} 1' in metrics.text
+
+
+def test_v2_response_canary_requires_the_authenticated_user(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    rag_retrieval_enabled=True,
+    rag_generation_enabled=True,
+    rag_response_enabled=True,
+    rag_allowed_tenants=("local",),
+    rag_response_allowed_users=("different-user",),
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  rag = FakeRagService()
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service, rag_service=rag),
+    headers={"Authorization": "Bearer test-api-token"},
+  )
+
+  response = client.post("/v2/ai/analyze", json={"task": "Prepare roadmap"})
+
+  assert response.status_code == 200
+  assert response.json()["mode"] == "fallback"
+  assert response.json()["fallback_reason"] == "user_not_enabled"
+  assert len(rag.calls) == 1
+
+
 def test_v2_knowledge_search_forwards_the_authorized_project_filter(tmp_path: Path):
   settings = Settings(
     training_data_path=tmp_path / "training.json",

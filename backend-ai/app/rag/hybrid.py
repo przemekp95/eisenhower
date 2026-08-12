@@ -41,6 +41,33 @@ class Reranker(Protocol):
   ) -> Sequence[float]: ...
 
 
+class SentenceTransformerCrossEncoderReranker:
+  """Bounded adapter for an already pinned and loaded CrossEncoder model."""
+
+  def __init__(self, model, *, batch_size: int = 4):
+    if not 1 <= batch_size <= _MAX_RERANKER_CANDIDATES:
+      raise ValueError("reranker batch_size must be between 1 and 20")
+    self.model = model
+    self.batch_size = batch_size
+
+  def score(
+    self,
+    query_text: str,
+    ranked_candidates: tuple[RetrievalHit, ...],
+  ) -> list[float]:
+    pairs = [
+      [query_text, f"{candidate.title}\n{candidate.text}"]
+      for candidate in ranked_candidates
+    ]
+    raw_scores = self.model.predict(
+      pairs,
+      batch_size=self.batch_size,
+      show_progress_bar=False,
+      convert_to_numpy=True,
+    )
+    return [float(score) for score in raw_scores]
+
+
 class HybridRetrievalCore:
   """Fuses canonical dense and lexical rankings, then optionally reranks."""
 
@@ -129,18 +156,34 @@ class HybridRetrievalCore:
     ):
       raise RerankerUnavailable("reranker returned a non-finite score")
 
-    reranked = [
-      item.model_copy(update={"score": float(raw_scores[index])})
-      for index, item in enumerate(prefix)
-    ]
-    reranked.sort(
-      key=lambda item: (-item.score, self._rank_of(item.chunk_id, prefix), item.chunk_id),
+    reranker_order = sorted(
+      range(prefix_size),
+      key=lambda index: (-float(raw_scores[index]), index, prefix[index].chunk_id),
     )
+    reranker_rank = {
+      prefix[index].chunk_id: rank
+      for rank, index in enumerate(reranker_order, start=1)
+    }
+    original_rank = {
+      item.chunk_id: rank
+      for rank, item in enumerate(prefix, start=1)
+    }
+    reranked = [
+      item.model_copy(update={
+        "score": (
+          (1 / (self.rrf_k + original_rank[item.chunk_id]))
+          + (1 / (self.rrf_k + reranker_rank[item.chunk_id]))
+        )
+      })
+      for item in prefix
+    ]
+    reranked.sort(key=lambda item: (
+      -item.score,
+      reranker_rank[item.chunk_id],
+      original_rank[item.chunk_id],
+      item.chunk_id,
+    ))
     return reranked + fused[prefix_size:]
-
-  @staticmethod
-  def _rank_of(chunk_id: str, candidates: Sequence[RetrievalHit]) -> int:
-    return next(index for index, item in enumerate(candidates) if item.chunk_id == chunk_id)
 
   @staticmethod
   def _validate_candidates(
@@ -287,7 +330,7 @@ class HybridRetriever:
     lexical_retriever: Retriever,
     *,
     rrf_k: int = 60,
-    candidate_multiplier: int = 4,
+    candidate_multiplier: int = 20,
     reranker: Reranker | None = None,
     reranker_candidate_limit: int = 20,
   ):
@@ -303,8 +346,39 @@ class HybridRetriever:
     )
 
   def retrieve(self, query: RetrievalQuery) -> list[RetrievalHit]:
-    candidate_limit = min(20, max(query.limit, query.limit * self.candidate_multiplier))
+    candidate_limit = min(100, max(query.limit, query.limit * self.candidate_multiplier))
     candidate_query = query.model_copy(update={"limit": candidate_limit})
-    dense_candidates = self.dense_retriever.retrieve(candidate_query)
-    lexical_candidates = self.lexical_retriever.retrieve(candidate_query)
-    return self.core.rank(query, dense_candidates, lexical_candidates)
+    dense_candidates = self._best_per_document(
+      self.dense_retriever.retrieve(candidate_query)
+    )
+    lexical_candidates = self._best_per_document(
+      self.lexical_retriever.retrieve(candidate_query)
+    )
+    lexical_by_document = {item.document_id: item for item in lexical_candidates}
+    dense_candidates = [
+      lexical_by_document[item.document_id].model_copy(update={"score": item.score})
+      if item.document_id in lexical_by_document else item
+      for item in dense_candidates
+    ]
+    ranked = self.core.rank(candidate_query, dense_candidates, lexical_candidates)
+    diversified: list[RetrievalHit] = []
+    seen_documents: set[str] = set()
+    for candidate in ranked:
+      if candidate.document_id in seen_documents:
+        continue
+      seen_documents.add(candidate.document_id)
+      diversified.append(candidate)
+      if len(diversified) == query.limit:
+        break
+    return diversified
+
+  @staticmethod
+  def _best_per_document(candidates: Sequence[RetrievalHit]) -> list[RetrievalHit]:
+    selected: list[RetrievalHit] = []
+    seen_documents: set[str] = set()
+    for candidate in candidates:
+      if candidate.document_id in seen_documents:
+        continue
+      seen_documents.add(candidate.document_id)
+      selected.append(candidate)
+    return selected

@@ -6,6 +6,7 @@ from app.rag.hybrid import (
   HybridRetrievalCore,
   HybridRetriever,
   RerankerUnavailable,
+  SentenceTransformerCrossEncoderReranker,
 )
 from app.rag.canonical import CanonicalDocumentState
 from app.rag.models import AccessScope, RetrievalHit, RetrievalQuery, SourceDocument
@@ -120,8 +121,25 @@ def test_hybrid_can_recall_a_canonical_lexical_candidate_that_dense_missed():
 
   assert "exact-doc" not in {item.document_id for item in dense.hits}
   assert [item.document_id for item in ranked] == ["exact-doc", "doc-semantic"]
-  assert dense.queries[0].limit > 2
+  assert dense.queries[0].limit == 40
   assert store.project_queries == [("tenant-a", "project-1")]
+
+
+def test_hybrid_diversifies_final_results_by_document_before_applying_limit():
+  dense = DenseRetriever([
+    hit("same-a", "first chunk", score=0.99, document_id="same-doc"),
+    hit("same-b", "second chunk", score=0.98, document_id="same-doc"),
+    hit("other", "other document", score=0.70, document_id="other-doc"),
+  ])
+  lexical = DenseRetriever([
+    hit("same-a", "first chunk", score=3.0, document_id="same-doc"),
+    hit("same-b", "second chunk", score=2.0, document_id="same-doc"),
+    hit("other", "other document", score=1.0, document_id="other-doc"),
+  ])
+
+  ranked = HybridRetriever(dense, lexical).retrieve(query(limit=2))
+
+  assert [item.document_id for item in ranked] == ["same-doc", "other-doc"]
 
 
 def test_lexical_retriever_enforces_pending_tombstone_version_acl_and_scope_boundary():
@@ -227,6 +245,54 @@ class RecordingReranker:
     return self.scores
 
 
+def test_hybrid_collapses_each_source_by_document_before_bounded_reranking():
+  dense = DenseRetriever([
+    hit("same-a", "first chunk", score=0.99, document_id="same-doc"),
+    hit("same-b", "second chunk", score=0.98, document_id="same-doc"),
+    hit("other", "other document", score=0.70, document_id="other-doc"),
+  ])
+  lexical = DenseRetriever([
+    hit("same-b", "second chunk", score=3.0, document_id="same-doc"),
+    hit("other", "other document", score=2.0, document_id="other-doc"),
+  ])
+  reranker = RecordingReranker(scores=[0.9, 0.8])
+
+  ranked = HybridRetriever(dense, lexical, reranker=reranker).retrieve(query(limit=2))
+
+  assert reranker.received is not None
+  assert reranker.received[1][0].chunk_id == "same-b"
+  assert [item.document_id for item in reranker.received[1]] == ["same-doc", "other-doc"]
+  assert [item.document_id for item in ranked] == ["same-doc", "other-doc"]
+
+
+class FakeCrossEncoder:
+  def __init__(self):
+    self.calls = []
+
+  def predict(self, pairs, *, batch_size, show_progress_bar, convert_to_numpy):
+    self.calls.append((pairs, batch_size, show_progress_bar, convert_to_numpy))
+    return [0.25, 0.75]
+
+
+def test_cross_encoder_reranker_scores_only_bounded_query_title_text_pairs():
+  model = FakeCrossEncoder()
+  reranker = SentenceTransformerCrossEncoderReranker(model, batch_size=4)
+  ranked_candidates = tuple(candidates()[:2])
+
+  scores = reranker.score("polskie zapytanie", ranked_candidates)
+
+  assert scores == [0.25, 0.75]
+  assert model.calls == [(
+    [
+      ["polskie zapytanie", "Title semantic\nOgólne zatwierdzenie oceny jakości."],
+      ["polskie zapytanie", "Title noise\nDokument o wdrożeniu Androida."],
+    ],
+    4,
+    False,
+    True,
+  )]
+
+
 def test_optional_reranker_receives_only_the_bounded_fused_prefix():
   reranker = RecordingReranker(scores=[0.1, 0.9])
   core = HybridRetrievalCore(reranker=reranker, reranker_candidate_limit=2)
@@ -237,6 +303,16 @@ def test_optional_reranker_receives_only_the_bounded_fused_prefix():
   assert reranker.received[0] == "TASK-013 zatwierdzenie"
   assert [item.chunk_id for item in reranker.received[1]] == ["semantic", "exact"]
   assert [item.chunk_id for item in ranked] == ["exact", "semantic", "noise"]
+
+
+def test_reranker_is_rank_fused_and_cannot_discard_the_original_hybrid_signal():
+  reranker = RecordingReranker(scores=[0.8, 0.7, 0.9])
+  core = HybridRetrievalCore(reranker=reranker, reranker_candidate_limit=3)
+
+  ranked = core.rank(query(), candidates())
+
+  assert ranked[0].chunk_id == "semantic"
+  assert ranked[0].score > ranked[1].score
 
 
 def test_disabled_reranker_returns_the_fused_order():

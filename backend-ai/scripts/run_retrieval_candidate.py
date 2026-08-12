@@ -11,7 +11,8 @@ from uuid import uuid4
 import httpx
 from pymongo import MongoClient
 from qdrant_client import QdrantClient, models as qmodels
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import CrossEncoder, SentenceTransformer
+import torch
 
 from app.config import Settings
 from app.rag.adapters import QdrantIngestionAdapter, QdrantRetriever
@@ -20,19 +21,26 @@ from app.rag.collections import QdrantCollectionManager
 from app.rag.corpus_manifest import CorpusManifest, RepositoryCorpusConnector
 from app.rag.golden import load_golden_dataset
 from app.rag.golden_runner import RetrievalStrategyComparisonRunner
-from app.rag.hybrid import CanonicalBm25Retriever, HybridRetriever
+from app.rag.hybrid import (
+  CanonicalBm25Retriever,
+  HybridRetriever,
+  SentenceTransformerCrossEncoderReranker,
+)
 from app.rag.ingestion import DeterministicChunker
 from app.rag.models import AccessScope
 from app.rag.mongo_document_store import MongoCanonicalDocumentStore
 from scripts.verify_qdrant_recovery import verify_candidate_collection_snapshot
 
 
-class PinnedMiniLMEmbedding:
-  version = "minilm-v1"
+RERANKER_MODEL_ID = "BAAI/bge-reranker-v2-m3"
+RERANKER_MODEL_REVISION = "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e"
 
-  def __init__(self, model_name: str, revision: str):
+
+class PinnedMiniLMEmbedding:
+  def __init__(self, model_name: str, revision: str, *, embedding_version: str = "minilm-v1"):
     self.model_name = model_name
     self.revision = revision
+    self.version = embedding_version
     self.encoder = SentenceTransformer(model_name, revision=revision)
 
   def embed(self, texts: list[str]) -> list[list[float]]:
@@ -57,6 +65,10 @@ def run(
   candidate_path: Path,
   snapshot_output: Path | None = None,
   repository_root: Path | None = None,
+  embedding_model: str | None = None,
+  embedding_revision: str | None = None,
+  embedding_version: str = "minilm-v1",
+  include_reranker: bool = False,
 ) -> dict:
   repository_root = (repository_root or Path(__file__).resolve().parents[2]).resolve()
   manifest_path = repository_root / "docs" / "ai-rebuild" / "corpus-manifest-v1.json"
@@ -71,8 +83,9 @@ def run(
     model_cache_dir=repository_root / "data" / "models",
   )
   embedding = PinnedMiniLMEmbedding(
-    settings.local_model_name,
-    settings.local_model_revision,
+    embedding_model or settings.local_model_name,
+    embedding_revision or settings.local_model_revision,
+    embedding_version=embedding_version,
   )
   vector_size = len(embedding.embed(["dimension probe"])[0])
   suffix = uuid4().hex
@@ -122,10 +135,28 @@ def run(
       chunker=DeterministicChunker(max_chars=1200, overlap_chars=160),
     )
     hybrid_retriever = HybridRetriever(dense_retriever, lexical_retriever)
-    strategy_comparison = RetrievalStrategyComparisonRunner({
+    strategies = {
       "dense": dense_retriever,
       "hybrid": hybrid_retriever,
-    }).run(cases, k=5)
+    }
+    reranker_device = None
+    if include_reranker:
+      reranker_device = "cuda" if torch.cuda.is_available() else "cpu"
+      cross_encoder = CrossEncoder(
+        RERANKER_MODEL_ID,
+        revision=RERANKER_MODEL_REVISION,
+        trust_remote_code=False,
+        max_length=512,
+        device=reranker_device,
+      )
+      strategies["reranked"] = HybridRetriever(
+        dense_retriever,
+        lexical_retriever,
+        reranker=SentenceTransformerCrossEncoderReranker(cross_encoder, batch_size=4),
+      )
+    comparison_runner = RetrievalStrategyComparisonRunner(strategies)
+    strategy_comparison = comparison_runner.run(cases, k=5)
+    holdout_strategy_comparison = comparison_runner.run(cases, k=5, split="holdout")
     recovery = (
       verify_candidate_collection_snapshot(qdrant, manager, collection_name, snapshot_output)
       if snapshot_output is not None else None
@@ -146,6 +177,14 @@ def run(
         "embedding_version": embedding.version,
         "vector_size": vector_size,
       },
+      "reranker": ({
+        "id": RERANKER_MODEL_ID,
+        "revision": RERANKER_MODEL_REVISION,
+        "candidate_limit": 20,
+        "batch_size": 4,
+        "max_length": 512,
+        "device": reranker_device,
+      } if include_reranker else None),
       "runtime": {
         "qdrant_server_version": server["version"],
         "qdrant_server_commit": server["commit"],
@@ -157,6 +196,7 @@ def run(
       "reconciliation": reconciliation,
       "evaluation": strategy_comparison["strategies"]["dense"],
       "strategy_comparison": strategy_comparison,
+      "holdout_strategy_comparison": holdout_strategy_comparison,
       "collection": {"name": collection_name, "revision": embedding.version},
       "snapshot_restore": recovery,
       "total_seconds_before_cleanup": round(perf_counter() - started, 6),
@@ -184,8 +224,21 @@ def main() -> None:
     "--repository-root", type=Path,
     help="Read the frozen corpus from an explicit clean exact-SHA checkout.",
   )
+  parser.add_argument("--embedding-model")
+  parser.add_argument("--embedding-revision")
+  parser.add_argument("--embedding-version", default="minilm-v1")
+  parser.add_argument("--include-reranker", action="store_true")
   args = parser.parse_args()
-  report = run(args.candidate, repository_root=args.repository_root)
+  if bool(args.embedding_model) != bool(args.embedding_revision):
+    parser.error("--embedding-model and --embedding-revision must be supplied together")
+  report = run(
+    args.candidate,
+    repository_root=args.repository_root,
+    embedding_model=args.embedding_model,
+    embedding_revision=args.embedding_revision,
+    embedding_version=args.embedding_version,
+    include_reranker=args.include_reranker,
+  )
   args.output.parent.mkdir(parents=True, exist_ok=True)
   args.output.write_text(
     json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2) + "\n",

@@ -35,6 +35,40 @@ class MiniLMEmbeddingProvider:
     return [[float(value) for value in self.local_model.encode_text(text)] for text in texts]
 
 
+class SentenceTransformerEmbeddingProvider:
+  def __init__(
+    self,
+    model_name: str,
+    *,
+    revision: str,
+    version: str,
+    device: str | None = None,
+    model_factory=None,
+  ):
+    if not model_name or not revision or not version:
+      raise ValueError("embedding model, revision and version are required")
+    if model_factory is None:
+      from sentence_transformers import SentenceTransformer
+
+      model_factory = SentenceTransformer
+    self.model = model_factory(model_name, revision=revision, device=device)
+    self._version = version
+
+  @property
+  def version(self) -> str:
+    return self._version
+
+  def embed(self, texts: list[str]) -> list[list[float]]:
+    encoded = self.model.encode(
+      texts,
+      normalize_embeddings=True,
+      convert_to_numpy=True,
+      show_progress_bar=False,
+    )
+    rows = encoded.tolist() if hasattr(encoded, "tolist") else encoded
+    return [[float(value) for value in row] for row in rows]
+
+
 class QdrantRetriever:
   def __init__(self, client, embedding_provider: EmbeddingProvider, *, collection_alias: str):
     self.client = client

@@ -99,6 +99,23 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn("INFERENCE_MODEL is required", self.amd_compose_text)
     self.assertIn("INFERENCE_API_KEY is required", self.amd_compose_text)
 
+  def test_amd_retrieval_profile_runs_pinned_bge_m3_without_enabling_generation(self):
+    ai = self.amd_services["ai-service"]
+    worker = self.amd_services["rag-worker"]
+    self.assertEqual(ai["profiles"], ["retrieval-amd"])
+    self.assertEqual(worker["profiles"], ["retrieval-amd"])
+    for service in (ai, worker):
+      self.assertIn("/dev/kfd:/dev/kfd", service["devices"])
+      self.assertIn("/dev/dri:/dev/dri", service["devices"])
+      self.assertIn("RAG_EMBEDDING_MODEL_NAME=BAAI/bge-m3", service["environment"])
+      self.assertIn(
+        "RAG_EMBEDDING_MODEL_REVISION=5617a9f61b028005a4858fdac845db406aefb181",
+        service["environment"],
+      )
+      self.assertIn("EMBEDDING_VERSION=bge-m3-v1", service["environment"])
+    self.assertIn("RAG_GENERATION_ENABLED=false", ai["environment"])
+    self.assertIn("RAG_RESPONSE_ENABLED=false", ai["environment"])
+
   def test_application_images_receive_required_production_identity_and_audit_config(self):
     for name in ("api-service", "ai-service"):
       environment = self.services[name]["environment"]

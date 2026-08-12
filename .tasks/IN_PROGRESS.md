@@ -20,50 +20,57 @@ The portable local topology, transactional Calendar domain/outbox, HMAC-bound n8
 
 ---
 
-## TASK-043: Compare dense, hybrid RRF and optional reranked retrieval
-**Priority:** P1 | **Tags:** rag, retrieval, bm25, rrf, reranker, evaluation
+## TASK-014: Run the retrieval-only shadow pilot
+**Priority:** P1 | **Tags:** rag, shadow, production, observability
 
-Implement a disabled-by-default comparison path for the existing dense retriever, BM25 plus dense fusion with reciprocal rank fusion, and an optional bounded cross-encoder reranker. Every strategy must preserve the canonical MongoDB, tenant, project, ACL, version, tombstone and Qdrant projection boundary.
+Deploy retrieval-only to an allowlisted internal cohort with `RAG_GENERATION_ENABLED=false` and `RAG_RESPONSE_ENABLED=false`, then compare aggregate retrieval quality, latency, freshness, errors, and fallback health without exposing retrieved content.
 
 ### Plan
 
-- Retrieve lexical candidates from the canonical authorized corpus, then add deterministic BM25 and equal-contribution RRF contracts without choosing parameters from the untouched holdout.
-- Add strategy-neutral dense/hybrid/optional-reranked evaluation for PL/EN Recall@k, MRR, no-hit, duplicate, freshness, isolation and latency slices.
-- Keep dense as the runtime default, pin and bound any optional reranker, and fail closed rather than silently changing strategy when it is unavailable.
-- Produce immutable comparison evidence before any reversible promotion flag is changed.
-
-### Conditional checkpoint
-
-The repository owner approves the human decision gate green without reservations through 2026-08-15 23:59:59 Europe/Warsaw. The untouched holdout and exact evidence remain enforced.
+- Build an immutable AMD ROCm application image with the selected pinned BGE-M3 dense retriever and deploy it only to the local owner cohort.
+- Seed the owner-approved frozen corpus through canonical MongoDB into the rebuildable Qdrant projection, then verify reconciliation and isolation.
+- Exercise privacy-safe local traffic, record aggregate retrieval/latency/error/fallback evidence, and prove generation and user-visible response remain off during this phase.
+- Rehearse the retrieval disable switch, restore the admitted shadow state, and record the bounded go/no-go decision.
 
 ### Progress
 
-The disabled comparison implementation now provides canonical BM25, independently retrieved dense and lexical candidates, equal-contribution RRF, and a typed optional reranker bounded to 20 candidates. The strategy-neutral runner preserves PL/EN, isolation, freshness, duplicate, no-hit and latency slices while leaving dense retrieval as the runtime default. A real comparison report cannot yet be emitted: the governed 19-file corpus no longer matches the frozen manifest snapshot even from a clean worktree at `cbc91d54dfbf23ea00b3ebff7bedc4730c854931`. Refreezing the actual corpus and then running the immutable comparison is a technical evidence requirement, not a human approval gate; no strategy or parameter has been promoted.
+The physical `gfx1151` GPU passed PyTorch ROCm execution. Pinned BGE-M3 dense retrieval passed the untouched holdout for Recall@5 `1.0`, MRR@5 `0.7778`, p95 `100.6431 ms`, isolation, forbidden, stale and duplicate rates `0`; hybrid and the cross-encoder reranker were rejected. Runtime deployment, aggregate traffic and rollback evidence remain in progress. The retrieval-only no-answer score `0.8333` is recorded as a user-response blocker, not hidden or tuned away.
+
 ---
 
-## TASK-013: Approve representative retrieval quality gates
-**Priority:** P1 | **Tags:** rag, evaluation, recall, mrr, human-gate
+## TASK-015: Qualify the selected live GPU, runtime, model and quantization
+**Priority:** P2 | **Tags:** rag, vllm, gpu, citations
 
-Build a human-reviewed PL/EN retrieval golden set from the approved corpus and establish Recall@k, MRR, no-hit, duplicate, freshness, and isolation thresholds before tuning retrieval.
+After retrieval proves useful, qualify a licensed model on the exact physical NVIDIA/CUDA or AMD/ROCm host and prove that its pinned runtime satisfies the private generation contract, capacity and failure gates.
 
 ### Plan
 
-- Freeze train/dev/holdout queries with relevant, forbidden, stale, and deleted document labels.
-- Run the existing evaluator against the real Qdrant candidate and report required slices.
-- Validate the independent review as a hash-bound, fail-closed attestation, preserve crash-recoverable immutable outputs, and confirm human provenance out of band.
-- Obtain human approval for thresholds and preserve the immutable dataset/report hashes.
-
-### Resume gate
-
-Synthetic fixtures remain smoke tests; representative relevance labels and final thresholds require human review after TASK-010 through TASK-012.
-
-### Conditional checkpoint
-
-The repository owner approves the frozen proposed relevance decisions and threshold work green without reservations through 2026-08-15 23:59:59 Europe/Warsaw. Comparison and selection may proceed now while the untouched holdout and immutable hashes remain enforced.
+- Run the pinned Qwen3-4B-Instruct-2507 candidate in the digest-pinned vLLM ROCm image on the local `gfx1151` GPU and record the exact model, tokenizer, chat template, dtype, runtime and memory identity.
+- Bind the immutable PromptSpec only after live startup and PL/EN structured-output contracts pass.
+- Run health, private-network, schema, citation, no-answer, injection, latency, capacity, restart, OOM/disconnect and fallback gates without weakening validation.
+- Record a go/no-go decision and keep generation disabled if any zero-tolerance gate fails.
 
 ### Progress
 
-After the approved security/index documentation changed, the same 19-file corpus allowlist was owner-refrozen and every dependent candidate/runtime hash was regenerated before human review. The untuned real MiniLM + canonical MongoDB + Qdrant baseline still fails: Recall@5 `0.6667`, MRR@5 `0.5444`, no-answer accuracy `0.9444`, PL Recall@5/MRR@5 `0.4375`/`0.4375`; isolation, forbidden, stale and duplicate hit rates were zero. The readable worksheet maps every case to proposed sources, while `human-review-v1.json` is the authoritative four-hash-bound record with 18 pending decisions. A tested single-read finalizer re-verifies the physical corpus, rejects incomplete/drifted/duplicate/security-relaxed review, and creates staged, crash-recoverable attestation outputs without overwriting conflicting evidence. It explicitly records that human provenance is not cryptographically verified and remains an out-of-band gate. Fresh backend regression is `365 passed, 7 skipped` at `89.86%` coverage and focused review-finalizer coverage is `15 passed`; no human judgment has been fabricated and holdout results were not used for tuning.
+The official vLLM ROCm image is locally present by digest, and the same container proved PyTorch/HIP execution on `gfx1151`. Model download, live vLLM serving, exact PromptSpec binding and the generation contract matrix remain in progress.
+
+---
+
+## TASK-023: Run private generation shadow and response canary
+**Priority:** P2 | **Tags:** rag, generation, shadow, canary, production
+
+Deploy the qualified private inference matrix behind FastAPI, discard validated generated output during a bounded shadow, and expose grounded responses only to an approved cohort after quality, security, availability and rollback gates pass.
+
+### Plan
+
+- Run private generation shadow on the allowlisted local owner cohort with validated output discarded and aggregate-only telemetry.
+- Require grounded citations, strict no-answer behavior, schema validity, PL/EN quality, stable latency/errors and zero isolation or prompt-injection violations.
+- Rehearse generation and response disable switches plus model rollback before exposing any answer.
+- Enable user-visible responses only for the bounded cohort after every zero-tolerance gate is green, then verify the real client flow and preserve an exact-SHA decision record.
+
+### Progress
+
+User-visible response enablement is explicitly in scope. It remains fail-closed until TASK-015 proves the live GPU/model matrix and the no-answer defect is corrected without tuning against the already opened holdout.
 
 ---
 

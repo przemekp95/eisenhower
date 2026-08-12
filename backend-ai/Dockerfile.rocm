@@ -1,0 +1,37 @@
+FROM vllm/vllm-openai-rocm@sha256:3be0d8f3ec3ebcc99203e08d895392a8d749ed8a132f41574a8018cdaf525a22
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=on \
+    PIP_DISABLE_PIP_VERSION_CHECK=on \
+    HF_HOME=/home/app/.cache/huggingface
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        curl libgomp1 libmagic1 poppler-utils tesseract-ocr tesseract-ocr-pol \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip install --no-cache-dir \
+        fastapi==0.135.4 \
+        pydantic==2.13.4 \
+        uvicorn==0.44.0 \
+        python-multipart==0.0.32 \
+        pillow==12.3.0 \
+        pytesseract==0.3.13 \
+        sentence-transformers==5.7.0 \
+        qdrant-client==1.12.0 \
+        httpx==0.28.1 \
+        'PyJWT[crypto]==2.13.0' \
+        pymongo==4.17.0 \
+    && useradd --uid 1000 --create-home --shell /bin/bash app \
+    && mkdir -p /app/data /app/logs /home/app/.cache/huggingface \
+    && chown -R app:app /app /home/app
+
+COPY --chown=app:app . .
+
+USER app
+HEALTHCHECK --interval=30s --timeout=30s --start-period=300s --retries=5 \
+    CMD curl -f http://localhost:8000/health/ready || exit 1
+EXPOSE 8000
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

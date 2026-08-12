@@ -1,6 +1,50 @@
 name: eisenhower-local-production
 
 services:
+  ai-service:
+    image: ${AI_ROCM_IMAGE:?AI_ROCM_IMAGE must be an immutable local tag or digest}
+    profiles:
+      - retrieval-amd
+    environment:
+      - RAG_RETRIEVAL_ENABLED=true
+      - RAG_GENERATION_ENABLED=false
+      - RAG_RESPONSE_ENABLED=false
+      - RAG_EMBEDDING_MODEL_NAME=BAAI/bge-m3
+      - RAG_EMBEDDING_MODEL_REVISION=5617a9f61b028005a4858fdac845db406aefb181
+      - RAG_EMBEDDING_DEVICE=cuda
+      - EMBEDDING_VERSION=bge-m3-v1
+    ipc: host
+    group_add:
+      - video
+      - render
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    security_opt:
+      - seccomp=unconfined
+
+  rag-worker:
+    image: ${AI_ROCM_IMAGE:?AI_ROCM_IMAGE must be an immutable local tag or digest}
+    profiles:
+      - retrieval-amd
+    environment:
+      - RAG_RETRIEVAL_ENABLED=true
+      - RAG_GENERATION_ENABLED=false
+      - RAG_RESPONSE_ENABLED=false
+      - RAG_EMBEDDING_MODEL_NAME=BAAI/bge-m3
+      - RAG_EMBEDDING_MODEL_REVISION=5617a9f61b028005a4858fdac845db406aefb181
+      - RAG_EMBEDDING_DEVICE=cuda
+      - EMBEDDING_VERSION=bge-m3-v1
+    ipc: host
+    group_add:
+      - video
+      - render
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    security_opt:
+      - seccomp=unconfined
+
   # Contract-only until the physical ROCm/model qualification gate passes.
   # Binding defaults to loopback; use only an actual private VPN/LAN address
   # when FastAPI is placed on a different host.

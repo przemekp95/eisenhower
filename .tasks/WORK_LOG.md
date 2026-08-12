@@ -1,5 +1,9 @@
 # Completion log
 
+2026-08-12 — TASK-043: Selected pinned BGE-M3 dense retrieval on the physical AMD ROCm GPU after rejecting hybrid on untouched holdout and the reranker for quality/latency; focused tests passed 21/21 and all retrieval isolation/freshness/duplicate safety rates were zero.
+
+2026-08-12 — TASK-013: Finalized the owner-approved 18-case PL/EN retrieval dataset and hash-bound attestation; preserved the holdout no-answer failure at 0.8333 as a response blocker while BGE-M3 passed Recall/MRR and zero-tolerance safety gates.
+
 2026-08-12 — TASK-047 milestone: Closed point 2 in source and an isolated real runtime with Keycloak 26.7 multi-user OIDC, no static fallback, exact MCP resource audience, RFC 8693 exchange, scoped Node task authorization and private-gateway controls; two stable subjects in one tenant produced API and Remote MCP visibility counts 1 versus 0, while exact-SHA production deployment and broader task gates remain pending.
 
 2026-08-12 — TASK-047 milestone: Deployed point 1 on the local AMD host with user-separated encrypted Google OAuth, narrow Tailscale HTTPS callback/webhook routing, published tokenless n8n workflows, a real incremental baseline and active Google Watch channel; full Node 190/190, build, n8n 12/12 and deploy 10/10 passed while the broader task remains in progress.

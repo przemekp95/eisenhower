@@ -13,6 +13,7 @@ from ..generation.delta import EmbeddingStatementSimilarity, InformationDeltaVal
 from .adapters import (
   CircuitBreakerGenerationProvider,
   MiniLMEmbeddingProvider,
+  SentenceTransformerEmbeddingProvider,
   QdrantRetriever,
   QdrantIngestionAdapter,
   OpenAICompatibleGenerationProvider,
@@ -54,10 +55,7 @@ def build_rag_service(
     raise ValueError("MONGODB_URI is required for canonical RAG retrieval")
   if settings.mongodb_uri and not is_private_mongodb_uri(settings.mongodb_uri):
     raise ValueError("MongoDB must use a fixed private-network endpoint")
-  embedding = MiniLMEmbeddingProvider(
-    fallback_classifier.local_model,
-    version=settings.embedding_version,
-  )
+  embedding = _build_retrieval_embedding(settings, fallback_classifier.local_model)
   qdrant = qdrant_client or QdrantClient(
     url=settings.qdrant_url,
     api_key=settings.qdrant_api_key,
@@ -155,10 +153,7 @@ def build_ingestion_application(
     raise ValueError("MONGODB_URI is required for canonical RAG ingestion")
   if settings.mongodb_uri and not is_private_mongodb_uri(settings.mongodb_uri):
     raise ValueError("MongoDB must use a fixed private-network endpoint")
-  embedding = MiniLMEmbeddingProvider(
-    ai_service.local_model,
-    version=settings.embedding_version,
-  )
+  embedding = _build_retrieval_embedding(settings, ai_service.local_model)
   qdrant = qdrant_client or QdrantClient(
     url=settings.qdrant_url,
     api_key=settings.qdrant_api_key,
@@ -189,4 +184,15 @@ def build_ingestion_application(
     canonical_store,
     adapter,
     DeterministicChunker(max_chars=1200, overlap_chars=160),
+  )
+
+
+def _build_retrieval_embedding(settings: Settings, local_model):
+  if settings.rag_embedding_model_name is None:
+    return MiniLMEmbeddingProvider(local_model, version=settings.embedding_version)
+  return SentenceTransformerEmbeddingProvider(
+    settings.rag_embedding_model_name,
+    revision=settings.rag_embedding_model_revision or "",
+    version=settings.embedding_version,
+    device=settings.rag_embedding_device,
   )

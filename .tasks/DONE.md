@@ -1,5 +1,41 @@
 # Done
 
+## TASK-043: Compare dense, hybrid RRF and optional reranked retrieval
+**Priority:** P1 | **Tags:** rag, retrieval, bm25, rrf, reranker, evaluation
+
+Implement a disabled-by-default comparison path for the existing dense retriever, BM25 plus dense fusion with reciprocal rank fusion, and an optional bounded cross-encoder reranker. Every strategy must preserve the canonical MongoDB, tenant, project, ACL, version, tombstone and Qdrant projection boundary.
+
+### Plan
+
+- Retrieve lexical candidates from the canonical authorized corpus, then add deterministic BM25 and equal-contribution RRF contracts without choosing parameters from the untouched holdout.
+- Add strategy-neutral dense/hybrid/optional-reranked evaluation for PL/EN Recall@k, MRR, no-hit, duplicate, freshness, isolation and latency slices.
+- Keep dense as the runtime default, pin and bound any optional reranker, and fail closed rather than silently changing strategy when it is unavailable.
+- Produce immutable comparison evidence before any reversible promotion flag is changed.
+
+### Outcome
+
+Implemented canonical BM25, independently retrieved dense and lexical candidates, document diversification, equal-contribution RRF and a bounded typed cross-encoder adapter while preserving MongoDB revalidation and ACL/version/tombstone boundaries. The physical `gfx1151` ROCm comparison selected pinned BGE-M3 dense retrieval: non-holdout Recall@5 `0.9583`, MRR@5 `0.9167`, p95 `89.9891 ms`; untouched holdout Recall@5 `1.0`, MRR@5 `0.7778`, p95 `100.6431 ms`, with zero forbidden, isolation, stale and duplicate rates. Hybrid was rejected on holdout and the reranker was rejected for lower quality and about `3.2 s` p95 latency. Focused hybrid tests passed 21/21; no runtime strategy was silently promoted.
+
+---
+
+## TASK-013: Approve representative retrieval quality gates
+**Priority:** P1 | **Tags:** rag, evaluation, recall, mrr, human-gate
+
+Build a human-reviewed PL/EN retrieval golden set from the approved corpus and establish Recall@k, MRR, no-hit, duplicate, freshness, and isolation thresholds before tuning retrieval.
+
+### Plan
+
+- Freeze train/dev/holdout queries with relevant, forbidden, stale, and deleted document labels.
+- Run the existing evaluator against the real Qdrant candidate and report required slices.
+- Validate the independent review as a hash-bound, fail-closed attestation, preserve crash-recoverable immutable outputs, and confirm human provenance out of band.
+- Obtain human approval for thresholds and preserve the immutable dataset/report hashes.
+
+### Outcome
+
+Owner-refroze the governed 19-file corpus, approved all 18 PL/EN relevance and security decisions, and finalized the hash-bound dataset plus attestation while preserving the truthful note that human provenance is not cryptographically verified. Pinned BGE-M3 on the physical AMD ROCm GPU passed retrieval Recall/MRR and all zero-tolerance isolation, forbidden, stale and duplicate gates; the opened holdout also exposed no-answer accuracy `0.8333` against the required `1.0`. That failure is preserved as a downstream response blocker and was not tuned away. Dataset SHA-256 is `0dbb4fe44530a2180fbd6dd5790c91a3299757f6f7714da65373be2454ccd0d1`; the immutable selection record is `strategy-comparison-bge-m3-v1.json`.
+
+---
+
 ## TASK-045: Resolve default-branch Dependabot alerts and promote green dev
 **Priority:** P0 | **Tags:** security, dependencies, dependabot, release-gate
 
