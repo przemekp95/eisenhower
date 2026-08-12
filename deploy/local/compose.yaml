@@ -189,6 +189,8 @@ services:
       - INFERENCE_API_KEY=${INFERENCE_API_KEY:?INFERENCE_API_KEY is required}
       - INFERENCE_MODEL=${INFERENCE_MODEL:?INFERENCE_MODEL is required}
       - INFERENCE_ALLOWED_HOSTS=${INFERENCE_ALLOWED_HOSTS:-inference}
+      - PROMPT_VERSION=${PROMPT_VERSION:-1.2.0}
+      - KNOWLEDGE_PROMPT_VERSION=${KNOWLEDGE_PROMPT_VERSION:-1.0.0}
     volumes:
       - model_cache:/home/app/.cache/huggingface
       - audit_data:/app/audit

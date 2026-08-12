@@ -152,6 +152,8 @@ services:
       - "192"
       - --dtype
       - float16
+      - --gpu-memory-utilization
+      - "0.10"
       - --no-enable-log-requests
     ipc: host
     group_add:
