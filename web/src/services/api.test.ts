@@ -4,6 +4,8 @@ import {
   addTrainingExample,
   analyzeTask,
   analyzeTaskWithRag,
+  answerKnowledge,
+  answerKnowledge,
   batchAnalyzeTasks,
   clearTrainingData,
   classifyTask,
@@ -641,6 +643,85 @@ describe('api service', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ task: 'ground this task' }),
+      })
+    );
+  });
+
+  it('uses the governed knowledge-answer endpoint with the UI language', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({
+        status: 'insufficient_evidence',
+        answer: null,
+        claims: [],
+        citations: [],
+        retrieval: { hit_count: 0, top_score: null, embedding_version: null },
+        generation: null,
+        no_answer_reason: 'insufficient_context',
+      }),
+    });
+
+    await answerKnowledge('Nieznane pytanie', 'pl');
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${runtimeConfig.aiApiUrl}/v2/knowledge/answer`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'Nieznane pytanie',
+          language: 'pl',
+          project_id: null,
+          limit: 5,
+        }),
+      })
+    );
+  });
+
+  it('uses the separate governed knowledge-answer endpoint', async () => {
+    const response = {
+      status: 'insufficient_evidence',
+      answer: null,
+      claims: [],
+      citations: [],
+      retrieval: { hit_count: 0, top_score: null, embedding_version: null },
+      no_answer_reason: 'no_retrieval_hits',
+    };
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => response,
+    });
+
+    await expect(answerKnowledge('What is approved?', 'pl')).resolves.toEqual(response);
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${runtimeConfig.aiApiUrl}/v2/knowledge/answer`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'What is approved?',
+          language: 'pl',
+          project_id: null,
+          limit: 5,
+        }),
+      })
+    );
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => response,
+    });
+    await answerKnowledge('What is approved?');
+    expect((global.fetch as jest.Mock).mock.calls[1][1].body).toBe(
+      JSON.stringify({
+        query: 'What is approved?',
+        language: 'en',
+        project_id: null,
+        limit: 5,
       })
     );
   });

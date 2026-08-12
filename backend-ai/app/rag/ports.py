@@ -5,11 +5,12 @@ from typing import Protocol
 from .models import (
   ChunkRecord,
   GenerationRequest,
-  GenerationResult,
+  KnowledgeAnswerRequest,
   RetrievalHit,
   RetrievalQuery,
   SourceDocument,
 )
+from ..generation.models import GenerationResult, KnowledgeAnswerResult
 
 
 class Retriever(Protocol):
@@ -25,6 +26,8 @@ class EmbeddingProvider(Protocol):
 
 class GenerationProvider(Protocol):
   def generate(self, request: GenerationRequest) -> GenerationResult: ...
+
+  def answer(self, request: KnowledgeAnswerRequest) -> KnowledgeAnswerResult: ...
 
 
 class DocumentStore(Protocol):

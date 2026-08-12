@@ -1,0 +1,125 @@
+{
+  "schema_version": "vllm-rocm-qwen3-local-v1",
+  "observed_at_utc": "2026-08-12T17:14:30Z",
+  "scope": "local_physical_amd_shadow_qualification",
+  "source": {
+    "git_sha": "16053e5edb2244b765d80de39214767717c3d943",
+    "application_image": "local/eisenhower-ai-rocm:16053e5edb2244b765d80de39214767717c3d943",
+    "application_image_digest": "sha256:f668ca6eb04dd0b28fd1ee827a4b91280ac64a96a5cd06dadbec43e3e4b5af4c",
+    "vllm_image_digest": "sha256:3be0d8f3c541050335082a1354071be31368779f22ef71fdb9ed1d222f37eb29"
+  },
+  "hardware": {
+    "device": "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S",
+    "gfx_target": "gfx1151",
+    "visible_vram_mib": 16384,
+    "post_load_used_vram_mib": 2983,
+    "post_load_free_vram_mib": 13401,
+    "post_load_used_gtt_mib": 45086,
+    "post_load_free_gtt_mib": 11072
+  },
+  "inference": {
+    "runtime": "vLLM 0.20.0 ROCm",
+    "model": "Qwen/Qwen3-4B-Instruct-2507",
+    "model_revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+    "dtype": "bfloat16",
+    "max_model_len": 8192,
+    "max_num_seqs": 1,
+    "gpu_memory_utilization": 0.8,
+    "chat_template_sha256": "64f85b198065d0fba2a81f37e10ed68161ce2c19a754c7100e67e0ca2ee9c326",
+    "prompt_specs": {
+      "en_sha256": "e342ed1c47ee854b4eccfe060a26447ceee0dfe5733e0fbfd915ac63f370fe00",
+      "pl_sha256": "f01ff76f3cd874b88f1c2de9774faeb71c90851b2fd566a4779b103e5fa1da4c"
+    },
+    "cold_start_seconds_observed": 224,
+    "live_contract": {
+      "result": "passed",
+      "tests": 4,
+      "duration_seconds": 50.97,
+      "coverage": [
+        "Polish strict structured output",
+        "English strict structured output",
+        "unauthenticated request rejected with 401",
+        "authenticated request accepted with exact model identity"
+      ]
+    }
+  },
+  "retrieval": {
+    "encoder": "BAAI/bge-m3",
+    "encoder_revision": "5617a9f61b028005a4858fdac845db406aefb181",
+    "device": "AMD ROCm",
+    "canonical_documents": 25,
+    "qdrant_collection": "eisenhower-knowledge-bge-m3-v1",
+    "qdrant_points": 235,
+    "qdrant_status": "green",
+    "non_holdout": {
+      "recall_at_5": 0.9583,
+      "mrr_at_5": 0.9167,
+      "p95_ms": 89.9891
+    },
+    "untouched_holdout": {
+      "recall_at_5": 1.0,
+      "mrr_at_5": 0.7778,
+      "p95_ms": 100.6431,
+      "no_answer_accuracy": 0.8333
+    },
+    "zero_tolerance_rates": {
+      "forbidden": 0,
+      "isolation": 0,
+      "stale": 0,
+      "duplicate": 0
+    }
+  },
+  "full_chain": {
+    "result": "passed_in_generation_shadow",
+    "path": "BGE-M3 on AMD -> authorized Mongo/Qdrant corpus -> Qwen vLLM on AMD -> strict validation -> discard generated output",
+    "observed_aggregate": {
+      "mode": "rag",
+      "quadrant": 2,
+      "citation_count": 1,
+      "generation_executed": true,
+      "fallback_reason": null,
+      "model": "Qwen/Qwen3-4B-Instruct-2507"
+    },
+    "generated_content_persisted_or_exposed": false,
+    "historical_pre_restart_traffic": {
+      "requests": 29,
+      "prompt_tokens": 14582,
+      "generation_tokens": 4491,
+      "e2e_latency_p95_bucket_seconds": 10,
+      "ttft_p95_bucket_seconds": 2.5
+    }
+  },
+  "rollback": {
+    "physical_stop_produced_connection_failure": true,
+    "exact_model_restarted_healthy": true,
+    "recovery_attempt": 13,
+    "poll_interval_seconds": 10
+  },
+  "security": {
+    "inference_api_key_is_distinct_from_internal_service_token": true,
+    "inference_api_key_is_not_present_in_command_line": true,
+    "previously_logged_internal_service_token_rotated": true,
+    "affected_n8n_service_recreated_with_rotated_token": true,
+    "secrets_recorded_in_this_artifact": false
+  },
+  "decisions": {
+    "amd_gpu_runtime": "go",
+    "retrieval_shadow": "go",
+    "bounded_generation_shadow_for_grounded_quadrant_explanations": "go",
+    "user_visible_response_canary": "no_go",
+    "generic_knowledge_question_answering": "not_implemented"
+  },
+  "response_blockers": [
+    "The production classifier evaluation still lacks the required independent dual-human labels and adjudication for its frozen 240-case set.",
+    "Retrieval no-answer accuracy is 0.8333 versus the zero-tolerance requirement of 1.0; the opened holdout must not be used for threshold tuning.",
+    "A new balanced calibration-dev set and separately sealed v2 holdout are required before generic retrieved answers can be enabled.",
+    "The implemented response is a grounded quadrant explanation, not a generic knowledge Q&A endpoint."
+  ],
+  "current_runtime": {
+    "inference": "healthy_and_bound_to_loopback",
+    "qdrant": "green_and_bound_to_loopback",
+    "ai_service": "intentionally_stopped_fail_closed",
+    "rag_response_enabled": false,
+    "response_user_allowlist": []
+  }
+}

@@ -15,13 +15,11 @@ function renderAnalysis(taskTitle = 'prepare incident review') {
   );
 }
 
-function groundedResult(overrides: Partial<api.GroundedAnalysis> = {}): api.GroundedAnalysis {
+function groundedResult(overrides: Partial<api.KnowledgeAnswer> = {}): api.KnowledgeAnswer {
   return {
-    mode: 'rag',
-    quadrant: 0,
-    quadrant_name: 'Do Now',
-    confidence: 0.91,
-    explanation: 'The cited incident policy makes this urgent and important.',
+    status: 'answered',
+    answer: 'The cited incident policy requires an immediate review.',
+    claims: [{ statement: 'The policy requires a review.', citation_ids: ['chunk-1'] }],
     citations: [
       {
         chunk_id: 'chunk-1',
@@ -34,7 +32,7 @@ function groundedResult(overrides: Partial<api.GroundedAnalysis> = {}): api.Grou
       },
     ],
     retrieval: { hit_count: 1, top_score: 0.876, embedding_version: 'minilm-v1' },
-    fallback_reason: null,
+    no_answer_reason: null,
     ...overrides,
   };
 }
@@ -46,16 +44,18 @@ describe('GroundedAIAnalysis', () => {
   });
 
   it('renders a sourced answer and escaped citations without technical diagnostics', async () => {
-    mockedApi.analyzeTaskWithRag.mockResolvedValueOnce(groundedResult());
+    mockedApi.answerKnowledge.mockResolvedValueOnce(groundedResult());
     renderAnalysis();
 
     fireEvent.click(screen.getByRole('button', { name: 'Check sources' }));
 
     await waitFor(() => expect(screen.getByText('Answer with sources')).toBeInTheDocument());
-    expect(mockedApi.analyzeTaskWithRag).toHaveBeenCalledWith('prepare incident review');
+    expect(mockedApi.answerKnowledge).toHaveBeenCalledWith('prepare incident review', 'en');
     expect(screen.queryByText('1 retrieved chunks')).not.toBeInTheDocument();
     expect(screen.queryByText('Index minilm-v1')).not.toBeInTheDocument();
-    expect(screen.getByText('Suggested quadrant: Do Now')).toBeInTheDocument();
+    expect(
+      screen.getByText('The cited incident policy requires an immediate review.')
+    ).toBeInTheDocument();
     expect(screen.getByText('<img src=x onerror=alert(1)> Incident policy')).toBeInTheDocument();
     expect(screen.getByText(/<script>window.compromised/)).toBeInTheDocument();
     expect(screen.queryByText('Score 0.88')).not.toBeInTheDocument();
@@ -64,9 +64,9 @@ describe('GroundedAIAnalysis', () => {
     expect(document.querySelector('img[src="x"]')).toBeNull();
   });
 
-  it('shows loading and then an honest fallback without invented sources', async () => {
-    let resolveRequest: (result: api.GroundedAnalysis) => void = () => undefined;
-    mockedApi.analyzeTaskWithRag.mockImplementationOnce(
+  it('shows loading and then an honest no-answer without invented sources', async () => {
+    let resolveRequest: (result: api.KnowledgeAnswer) => void = () => undefined;
+    mockedApi.answerKnowledge.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
           resolveRequest = resolve;
@@ -80,47 +80,42 @@ describe('GroundedAIAnalysis', () => {
     await act(async () => {
       resolveRequest(
         groundedResult({
-          mode: 'fallback',
-          quadrant: null,
-          quadrant_name: null,
-          explanation: 'The deterministic classifier handled this request.',
+          status: 'insufficient_evidence',
+          answer: null,
+          claims: [],
           citations: [],
           retrieval: { hit_count: 0, top_score: null, embedding_version: null },
-          fallback_reason: 'generation_disabled',
+          no_answer_reason: 'generation_disabled',
         })
       );
     });
 
-    expect(screen.getByText('Suggestion without sources')).toBeInTheDocument();
-    expect(
-      screen.getByText('The deterministic classifier handled this request.')
-    ).toBeInTheDocument();
+    expect(screen.getByText('No answer')).toBeInTheDocument();
+    expect(screen.getByText(/not enough approved information/i)).toBeInTheDocument();
     expect(screen.getByText('No sources were cited for this response.')).toBeInTheDocument();
     expect(screen.queryByText(/Suggested quadrant:/)).not.toBeInTheDocument();
   });
 
   it('renders no-answer with and without a policy reason', async () => {
-    mockedApi.analyzeTaskWithRag
+    mockedApi.answerKnowledge
       .mockResolvedValueOnce(
         groundedResult({
-          mode: 'no_answer',
-          quadrant: null,
-          quadrant_name: null,
-          explanation: '',
+          status: 'insufficient_evidence',
+          answer: null,
+          claims: [],
           citations: [],
           retrieval: { hit_count: 0, top_score: null, embedding_version: null },
-          fallback_reason: 'insufficient_evidence',
+          no_answer_reason: 'insufficient_context',
         })
       )
       .mockResolvedValueOnce(
         groundedResult({
-          mode: 'no_answer',
-          quadrant: null,
-          quadrant_name: null,
-          explanation: '',
+          status: 'insufficient_evidence',
+          answer: null,
+          claims: [],
           citations: [],
           retrieval: { hit_count: 0, top_score: null, embedding_version: null },
-          fallback_reason: null,
+          no_answer_reason: null,
         })
       );
     renderAnalysis();
@@ -139,7 +134,7 @@ describe('GroundedAIAnalysis', () => {
   });
 
   it('reports typed and unknown failures and clears stale output', async () => {
-    mockedApi.analyzeTaskWithRag
+    mockedApi.answerKnowledge
       .mockResolvedValueOnce(groundedResult())
       .mockRejectedValueOnce(new Error('Private RAG unavailable'))
       .mockRejectedValueOnce('offline');
@@ -168,7 +163,7 @@ describe('GroundedAIAnalysis', () => {
   });
 
   it('does not submit an empty task and clears results after a language change', async () => {
-    mockedApi.analyzeTaskWithRag.mockResolvedValueOnce(groundedResult());
+    mockedApi.answerKnowledge.mockResolvedValueOnce(groundedResult());
 
     function Harness() {
       const { setLanguage } = useLanguage();
@@ -198,7 +193,7 @@ describe('GroundedAIAnalysis', () => {
     const disabled = screen.getByRole('button', { name: 'Check sources' });
     expect(disabled).toBeDisabled();
     fireEvent.click(disabled);
-    expect(mockedApi.analyzeTaskWithRag).toHaveBeenCalledTimes(1);
+    expect(mockedApi.answerKnowledge).toHaveBeenCalledTimes(1);
     empty.unmount();
   });
 });

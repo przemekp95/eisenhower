@@ -9,12 +9,16 @@ import pytest
 
 from app.config import Settings
 from app.audit import AuditAction, AuditOutcome
-from app.generation.models import InformationDelta, statement_checksum
+from app.generation.models import InformationDelta, KnowledgeAnswerClaim, statement_checksum
 from app.local_model import LocalMiniLMClassifier, LocalPrediction, ModelNotReadyError, SimilarExample
 from app.jobs import SqliteJobQueue
 from app.main import create_app
 from app.rag.hybrid import RerankerUnavailable
-from app.rag.models import AnalyzeResult, RetrievalSummary
+from app.rag.models import (
+  AnalyzeResult,
+  KnowledgeAnswerResponse,
+  RetrievalSummary,
+)
 from app.service import QuadrantAIService
 from app.store import TrainingStore
 from app.webhooks import (
@@ -157,6 +161,7 @@ class FakeRagService:
     self.calls = []
     self.shadow_calls = []
     self.search_calls = []
+    self.answer_calls = []
     self.generation_enabled = True
 
   def analyze(self, task, scope, *, language="en", **delta_inputs):
@@ -196,6 +201,20 @@ class FakeRagService:
       "citations": [],
       "retrieval": RetrievalSummary(hit_count=1, top_score=0.8, embedding_version="minilm-v1"),
     }
+
+  def answer(self, query, scope, *, language="en", limit=5, project_id=None):
+    self.answer_calls.append((query, scope, language, limit, project_id))
+    return KnowledgeAnswerResponse(
+      status="answered",
+      answer="MongoDB is canonical.",
+      claims=[KnowledgeAnswerClaim(
+        statement="MongoDB is canonical.", citation_ids=["chunk-1"]
+      )],
+      citations=[],
+      retrieval=RetrievalSummary(
+        hit_count=1, top_score=0.9, embedding_version="bge-m3-v1"
+      ),
+    )
 
 
 @pytest.mark.parametrize(
@@ -403,6 +422,61 @@ def test_v2_shadow_retrieval_runs_without_exposing_hits_or_calling_generation(tm
   assert 'eisenhower_rag_analysis_duration_seconds_count{mode="fallback"} 1' in metrics.text
 
 
+def test_v2_generation_shadow_validates_and_discards_model_output(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    rag_retrieval_enabled=True,
+    rag_generation_enabled=True,
+    rag_response_enabled=False,
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  rag = FakeRagService()
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service, rag_service=rag),
+    headers={"Authorization": "Bearer test-api-token"},
+  )
+
+  response = client.post("/v2/ai/analyze", json={"task": "Prepare roadmap"})
+  metrics = client.get("/metrics")
+
+  assert response.status_code == 200
+  assert response.json()["mode"] == "fallback"
+  assert response.json()["fallback_reason"] == "rag_response_disabled"
+  assert response.json()["citations"] == []
+  assert response.json()["generation"] is None
+  assert len(rag.calls) == 1
+  assert not rag.shadow_calls
+  assert 'eisenhower_rag_generation_total{outcome="success"} 1' in metrics.text
+
+
+def test_v2_response_canary_requires_the_authenticated_user(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    rag_retrieval_enabled=True,
+    rag_generation_enabled=True,
+    rag_response_enabled=True,
+    rag_allowed_tenants=("local",),
+    rag_response_allowed_users=("different-user",),
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  rag = FakeRagService()
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service, rag_service=rag),
+    headers={"Authorization": "Bearer test-api-token"},
+  )
+
+  response = client.post("/v2/ai/analyze", json={"task": "Prepare roadmap"})
+
+  assert response.status_code == 200
+  assert response.json()["mode"] == "fallback"
+  assert response.json()["fallback_reason"] == "user_not_enabled"
+  assert len(rag.calls) == 1
+
+
 def test_v2_knowledge_search_forwards_the_authorized_project_filter(tmp_path: Path):
   settings = Settings(
     training_data_path=tmp_path / "training.json",
@@ -429,6 +503,63 @@ def test_v2_knowledge_search_forwards_the_authorized_project_filter(tmp_path: Pa
   assert rag.search_calls[0][1].project_ids == ["local-project"]
   assert 'eisenhower_rag_retrieval_duration_seconds_count{stage="search",outcome="hit"} 1' in metrics.text
   assert 'eisenhower_rag_retrieved_chunks_sum{stage="search"} 1' in metrics.text
+
+
+def test_v2_knowledge_answer_uses_authenticated_scope_and_response_canary(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    rag_retrieval_enabled=True,
+    rag_generation_enabled=True,
+    rag_response_enabled=True,
+    rag_allowed_tenants=("local",),
+    rag_response_allowed_users=("local-user",),
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  rag = FakeRagService()
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service, rag_service=rag),
+    headers={"Authorization": "Bearer test-api-token"},
+  )
+
+  response = client.post(
+    "/v2/knowledge/answer",
+    json={"query": "Co jest kanoniczne?", "language": "pl", "limit": 3},
+  )
+
+  assert response.status_code == 200
+  assert response.json()["status"] == "answered"
+  assert response.json()["answer"] == "MongoDB is canonical."
+  assert rag.answer_calls[0][1].tenant_id == "local"
+  assert rag.answer_calls[0][1].user_id == "local-user"
+  assert rag.answer_calls[0][2:] == ("pl", 3, None)
+
+
+def test_v2_knowledge_answer_abstains_without_retrieval_when_canary_is_disabled(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    rag_retrieval_enabled=True,
+    rag_generation_enabled=True,
+    rag_response_enabled=False,
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  rag = FakeRagService()
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service, rag_service=rag),
+    headers={"Authorization": "Bearer test-api-token"},
+  )
+
+  response = client.post("/v2/knowledge/answer", json={"query": "Question"})
+
+  assert response.status_code == 200
+  assert response.json()["status"] == "insufficient_evidence"
+  assert response.json()["answer"] is None
+  assert response.json()["citations"] == []
+  assert response.json()["no_answer_reason"] == "rag_response_disabled"
+  assert rag.answer_calls == []
 
 
 def test_v2_knowledge_search_reports_default_reranker_unavailable_without_dense_results(tmp_path: Path):

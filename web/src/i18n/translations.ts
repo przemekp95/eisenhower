@@ -158,6 +158,8 @@ export const translations = {
     'ai.grounded.mode.rag': 'Answer with sources',
     'ai.grounded.mode.fallback': 'Suggestion without sources',
     'ai.grounded.mode.no_answer': 'No answer',
+    'ai.grounded.mode.answered': 'Answer with sources',
+    'ai.grounded.mode.insufficient_evidence': 'No answer',
     'ai.grounded.hits': '{count} sources found',
     'ai.grounded.embedding': 'Source set {version}',
     'ai.grounded.noAnswer': 'There is not enough approved information to answer safely.',
@@ -406,6 +408,8 @@ export const translations = {
     'ai.grounded.mode.rag': 'Odpowiedź ze źródłami',
     'ai.grounded.mode.fallback': 'Podpowiedź bez źródeł',
     'ai.grounded.mode.no_answer': 'Brak odpowiedzi',
+    'ai.grounded.mode.answered': 'Odpowiedź ze źródłami',
+    'ai.grounded.mode.insufficient_evidence': 'Brak odpowiedzi',
     'ai.grounded.hits': 'Znalezione źródła: {count}',
     'ai.grounded.embedding': 'Zestaw źródeł {version}',
     'ai.grounded.noAnswer':

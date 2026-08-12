@@ -6,6 +6,7 @@ import apiClient, {
   type BatchAnalysisResultDto,
   type ClassificationResultDto,
   type GroundedAnalysisDto,
+  type KnowledgeAnswerDto,
   type TaskAnalysisDto,
   type OcrResultDto,
   type SimilarExampleResultDto,
@@ -62,6 +63,7 @@ function getAiApi() {
 
 export type ClassificationResult = ClassificationResultDto;
 export type GroundedAnalysis = GroundedAnalysisDto;
+export type KnowledgeAnswer = KnowledgeAnswerDto;
 export type SimilarExampleResult = SimilarExampleResultDto;
 export type TaskAnalysis = TaskAnalysisDto;
 /** @deprecated Use TaskAnalysis. */
@@ -173,6 +175,13 @@ export async function analyzeTask(task: string, language: Language = 'en'): Prom
 
 export async function analyzeTaskWithRag(task: string): Promise<GroundedAnalysis> {
   return getAiApi().analyzeTaskWithRag(task);
+}
+
+export async function answerKnowledge(
+  query: string,
+  language: Language = 'en'
+): Promise<KnowledgeAnswer> {
+  return getAiApi().answerKnowledge(query, language);
 }
 
 /** @deprecated Use analyzeTask. */

@@ -1,19 +1,47 @@
 import { expect, test } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
-  await page.route('**/v2/ai/analyze', async (route) => {
+  await page.route('**/v2/knowledge/answer', async (route) => {
     const request = route.request();
     expect(request.method()).toBe('POST');
-    expect(request.postDataJSON()).toEqual({ task: 'Prepare the incident review' });
+    const body = request.postDataJSON();
+    expect(body).toEqual({
+      query: expect.any(String),
+      language: 'en',
+      project_id: null,
+      limit: 5,
+    });
+
+    if (body.query === 'Question outside approved knowledge') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'insufficient_evidence',
+          answer: null,
+          claims: [],
+          citations: [],
+          retrieval: { hit_count: 0, top_score: null, embedding_version: null },
+          generation: null,
+          no_answer_reason: 'insufficient_context',
+        }),
+      });
+      return;
+    }
+
+    expect(body.query).toBe('Prepare the incident review');
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        mode: 'rag',
-        quadrant: 0,
-        quadrant_name: 'Do Now',
-        confidence: 0.91,
-        explanation: 'The approved incident procedure supports this priority.',
+        status: 'answered',
+        answer: 'The approved incident procedure requires an immediate review.',
+        claims: [
+          {
+            statement: 'The incident procedure requires an immediate review.',
+            citation_ids: ['chunk-1'],
+          },
+        ],
         citations: [
           {
             chunk_id: 'chunk-1',
@@ -26,7 +54,8 @@ test.beforeEach(async ({ page }) => {
           },
         ],
         retrieval: { hit_count: 1, top_score: 0.87, embedding_version: 'minilm-v1' },
-        fallback_reason: null,
+        generation: null,
+        no_answer_reason: null,
       }),
     });
   });
@@ -53,6 +82,9 @@ test('renders a sourced answer with escaped citations on desktop and mobile', as
   await page.getByRole('button', { name: 'Check sources' }).click();
 
   await expect(page.getByText('Answer with sources', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('The approved incident procedure requires an immediate review.')
+  ).toBeVisible();
   await expect(page.getByText('1 retrieved chunks')).toHaveCount(0);
   await expect(page.getByText('Index minilm-v1')).toHaveCount(0);
   await expect(page.getByText('<img src=x onerror=alert(1)> Incident procedure')).toBeVisible();
@@ -70,4 +102,18 @@ test('renders a sourced answer with escaped citations on desktop and mobile', as
 
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(opener).toBeFocused();
+});
+
+test('renders an honest no-answer without fabricated citations', async ({ page }) => {
+  await page.getByPlaceholder('Task title').fill('Question outside approved knowledge');
+  await page.getByRole('button', { name: 'Open AI tools' }).click();
+  await page.getByRole('tab', { name: 'Answers with sources' }).click();
+  await page.getByRole('button', { name: 'Check sources' }).click();
+
+  await expect(page.getByText('No answer', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('There is not enough approved information to answer safely.')
+  ).toBeVisible();
+  await expect(page.getByText('No sources were cited for this response.')).toBeVisible();
+  await expect(page.locator('[data-testid="grounded-result"] li')).toHaveCount(0);
 });

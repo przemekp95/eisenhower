@@ -1,5 +1,13 @@
 # Completion log
 
+2026-08-12 — TASK-023 CI follow-up: Replaced the stale classifier fixture in grounded-answer Playwright coverage with the separate knowledge-answer contract and added desktop/mobile fail-closed no-answer coverage; focused E2E passed 6/6 before the exact-head PR rerun.
+
+2026-08-12 — TASK-023 milestone: Added a separate claim-cited knowledge-answer API and web surface with two-phase fail-closed Qwen decoding; physical AMD PL/EN answer and unsupported/injection abstention passed 4/4, and full `make verify` passed while the independent human/holdout response gate remains open.
+
+2026-08-12 — TASK-047 milestone: Integrated current `dev`, added the web UI to local Compose with state-bound OIDC S256 PKCE, created exact-SHA OCI-labelled build/render/deploy/smoke/rollback tooling, and closed bounded Qwen injection/capacity/oversize/disconnect recovery gates while preserving the missing human production evaluation as a hard deployment blocker.
+
+2026-08-12 — TASK-014/TASK-015/TASK-023 milestone: Proved the exact-source BGE-M3-to-Qwen chain on physical `gfx1151` with strict PL/EN output, grounded citations, aggregate-only generation shadow and a real inference rollback; retained fail-closed response and human-quality gates during integration with the newer hybrid reranker strategy.
+
 2026-08-12 — TASK-043 milestone: Owner-authorized `hybrid-bge-v1` became the fail-closed runtime default with an exact revision/192-token authenticated reranker contract, explicit dense rollback and separate digest-pinned AMD service; full `make verify` passed while 42 independent decisions, holdout, deployment and production remain open.
 
 2026-08-12 — TASK-047 milestone: Closed point 2 in source and an isolated real runtime with Keycloak 26.7 multi-user OIDC, no static fallback, exact MCP resource audience, RFC 8693 exchange, scoped Node task authorization and private-gateway controls; two stable subjects in one tenant produced API and Remote MCP visibility counts 1 versus 0, while exact-SHA production deployment and broader task gates remain pending.

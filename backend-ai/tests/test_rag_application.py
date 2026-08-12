@@ -1,6 +1,12 @@
 import pytest
 
-from app.generation.models import ClassificationOutput, GenerationResult
+from app.generation.models import (
+  ClassificationOutput,
+  GenerationResult,
+  KnowledgeAnswerClaim,
+  KnowledgeAnswerOutput,
+  KnowledgeAnswerResult,
+)
 from app.rag.application import RagAnalysisService
 from app.rag.errors import GenerationProviderUnavailable, InvalidGenerationOutput
 from app.rag.hybrid import RerankerUnavailable
@@ -34,6 +40,12 @@ class StubGenerator:
       raise self.error
     return self.result
 
+  def answer(self, request):
+    self.requests.append(request)
+    if self.error:
+      raise self.error
+    return self.result
+
 
 class StubFallback:
   def classify_task(self, _task, **_kwargs):
@@ -51,6 +63,21 @@ def generation_result(output):
     model_revision="model-revision",
     schema_version="1.0.0",
     input_tokens=100,
+    context_chunk_ids=["chunk-1"],
+  )
+
+
+def knowledge_result(output):
+  return KnowledgeAnswerResult(
+    output=output,
+    execution_id="b" * 64,
+    prompt_id="knowledge-answer",
+    prompt_version="1.0.0",
+    language="pl",
+    model_id="org/model",
+    model_revision="model-revision",
+    schema_version="1.0.0",
+    input_tokens=120,
     context_chunk_ids=["chunk-1"],
   )
 
@@ -350,3 +377,125 @@ def test_knowledge_search_returns_retrieval_citations_without_generation():
   assert result["citations"][0].chunk_id == "chunk-1"
   assert result["answer"] is None
   assert retriever.queries[0].limit == 5
+
+
+def test_knowledge_answer_returns_claim_level_grounded_answer():
+  hit = RetrievalHit(
+    chunk_id="chunk-1",
+    document_id="doc-1",
+    text="Qdrant is a rebuildable projection; MongoDB is canonical.",
+    score=0.91,
+    source_uri="knowledge://architecture",
+    title="Architecture",
+    tenant_id="tenant-a",
+    project_id="project-1",
+    embedding_version="bge-m3-v1",
+    content_version="v1",
+  )
+  generator = StubGenerator(knowledge_result(KnowledgeAnswerOutput(
+    status="answered",
+    answer="MongoDB is canonical, while Qdrant can be rebuilt.",
+    claims=[KnowledgeAnswerClaim(
+      statement="MongoDB is canonical, while Qdrant is rebuildable.",
+      citation_ids=["chunk-1"],
+    )],
+    citations=["chunk-1"],
+    no_answer_reason="none",
+  )))
+  service = RagAnalysisService(StubRetriever([hit]), generator, StubFallback())
+
+  result = service.answer(
+    "Który magazyn jest kanoniczny?",
+    AccessScope(tenant_id="tenant-a", user_id="user-1", project_ids=["project-1"]),
+    language="pl",
+  )
+
+  assert result.status == "answered"
+  assert result.answer == "MongoDB is canonical, while Qdrant can be rebuilt."
+  assert result.claims[0].citation_ids == ["chunk-1"]
+  assert result.citations[0].chunk_id == "chunk-1"
+  assert result.generation.execution_id == "b" * 64
+
+
+def test_knowledge_answer_abstains_without_calling_generator_when_retrieval_is_empty():
+  generator = StubGenerator()
+  service = RagAnalysisService(StubRetriever([]), generator, StubFallback())
+
+  result = service.answer(
+    "Podaj prywatny numer telefonu klienta",
+    AccessScope(tenant_id="tenant-a", user_id="user-1"),
+    language="pl",
+  )
+
+  assert result.status == "insufficient_evidence"
+  assert result.answer is None
+  assert result.citations == []
+  assert result.no_answer_reason == "no_retrieval_hits"
+  assert generator.requests == []
+
+
+def test_knowledge_answer_rejects_foreign_or_uncited_generated_claims():
+  hit = RetrievalHit(
+    chunk_id="chunk-1",
+    document_id="doc-1",
+    text="Known context",
+    score=0.9,
+    source_uri="knowledge://1",
+    title="Known",
+    tenant_id="tenant-a",
+    embedding_version="bge-m3-v1",
+    content_version="v1",
+  )
+  output = KnowledgeAnswerOutput.model_construct(
+    status="answered",
+    answer="Unsupported answer",
+    claims=[KnowledgeAnswerClaim.model_construct(
+      statement="Unsupported claim",
+      citation_ids=["invented"],
+    )],
+    citations=["invented"],
+    no_answer_reason="none",
+  )
+  service = RagAnalysisService(
+    StubRetriever([hit]), StubGenerator(knowledge_result(output)), StubFallback()
+  )
+
+  result = service.answer(
+    "Question",
+    AccessScope(tenant_id="tenant-a", user_id="user-1"),
+  )
+
+  assert result.status == "insufficient_evidence"
+  assert result.answer is None
+  assert result.citations == []
+  assert result.no_answer_reason == "invalid_citations"
+
+
+def test_knowledge_answer_fails_closed_when_provider_is_unavailable():
+  hit = RetrievalHit(
+    chunk_id="chunk-1",
+    document_id="doc-1",
+    text="Known context",
+    score=0.9,
+    source_uri="knowledge://1",
+    title="Known",
+    tenant_id="tenant-a",
+    embedding_version="bge-m3-v1",
+    content_version="v1",
+  )
+  service = RagAnalysisService(
+    StubRetriever([hit]),
+    StubGenerator(error=GenerationProviderUnavailable(
+      "offline", reason="generation_connection_error"
+    )),
+    StubFallback(),
+  )
+
+  result = service.answer(
+    "Question",
+    AccessScope(tenant_id="tenant-a", user_id="user-1"),
+  )
+
+  assert result.status == "insufficient_evidence"
+  assert result.no_answer_reason == "generation_connection_error"
+  assert result.citations == []

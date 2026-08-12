@@ -11,6 +11,7 @@ AMD_COMPOSE_PATH = ROOT / "deploy" / "local" / "compose.amd.yaml"
 ENV_PATH = ROOT / "deploy" / "local" / ".env.example"
 GATEWAY_CONFIG_PATH = ROOT / "deploy" / "local" / "calendar-gateway.conf.template"
 ACCESS_GATEWAY_CONFIG_PATH = ROOT / "deploy" / "local" / "access-gateway.conf.template"
+DEPLOY_SCRIPT_PATH = ROOT / "deploy" / "local" / "deploy.sh"
 KEYCLOAK_REALM_PATH = ROOT / "deploy" / "local" / "identity" / "eisenhower-realm.json"
 KEYCLOAK_E2E_REALM_PATH = (
   ROOT / "deploy" / "local" / "identity" / "e2e" / "eisenhower-e2e-realm.json"
@@ -34,7 +35,7 @@ class LocalProductionContractTest(unittest.TestCase):
       {
         "api-service", "mongodb", "ai-service", "rag-worker", "qdrant", "n8n",
         "calendar-gateway", "audit-volume-init", "identity-db", "identity-service",
-        "mcp-service", "access-gateway", "inference", "reranker",
+        "mcp-service", "access-gateway", "web", "inference", "reranker",
       },
     )
     self.assertNotIn("outbox-worker", self.services)
@@ -85,6 +86,7 @@ class LocalProductionContractTest(unittest.TestCase):
       "identity-service": "KEYCLOAK_IMAGE",
       "mcp-service": "MCP_IMAGE",
       "access-gateway": "ACCESS_GATEWAY_IMAGE",
+      "web": "WEB_IMAGE",
       "audit-volume-init": "VOLUME_INIT_IMAGE",
       "inference": "AMD_INFERENCE_IMAGE",
       "reranker": "AMD_RERANKER_IMAGE",
@@ -92,21 +94,83 @@ class LocalProductionContractTest(unittest.TestCase):
     for name, variable in expected_image_inputs.items():
       image = self._service(name)["image"]
       self.assertIn(f"${{{variable}", image, name)
-      self.assertNotIn(":latest", image, name)
+    self.assertNotIn(":latest", image, name)
 
-  def test_amd_inference_is_opt_in_and_has_no_fake_readiness_claim(self):
+  def test_web_is_deployed_behind_the_private_access_gateway(self):
+    web = self.services["web"]
+    self.assertNotIn("ports", web)
+    self.assertIn("VITE_API_URL=/api", web["environment"])
+    self.assertIn("VITE_AI_API_URL=/ai", web["environment"])
+    self.assertIn("VITE_OIDC_ISSUER=${OIDC_ISSUER:?OIDC_ISSUER is required}", web["environment"])
+    self.assertIn("VITE_OIDC_CLIENT_ID=eisenhower-web", web["environment"])
+    self.assertIn(
+      "VITE_OIDC_REDIRECT_URI=${EISENHOWER_OIDC_REDIRECT_URI:?EISENHOWER_OIDC_REDIRECT_URI is required}",
+      web["environment"],
+    )
+    self.assertIn("healthcheck", web)
+
+    gateway = self.services["access-gateway"]
+    self.assertIn("WEB_UPSTREAM=${ACCESS_GATEWAY_WEB_UPSTREAM:-web:3000}", gateway["environment"])
+    self.assertEqual(gateway["depends_on"]["web"]["condition"], "service_healthy")
+    config = ACCESS_GATEWAY_CONFIG_PATH.read_text()
+    self.assertIn("set $web_upstream ${WEB_UPSTREAM};", config)
+    self.assertIn("proxy_pass http://$web_upstream;", config)
+    self.assertNotIn("location / { return 404; }", config)
+
+  def test_local_deploy_script_enforces_clean_exact_sha_and_records_rollback(self):
+    script = DEPLOY_SCRIPT_PATH.read_text()
+    self.assertIn('git diff --quiet', script)
+    self.assertIn('git diff --cached --quiet', script)
+    self.assertIn('release_sha="$(git rev-parse HEAD)"', script)
+    self.assertIn('API_IMAGE="local/eisenhower-api:${release_sha}"', script)
+    self.assertIn('AI_IMAGE="local/eisenhower-ai:${release_sha}"', script)
+    self.assertIn('AI_ROCM_IMAGE="local/eisenhower-ai-rocm:${release_sha}"', script)
+    self.assertIn('MCP_IMAGE="local/eisenhower-mcp:${release_sha}"', script)
+    self.assertIn('WEB_IMAGE="local/eisenhower-web:${release_sha}"', script)
+    self.assertIn('docker image inspect', script)
+    self.assertIn('rollback.env', script)
+    self.assertIn('docker compose', script)
+    self.assertIn('config --quiet', script)
+
+  def test_amd_inference_is_opt_in_and_uses_the_pinned_rocm_model_contract(self):
     inference = self.amd_services["inference"]
     self.assertEqual(inference["profiles"], ["inference-amd"])
     self.assertEqual(inference["devices"], ["/dev/kfd:/dev/kfd", "/dev/dri:/dev/dri"])
-    self.assertNotIn("healthcheck", inference)
+    self.assertIn("healthcheck", inference)
     self.assertIn("INFERENCE_MODEL is required", self.amd_compose_text)
+    self.assertIn("INFERENCE_MODEL_REVISION is required", self.amd_compose_text)
     self.assertIn("INFERENCE_API_KEY is required", self.amd_compose_text)
+    self.assertIn("--dtype", inference["command"])
+    self.assertIn("bfloat16", inference["command"])
+    self.assertIn("--max-num-seqs", inference["command"])
+    self.assertIn("model_cache:/root/.cache/huggingface", inference["volumes"])
+
+  def test_amd_retrieval_profile_runs_pinned_bge_m3_without_enabling_generation(self):
+    ai = self.amd_services["ai-service"]
+    worker = self.amd_services["rag-worker"]
+    self.assertEqual(ai["profiles"], ["retrieval-amd"])
+    self.assertEqual(worker["profiles"], ["retrieval-amd"])
+    for service in (ai, worker):
+      self.assertIn("/dev/kfd:/dev/kfd", service["devices"])
+      self.assertIn("/dev/dri:/dev/dri", service["devices"])
+      self.assertIn("RAG_EMBEDDING_MODEL_NAME=BAAI/bge-m3", service["environment"])
+      self.assertIn(
+        "RAG_EMBEDDING_MODEL_REVISION=5617a9f61b028005a4858fdac845db406aefb181",
+        service["environment"],
+      )
+      self.assertIn("EMBEDDING_VERSION=bge-m3-v1", service["environment"])
+    self.assertIn("RAG_GENERATION_ENABLED=false", ai["environment"])
+    self.assertIn("RAG_RESPONSE_ENABLED=false", ai["environment"])
+    rocm_dockerfile = (ROOT / "backend-ai" / "Dockerfile.rocm").read_text(encoding="utf-8")
+    self.assertIn("ENTRYPOINT []", rocm_dockerfile)
+    self.assertIn("grpcio==1.78.0", rocm_dockerfile)
+    self.assertIn("'protobuf>=6.31.1,<7'", rocm_dockerfile)
 
   def test_amd_reranker_is_a_separate_pinned_bounded_private_service(self):
     reranker = self.amd_services["reranker"]
     self.assertEqual(reranker["profiles"], ["reranker-amd"])
     self.assertEqual(reranker["devices"], ["/dev/kfd:/dev/kfd", "/dev/dri:/dev/dri"])
-    self.assertNotIn("healthcheck", reranker)
+    self.assertIn("healthcheck", reranker)
     self.assertIn("--runner", reranker["command"])
     self.assertIn("pooling", reranker["command"])
     self.assertNotIn("--task", reranker["command"])
@@ -114,6 +178,11 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn("192", reranker["command"])
     self.assertIn("953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e", reranker["command"])
     self.assertIn("--no-enable-log-requests", reranker["command"])
+    self.assertNotIn("--api-key", reranker["command"])
+    self.assertIn(
+      "VLLM_API_KEY=${RERANKER_API_KEY:?RERANKER_API_KEY is required}",
+      reranker["environment"],
+    )
     self.assertTrue(any(
       "RERANKER_MODEL_CACHE" in volume and volume.endswith(":/root/.cache/huggingface")
       for volume in reranker["volumes"]

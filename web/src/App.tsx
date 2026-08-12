@@ -13,6 +13,8 @@ import {
 import { LanguageProvider, useLanguage } from './i18n/LanguageContext';
 import type { TranslationKey } from './i18n/translations';
 import { replaceTaskById } from './lib/uiState';
+import { runtimeConfig } from './config';
+import { beginOidcLogin, completeOidcLogin, type OidcRuntimeConfig } from './oidcSession';
 import {
   createTask,
   deleteTask,
@@ -59,11 +61,24 @@ function safeMessage(
   return translate(kind === 'load' ? 'status.loadError' : 'status.saveError');
 }
 
-function CredentialGate() {
+function oidcConfig(): OidcRuntimeConfig | null {
+  if (!runtimeConfig.oidcIssuer || !runtimeConfig.oidcClientId || !runtimeConfig.oidcRedirectUri) {
+    return null;
+  }
+  return {
+    issuer: runtimeConfig.oidcIssuer,
+    clientId: runtimeConfig.oidcClientId,
+    redirectUri: runtimeConfig.oidcRedirectUri,
+    scopes: runtimeConfig.oidcScopes,
+  };
+}
+
+function CredentialGate({ oidcFailed }: { oidcFailed: boolean }) {
   const { t } = useLanguage();
   const [code, setCode] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const rejected = getAccessRejection() === 'rejected';
+  const oidc = oidcConfig();
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -92,7 +107,7 @@ function CredentialGate() {
           <p id="access-code-help" className="mt-3 text-sm leading-6 text-slate-300">
             {t('auth.help')}
           </p>
-          {rejected ? (
+          {rejected || oidcFailed ? (
             <p
               role="alert"
               className="mt-4 rounded-xl border border-red-300/30 bg-red-950/50 p-3 text-sm text-red-100"
@@ -100,22 +115,27 @@ function CredentialGate() {
               {t('auth.rejected')}
             </p>
           ) : null}
-          <label htmlFor="access-code" className="mt-6 block text-sm font-medium">
-            {t('auth.code')}
-          </label>
-          <input
-            ref={inputRef}
-            id="access-code"
-            type="password"
-            autoComplete="off"
-            value={code}
-            required
-            onChange={(event) => setCode(event.target.value)}
-            className="mt-2 min-h-12 w-full rounded-xl border border-white/20 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-300/30"
-          />
+          {!oidc ? (
+            <>
+              <label htmlFor="access-code" className="mt-6 block text-sm font-medium">
+                {t('auth.code')}
+              </label>
+              <input
+                ref={inputRef}
+                id="access-code"
+                type="password"
+                autoComplete="off"
+                value={code}
+                required
+                onChange={(event) => setCode(event.target.value)}
+                className="mt-2 min-h-12 w-full rounded-xl border border-white/20 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-300/30"
+              />
+            </>
+          ) : null}
           <button
             type="submit"
-            disabled={!code.trim()}
+            disabled={!oidc && !code.trim()}
+            onClick={oidc ? () => void beginOidcLogin(oidc) : undefined}
             className="mt-5 min-h-12 w-full rounded-xl bg-cyan-300 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t('auth.enter')}
@@ -390,7 +410,21 @@ function AppContent() {
 
 function AppRouter() {
   const apiToken = useSyncExternalStore(subscribeToApiToken, getApiToken, getApiToken);
-  return apiToken ? <AppContent /> : <CredentialGate />;
+  const [callbackState, setCallbackState] = useState<'checking' | 'ready' | 'failed'>('checking');
+
+  useEffect(() => {
+    const oidc = oidcConfig();
+    if (!oidc || !window.location.search.includes('code=')) {
+      setCallbackState('ready');
+      return;
+    }
+    void completeOidcLogin(new URL(window.location.href), oidc)
+      .then(() => setCallbackState('ready'))
+      .catch(() => setCallbackState('failed'));
+  }, []);
+
+  if (callbackState === 'checking') return <main aria-busy="true" />;
+  return apiToken ? <AppContent /> : <CredentialGate oidcFailed={callbackState === 'failed'} />;
 }
 
 export default function App() {

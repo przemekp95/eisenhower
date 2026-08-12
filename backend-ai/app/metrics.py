@@ -23,6 +23,7 @@ RAG_REASONS = {
   "rag_disabled",
   "rag_response_disabled",
   "tenant_not_enabled",
+  "user_not_enabled",
   "vllm_timeout",
 }
 RETRIEVAL_STAGES = {"shadow", "search", "online", "evaluation"}

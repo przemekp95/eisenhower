@@ -16,6 +16,7 @@ def test_load_settings_uses_defaults():
   assert settings.rag_retrieval_enabled is False
   assert settings.rag_generation_enabled is False
   assert settings.rag_response_enabled is False
+  assert not settings.rag_response_allowed_users
   assert settings.rag_retrieval_strategy == "hybrid-bge-v1"
   assert settings.reranker_base_url == "http://reranker:8000"
   assert settings.reranker_api_key is None
@@ -33,6 +34,8 @@ def test_load_settings_uses_defaults():
   assert settings.prompt_id == "eisenhower-classifier"
   assert settings.prompt_version == "1.1.0"
   assert settings.local_model_revision == "e8f8c211226b894fcb81acc59f3b34ba3efd5f42"
+  assert settings.rag_embedding_model_name is None
+  assert settings.rag_embedding_model_revision is None
   assert settings.mongodb_uri is None
   assert settings.canonical_documents_collection == "rag_documents"
   assert settings.memory_write_enabled is False
@@ -61,6 +64,9 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
       "INDEX_VERSION": "index-v3",
       "RAG_RETRIEVAL_ENABLED": "true",
       "RAG_GENERATION_ENABLED": "false",
+      "RAG_EMBEDDING_MODEL_NAME": "BAAI/bge-m3",
+      "RAG_EMBEDDING_MODEL_REVISION": "5617a9f61b028005a4858fdac845db406aefb181",
+      "RAG_EMBEDDING_DEVICE": "cuda",
       "RAG_RETRIEVAL_STRATEGY": "dense-v1",
       "RERANKER_BASE_URL": "http://reranker.internal:8000",
       "RERANKER_API_KEY": "reranker-token",
@@ -109,6 +115,9 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
   assert settings.index_version == "index-v3"
   assert settings.rag_retrieval_enabled is True
   assert settings.rag_generation_enabled is False
+  assert settings.rag_embedding_model_name == "BAAI/bge-m3"
+  assert settings.rag_embedding_model_revision == "5617a9f61b028005a4858fdac845db406aefb181"
+  assert settings.rag_embedding_device == "cuda"
   assert settings.rag_retrieval_strategy == "dense-v1"
   assert settings.reranker_base_url == "http://reranker.internal:8000"
   assert settings.reranker_api_key == "reranker-token"
@@ -191,6 +200,25 @@ def test_generation_cannot_be_enabled_without_retrieval(tmp_path: Path):
       model_cache_dir=tmp_path / "runtime",
       rag_generation_enabled=True,
     )
+
+
+def test_production_response_canary_requires_explicit_tenant_and_user_cohorts(tmp_path: Path):
+  common = {
+    "training_data_path": tmp_path / "training.json",
+    "model_cache_dir": tmp_path / "runtime",
+    "app_env": "production",
+    "rag_retrieval_enabled": True,
+    "rag_generation_enabled": True,
+    "rag_response_enabled": True,
+  }
+  with pytest.raises(ValueError, match="tenant and user allowlists"):
+    Settings(**common)
+  settings = Settings(
+    **common,
+    rag_allowed_tenants=("owner-tenant",),
+    rag_response_allowed_users=("owner-sub",),
+  )
+  assert settings.rag_response_allowed_users == ("owner-sub",)
 
 
 def test_unknown_retrieval_strategy_fails_closed(tmp_path: Path):

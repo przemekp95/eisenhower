@@ -38,6 +38,7 @@ const AI_API_PATHS = Object.freeze({
   analyzeWithLangChain: '/analyze-langchain',
   analyzeTaskWithRag: '/v2/ai/analyze',
   knowledgeSearch: '/v2/knowledge/search',
+  knowledgeAnswer: '/v2/knowledge/answer',
   extractTasksFromImage: '/extract-tasks-from-image',
   batchAnalyzeTasks: '/batch-analyze',
   addTrainingExample: '/add-example',
@@ -542,6 +543,19 @@ function createAiApi(baseUrl, optionsOrFetch) {
         defaultError: 'Knowledge search failed',
         errorCode: 'knowledge_search_failed',
         validate: isKnowledgeSearchDto,
+        invalidResponse: 'AI API returned an invalid response',
+      });
+    },
+    async answerKnowledge(query, language = 'en', projectId = null, limit = 5) {
+      const response = await request(buildUrl(baseUrl, AI_API_PATHS.knowledgeAnswer), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, language, project_id: projectId, limit }),
+      });
+      return readJson(response, {
+        defaultError: 'Knowledge answer failed',
+        errorCode: 'knowledge_answer_failed',
+        validate: isKnowledgeAnswerDto,
         invalidResponse: 'AI API returned an invalid response',
       });
     },
@@ -1051,6 +1065,36 @@ function isKnowledgeSearchDto(value) {
       isNullable(item, (entry) => typeof entry === 'string')
     )
   );
+}
+
+function isKnowledgeAnswerClaimDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    typeof value.statement === 'string' &&
+    Array.isArray(value.citation_ids) &&
+    value.citation_ids.length > 0 &&
+    value.citation_ids.every((item) => typeof item === 'string')
+  );
+}
+
+function isKnowledgeAnswerDto(value) {
+  if (
+    !isRecord(value) ||
+    !['answered', 'insufficient_evidence'].includes(value.status) ||
+    !Array.isArray(value.claims) ||
+    !value.claims.every(isKnowledgeAnswerClaimDto) ||
+    !Array.isArray(value.citations) ||
+    !value.citations.every(isCitationDto) ||
+    !isRetrievalSummaryDto(value.retrieval) ||
+    !isOptional(value.generation, (item) => isNullable(item, isGenerationMetadataDto)) ||
+    !isOptional(value.no_answer_reason, (item) =>
+      isNullable(item, (entry) => typeof entry === 'string')
+    )
+  ) return false;
+  if (value.status === 'answered') {
+    return typeof value.answer === 'string' && value.answer.length > 0 && value.claims.length > 0;
+  }
+  return value.answer === null && value.claims.length === 0 && value.citations.length === 0;
 }
 
 function isSimilarExampleResultDto(value) {

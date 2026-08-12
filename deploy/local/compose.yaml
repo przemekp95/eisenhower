@@ -6,6 +6,23 @@ x-common: &common
     - private
 
 services:
+  web:
+    <<: *common
+    image: ${WEB_IMAGE:?WEB_IMAGE must be a versioned tag or digest}
+    environment:
+      - VITE_API_URL=/api
+      - VITE_AI_API_URL=/ai
+      - VITE_OIDC_ISSUER=${OIDC_ISSUER:?OIDC_ISSUER is required}
+      - VITE_OIDC_CLIENT_ID=eisenhower-web
+      - VITE_OIDC_REDIRECT_URI=${EISENHOWER_OIDC_REDIRECT_URI:?EISENHOWER_OIDC_REDIRECT_URI is required}
+      - VITE_OIDC_SCOPES=openid profile email tasks:read tasks:write calendar:read calendar:write knowledge:read ai:analyze
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/health >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+
   # The Mongo outbox publisher runs inside this real Node process. There is no
   # separate outbox-worker entrypoint to deploy.
   api-service:
@@ -106,9 +123,13 @@ services:
       - RAG_GENERATION_ENABLED=${RAG_GENERATION_ENABLED:-false}
       - RAG_RESPONSE_ENABLED=${RAG_RESPONSE_ENABLED:-false}
       - RAG_ALLOWED_TENANTS=${RAG_ALLOWED_TENANTS:-}
+      - RAG_RESPONSE_ALLOWED_USERS=${RAG_RESPONSE_ALLOWED_USERS:-}
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_API_KEY=${QDRANT_API_KEY:-}
       - QDRANT_COLLECTION_ALIAS=${QDRANT_COLLECTION_ALIAS:-eisenhower-knowledge-active}
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/eisenhower?replicaSet=rs0}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-eisenhower}
+      - CANONICAL_DOCUMENTS_COLLECTION=${CANONICAL_DOCUMENTS_COLLECTION:-rag_documents}
       - RERANKER_BASE_URL=${RERANKER_BASE_URL:-http://reranker:8000}
       - RERANKER_API_KEY=${RERANKER_API_KEY:-}
       - RERANKER_ALLOWED_HOSTS=${RERANKER_ALLOWED_HOSTS:-reranker}
@@ -142,6 +163,7 @@ services:
       - ../../README.md:/corpus/README.md:ro
       - ../../docs:/corpus/docs:ro
       - ../../corpus:/corpus/corpus:ro
+      - ../../.tasks:/corpus/.tasks:ro
 
   qdrant:
     <<: *common
@@ -262,6 +284,8 @@ services:
     <<: *common
     image: ${ACCESS_GATEWAY_IMAGE:-nginx:1.27.5-alpine}
     depends_on:
+      web:
+        condition: service_healthy
       identity-service:
         condition: service_started
       mcp-service:
@@ -275,6 +299,7 @@ services:
       - MCP_UPSTREAM=${ACCESS_GATEWAY_MCP_UPSTREAM:-mcp-service:8000}
       - API_UPSTREAM=${ACCESS_GATEWAY_API_UPSTREAM:-api-service:3001}
       - AI_UPSTREAM=${ACCESS_GATEWAY_AI_UPSTREAM:-ai-service:8000}
+      - WEB_UPSTREAM=${ACCESS_GATEWAY_WEB_UPSTREAM:-web:3000}
     volumes:
       - ./access-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
 

@@ -16,59 +16,60 @@ Deliver the approved platform end to end on the local AMD computer while keeping
 
 ### Progress
 
-The portable local topology, transactional Calendar domain/outbox, HMAC-bound n8n workflows, bounded MCP write tools, API client and accessible Calendar status/conflict UI are implemented on the feature branch. Point 1 is live on the local AMD host with per-user encrypted Google OAuth and an active Watch channel. Point 2 now has a fail-closed multi-user Keycloak boundary, pre-registered PKCE clients, exact resource audiences, scoped Node task authorization, a private Host/Origin/rate-limited gateway and Remote MCP token exchange that never passes the MCP bearer upstream. A real Keycloak 26.7 + Node + MCP SDK v2 rehearsal proved two stable subjects in one tenant, API owner isolation and the same 1-versus-0 result through 15 network MCP tools; the production realm contains no users or password grant. Final promotion remains fail-closed: the exact source SHA still needs the full repository/CI run and deployment update; no production-approved AI evaluation artifact exists; the `gfx1151` ROCm image/model has not been downloaded or qualified; and ordinary task update/lifecycle/delegation APIs still need durable mutation receipts beyond `If-Match`.
+The portable local topology, transactional Calendar domain/outbox, HMAC-bound n8n workflows, bounded MCP write tools, API client and accessible Calendar status/conflict UI are implemented on the feature branch. Point 1 is live on the local AMD host with per-user encrypted Google OAuth and an active Watch channel. Point 2 has a fail-closed multi-user Keycloak boundary, pre-registered PKCE clients, exact resource audiences, scoped Node task authorization, a private Host/Origin/rate-limited gateway and Remote MCP token exchange that never passes the MCP bearer upstream. The local Compose now includes the web UI behind that gateway with state-bound Authorization Code + S256 PKCE and memory-only access tokens. Point 4 has AMD ROCm BGE-M3 retrieval and Qwen generation-shadow evidence on `gfx1151`, including strict PL/EN schema, safe injection abstention, serialized capacity-two traffic at configured capacity one, oversize rejection without OOM, application-level disconnect fallback and physical recovery. An exact-SHA build/render/deploy/smoke/rollback script now covers all first-party images and verifies OCI source revisions. Final deployment remains fail-closed because a genuine production classifier evaluation file does not exist; the script refuses `/dev/null`, a mismatched digest or missing model/service keys instead of weakening readiness.
 
 ---
 
-## TASK-043: Compare dense, hybrid RRF and optional reranked retrieval
-**Priority:** P1 | **Tags:** rag, retrieval, bm25, rrf, reranker, evaluation
+## TASK-014: Run the retrieval-only shadow pilot
+**Priority:** P1 | **Tags:** rag, shadow, production, observability
 
-Implement a disabled-by-default comparison path for the existing dense retriever, BM25 plus dense fusion with reciprocal rank fusion, and an optional bounded cross-encoder reranker. Every strategy must preserve the canonical MongoDB, tenant, project, ACL, version, tombstone and Qdrant projection boundary.
+Deploy retrieval-only to an allowlisted internal cohort with `RAG_GENERATION_ENABLED=false` and `RAG_RESPONSE_ENABLED=false`, then compare aggregate retrieval quality, latency, freshness, errors, and fallback health without exposing retrieved content.
 
 ### Plan
 
-- Add document-diverse fielded BM25/RRF candidates so repeated chunks cannot crowd out distinct relevant documents, while preserving canonical ACL/version/tombstone checks.
-- Expand only train/dev with PL/EN, multi-document, exact-identifier and negative no-hit cases; keep the existing holdout byte-for-byte untouched.
-- Select bounded parameters on train, validate once on dev, and keep dense as the runtime default unless every approved quality and zero-tolerance gate passes.
-- Produce a new immutable exact-SHA comparison, run full regression and CI, then promote only evidence that remains truthful about the independent-human gate.
-- Following the owner's explicit rollout direction, make the selected hybrid plus pinned reranker strategy the runtime default whenever RAG retrieval is enabled; fail startup closed when its private authenticated endpoint does not satisfy the evaluated model and token bounds.
-- Preserve every `PENDING` human-review decision and the untouched holdout as unresolved evidence; do not present the owner's rollout authorization as independent review.
-- Drive the runtime wiring and portable local AMD contract through a red-green loop, run the full affected verification, and promote only the exact green SHA to `dev`.
-
-### Conditional checkpoint
-
-The repository owner approves the human decision gate green without reservations through 2026-08-15 23:59:59 Europe/Warsaw. The untouched holdout and exact evidence remain enforced.
+- Deploy the selected owner-authorized hybrid BGE strategy with its private pinned reranker on the local AMD cohort.
+- Preserve aggregate-only telemetry, canonical authorization and independent retrieval/generation/response switches.
+- Rehearse disable and restore paths before recording the final bounded decision.
 
 ### Progress
 
-The approved 19-file allowlist is refrozen at snapshot `2994f809649d3dd155faf09419557de7af70c7a77dae9aa4d3cf67f717ac70a8`; the v3 packet expands only train/dev to 42 balanced PL/EN exact-ID, multi-document, no-hit and ACL cases while preserving all six v2 holdout records semantically unchanged. Train-only selection chose document-diverse fielded BM25/RRF plus the revision-pinned `BAAI/bge-reranker-v2-m3`, bounded to 20 candidates and 192 tokens. The clean exact-SHA local MongoDB/Qdrant/private-ROCm comparison passes the proposed non-holdout gates: Recall@5 `0.9107`, MRR@5 `0.8048`, PL `0.8929`/`0.8000`, EN `0.9286`/`0.8095`, no-answer `1.0`, p95 `231.83 ms`, and zero duplicate, forbidden, stale or isolation hits. ROCm 7.2 on `gfx1151` served the pinned reranker over loopback-only vLLM; the temporary service and isolated stores were removed after evaluation. Dense remains the runtime default and holdout remains unobserved because `human-review-v3.json` still has 42 truthful `PENDING` decisions; independent human review is the only remaining gate before final holdout and promotion.
+The earlier exact-source ROCm image loaded 25 canonical documents into a green 235-point local Qdrant projection and completed a real authorized BGE-M3-to-Qwen shadow request without exposing generated content. The newer `dev` strategy adds owner-authorized fielded BM25/RRF and a separate fail-closed pinned reranker; its local deployment must be rehearsed together with the qualified generator before this pilot can close.
 
-The owner subsequently authorized the exact selected strategy as the default before independent review and holdout. Runtime now composes canonical dense plus fielded BM25 with the evaluated RRF weights and an authenticated private reranker that verifies the exact served model/revision and 192-token bound at startup; `dense-v1` is an explicit rollback and never an automatic fallback. A separate digest-pinned `reranker-amd` service can move independently and keeps its model cache on the workspace filesystem. Red-green tests prove typed classifier fallback for analysis, HTTP 503 for search and no dense substitution on reranker failure. Full `make verify` passes, including 611 backend-AI tests with the frozen holdout checks, 240 Node tests, 21 BDD scenarios/107 steps, 175 web tests plus 2 integrations, 192 mobile tests, 50 MCP tests, dependency audits, typecheck and pylint `10.00/10`. The 42 independent decisions remain `PENDING`, holdout remains unobserved, and no deployment or production approval is claimed.
 ---
 
-## TASK-013: Approve representative retrieval quality gates
-**Priority:** P1 | **Tags:** rag, evaluation, recall, mrr, human-gate
+## TASK-015: Qualify the selected live GPU, runtime, model and quantization
+**Priority:** P2 | **Tags:** rag, vllm, gpu, citations
 
-Build a human-reviewed PL/EN retrieval golden set from the approved corpus and establish Recall@k, MRR, no-hit, duplicate, freshness, and isolation thresholds before tuning retrieval.
+After retrieval proves useful, qualify a licensed model on the exact physical NVIDIA/CUDA or AMD/ROCm host and prove that its pinned runtime satisfies the private generation contract, capacity and failure gates.
 
 ### Plan
 
-- Freeze train/dev/holdout queries with relevant, forbidden, stale, and deleted document labels.
-- Run the existing evaluator against the real Qdrant candidate and report required slices.
-- Validate the independent review as a hash-bound, fail-closed attestation, preserve crash-recoverable immutable outputs, and confirm human provenance out of band.
-- Obtain human approval for thresholds and preserve the immutable dataset/report hashes.
-
-### Resume gate
-
-Synthetic fixtures remain smoke tests; representative relevance labels and final thresholds require human review after TASK-010 through TASK-012.
-
-### Conditional checkpoint
-
-The repository owner approves the frozen proposed relevance decisions and threshold work green without reservations through 2026-08-15 23:59:59 Europe/Warsaw. Comparison and selection may proceed now while the untouched holdout and immutable hashes remain enforced.
+- Preserve the revision-pinned Qwen3-4B-Instruct-2507 BF16 runtime and immutable PL/EN PromptSpecs.
+- Complete adversarial no-answer/injection, bounded concurrency/capacity and disconnect/fallback checks on physical `gfx1151`.
+- Record exact runtime, memory, restart and rollback evidence without inferring untested OOM behavior.
 
 ### Progress
 
-After the approved security/index documentation changed, the same 19-file corpus allowlist was owner-refrozen and every dependent candidate/runtime hash was regenerated before human review. The untuned real MiniLM + canonical MongoDB + Qdrant baseline still fails: Recall@5 `0.6667`, MRR@5 `0.5444`, no-answer accuracy `0.9444`, PL Recall@5/MRR@5 `0.4375`/`0.4375`; isolation, forbidden, stale and duplicate hit rates were zero. The readable worksheet maps every case to proposed sources, while `human-review-v1.json` is the authoritative four-hash-bound record with 18 pending decisions. A tested single-read finalizer re-verifies the physical corpus, rejects incomplete/drifted/duplicate/security-relaxed review, and creates staged, crash-recoverable attestation outputs without overwriting conflicting evidence. It explicitly records that human provenance is not cryptographically verified and remains an out-of-band gate. Fresh backend regression is `365 passed, 7 skipped` at `89.86%` coverage and focused review-finalizer coverage is `15 passed`; no human judgment has been fabricated and holdout results were not used for tuning.
+Digest-pinned vLLM ROCm 0.20.0 serves revision-pinned Qwen3-4B-Instruct-2507 in BF16 on physical `gfx1151`. Live PL/EN structured output, authentication, exact model identity and grounded citations passed; adversarial task/context injection now produces a schema-valid abstention with null classification and empty citations/evidence. Two concurrent requests completed deterministically with configured `max-num-seqs=1`; an oversized request was rejected with HTTP 400, `OOMKilled=false`, no restart. A physical application drill proved RAG before disconnect, `generation_connection_error` classifier fallback with zero citations while vLLM was stopped, and RAG after healthy restart. Post-load use was about 2.98 GiB visible VRAM plus 45.09 GiB GTT. The selected model/runtime machine qualification is green for the bounded single-user local capacity; production response quality remains a separate TASK-023 gate.
+
+---
+
+## TASK-023: Run private generation shadow and response canary
+**Priority:** P2 | **Tags:** rag, generation, shadow, canary, production
+
+Deploy the qualified private inference matrix behind FastAPI, discard validated generated output during a bounded shadow, and expose grounded responses only to an approved cohort after quality, security, availability and rollback gates pass.
+
+### Plan
+
+- Exercise integrated hybrid retrieval plus private generation with generated output discarded and aggregate-only telemetry.
+- Add a separate knowledge-answer query contract instead of reusing classifier explanations or changing retrieval-search semantics.
+- Require deterministic no-hit abstention, claim-level grounded citations, strict no-answer behavior, schema validity, PL/EN quality and zero isolation or injection violations.
+- Rehearse answerable, unsupported, injected, provider-failure and cross-scope cases without tuning on the opened holdout.
+- Keep user-visible responses disabled unless every zero-tolerance gate and explicit tenant/user allowlist is satisfied.
+
+### Progress
+
+Private Qwen generation shadow is real and generated content is discarded after strict validation. A separate `POST /v2/knowledge/answer` query contract now preserves search semantics and returns either one atomic claim with one authorized citation or a content-free `insufficient_evidence`; it never reuses classifier explanations as answers. Two-phase guided generation first decides answerability and only then produces the required cited claim, avoiding nullable/conditional-schema gaps observed on the physical vLLM decoder. OIDC scope, tenant/project ACL, browser rate limiting, tenant/user canary allowlists, provider failures and foreign citations all remain fail-closed. The web UI calls this Q&A contract and renders no quadrant or invented source for abstentions. Physical Qwen on AMD `gfx1151` passed PL answer, EN answer, unsupported private-data question and injected-context abstention 4/4; full `make verify` passed with 627 backend-AI tests/10 skips at 88.57% coverage, 240 Node tests, 21 BDD scenarios/107 steps, 186 web tests plus 2 integrations, 192 mobile tests, 50 MCP tests, audits, builds, typechecks and Pylint 10.00/10. User-visible responses remain disabled by default because this bounded smoke is not an independently human-reviewed answer-quality holdout; the 42 retrieval decisions and 240 classifier labels remain pending.
 
 ---
 

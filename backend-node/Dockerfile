@@ -17,6 +17,9 @@ RUN npm run build && npm prune --omit=dev
 # Production stage
 FROM node:20-alpine AS production
 
+ARG RELEASE_SHA
+LABEL org.opencontainers.image.revision=$RELEASE_SHA
+
 ENV NODE_ENV=production
 ENV PORT=3001
 

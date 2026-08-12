@@ -22,7 +22,13 @@ from .generation.models import KnownStatement
 from .jobs import JobConflictError, SqliteJobQueue
 from .metrics import MetricsRegistry
 from .rag.errors import RerankerUnavailable
-from .rag.models import AccessScope, AnalyzeResult, Citation, RetrievalSummary
+from .rag.models import (
+  AccessScope,
+  AnalyzeResult,
+  Citation,
+  KnowledgeAnswerResponse,
+  RetrievalSummary,
+)
 from .service import ProviderDisabledError, QuadrantAIService
 from .security_controls import SlidingWindowRateLimiter
 from .store import TrainingStore
@@ -99,6 +105,13 @@ class KnowledgeSearchResponse(StrictRequest):
   citations: list[Citation] = Field(default_factory=list)
   retrieval: RetrievalSummary = Field(default_factory=RetrievalSummary)
   no_answer_reason: str | None = None
+
+
+class KnowledgeAnswerApiRequest(StrictRequest):
+  query: str = Field(..., min_length=1, max_length=2000)
+  language: Literal["en", "pl"] = "en"
+  project_id: str | None = Field(default=None, max_length=128)
+  limit: int = Field(default=5, ge=1, le=20)
 
 
 class InternalJobRequest(StrictRequest):
@@ -297,7 +310,11 @@ def create_app(
         headers={"WWW-Authenticate": "Bearer"},
       )
     principal = request.state.principal
-    if request.url.path in {"/v2/ai/analyze", "/v2/knowledge/search"}:
+    if request.url.path in {
+      "/v2/ai/analyze",
+      "/v2/knowledge/search",
+      "/v2/knowledge/answer",
+    }:
       rate_key = f"{principal.tenant_id}:{principal.user_id}:{request.url.path}"
       if not ai_rate_limiter.allow(rate_key):
         return JSONResponse(
@@ -429,6 +446,13 @@ def create_app(
       not resolved_settings.rag_allowed_tenants
       or principal.tenant_id in resolved_settings.rag_allowed_tenants
     )
+    user_enabled = (
+      (
+        resolved_settings.app_env != "production"
+        and not resolved_settings.rag_response_allowed_users
+      )
+      or principal.user_id in resolved_settings.rag_response_allowed_users
+    )
     generation_enabled = bool(
       resolved_rag_service is not None
       and getattr(resolved_rag_service, "generation_enabled", True)
@@ -438,11 +462,15 @@ def create_app(
       and tenant_enabled
       and request.freshness_requirement == "current_world_required"
     )
-    if (
-      resolved_rag_service is not None
-      and generation_enabled
+    response_enabled = (
+      generation_enabled
       and resolved_settings.rag_response_enabled
       and tenant_enabled
+      and user_enabled
+    )
+    if (
+      resolved_rag_service is not None
+      and response_enabled
     ) or current_world_abstention:
       delta_requested = (
         request.known_state is not None
@@ -461,7 +489,36 @@ def create_app(
       else:
         result = resolved_rag_service.analyze(request.task, scope, language=request.language)
     else:
-      if resolved_rag_service is not None and tenant_enabled:
+      if resolved_rag_service is not None and tenant_enabled and generation_enabled:
+        generation_started = time.perf_counter()
+        try:
+          shadow_result = resolved_rag_service.analyze(
+            request.task,
+            scope,
+            language=request.language,
+          )
+          shadow_outcome = "no_answer" if shadow_result.mode == "no_answer" else "success"
+          metrics.observe_generation(
+            shadow_outcome,
+            duration_seconds=time.perf_counter() - generation_started,
+            input_tokens=(
+              shadow_result.generation.input_tokens
+              if shadow_result.generation is not None
+              else 0
+            ),
+          )
+          if shadow_result.generation is not None:
+            metrics.observe_rag_validation("schema", "accepted")
+            if shadow_result.mode == "rag":
+              metrics.observe_rag_validation("citations", "accepted")
+        except Exception:
+          request_logger.warning("Optional generation shadow failed", exc_info=True)
+          metrics.observe_generation(
+            "unavailable",
+            duration_seconds=time.perf_counter() - generation_started,
+            input_tokens=0,
+          )
+      elif resolved_rag_service is not None and tenant_enabled:
         retrieval_started = time.perf_counter()
         try:
           shadow = resolved_rag_service.retrieve_summary(request.task, scope)
@@ -484,6 +541,8 @@ def create_app(
         fallback_reason = "rag_response_disabled"
       elif not generation_enabled:
         fallback_reason = "generation_disabled"
+      elif not user_enabled:
+        fallback_reason = "user_not_enabled"
       else:
         fallback_reason = "tenant_not_enabled"
       result = AnalyzeResult(
@@ -577,6 +636,82 @@ def create_app(
       "search",
       hit_count=result["retrieval"].hit_count,
       duration_seconds=time.perf_counter() - retrieval_started,
+    )
+    return result
+
+  @app.post("/v2/knowledge/answer", response_model=KnowledgeAnswerResponse)
+  def answer_knowledge(request: KnowledgeAnswerApiRequest, http_request: Request):
+    principal = http_request.state.principal
+    if "*" not in principal.scopes and not ({"knowledge:read", "ai:analyze"} & set(principal.scopes)):
+      raise HTTPException(status_code=403, detail="Missing knowledge:read scope.")
+    project_ids = list(principal.project_ids)
+    if request.project_id:
+      if "admin" not in principal.roles and request.project_id not in project_ids:
+        raise HTTPException(status_code=403, detail="Project is outside the authenticated scope.")
+      project_ids = [request.project_id]
+    scope = AccessScope(
+      tenant_id=principal.tenant_id,
+      user_id=principal.user_id,
+      project_ids=project_ids,
+      roles=principal.roles,
+    )
+    tenant_enabled = (
+      not resolved_settings.rag_allowed_tenants
+      or principal.tenant_id in resolved_settings.rag_allowed_tenants
+    )
+    user_enabled = (
+      (
+        resolved_settings.app_env != "production"
+        and not resolved_settings.rag_response_allowed_users
+      )
+      or principal.user_id in resolved_settings.rag_response_allowed_users
+    )
+    generation_enabled = bool(
+      resolved_rag_service is not None
+      and getattr(resolved_rag_service, "generation_enabled", True)
+    )
+    if resolved_rag_service is None:
+      reason = "rag_disabled"
+    elif not resolved_settings.rag_response_enabled:
+      reason = "rag_response_disabled"
+    elif not generation_enabled:
+      reason = "generation_disabled"
+    elif not tenant_enabled:
+      reason = "tenant_not_enabled"
+    elif not user_enabled:
+      reason = "user_not_enabled"
+    else:
+      reason = None
+    if reason is not None:
+      return KnowledgeAnswerResponse(
+        status="insufficient_evidence",
+        answer=None,
+        claims=[],
+        citations=[],
+        retrieval=RetrievalSummary(),
+        no_answer_reason=reason,
+      )
+
+    started = time.perf_counter()
+    result = resolved_rag_service.answer(
+      request.query,
+      scope,
+      language=request.language,
+      limit=request.limit,
+      project_id=request.project_id,
+    )
+    metrics.observe_rag_retrieval(
+      "answer",
+      hit_count=result.retrieval.hit_count,
+      duration_seconds=time.perf_counter() - started,
+    )
+    generation_outcome = (
+      "success" if result.status == "answered" else "no_answer"
+    )
+    metrics.observe_generation(
+      generation_outcome,
+      duration_seconds=time.perf_counter() - started,
+      input_tokens=result.generation.input_tokens if result.generation else 0,
     )
     return result
 
