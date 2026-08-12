@@ -2,17 +2,18 @@
 
 This topology runs the application on one local Linux host by default and keeps every location-sensitive
 connection configurable. The initial target is the AMD computer, but Node/Mongo, FastAPI, Qdrant, n8n
-the public calendar gateway and inference can be moved independently to hosts reachable over a private
+the calendar/access gateways, identity service, Remote MCP and inference can be moved independently to hosts reachable over a private
 LAN/VPN address.
 
 ## What is deployable now
 
 `compose.yaml` contains only real entrypoints: Node API, a single-node MongoDB replica set required by
 the transactional outbox, FastAPI, the existing RAG worker,
-Qdrant, n8n and a narrow nginx calendar gateway. The Mongo outbox publisher is part of the Node API process; there is intentionally no
-invented `outbox-worker` container. A one-shot `audit-volume-init` applies the UID 1001 ownership required
-by the non-root Node container before it starts. The current MCP entrypoint is stdio-only, so this topology does not
-pretend that a remotely deployable MCP HTTP service exists.
+Qdrant, n8n, Keycloak with PostgreSQL, the OAuth-protected Remote MCP adapter and narrow nginx gateways. The Mongo outbox publisher is part of the Node API process; there is intentionally no
+invented `outbox-worker` container. A one-shot `audit-volume-init` applies the shared audit directory and
+preserves the distinct UID ownership required by the Node/MCP and AI audit files
+by the non-root Node container before it starts. Production is fixed to `AUTH_MODE=oidc`; neither Node,
+FastAPI nor Remote MCP receives a static user token as a fallback.
 
 `compose.amd.yaml` is an opt-in vLLM/ROCm overlay. It is a deployment contract, not evidence that vLLM
 or a model works on this AMD host. It has no readiness check because no live model was loaded or tested.
@@ -20,8 +21,8 @@ FastAPI remains usable with generation disabled and its MiniLM fallback.
 
 ## First same-host deployment
 
-1. Build and tag the Node and AI images locally for one exact Git SHA (or publish them to the registry).
-   Set `API_IMAGE` and `AI_IMAGE` to those versioned tags or, preferably after publication, registry
+1. Build and tag the Node, AI and MCP images locally for one exact Git SHA (or publish them to the registry).
+   Set `API_IMAGE`, `AI_IMAGE` and `MCP_IMAGE` to those versioned tags or, preferably after publication, registry
    digests. Do not use mutable `latest` tags.
 
    ```bash
@@ -30,6 +31,8 @@ FastAPI remains usable with generation disabled and its MiniLM fallback.
      -t "local/eisenhower-api:${release_sha}" .
    docker build --target production -f backend-ai/Dockerfile \
      -t "local/eisenhower-ai:${release_sha}" backend-ai
+   docker build -f mcp/eisenhower_adapter/Dockerfile \
+     -t "local/eisenhower-mcp:${release_sha}" .
    ```
 2. Copy `.env.example` to `.env`, replace the placeholder image tags and populate secrets. Keep `.env`
    outside version control and readable only by its owner. `AI_EVALUATION_FILE` must be the absolute host
@@ -53,6 +56,31 @@ FastAPI remains usable with generation disabled and its MiniLM fallback.
 
 This binds host ports to `127.0.0.1` by default. Compose DNS names provide same-host service-to-service
 URLs. A reverse proxy or private client may reach only the endpoints explicitly selected by the owner.
+
+## Multi-user OIDC and Remote MCP
+
+`identity-service` imports the production-shaped `eisenhower` realm from
+`identity/eisenhower-realm.json`. It contains no users and enables no password grant. Browser and MCP
+clients are pre-registered Authorization Code + PKCE clients. Stable `sub` and `tenant_id` claims form
+the identity boundary; scopes separately authorize tasks, Calendar, knowledge and AI access.
+
+`access-gateway` is the only supported remote ingress for identity, API and MCP. It binds to loopback,
+validates the exact Host and browser Origin, rate-limits requests, bounds bodies and timeouts, disables
+access logs, re-resolves Docker upstreams after container replacement and publishes the RFC 9728
+protected-resource metadata route. Place only this loopback port
+behind private Tailscale Serve (not Funnel), for example on an otherwise unused HTTPS port. Do not expose
+Keycloak, Node, FastAPI or MCP container ports directly.
+
+An MCP access token must target the exact public MCP resource URL and include `mcp:tools` plus the
+least-privilege tool scope. The MCP service verifies that token locally and performs RFC 8693 token
+exchange for a separate `eisenhower-api` audience token. It never forwards the incoming MCP token to
+Node or FastAPI. The exchanged token is re-verified for unchanged subject and tenant and non-expanded
+scopes. Keycloak's current local configuration uses pre-registered clients and audience mappers; dynamic
+client registration and CIMD are deliberately disabled.
+
+The fixture under `identity/e2e/` is test-only. It contains two synthetic subjects in the same tenant and
+is never mounted by production Compose. Its password grant exists solely so automated isolation tests can
+obtain tokens without a browser.
 
 ## Public Google Calendar gateway
 
@@ -108,6 +136,9 @@ private VPN/LAN address. On each caller, replace only the matching URL:
 | Qdrant | `QDRANT_BIND_ADDRESS` | FastAPI/worker: `QDRANT_URL` |
 | n8n | `N8N_BIND_ADDRESS` | operator/private callback routing |
 | Calendar gateway | fixed `127.0.0.1`, configurable `CALENDAR_GATEWAY_BIND_PORT` | local Funnel target for the two fixed routes |
+| Keycloak/PostgreSQL | no host port by default | access gateway `IDENTITY_UPSTREAM` |
+| Remote MCP | no host port by default | access gateway `MCP_UPSTREAM` |
+| Access gateway | fixed `127.0.0.1`, configurable `ACCESS_GATEWAY_BIND_PORT` | private Tailscale Serve target |
 | vLLM | `INFERENCE_BIND_ADDRESS` | FastAPI: `INFERENCE_BASE_URL` and `INFERENCE_ALLOWED_HOSTS` |
 
 Never set a bind address to `0.0.0.0`. Private addressing alone is not an authorization boundary: enforce

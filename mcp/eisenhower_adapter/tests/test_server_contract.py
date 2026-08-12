@@ -8,6 +8,13 @@ from eisenhower_mcp import server
 
 
 class ServerContractTest(unittest.TestCase):
+    def test_container_packages_canonical_audit_without_fastapi_package_side_effects(self) -> None:
+        root = Path(__file__).resolve().parents[3]
+        dockerfile = (root / "mcp" / "eisenhower_adapter" / "Dockerfile").read_text()
+        self.assertIn("backend-ai/app/audit.py /app/backend-ai/app/audit.py", dockerfile)
+        self.assertIn("mcp/eisenhower_adapter/audit_runtime/__init__.py", dockerfile)
+        self.assertNotIn("COPY backend-ai/app/__init__.py", dockerfile)
+
     def test_environment_configuration_fails_closed_without_both_upstreams(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaisesRegex(RuntimeError, "TASK_API_BASE_URL.*AI_API_BASE_URL"):
@@ -72,7 +79,8 @@ class ServerContractTest(unittest.TestCase):
         self.assertNotIn("FastMCP", source)
         self.assertIn("def main()", source)
         self.assertIn('eisenhower-mcp = "eisenhower_mcp.server:main"', project)
-        self.assertIn('dependencies = ["mcp==2.0.0"]', project)
+        self.assertIn('"mcp==2.0.0"', project)
+        self.assertIn('"PyJWT[crypto]>=2.10,<3"', project)
 
     def test_registers_exactly_the_bounded_read_and_write_tools(self) -> None:
         source = Path(__file__).parents[1].joinpath("eisenhower_mcp", "server.py").read_text(encoding="utf-8")

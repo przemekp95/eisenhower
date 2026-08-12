@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import unittest
 
 import yaml
@@ -9,6 +10,11 @@ COMPOSE_PATH = ROOT / "deploy" / "local" / "compose.yaml"
 AMD_COMPOSE_PATH = ROOT / "deploy" / "local" / "compose.amd.yaml"
 ENV_PATH = ROOT / "deploy" / "local" / ".env.example"
 GATEWAY_CONFIG_PATH = ROOT / "deploy" / "local" / "calendar-gateway.conf.template"
+ACCESS_GATEWAY_CONFIG_PATH = ROOT / "deploy" / "local" / "access-gateway.conf.template"
+KEYCLOAK_REALM_PATH = ROOT / "deploy" / "local" / "identity" / "eisenhower-realm.json"
+KEYCLOAK_E2E_REALM_PATH = (
+  ROOT / "deploy" / "local" / "identity" / "e2e" / "eisenhower-e2e-realm.json"
+)
 
 
 class LocalProductionContractTest(unittest.TestCase):
@@ -27,10 +33,10 @@ class LocalProductionContractTest(unittest.TestCase):
       set(self.services) | set(self.amd_services),
       {
         "api-service", "mongodb", "ai-service", "rag-worker", "qdrant", "n8n",
-        "calendar-gateway", "audit-volume-init", "inference",
+        "calendar-gateway", "audit-volume-init", "identity-db", "identity-service",
+        "mcp-service", "access-gateway", "inference",
       },
     )
-    self.assertNotIn("mcp", self.services)
     self.assertNotIn("outbox-worker", self.services)
 
   def test_cross_service_urls_are_configurable_with_same_host_defaults(self):
@@ -57,7 +63,7 @@ class LocalProductionContractTest(unittest.TestCase):
   def test_every_host_port_defaults_to_loopback_and_can_bind_a_private_address(self):
     for name, service in (self.services | self.amd_services).items():
       for published_port in service.get("ports", []):
-        if name == "calendar-gateway":
+        if name in {"calendar-gateway", "access-gateway"}:
           self.assertTrue(published_port.startswith("127.0.0.1:"), name)
           self.assertNotIn("BIND_ADDRESS", published_port, name)
           continue
@@ -73,6 +79,10 @@ class LocalProductionContractTest(unittest.TestCase):
       "qdrant": "QDRANT_IMAGE",
       "n8n": "N8N_IMAGE",
       "calendar-gateway": "CALENDAR_GATEWAY_IMAGE",
+      "identity-db": "IDENTITY_DB_IMAGE",
+      "identity-service": "KEYCLOAK_IMAGE",
+      "mcp-service": "MCP_IMAGE",
+      "access-gateway": "ACCESS_GATEWAY_IMAGE",
       "audit-volume-init": "VOLUME_INIT_IMAGE",
       "inference": "AMD_INFERENCE_IMAGE",
     }
@@ -96,6 +106,21 @@ class LocalProductionContractTest(unittest.TestCase):
       self.assertIn("AUDIT_HMAC_KEY=${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY is required}", environment)
 
     ai_environment = self.services["ai-service"]["environment"]
+    self.assertEqual(self.services["ai-service"]["group_add"], ["1001"])
+    self.assertEqual(
+      self.services["audit-volume-init"]["command"],
+      [
+        "sh",
+        "-c",
+        "chown 1001:1001 /audit && chmod 0770 /audit && "
+        "find /audit -maxdepth 1 -type f -name 'audit.sqlite3*' "
+        "-exec chown 1000:1001 {} + -exec chmod 0600 {} +",
+      ],
+    )
+    self.assertIn(
+      "INTERNAL_ALLOWED_TENANTS=${INTERNAL_ALLOWED_TENANTS:?INTERNAL_ALLOWED_TENANTS is required}",
+      ai_environment,
+    )
     self.assertIn("LOCAL_MODEL_REQUIRE_EVALUATION=true", ai_environment)
     self.assertIn(
       "LOCAL_MODEL_APPROVED_EVALUATION_SHA256=${LOCAL_MODEL_APPROVED_EVALUATION_SHA256:?approved evaluation digest is required}",
@@ -174,7 +199,183 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn("API_IMAGE=", env_text)
     self.assertIn("AI_IMAGE=", env_text)
     self.assertIn("EISENHOWER_API_TOKEN=", env_text)
+    self.assertIn("AUTH_MODE=oidc", env_text)
+    self.assertIn("OIDC_ISSUER=https://identity.example.invalid/realms/eisenhower", env_text)
+    self.assertIn("OIDC_AUDIENCE=eisenhower-api", env_text)
+    self.assertIn(
+      "OIDC_JWKS_URL=https://identity.example.invalid/realms/eisenhower/protocol/openid-connect/certs",
+      env_text,
+    )
     self.assertNotIn("change-me", env_text.lower())
+
+  def test_keycloak_realm_issues_the_exact_multi_user_api_claim_contract(self):
+    realm = json.loads(KEYCLOAK_REALM_PATH.read_text())
+    self.assertEqual(realm["realm"], "eisenhower")
+    self.assertTrue(realm["enabled"])
+    self.assertFalse(realm["registrationAllowed"])
+
+    clients = {item["clientId"]: item for item in realm["clients"]}
+    api = clients["eisenhower-api"]
+    self.assertTrue(api["bearerOnly"])
+    self.assertFalse(api["publicClient"])
+    self.assertFalse(api["standardFlowEnabled"])
+    self.assertFalse(api["directAccessGrantsEnabled"])
+    web = clients["eisenhower-web"]
+    self.assertTrue(web["publicClient"])
+    self.assertTrue(web["standardFlowEnabled"])
+    self.assertFalse(web["directAccessGrantsEnabled"])
+    self.assertEqual(web["attributes"]["pkce.code.challenge.method"], "S256")
+    self.assertEqual(web["redirectUris"], ["${EISENHOWER_OIDC_REDIRECT_URI}"])
+    self.assertEqual(web["webOrigins"], ["${EISENHOWER_OIDC_WEB_ORIGIN}"])
+
+    claims_scope = next(
+      item for item in realm["clientScopes"] if item["name"] == "eisenhower-claims"
+    )
+    mappers = {mapper["name"]: mapper for mapper in claims_scope["protocolMappers"]}
+    self.assertEqual(
+      set(mappers),
+      {"subject", "tenant-id", "project-ids", "realm-roles"},
+    )
+    self.assertEqual(mappers["subject"]["protocolMapper"], "oidc-sub-mapper")
+    self.assertEqual(mappers["tenant-id"]["config"]["claim.name"], "tenant_id")
+    self.assertEqual(mappers["project-ids"]["config"]["claim.name"], "project_ids")
+    self.assertEqual(mappers["project-ids"]["config"]["multivalued"], "true")
+    self.assertEqual(mappers["realm-roles"]["config"]["claim.name"], "roles")
+    self.assertEqual(mappers["realm-roles"]["config"]["multivalued"], "true")
+
+    required_scopes = {
+      "eisenhower-claims", "tasks:read", "tasks:write", "calendar:read",
+      "calendar:write", "knowledge:read", "ai:analyze",
+    }
+    self.assertTrue(required_scopes <= set(web["defaultClientScopes"]))
+    self.assertTrue(required_scopes - {"eisenhower-claims"} <= {
+      scope["name"] for scope in realm["clientScopes"]
+      if scope.get("attributes", {}).get("include.in.token.scope") == "true"
+    })
+
+  def test_keycloak_mcp_uses_preregistered_pkce_and_confidential_exchange(self):
+    realm_text = KEYCLOAK_REALM_PATH.read_text()
+    realm = json.loads(realm_text)
+    self.assertNotIn("users", realm)
+    self.assertTrue(all(not client["directAccessGrantsEnabled"] for client in realm["clients"]))
+    clients = {item["clientId"]: item for item in realm["clients"]}
+    mcp = clients["eisenhower-mcp-client"]
+    self.assertTrue(mcp["publicClient"])
+    self.assertEqual(mcp["attributes"]["pkce.code.challenge.method"], "S256")
+    self.assertEqual(mcp["redirectUris"], ["${EISENHOWER_MCP_REDIRECT_URI}"])
+    self.assertIn("mcp:tools", mcp["defaultClientScopes"])
+    exchange = clients["eisenhower-mcp-exchange"]
+    self.assertFalse(exchange["publicClient"])
+    self.assertEqual(exchange["clientAuthenticatorType"], "client-secret")
+    self.assertEqual(exchange["secret"], "${EISENHOWER_MCP_CLIENT_SECRET}")
+    self.assertEqual(exchange["attributes"]["standard.token.exchange.enabled"], "true")
+    self.assertIn("api-target", exchange["defaultClientScopes"])
+    self.assertNotIn("mcp:tools", exchange["defaultClientScopes"])
+
+    scopes = {item["name"]: item for item in realm["clientScopes"]}
+    mcp_mappers = {
+      item["name"]: item for item in scopes["mcp:tools"]["protocolMappers"]
+    }
+    self.assertEqual(
+      mcp_mappers["mcp-resource-audience"]["config"]["included.custom.audience"],
+      "${OIDC_MCP_RESOURCE_URL}",
+    )
+    self.assertEqual(
+      mcp_mappers["mcp-exchange-audience"]["config"]["included.client.audience"],
+      "eisenhower-mcp-exchange",
+    )
+    api_mapper = scopes["api-target"]["protocolMappers"][0]
+    self.assertEqual(api_mapper["config"]["included.client.audience"], "eisenhower-api")
+    self.assertNotIn("clientPolicies", realm)
+
+  def test_keycloak_e2e_subjects_are_stable_separate_and_have_no_checked_in_secret(self):
+    realm_text = KEYCLOAK_E2E_REALM_PATH.read_text()
+    realm = json.loads(realm_text)
+    self.assertEqual(realm["realm"], "eisenhower-e2e")
+    users = {user["username"]: user for user in realm["users"]}
+    self.assertEqual(set(users), {"e2e-user-a", "e2e-user-b"})
+    self.assertNotEqual(users["e2e-user-a"]["id"], users["e2e-user-b"]["id"])
+    self.assertEqual(users["e2e-user-a"]["attributes"]["tenant_id"], ["local-e2e"])
+    self.assertEqual(users["e2e-user-b"]["attributes"]["tenant_id"], ["local-e2e"])
+    self.assertEqual(users["e2e-user-a"]["attributes"]["project_ids"], ["project-a"])
+    self.assertEqual(users["e2e-user-b"]["attributes"]["project_ids"], ["project-b"])
+    for username, variable in (
+      ("e2e-user-a", "EISENHOWER_E2E_USER_A_PASSWORD"),
+      ("e2e-user-b", "EISENHOWER_E2E_USER_B_PASSWORD"),
+    ):
+      self.assertEqual(users[username]["realmRoles"], ["user"])
+      self.assertEqual(users[username]["credentials"], [{
+        "type": "password", "value": "${" + variable + "}", "temporary": False,
+      }])
+    clients = {item["clientId"]: item for item in realm["clients"]}
+    api = clients["eisenhower-api"]
+    self.assertTrue(api["bearerOnly"])
+    client = clients["eisenhower-e2e"]
+    self.assertTrue(client["directAccessGrantsEnabled"])
+    self.assertTrue({
+      "tasks:read", "tasks:write", "calendar:read", "calendar:write",
+      "knowledge:read", "ai:analyze",
+    } <= set(client["defaultClientScopes"]))
+    mcp = clients["eisenhower-e2e-mcp"]
+    self.assertTrue(mcp["directAccessGrantsEnabled"])
+    self.assertIn("mcp:tools", mcp["defaultClientScopes"])
+    exchange = clients["eisenhower-e2e-mcp-exchange"]
+    self.assertEqual(exchange["secret"], "${EISENHOWER_MCP_CLIENT_SECRET}")
+    self.assertEqual(exchange["attributes"]["standard.token.exchange.enabled"], "true")
+    self.assertIn("api-target", exchange["defaultClientScopes"])
+    self.assertNotIn("clientSecret", realm_text)
+
+  def test_oidc_and_remote_mcp_are_fail_closed_in_the_production_topology(self):
+    for name in ("api-service", "ai-service"):
+      environment = self.services[name]["environment"]
+      self.assertIn("AUTH_MODE=oidc", environment)
+      self.assertNotIn("AUTH_MODE=${AUTH_MODE:-static}", environment)
+      self.assertTrue(any(item.startswith("OIDC_ISSUER=${OIDC_ISSUER:?") for item in environment))
+      self.assertTrue(any(item.startswith("OIDC_AUDIENCE=${OIDC_AUDIENCE:?") for item in environment))
+
+    identity = self.services["identity-service"]
+    self.assertEqual(identity["image"], "${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.7.0}")
+    self.assertNotIn("ports", identity)
+    self.assertEqual(
+      identity["volumes"],
+      ["./identity/eisenhower-realm.json:/opt/keycloak/data/import/eisenhower-realm.json:ro"],
+    )
+    self.assertNotIn("e2e", str(identity))
+    self.assertIn("JAVA_OPTS_KC_HEAP=-XX:MaxRAMPercentage=65", identity["environment"])
+
+    mcp = self.services["mcp-service"]
+    self.assertNotIn("ports", mcp)
+    self.assertIn("MCP_TRANSPORT=streamable-http", mcp["environment"])
+    self.assertIn("MCP_BEHIND_TRUSTED_PROXY=true", mcp["environment"])
+    self.assertIn(
+      "MCP_OIDC_CLIENT_SECRET=${EISENHOWER_MCP_CLIENT_SECRET:?EISENHOWER_MCP_CLIENT_SECRET is required}",
+      mcp["environment"],
+    )
+    self.assertFalse(any(item.startswith("EISENHOWER_API_TOKEN=") for item in mcp["environment"]))
+
+  def test_access_gateway_is_the_only_remote_identity_and_mcp_ingress(self):
+    gateway = self.services["access-gateway"]
+    self.assertEqual(gateway["ports"], ["127.0.0.1:${ACCESS_GATEWAY_BIND_PORT:-8790}:8080"])
+    self.assertIn(
+      "./access-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro",
+      gateway["volumes"],
+    )
+    config = ACCESS_GATEWAY_CONFIG_PATH.read_text()
+    self.assertIn("map_hash_bucket_size 128;", config)
+    self.assertIn("resolver 127.0.0.11 valid=10s ipv6=off;", config)
+    for upstream in ("identity", "mcp", "api", "ai"):
+      self.assertIn(f"set ${upstream}_upstream ${{{upstream.upper()}_UPSTREAM}};", config)
+    self.assertIn("limit_req_zone", config)
+    self.assertIn("client_max_body_size", config)
+    self.assertIn("if ($host != \"${ACCESS_GATEWAY_HOST}\")", config)
+    self.assertIn("if ($origin_allowed = 0)", config)
+    self.assertIn("location /identity/", config)
+    self.assertIn("location = /mcp", config)
+    self.assertIn("location = /.well-known/oauth-protected-resource/mcp", config)
+    self.assertIn("location /api/", config)
+    self.assertIn("location /ai/", config)
+    self.assertIn("access_log off;", config)
+    self.assertNotIn("$http_authorization", config)
 
 
 if __name__ == "__main__":

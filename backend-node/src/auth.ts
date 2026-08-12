@@ -97,10 +97,12 @@ export interface OidcVerifierConfig {
   jwksUrl: string;
 }
 
+export type OidcTokenVerifier = (token: string) => Promise<AuthPrincipal>;
+
 export function createOidcTokenVerifier(
   config: OidcVerifierConfig,
   keyResolver?: JWTVerifyGetKey,
-): (token: string) => Promise<AuthPrincipal> {
+): OidcTokenVerifier {
   const issuer = new URL(config.issuer);
   const jwks = new URL(config.jwksUrl);
   if (issuer.protocol !== 'https:' || jwks.protocol !== 'https:') {
@@ -154,8 +156,23 @@ export function requireScope(scope: string, onReject?: SecurityRejectionHandler)
   };
 }
 
+export function requireTaskScope(onReject?: SecurityRejectionHandler) {
+  const requireReadScope = requireScope('tasks:read', onReject);
+  const requireWriteScope = requireScope('tasks:write', onReject);
+  return (request: Request, response: Response, next: NextFunction) => {
+    if (request.method === 'OPTIONS') {
+      next();
+      return;
+    }
+    const authorize = request.method === 'GET' || request.method === 'HEAD'
+      ? requireReadScope
+      : requireWriteScope;
+    authorize(request, response, next);
+  };
+}
+
 export function requireOidcToken(
-  verifier: (token: string) => Promise<AuthPrincipal>,
+  verifier: OidcTokenVerifier,
   onReject?: SecurityRejectionHandler,
 ) {
   return async (request: Request, response: Response, next: NextFunction) => {
