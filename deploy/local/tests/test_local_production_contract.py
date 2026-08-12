@@ -138,6 +138,7 @@ class LocalProductionContractTest(unittest.TestCase):
     environment = self.services["knowledge-service"]["environment"]
     self.assertIn("PROMPT_VERSION=${PROMPT_VERSION:-1.2.0}", environment)
     self.assertIn("KNOWLEDGE_PROMPT_VERSION=${KNOWLEDGE_PROMPT_VERSION:-1.0.0}", environment)
+    self.assertEqual(self.services["knowledge-service"]["healthcheck"]["start_period"], "600s")
 
   def test_local_deploy_script_enforces_clean_exact_sha_and_records_rollback(self):
     script = DEPLOY_SCRIPT_PATH.read_text()
