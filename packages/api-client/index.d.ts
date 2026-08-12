@@ -49,6 +49,22 @@ export interface TaskInputDto {
   important: boolean;
 }
 
+export interface CalendarStatusDto {
+  status: 'disconnected' | 'connected' | 'pending';
+  connection: null | { id: string; provider: 'google'; calendarId: string };
+  syncState?: Record<string, unknown> | null;
+  openConflicts?: number;
+  pendingOutbox?: number;
+}
+
+export interface CalendarConflictDto {
+  _id: string;
+  taskId: string;
+  providerSnapshot: { title: string; dueAt: string; timeZone: string };
+  status: 'open' | 'resolved_local' | 'resolved_provider';
+  revision: number;
+}
+
 export interface QuadrantDefinition {
   readonly value: 0 | 1 | 2 | 3;
   readonly key: 'do' | 'delegate' | 'schedule' | 'delete';
@@ -410,6 +426,12 @@ export const AI_API_PATHS: {
   readonly clearTrainingData: '/training-data';
 };
 
+export const CALENDAR_API_PATHS: {
+  readonly status: '/calendar/status';
+  readonly syncRequests: '/calendar/sync-requests';
+  readonly conflicts: '/calendar/conflicts';
+};
+
 export interface TaskApiClient {
   paths: typeof TASK_API_PATHS;
   listTasks(lifecycle?: TaskLifecycleFilter): Promise<TaskDto[]>;
@@ -437,6 +459,15 @@ export interface TaskApiClient {
     revision?: number
   ): Promise<TaskDto>;
   deleteTask(id: string, revision?: number): Promise<null>;
+  getCalendarStatus(): Promise<CalendarStatusDto>;
+  requestCalendarSync(idempotencyKey: string): Promise<{ eventId: string }>;
+  listCalendarConflicts(): Promise<CalendarConflictDto[]>;
+  resolveCalendarConflict(
+    id: string,
+    strategy: 'eisenhower' | 'google',
+    revision: number,
+    idempotencyKey: string
+  ): Promise<CalendarConflictDto>;
   getHealth(): Promise<HealthResponseDto>;
   getReadiness(): Promise<HealthResponseDto>;
 }

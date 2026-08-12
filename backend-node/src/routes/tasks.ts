@@ -281,6 +281,16 @@ export function createTasksRouter(repository: TaskRepository = new MongooseTaskR
     }
   });
 
+  router.get('/:id', param('id').isMongoId(), async (req: Request, res: Response, next: NextFunction) => {
+    const errors = ensureValidRequest(req);
+    if (errors) return res.status(400).json({ error: 'Validation failed', details: errors });
+    try {
+      const task = await repository.get(taskScope(req), req.params.id);
+      if (!task) return res.status(404).json({ error: 'Task not found' });
+      return res.set('ETag', formatRevisionEtag(task.revision)).json(task);
+    } catch (error) { return next(error); }
+  });
+
   router.get('/', async (req, res, next) => {
     try {
       const lifecycleValue = req.query.lifecycle ?? 'active';

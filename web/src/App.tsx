@@ -1,6 +1,7 @@
 import { FormEvent, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import LanguageSwitcher from './components/LanguageSwitcher';
 import Matrix from './components/Matrix';
+import CalendarSyncPanel from './components/CalendarSyncPanel';
 import { AIToolsComponent } from './components/matrixLazyComponents';
 import {
   clearTokens,
@@ -368,6 +369,9 @@ function AppContent() {
           onUpdateDelegation={handleUpdateDelegation}
           onDelegationStatus={handleDelegationStatus}
         />
+        <div className="mt-4">
+          <CalendarSyncPanel />
+        </div>
       </div>
 
       {showAdministration ? (

@@ -1,5 +1,14 @@
 import mongoose from 'mongoose';
 import { TaskModel } from './models/task';
+import {
+  CalendarBindingModel,
+  CalendarConflictModel,
+  CalendarConnectionModel,
+  CalendarDomainAuditModel,
+  CalendarMutationReceiptModel,
+  CalendarOutboxModel,
+  CalendarSyncStateModel,
+} from './models/calendar';
 
 let activeUri: string | null = null;
 
@@ -14,6 +23,15 @@ export async function connectToDatabase(uri: string) {
 
   await mongoose.connect(uri);
   await TaskModel.init();
+  await Promise.all([
+    CalendarConnectionModel.init(),
+    CalendarBindingModel.init(),
+    CalendarConflictModel.init(),
+    CalendarSyncStateModel.init(),
+    CalendarOutboxModel.init(),
+    CalendarMutationReceiptModel.init(),
+    CalendarDomainAuditModel.init(),
+  ]);
   activeUri = uri;
   return mongoose.connection;
 }

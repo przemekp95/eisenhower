@@ -16,6 +16,8 @@ import apiClient, {
   type TaskLifecycleAction,
   type TaskLifecycleFilter,
   type TaskScheduleDto,
+  type CalendarStatusDto,
+  type CalendarConflictDto,
   type TrainingDataClearResultDto,
   type TrainingStatsDto,
 } from '@eisenhower/api-client';
@@ -80,6 +82,8 @@ export type {
   TaskLifecycleAction,
   TaskLifecycleFilter,
   TaskScheduleDto,
+  CalendarStatusDto,
+  CalendarConflictDto,
 };
 
 export async function getTasks(lifecycle: TaskLifecycleFilter = 'active'): Promise<TaskDto[]> {
@@ -136,6 +140,27 @@ export async function transitionTaskDelegation(
 
 export async function deleteTask(id: string, revision?: number): Promise<void> {
   await getTaskApi().deleteTask(id, revision);
+}
+
+export async function getCalendarStatus(): Promise<CalendarStatusDto> {
+  return getTaskApi().getCalendarStatus();
+}
+
+export async function requestCalendarSync(idempotencyKey: string): Promise<{ eventId: string }> {
+  return getTaskApi().requestCalendarSync(idempotencyKey);
+}
+
+export async function getCalendarConflicts(): Promise<CalendarConflictDto[]> {
+  return getTaskApi().listCalendarConflicts();
+}
+
+export async function resolveCalendarConflict(
+  id: string,
+  strategy: 'eisenhower' | 'google',
+  revision: number,
+  idempotencyKey: string
+): Promise<CalendarConflictDto> {
+  return getTaskApi().resolveCalendarConflict(id, strategy, revision, idempotencyKey);
 }
 
 export async function classifyTask(title: string): Promise<ClassificationResult> {

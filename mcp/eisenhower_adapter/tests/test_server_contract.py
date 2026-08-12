@@ -74,7 +74,7 @@ class ServerContractTest(unittest.TestCase):
         self.assertIn('eisenhower-mcp = "eisenhower_mcp.server:main"', project)
         self.assertIn('dependencies = ["mcp==2.0.0"]', project)
 
-    def test_registers_exactly_six_read_only_tools(self) -> None:
+    def test_registers_exactly_the_bounded_read_and_write_tools(self) -> None:
         source = Path(__file__).parents[1].joinpath("eisenhower_mcp", "server.py").read_text(encoding="utf-8")
         tree = ast.parse(source)
         registered: list[str] = []
@@ -100,13 +100,21 @@ class ServerContractTest(unittest.TestCase):
                     "project_context",
                     "knowledge_search",
                     "priority_explain",
+                    "task_create",
+                    "task_update",
+                    "task_lifecycle",
+                    "task_schedule",
+                    "task_delegation",
+                    "calendar_sync_status",
+                    "calendar_sync_request",
+                    "calendar_conflicts_list",
+                    "calendar_conflict_resolve",
                 ]
             ),
         )
         self.assertNotIn("workflow_execute", source)
-        self.assertNotIn("task_create", source)
-        self.assertNotIn("task_update", source)
         self.assertNotIn("task_delete", source)
+        self.assertNotIn("url_fetch", source)
 
 
 if __name__ == "__main__":

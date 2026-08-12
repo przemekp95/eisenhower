@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useRef, useState } from 'react';
+import { FormEvent, useCallback, useMemo, useRef, useState } from 'react';
 import { DropResult } from '@hello-pangea/dnd';
 import {
   classifyTask,
@@ -74,13 +74,13 @@ export function useMatrixController({
     setNewTask((current) => ({ ...current, [key]: value }));
   };
 
-  const openAiTools = () => {
+  const openAiTools = useCallback(() => {
     setShowAiTools(true);
-  };
+  }, []);
 
-  const closeAiTools = () => {
+  const closeAiTools = useCallback(() => {
     setShowAiTools(false);
-  };
+  }, []);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();

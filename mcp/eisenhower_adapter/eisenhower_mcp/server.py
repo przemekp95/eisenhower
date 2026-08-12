@@ -7,6 +7,7 @@ from typing import Any, Callable, Protocol, TypeVar
 from uuid import uuid4
 
 from mcp.server import MCPServer
+from mcp.types import ToolAnnotations
 
 from .http_client import EisenhowerApiClient
 from .service import EisenhowerMcpService
@@ -118,6 +119,18 @@ service: EisenhowerMcpService | None = None
 audit_recorder: AuditRecorder | None = None
 _audit_lock = Lock()
 mcp = MCPServer("Eisenhower Matrix")
+_READ_TOOL = ToolAnnotations(
+    readOnlyHint=True,
+    destructiveHint=False,
+    idempotentHint=True,
+    openWorldHint=False,
+)
+_WRITE_TOOL = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=True,
+    openWorldHint=False,
+)
 
 
 def _service() -> EisenhowerMcpService:
@@ -149,31 +162,31 @@ def _invoke_tool(tool_name: str, operation: Callable[[], ResultT]) -> ResultT:
     return result
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_TOOL)
 def matrix_summary() -> dict[str, Any]:
     """Summarize task counts in the four canonical Eisenhower quadrants."""
     return _invoke_tool("matrix_summary", lambda: _service().matrix_summary())
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_TOOL)
 def tasks_search(query: str = "", limit: int = 20) -> dict[str, Any]:
     """Search existing tasks by title or description; never changes tasks."""
     return _invoke_tool("tasks_search", lambda: _service().tasks_search(query, limit))
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_TOOL)
 def task_get(task_id: str) -> dict[str, Any]:
     """Return one existing task by identifier using the public tasks API."""
     return _invoke_tool("task_get", lambda: _service().task_get(task_id))
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_TOOL)
 def project_context(project_id: str, limit: int = 100) -> dict[str, Any]:
     """Return task context associated with a project identifier."""
     return _invoke_tool("project_context", lambda: _service().project_context(project_id, limit))
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_TOOL)
 def knowledge_search(query: str, project_id: str | None = None, limit: int = 5) -> dict[str, Any]:
     """Search indexed project knowledge and preserve source citations."""
     return _invoke_tool(
@@ -182,10 +195,155 @@ def knowledge_search(query: str, project_id: str | None = None, limit: int = 5) 
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_TOOL)
 def priority_explain(task_id: str) -> dict[str, Any]:
     """Explain a task's priority using deterministic Eisenhower rules."""
     return _invoke_tool("priority_explain", lambda: _service().priority_explain(task_id))
+
+
+@mcp.tool(annotations=_WRITE_TOOL)
+def task_create(
+    title: str,
+    idempotency_key: str,
+    description: str = "",
+    urgent: bool = False,
+    important: bool = False,
+) -> dict[str, Any]:
+    """Create one task through the fixed task API; requires a retry-safe operation key."""
+    return _invoke_tool(
+        "task_create",
+        lambda: _service().task_create(title, idempotency_key, description, urgent, important),
+    )
+
+
+@mcp.tool(annotations=_WRITE_TOOL)
+def task_update(
+    task_id: str,
+    expected_revision: int,
+    idempotency_key: str,
+    title: str | None = None,
+    description: str | None = None,
+    urgent: bool | None = None,
+    important: bool | None = None,
+) -> dict[str, Any]:
+    """Update selected task fields with optimistic concurrency; never deletes a task."""
+    return _invoke_tool(
+        "task_update",
+        lambda: _service().task_update(
+            task_id,
+            expected_revision,
+            idempotency_key,
+            title,
+            description,
+            urgent,
+            important,
+        ),
+    )
+
+
+@mcp.tool(annotations=_WRITE_TOOL)
+def task_lifecycle(
+    task_id: str,
+    expected_revision: int,
+    action: str,
+    idempotency_key: str,
+) -> dict[str, Any]:
+    """Apply one reversible lifecycle action with an expected task revision."""
+    return _invoke_tool(
+        "task_lifecycle",
+        lambda: _service().task_lifecycle(task_id, expected_revision, action, idempotency_key),
+    )
+
+
+@mcp.tool(annotations=_WRITE_TOOL)
+def task_schedule(
+    task_id: str,
+    expected_revision: int,
+    idempotency_key: str,
+    due_at: str | None = None,
+    time_zone: str | None = None,
+    remind_at: str | None = None,
+    clear: bool = False,
+) -> dict[str, Any]:
+    """Set or explicitly clear one task schedule with optimistic concurrency."""
+    return _invoke_tool(
+        "task_schedule",
+        lambda: _service().task_schedule(
+            task_id,
+            expected_revision,
+            idempotency_key,
+            due_at,
+            time_zone,
+            remind_at,
+            clear,
+        ),
+    )
+
+
+@mcp.tool(annotations=_WRITE_TOOL)
+def task_delegation(
+    task_id: str,
+    expected_revision: int,
+    idempotency_key: str,
+    assignee_user_id: str | None = None,
+    display_label: str | None = None,
+    handoff_note: str = "",
+    status: str | None = None,
+    clear: bool = False,
+) -> dict[str, Any]:
+    """Assign, transition, or explicitly clear delegation using one fixed mode."""
+    return _invoke_tool(
+        "task_delegation",
+        lambda: _service().task_delegation(
+            task_id,
+            expected_revision,
+            idempotency_key,
+            assignee_user_id,
+            display_label,
+            handoff_note,
+            status,
+            clear,
+        ),
+    )
+
+
+@mcp.tool(annotations=_READ_TOOL)
+def calendar_sync_status() -> dict[str, Any]:
+    """Return calendar sync status once the public HTTP contract is available."""
+    return _invoke_tool("calendar_sync_status", lambda: _service().calendar_sync_status())
+
+
+@mcp.tool(annotations=_WRITE_TOOL)
+def calendar_sync_request(idempotency_key: str) -> dict[str, Any]:
+    """Request calendar synchronization once the public HTTP contract is available."""
+    return _invoke_tool(
+        "calendar_sync_request",
+        lambda: _service().calendar_sync_request(idempotency_key),
+    )
+
+
+@mcp.tool(annotations=_READ_TOOL)
+def calendar_conflicts_list() -> dict[str, Any]:
+    """List open calendar conflicts visible to the authenticated owner."""
+    return _invoke_tool(
+        "calendar_conflicts_list", lambda: _service().calendar_conflicts_list()
+    )
+
+
+@mcp.tool(annotations=_WRITE_TOOL)
+def calendar_conflict_resolve(
+    conflict_id: str,
+    expected_revision: int,
+    strategy: str,
+    idempotency_key: str,
+) -> dict[str, Any]:
+    """Resolve one calendar conflict using a fixed strategy and expected revision."""
+    return _invoke_tool(
+        "calendar_conflict_resolve",
+        lambda: _service().calendar_conflict_resolve(
+            conflict_id, expected_revision, strategy, idempotency_key
+        ),
+    )
 
 
 def main() -> None:

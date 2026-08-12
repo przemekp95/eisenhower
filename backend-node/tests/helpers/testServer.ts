@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import mongoose from 'mongoose';
-import { MongoMemoryServer } from 'mongodb-memory-server';
+import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { createApp, type CreateAppOptions } from '../../src/app';
 import { connectToDatabase, disconnectFromDatabase } from '../../src/db';
 
@@ -63,7 +63,7 @@ export async function startTestServer(options: StartTestServerOptions = {}): Pro
   const host = options.host ?? '127.0.0.1';
   const port = options.port ?? 0;
   const databaseName = options.databaseName ?? 'eisenhower-test';
-  let mongo: MongoMemoryServer | null = null;
+  let mongo: MongoMemoryReplSet | null = null;
   let server: Server | null = null;
   let closed = false;
 
@@ -95,12 +95,10 @@ export async function startTestServer(options: StartTestServerOptions = {}): Pro
 
   let address: AddressInfo;
   try {
-    mongo = await MongoMemoryServer.create({
-      instance: {
-        dbName: databaseName,
-      },
+    mongo = await MongoMemoryReplSet.create({
+      replSet: { count: 1 },
     });
-    await connectToDatabase(mongo.getUri());
+    await connectToDatabase(mongo.getUri(databaseName));
     const app = createApp({
       aiHealthChecker: async () => 'healthy',
       ...options.appOptions,

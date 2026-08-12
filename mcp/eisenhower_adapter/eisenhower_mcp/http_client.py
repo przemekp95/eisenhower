@@ -93,6 +93,148 @@ class EisenhowerApiClient:
             raise ApiClientError("The knowledge API returned an invalid response")
         return payload
 
+    def create_task(self, payload: dict[str, Any], idempotency_key: str) -> dict[str, Any]:
+        return self._task_command("POST", "tasks", payload, idempotency_key=idempotency_key)
+
+    def update_task(
+        self,
+        task_id: str,
+        expected_revision: int,
+        patch: dict[str, Any],
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        return self._revision_task_command(task_id, expected_revision, "", patch, idempotency_key)
+
+    def transition_task_lifecycle(
+        self, task_id: str, expected_revision: int, action: str, idempotency_key: str
+    ) -> dict[str, Any]:
+        return self._revision_task_command(
+            task_id, expected_revision, "lifecycle", {"action": action}, idempotency_key
+        )
+
+    def update_task_schedule(
+        self,
+        task_id: str,
+        expected_revision: int,
+        schedule: dict[str, Any] | None,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        return self._revision_task_command(
+            task_id, expected_revision, "schedule", {"schedule": schedule}, idempotency_key
+        )
+
+    def update_task_delegation(
+        self,
+        task_id: str,
+        expected_revision: int,
+        delegation: dict[str, Any] | None,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        return self._revision_task_command(
+            task_id,
+            expected_revision,
+            "delegation",
+            {"delegation": delegation},
+            idempotency_key,
+        )
+
+    def transition_task_delegation(
+        self, task_id: str, expected_revision: int, status: str, idempotency_key: str
+    ) -> dict[str, Any]:
+        return self._revision_task_command(
+            task_id,
+            expected_revision,
+            "delegation/status",
+            {"status": status},
+            idempotency_key,
+        )
+
+    def calendar_sync_status(self) -> dict[str, Any]:
+        payload = self._request(self.task_base_url, "GET", "calendar/status")
+        if not isinstance(payload, dict) or not isinstance(payload.get("status"), str):
+            raise ApiClientError("The calendar API returned an invalid response")
+        return payload
+
+    def request_calendar_sync(self, idempotency_key: str) -> dict[str, Any]:
+        payload, _headers = self._request_with_headers(
+            self.task_base_url,
+            "POST",
+            "calendar/sync-requests",
+            extra_headers={"Idempotency-Key": idempotency_key},
+        )
+        if not isinstance(payload, dict):
+            raise ApiClientError("The calendar API returned an invalid response")
+        return payload
+
+    def list_calendar_conflicts(self) -> list[dict[str, Any]]:
+        payload = self._request(self.task_base_url, "GET", "calendar/conflicts")
+        if not isinstance(payload, list) or not all(isinstance(item, dict) for item in payload):
+            raise ApiClientError("The calendar API returned an invalid response")
+        return payload
+
+    def resolve_calendar_conflict(
+        self,
+        conflict_id: str,
+        expected_revision: int,
+        strategy: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        encoded_id = quote(conflict_id, safe="")
+        payload, _headers = self._request_with_headers(
+            self.task_base_url,
+            "POST",
+            f"calendar/conflicts/{encoded_id}/resolve",
+            {"strategy": strategy},
+            extra_headers={
+                "If-Match": f'"{expected_revision}"',
+                "Idempotency-Key": idempotency_key,
+            },
+        )
+        if not isinstance(payload, dict):
+            raise ApiClientError("The calendar API returned an invalid response")
+        return payload
+
+    def _revision_task_command(
+        self,
+        task_id: str,
+        expected_revision: int,
+        suffix: str,
+        body: dict[str, Any],
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        encoded_id = quote(task_id, safe="")
+        path = f"tasks/{encoded_id}" + (f"/{suffix}" if suffix else "")
+        return self._task_command(
+            "PUT",
+            path,
+            body,
+            expected_revision=expected_revision,
+            idempotency_key=idempotency_key,
+        )
+
+    def _task_command(
+        self,
+        method: str,
+        path: str,
+        body: dict[str, Any],
+        *,
+        idempotency_key: str,
+        expected_revision: int | None = None,
+    ) -> dict[str, Any]:
+        headers = {"Idempotency-Key": idempotency_key}
+        if expected_revision is not None:
+            headers["If-Match"] = f'"{expected_revision}"'
+        payload, _headers = self._request_with_headers(
+            self.task_base_url,
+            method,
+            path,
+            body,
+            extra_headers=headers,
+        )
+        if not isinstance(payload, dict):
+            raise ApiClientError("The tasks API returned an invalid response")
+        return payload
+
     def _request(
         self,
         base_url: str,
@@ -109,6 +251,8 @@ class EisenhowerApiClient:
         method: str,
         path: str,
         body: dict[str, Any] | None = None,
+        *,
+        extra_headers: dict[str, str] | None = None,
     ) -> tuple[Any, Any]:
         url = urljoin(base_url + "/", path.lstrip("/"))
         data = None if body is None else json.dumps(body, separators=(",", ":")).encode("utf-8")
@@ -117,6 +261,8 @@ class EisenhowerApiClient:
             headers["Content-Type"] = "application/json"
         if self._bearer_token:
             headers["Authorization"] = f"Bearer {self._bearer_token}"
+        if extra_headers:
+            headers.update(extra_headers)
 
         request = Request(url, data=data, headers=headers, method=method)
         try:

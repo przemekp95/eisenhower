@@ -132,6 +132,34 @@ test('sends an optional idempotency key for safe task creation retries', async (
   assert.equal(calls[1][1].headers['Idempotency-Key'], undefined);
 });
 
+test('uses bounded calendar status, sync and conflict endpoints with safety headers', async () => {
+  const calls = [];
+  const responses = [
+    jsonResponse({ status: 'connected', connection: { id: 'connection-1', provider: 'google', calendarId: 'primary' }, syncState: null, openConflicts: 1, pendingOutbox: 0 }),
+    jsonResponse({ eventId: 'sync-1' }, { status: 202 }),
+    jsonResponse([{ _id: 'conflict-1', taskId: 'task-1', providerSnapshot: { title: 'Google title', dueAt: '2026-08-20T12:00:00.000Z', timeZone: 'Europe/Warsaw' }, status: 'open', revision: 2 }]),
+    jsonResponse({ _id: 'conflict-1', status: 'resolved_local', revision: 3 }),
+  ];
+  const api = createTaskApi('https://api.example.com', async (...args) => {
+    calls.push(args);
+    return responses.shift();
+  });
+
+  await api.getCalendarStatus();
+  await api.requestCalendarSync('sync-key-1');
+  await api.listCalendarConflicts();
+  await api.resolveCalendarConflict('conflict/1', 'eisenhower', 2, 'resolve-key-1');
+
+  assert.equal(calls[0][0], 'https://api.example.com/calendar/status');
+  assert.equal(calls[1][0], 'https://api.example.com/calendar/sync-requests');
+  assert.equal(calls[1][1].headers['Idempotency-Key'], 'sync-key-1');
+  assert.equal(calls[2][0], 'https://api.example.com/calendar/conflicts');
+  assert.equal(calls[3][0], 'https://api.example.com/calendar/conflicts/conflict%2F1/resolve');
+  assert.equal(calls[3][1].headers['If-Match'], '"2"');
+  assert.equal(calls[3][1].headers['Idempotency-Key'], 'resolve-key-1');
+  assert.deepEqual(JSON.parse(calls[3][1].body), { strategy: 'eisenhower' });
+});
+
 test('filters task lists by lifecycle and sends conflict-safe lifecycle transitions', async () => {
   const calls = [];
   const api = createTaskApi('https://api.example.com', async (...args) => {

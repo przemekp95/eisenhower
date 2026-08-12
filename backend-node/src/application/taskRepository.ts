@@ -136,6 +136,7 @@ export interface CreateTaskPersistenceResult {
 }
 
 export interface TaskRepository {
+  get(scope: TaskScope, id: string): Promise<StoredTask | null>;
   listPage(
     scope: TaskScope,
     limit: number,

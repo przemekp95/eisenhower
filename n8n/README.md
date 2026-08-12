@@ -1,14 +1,56 @@
-# n8n asynchronous ingestion scaffold
+# n8n asynchronous integration workflows
 
 These inactive importable workflows keep n8n out of every synchronous analysis request. n8n is an orchestration boundary for source polling/webhooks, normalization handoff, reindexing, tombstones, evaluation launches, retry, and alerting. FastAPI remains the owner of domain validation, ACL enforcement, deterministic chunk production, checksums, vector writes, and online retrieval/generation.
+
+Calendar automation follows the same boundary: Node owns task and calendar rules, bindings, conflicts, sync tokens, idempotency and the transactional outbox. n8n owns the Google OAuth credential and performs only the bounded provider calls described by claimed commands. A Google push notification is a signal to pull changes; it is never trusted as event data.
 
 ## Workflows
 
 - `workflows/async-rag-ingestion.json` accepts only `upsert`, `tombstone`, `reindex_project`, and `start_rag_evaluation` events. It authenticates the webhook with n8n Header Auth, asks the internal API to verify the HMAC signature and replay window, then dispatches one named asynchronous job with bounded retry.
 - `workflows/rag-ingestion-error.json` emits a sanitized alert. It deliberately omits raw input, document content, secrets, and full error objects.
 - `contracts/ingestion-event.schema.json` fixes the versioned envelope, ACL metadata, checksums, and embedding/chunking versions. It prevents a source connector from silently changing the indexing contract.
+- `workflows/calendar-outbound.json` claims one canonical `event_create`, `event_update` or `event_delete` dispatch from the Node outbox, performs the corresponding Google Calendar call with bounded retry and acknowledges `eventId`, delivery state, connection, provider event ID and ETag back to Node.
+- `workflows/calendar-inbound.json` acknowledges the webhook immediately, asks Node to validate and atomically claim the watch signal, then pulls changes using the returned `syncToken`/`pageToken`. It translates only bound timed events into camelCase `event_changed`, `event_deleted` and `sync_checkpoint` commands. `410 Gone` requests a controlled full resync instead of guessing state.
+- `workflows/calendar-reconciliation.json` activates the configured connection, claims reconciliation jobs, performs the repair pull and renews the Google watch channel. It intentionally excludes recurrence, all-day events, attendees, Meet and invitation delivery.
 
 There is no generic workflow executor and no n8n MCP server in this scaffold. If n8n MCP is added later, allowlist only individually reviewed workflows such as `sync_calendar`, `reindex_project`, or `start_rag_evaluation`; never expose arbitrary workflow selection, arbitrary URLs, code, commands, or credential access.
+
+## Google Calendar activation
+
+The three Calendar workflows are deliberately imported inactive. Before activation:
+
+1. Create a dedicated Google OAuth credential in the private n8n instance with the minimum Calendar event scope and replace `REPLACE_GOOGLE_CALENDAR_CREDENTIAL_ID` during the controlled import. No client secret or refresh token belongs in Git or workflow JSON.
+2. Set `EISENHOWER_NODE_INTERNAL_API_URL`, `CALENDAR_INTERNAL_HMAC_KEY`, `CALENDAR_TENANT_ID`, `CALENDAR_OWNER_ID`, `GOOGLE_CALENDAR_ID` and `GOOGLE_CALENDAR_WEBHOOK_URL`. The HMAC key must be the same dedicated value configured in Node and contain at least 32 bytes. The private Node base URL must not have a trailing slash because the exact request path is signed; the Google webhook URL must be HTTPS and expose only the inbound path through the gateway.
+3. Calendar signing uses the Code node's Node.js `crypto` module. Self-hosted n8n must explicitly set `NODE_FUNCTION_ALLOW_BUILTIN=crypto`; do not allow additional built-ins or external modules for these workflows.
+4. Connect one explicit calendar in the application. Eisenhower remains authoritative for task lifecycle/quadrant/schedule. Google edits may update the bound title/time only; concurrent edits create a conflict, Google deletion only unbinds the event, and ordinary Google events do not become tasks automatically.
+5. Import and inspect all workflows, attach the credential, run a test calendar rehearsal, then activate outbound, inbound and reconciliation together. Record the n8n workflow IDs and credential owner in the private operations inventory.
+
+The checked-in JSON proves source and contract shape only. Until a user grants Google OAuth consent and the workflows are imported and activated, live Calendar synchronization is not deployed.
+
+### Calendar internal HTTP signing
+
+Every Calendar request to Node is signed independently. A signing Code node first creates the final
+camelCase body and serializes it exactly once with `JSON.stringify`. The following HTTP Request node sends
+that exact string as raw `application/json`; it must never use n8n's JSON-body mode, which could
+reserialize the object after signing.
+
+The lower-case hexadecimal signature is HMAC-SHA256 over:
+
+```text
+v1 + "\n" + timestamp + "\n" + POST + "\n" + exact_path + "\n" + exact_raw_json
+```
+
+Headers are `X-Eisenhower-Timestamp` (Unix seconds) and `X-Eisenhower-Signature`. The exact signed paths
+are connection activation, outbox claim/acknowledgement, notification validation, sync apply/reset,
+reconciliation claim and watch renewal under `/internal/calendar`. Node enforces the five-minute window
+and constant-time digest comparison. There is no bearer-token fallback for these Calendar endpoints.
+
+The outbound claim contract is `eventId`, `type`, tenant/owner/aggregate fields, `payload`, and a
+`provider` object containing `connectionId`, `calendarId` and, for update/delete, `providerEventId` and
+`providerEtag`. Node must not lease an event that lacks the provider data needed to execute it. Notification
+validation returns the authoritative scope, connection/calendar IDs, stored page/sync tokens and `signalId`;
+the workflow does not infer them from untrusted Google headers. Reconciliation claim returns `jobs` with
+the same authoritative camelCase scope and checkpoint data.
 
 ## Security and idempotency contract
 

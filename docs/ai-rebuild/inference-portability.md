@@ -19,6 +19,11 @@ optional inference node. `/health/ready` reports its bounded circuit state as an
 
 ## Deployment combinations
 
+The runnable local-production topology and its split-host operating contract live in
+`deploy/local/README.md`. Its AMD overlay is opt-in and intentionally has no health/readiness claim until
+the live physical gate below passes. Image tags are pinned and accept digest overrides; rendering the
+Compose files does not pull the ROCm image or prove runtime compatibility.
+
 | Application location | Inference location | Configuration |
 | --- | --- | --- |
 | user computer | same computer | one opt-in NVIDIA or AMD Compose profile; private Compose network |
