@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-12 — TASK-023 milestone: Added a separate claim-cited knowledge-answer API and web surface with two-phase fail-closed Qwen decoding; physical AMD PL/EN answer and unsupported/injection abstention passed 4/4, and full `make verify` passed while the independent human/holdout response gate remains open.
+
 2026-08-12 — TASK-047 milestone: Integrated current `dev`, added the web UI to local Compose with state-bound OIDC S256 PKCE, created exact-SHA OCI-labelled build/render/deploy/smoke/rollback tooling, and closed bounded Qwen injection/capacity/oversize/disconnect recovery gates while preserving the missing human production evaluation as a hard deployment blocker.
 
 2026-08-12 — TASK-014/TASK-015/TASK-023 milestone: Proved the exact-source BGE-M3-to-Qwen chain on physical `gfx1151` with strict PL/EN output, grounded citations, aggregate-only generation shadow and a real inference rollback; retained fail-closed response and human-quality gates during integration with the newer hybrid reranker strategy.
