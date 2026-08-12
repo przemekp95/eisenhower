@@ -1,6 +1,6 @@
 # TASK-013 retrieval review packet
 
-Status: **unapproved candidate — independent human review required**
+Status: **owner-authorized runtime default exception — independent human review still required**
 
 ## Current refrozen packet (v2)
 
@@ -13,8 +13,11 @@ corpus manifest; all 42 decisions remain `PENDING`. The holdout has not been run
 Train-only selection on the local AMD host chose fielded BM25/RRF plus revision-pinned
 `BAAI/bge-reranker-v2-m3` through a loopback-only ROCm/vLLM scoring service. The 192-token,
 20-candidate result passes the proposed non-holdout quality, latency and zero-tolerance gates, but
-does not substitute for independent relevance review. Dense remains the runtime default until the
-human record is complete and the untouched holdout passes.
+does not substitute for independent relevance review. On 2026-08-12 the repository owner explicitly
+authorized this exact hybrid plus reranker configuration as the runtime default before that evidence
+was complete. The implementation must therefore remain fail-closed, retain `dense-v1` only as an
+explicit rollback and keep every `PENDING` decision plus the untouched holdout truthful. This is a
+rollout decision, not an independent relevance attestation or production-deployment proof.
 
 Authoritative technical report: `dense-hybrid-reranker-gpu192-v3-20260812.json`.
 

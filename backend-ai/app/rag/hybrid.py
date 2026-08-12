@@ -5,7 +5,11 @@ from math import isfinite, log
 import re
 from typing import Protocol, Sequence
 
+import httpx
+
+from .adapters import is_private_service_url
 from .canonical import CanonicalDocumentStore, canonical_document_is_visible
+from .errors import RerankerUnavailable
 from .ingestion import DeterministicChunker, build_chunk_records
 from .models import RetrievalHit, RetrievalQuery
 from .ports import Retriever
@@ -20,6 +24,10 @@ _DEFAULT_DENSE_RRF_WEIGHT = 1.0
 _DEFAULT_LEXICAL_RRF_WEIGHT = 1.5
 _MAX_RANKING_WEIGHT = 10.0
 _MAX_RERANKER_CANDIDATES = 20
+_EVALUATED_RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
+_EVALUATED_RERANKER_REVISION = "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e"
+_EVALUATED_RERANKER_MODEL_ID = f"{_EVALUATED_RERANKER_MODEL}@{_EVALUATED_RERANKER_REVISION}"
+_EVALUATED_RERANKER_MAX_TOKENS = 192
 
 
 class HybridRetrievalError(RuntimeError):
@@ -34,16 +42,97 @@ class InvalidCandidateSet(HybridRetrievalError):
   pass
 
 
-class RerankerUnavailable(HybridRetrievalError):
-  pass
-
-
 class Reranker(Protocol):
   def score(
     self,
     query_text: str,
     ranked_candidates: tuple[RetrievalHit, ...],
   ) -> Sequence[float]: ...
+
+
+class PrivateVllmReranker:
+  """Authenticated fail-closed adapter for the evaluated private vLLM score service."""
+
+  model_id = _EVALUATED_RERANKER_MODEL_ID
+  model_name = _EVALUATED_RERANKER_MODEL
+  revision = _EVALUATED_RERANKER_REVISION
+  max_model_len = _EVALUATED_RERANKER_MAX_TOKENS
+
+  def __init__(
+    self,
+    base_url: str,
+    api_key: str,
+    *,
+    allowed_hosts: tuple[str, ...] = (),
+    client: httpx.Client | None = None,
+  ):
+    if not is_private_service_url(base_url, allowed_hosts=allowed_hosts):
+      raise ValueError("Reranker must use a fixed private-network endpoint")
+    if not api_key:
+      raise ValueError("RERANKER_API_KEY is required for hybrid-bge-v1")
+    self.base_url = base_url.rstrip("/")
+    self.api_key = api_key
+    self.client = client or httpx.Client(
+      timeout=httpx.Timeout(connect=2.0, read=30.0, write=5.0, pool=1.0),
+      follow_redirects=False,
+    )
+    self._verify_runtime()
+
+  @property
+  def _headers(self) -> dict[str, str]:
+    return {"Authorization": f"Bearer {self.api_key}"}
+
+  def _verify_runtime(self) -> None:
+    try:
+      response = self.client.get(f"{self.base_url}/v1/models", headers=self._headers)
+      response.raise_for_status()
+      models = response.json()["data"]
+      if len(models) != 1:
+        raise ValueError
+      model = models[0]
+      if model["id"] != self.model_id or int(model["max_model_len"]) != self.max_model_len:
+        raise ValueError
+    except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
+      raise ValueError(
+        "Reranker endpoint does not expose the evaluated model revision and 192-token bound"
+      ) from error
+
+  def score(
+    self,
+    query_text: str,
+    ranked_candidates: tuple[RetrievalHit, ...],
+  ) -> Sequence[float]:
+    if len(ranked_candidates) > _MAX_RERANKER_CANDIDATES:
+      raise RerankerUnavailable("reranker candidate bound exceeded")
+    try:
+      response = self.client.post(
+        f"{self.base_url}/score",
+        headers=self._headers,
+        json={
+          "model": self.model_id,
+          "text_1": query_text,
+          "text_2": [f"{candidate.title}\n{candidate.text}" for candidate in ranked_candidates],
+          "truncate_prompt_tokens": self.max_model_len,
+        },
+      )
+      response.raise_for_status()
+      data = sorted(response.json()["data"], key=lambda item: item["index"])
+      indexes = [item["index"] for item in data]
+      scores = [item["score"] for item in data]
+      if indexes != list(range(len(ranked_candidates))):
+        raise ValueError
+      if any(
+        isinstance(score, bool)
+        or not isinstance(score, (int, float))
+        or not isfinite(float(score))
+        for score in scores
+      ):
+        raise ValueError
+      return [float(score) for score in scores]
+    except httpx.HTTPError as error:
+      raise RerankerUnavailable("reranker request failed") from error
+    except (KeyError, TypeError, ValueError) as error:
+      raise RerankerUnavailable("reranker returned an invalid response") from error
 
 
 class HybridRetrievalCore:
