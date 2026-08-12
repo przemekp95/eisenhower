@@ -18,6 +18,7 @@ services:
     group_add:
       - video
       - render
+      - "110"
     devices:
       - /dev/kfd:/dev/kfd
       - /dev/dri:/dev/dri
@@ -41,17 +42,17 @@ services:
     group_add:
       - video
       - render
+      - "110"
     devices:
       - /dev/kfd:/dev/kfd
       - /dev/dri:/dev/dri
     security_opt:
       - seccomp=unconfined
 
-  # Contract-only until the physical ROCm/model qualification gate passes.
   # Binding defaults to loopback; use only an actual private VPN/LAN address
   # when FastAPI is placed on a different host.
   inference:
-    image: ${AMD_INFERENCE_IMAGE:-vllm/vllm-openai-rocm:v0.20.0}
+    image: ${AMD_INFERENCE_IMAGE:-vllm/vllm-openai-rocm@sha256:3be0d8f3ec3ebcc99203e08d895392a8d749ed8a132f41574a8018cdaf525a22}
     profiles:
       - inference-amd
     ports:
@@ -59,12 +60,29 @@ services:
     command:
       - --model
       - ${INFERENCE_MODEL:?INFERENCE_MODEL is required}
+      - --revision
+      - ${INFERENCE_MODEL_REVISION:?INFERENCE_MODEL_REVISION is required}
+      - --tokenizer
+      - ${INFERENCE_MODEL:?INFERENCE_MODEL is required}
+      - --tokenizer-revision
+      - ${INFERENCE_MODEL_REVISION:?INFERENCE_MODEL_REVISION is required}
+      - --served-model-name
+      - ${INFERENCE_MODEL:?INFERENCE_MODEL is required}
+      - --dtype
+      - bfloat16
+      - --max-model-len
+      - "8192"
+      - --max-num-seqs
+      - "1"
+      - --gpu-memory-utilization
+      - ${INFERENCE_GPU_MEMORY_UTILIZATION:-0.80}
       - --api-key
       - ${INFERENCE_API_KEY:?INFERENCE_API_KEY is required}
       - --disable-log-requests
     ipc: host
     group_add:
       - video
+      - "110"
     devices:
       - /dev/kfd:/dev/kfd
       - /dev/dri:/dev/dri
@@ -72,6 +90,18 @@ services:
       - SYS_PTRACE
     security_opt:
       - seccomp=unconfined
+    volumes:
+      - model_cache:/root/.cache/huggingface
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl -fsS -H 'Authorization: Bearer ${INFERENCE_API_KEY}'
+          http://127.0.0.1:8000/v1/models >/dev/null
+      interval: 30s
+      timeout: 10s
+      start_period: 600s
+      retries: 5
     restart: unless-stopped
     networks:
       - private

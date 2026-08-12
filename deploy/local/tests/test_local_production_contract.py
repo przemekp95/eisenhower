@@ -91,13 +91,18 @@ class LocalProductionContractTest(unittest.TestCase):
       self.assertIn(f"${{{variable}", image, name)
       self.assertNotIn(":latest", image, name)
 
-  def test_amd_inference_is_opt_in_and_has_no_fake_readiness_claim(self):
+  def test_amd_inference_is_opt_in_and_uses_the_pinned_rocm_model_contract(self):
     inference = self.amd_services["inference"]
     self.assertEqual(inference["profiles"], ["inference-amd"])
     self.assertEqual(inference["devices"], ["/dev/kfd:/dev/kfd", "/dev/dri:/dev/dri"])
-    self.assertNotIn("healthcheck", inference)
+    self.assertIn("healthcheck", inference)
     self.assertIn("INFERENCE_MODEL is required", self.amd_compose_text)
+    self.assertIn("INFERENCE_MODEL_REVISION is required", self.amd_compose_text)
     self.assertIn("INFERENCE_API_KEY is required", self.amd_compose_text)
+    self.assertIn("--dtype", inference["command"])
+    self.assertIn("bfloat16", inference["command"])
+    self.assertIn("--max-num-seqs", inference["command"])
+    self.assertIn("model_cache:/root/.cache/huggingface", inference["volumes"])
 
   def test_amd_retrieval_profile_runs_pinned_bge_m3_without_enabling_generation(self):
     ai = self.amd_services["ai-service"]
