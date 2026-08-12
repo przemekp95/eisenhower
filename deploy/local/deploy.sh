@@ -32,7 +32,7 @@ export WEB_IMAGE="local/eisenhower-web:${release_sha}"
 compose() {
   docker compose --env-file "$env_file" \
     -f "$compose_base" -f "$compose_amd" \
-    --profile retrieval-amd --profile inference-amd --profile reranker-amd "$@"
+    --profile retrieval-amd --profile response-amd --profile inference-amd --profile reranker-amd "$@"
 }
 
 verify_image() {
@@ -70,7 +70,7 @@ record_rollback() {
   chmod 600 "$state_dir/rollback.config.env"
   {
     echo "ROLLBACK_RECORDED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    for service in api-service ai-service rag-worker mcp-service web; do
+    for service in api-service ai-service knowledge-service rag-worker mcp-service web; do
       container_id="$(compose ps -q "$service" 2>/dev/null || true)"
       if test -n "$container_id"; then
         image_id="$(docker inspect "$container_id" --format '{{.Image}}')"
@@ -97,6 +97,19 @@ validate_runtime_inputs() {
   }
 }
 
+validate_response_inputs() {
+  test -n "${INFERENCE_API_KEY:-}" || { echo "INFERENCE_API_KEY is required" >&2; exit 1; }
+  test -n "${INFERENCE_MODEL:-}" || { echo "INFERENCE_MODEL is required" >&2; exit 1; }
+  test -n "${RERANKER_API_KEY:-}" || { echo "RERANKER_API_KEY is required" >&2; exit 1; }
+  test -n "${RAG_RESPONSE_CANDIDATE_ID:-}" || { echo "RAG_RESPONSE_CANDIDATE_ID is required" >&2; exit 1; }
+  test -n "${RAG_ALLOWED_TENANTS:-}" || { echo "RAG_ALLOWED_TENANTS is required" >&2; exit 1; }
+  test -n "${RAG_RESPONSE_ALLOWED_USERS:-}" || { echo "RAG_RESPONSE_ALLOWED_USERS is required" >&2; exit 1; }
+  test -f "${AI_PROMOTION_ROOT:-}/current.json" || {
+    echo "AI promotion pointer is required" >&2
+    exit 1
+  }
+}
+
 render() {
   compose config --quiet
 }
@@ -109,6 +122,11 @@ smoke() {
   curl -fsS "http://127.0.0.1:${AI_BIND_PORT:-8000}/health/live" >/dev/null
   curl -fsS "http://127.0.0.1:${INFERENCE_BIND_PORT:-8010}/v1/models" \
     -H "Authorization: Bearer ${INFERENCE_API_KEY}" >/dev/null
+}
+
+smoke_response() {
+  compose ps knowledge-service access-gateway
+  compose exec -T knowledge-service curl -fsS http://127.0.0.1:8000/health/live >/dev/null
 }
 
 rollback() {
@@ -143,6 +161,16 @@ case "$action" in
     compose up -d --wait
     smoke
     ;;
+  deploy-response)
+    validate_response_inputs
+    docker build --build-arg RELEASE_SHA="$release_sha" \
+      -f backend-ai/Dockerfile.rocm -t "$AI_ROCM_IMAGE" backend-ai
+    verify_image "$AI_ROCM_IMAGE"
+    render
+    record_rollback
+    compose up -d --wait knowledge-service access-gateway
+    smoke_response
+    ;;
   smoke)
     validate_runtime_inputs
     render
@@ -150,7 +178,7 @@ case "$action" in
     ;;
   rollback) rollback ;;
   *)
-    echo "Usage: $0 {build|render|deploy|smoke|rollback}" >&2
+    echo "Usage: $0 {build|render|deploy|deploy-response|smoke|rollback}" >&2
     exit 2
     ;;
 esac

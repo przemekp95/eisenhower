@@ -145,6 +145,61 @@ services:
       - ${AI_EVALUATION_FILE:?approved evaluation file is required}:/app/evaluation/production.json:ro
       - ${AI_PROMOTION_ROOT:-./.runtime/promotion}:/app/promotion:ro
 
+  knowledge-service:
+    <<: *common
+    image: ${AI_IMAGE:?AI_IMAGE must be a versioned tag or digest}
+    command: ["uvicorn", "app.knowledge_runtime:from_environment", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+    group_add: ["1001"]
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      audit-volume-init:
+        condition: service_completed_successfully
+    environment:
+      - APP_ENV=production
+      - AUTH_MODE=oidc
+      - OIDC_ISSUER=${OIDC_ISSUER:?OIDC_ISSUER is required}
+      - OIDC_AUDIENCE=${OIDC_AUDIENCE:?OIDC_AUDIENCE is required}
+      - OIDC_JWKS_URL=${OIDC_JWKS_URL:?OIDC_JWKS_URL is required}
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://127.0.0.1}
+      - AUDIT_HMAC_KEY=${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY is required}
+      - AUDIT_DATABASE_PATH=/app/audit/audit.sqlite3
+      - RELEASE_SHA=${RELEASE_SHA:?RELEASE_SHA is required}
+      - AI_MANAGEMENT_ENABLED=false
+      - RAG_RETRIEVAL_ENABLED=true
+      - RAG_GENERATION_ENABLED=true
+      - RAG_RESPONSE_ENABLED=true
+      - RAG_RESPONSE_PROMOTION_POINTER_PATH=/app/promotion/current.json
+      - RAG_RESPONSE_CANDIDATE_ID=${RAG_RESPONSE_CANDIDATE_ID:?RAG_RESPONSE_CANDIDATE_ID is required}
+      - RAG_ALLOWED_TENANTS=${RAG_ALLOWED_TENANTS:?RAG_ALLOWED_TENANTS is required}
+      - RAG_RESPONSE_ALLOWED_USERS=${RAG_RESPONSE_ALLOWED_USERS:?RAG_RESPONSE_ALLOWED_USERS is required}
+      - RAG_RETRIEVAL_STRATEGY=${RAG_RETRIEVAL_STRATEGY:-hybrid-bge-v1}
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+      - QDRANT_COLLECTION_ALIAS=${QDRANT_COLLECTION_ALIAS:-eisenhower-knowledge-active}
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/eisenhower?replicaSet=rs0}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-eisenhower}
+      - CANONICAL_DOCUMENTS_COLLECTION=${CANONICAL_DOCUMENTS_COLLECTION:-rag_documents}
+      - RERANKER_BASE_URL=${RERANKER_BASE_URL:-http://reranker:8000}
+      - RERANKER_API_KEY=${RERANKER_API_KEY:?RERANKER_API_KEY is required}
+      - RERANKER_ALLOWED_HOSTS=${RERANKER_ALLOWED_HOSTS:-reranker}
+      - INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}
+      - INFERENCE_API_KEY=${INFERENCE_API_KEY:?INFERENCE_API_KEY is required}
+      - INFERENCE_MODEL=${INFERENCE_MODEL:?INFERENCE_MODEL is required}
+      - INFERENCE_ALLOWED_HOSTS=${INFERENCE_ALLOWED_HOSTS:-inference}
+    volumes:
+      - model_cache:/home/app/.cache/huggingface
+      - audit_data:/app/audit
+      - ${AI_PROMOTION_ROOT:-./.runtime/promotion}:/app/promotion:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health/live >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
   rag-worker:
     <<: *common
     image: ${AI_IMAGE:?AI_IMAGE must be a versioned tag or digest}
@@ -302,6 +357,7 @@ services:
       - MCP_UPSTREAM=${ACCESS_GATEWAY_MCP_UPSTREAM:-mcp-service:8000}
       - API_UPSTREAM=${ACCESS_GATEWAY_API_UPSTREAM:-api-service:3001}
       - AI_UPSTREAM=${ACCESS_GATEWAY_AI_UPSTREAM:-ai-service:8000}
+      - KNOWLEDGE_UPSTREAM=${ACCESS_GATEWAY_KNOWLEDGE_UPSTREAM:-knowledge-service:8000}
       - WEB_UPSTREAM=${ACCESS_GATEWAY_WEB_UPSTREAM:-web:3000}
     volumes:
       - ./access-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro

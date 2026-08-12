@@ -34,6 +34,7 @@ class LocalProductionContractTest(unittest.TestCase):
       set(self.services) | set(self.amd_services),
       {
         "api-service", "mongodb", "ai-service", "rag-worker", "qdrant", "n8n",
+        "knowledge-service",
         "calendar-gateway", "audit-volume-init", "identity-db", "identity-service",
         "mcp-service", "access-gateway", "web", "inference", "reranker",
       },
@@ -51,6 +52,11 @@ class LocalProductionContractTest(unittest.TestCase):
         "INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}",
         "RAG_RETRIEVAL_STRATEGY=${RAG_RETRIEVAL_STRATEGY:-hybrid-bge-v1}",
         "RERANKER_BASE_URL=${RERANKER_BASE_URL:-http://reranker:8000}",
+      ],
+      "knowledge-service": [
+        "QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}",
+        "INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}",
+        "RAG_RESPONSE_PROMOTION_POINTER_PATH=/app/promotion/current.json",
       ],
       "rag-worker": [
         "MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/eisenhower?replicaSet=rs0}",
@@ -111,11 +117,17 @@ class LocalProductionContractTest(unittest.TestCase):
 
     gateway = self.services["access-gateway"]
     self.assertIn("WEB_UPSTREAM=${ACCESS_GATEWAY_WEB_UPSTREAM:-web:3000}", gateway["environment"])
+    self.assertIn(
+      "KNOWLEDGE_UPSTREAM=${ACCESS_GATEWAY_KNOWLEDGE_UPSTREAM:-knowledge-service:8000}",
+      gateway["environment"],
+    )
     self.assertEqual(gateway["depends_on"]["web"]["condition"], "service_healthy")
     config = ACCESS_GATEWAY_CONFIG_PATH.read_text()
     self.assertIn("set $web_upstream ${WEB_UPSTREAM};", config)
     self.assertIn("proxy_pass http://$web_upstream;", config)
     self.assertNotIn("location / { return 404; }", config)
+    self.assertIn("location = /ai/v2/knowledge/answer", config)
+    self.assertIn("proxy_pass http://$knowledge_upstream/v2/knowledge/answer;", config)
 
   def test_local_deploy_script_enforces_clean_exact_sha_and_records_rollback(self):
     script = DEPLOY_SCRIPT_PATH.read_text()
@@ -128,6 +140,9 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn('MCP_IMAGE="local/eisenhower-mcp:${release_sha}"', script)
     self.assertIn('WEB_IMAGE="local/eisenhower-web:${release_sha}"', script)
     self.assertIn('docker image inspect', script)
+    self.assertIn('deploy-response)', script)
+    self.assertIn('compose up -d --wait knowledge-service access-gateway', script)
+    self.assertIn('validate_response_inputs', script)
     self.assertIn('rollback.env', script)
     self.assertIn('docker compose', script)
     self.assertIn('config --quiet', script)
