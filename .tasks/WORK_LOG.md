@@ -1,6 +1,6 @@
 # Completion log
 
-2026-08-12 — TASK-040: Restored the required E2E accessibility gate with durable active-language contrast and a semantic intro-ready Axe boundary; 154 web tests at 100% coverage, two integrations, production build and six Playwright scenarios passed without sleeps or disabled rules.
+2026-08-12 — TASK-040: Restored the required E2E accessibility gate with durable active-language contrast, a reduced-motion ready-state fallback and a semantic intro-ready Axe boundary, without sleeps or disabled rules.
 
 2026-08-12 — TASK-038: Added deterministic fail-closed CI impact planning with stable required contexts, continuous security gates and expanded module coverage; local verification and full PR CI run 31544533146 passed on 872ea746, with PR #159 left unmerged for final review.
 

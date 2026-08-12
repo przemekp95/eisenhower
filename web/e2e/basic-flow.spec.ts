@@ -26,6 +26,9 @@ test.beforeEach(async ({ page }) => {
   await page.getByRole('button', { name: 'Odblokuj' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Eisenhower Matrix' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Dodaj zadanie' })).toBeVisible();
+  expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(
+    true
+  );
   await expect(page.locator('main')).toHaveAttribute('data-app-intro', 'ready');
 });
 

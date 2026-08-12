@@ -13,7 +13,7 @@ Restore the exact-head E2E accessibility gate by giving the active language cont
 
 ### Outcome
 
-Replaced the threshold-level active language token with `text-blue-800` and made Playwright wait on the semantic intro-ready state before Axe analysis. The failure was reproduced by PR #161 CI as a 3.47:1 contrast violation across all retries; after the fix, 154 unit tests retained 100% coverage, two integration tests, the production build and all six desktop/mobile Playwright scenarios passed without disabling accessibility rules or adding sleeps.
+Replaced the threshold-level active language token with `text-blue-800`, made the reduced-motion path always settle a pending intro, and bound reduced-motion explicitly in both Playwright projects before waiting on the semantic intro-ready state for Axe. PR #161 reproduced a 3.47:1 contrast violation across all retries, while the first PR #162 run proved the project-level device settings had overridden the top-level reduced-motion option; both root causes are covered without disabling accessibility rules or adding sleeps.
 
 ---
 
