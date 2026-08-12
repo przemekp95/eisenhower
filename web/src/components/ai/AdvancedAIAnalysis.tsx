@@ -43,8 +43,8 @@ export default function AdvancedAIAnalysis({
         setAnalysis(analysis);
         onAnalysisComplete(analysis);
       });
-    } catch (issue) {
-      setError(issue instanceof Error ? issue.message : t('ai.analysis.failed'));
+    } catch {
+      setError(t('ai.analysis.failed'));
     } finally {
       setLoading(false);
     }
@@ -58,8 +58,8 @@ export default function AdvancedAIAnalysis({
 
     try {
       await onSubmit(result);
-    } catch (issue) {
-      setError(issue instanceof Error ? issue.message : t('ai.analysis.addFailed'));
+    } catch {
+      setError(t('ai.analysis.addFailed'));
     } finally {
       setAdding(false);
     }

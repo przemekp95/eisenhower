@@ -66,6 +66,32 @@ function trainingExampleFixture() {
   return { text: 'Task', quadrant: 0, source: 'user', timestamp: '2026-08-11T12:00:00Z' };
 }
 
+test('clears credentials only for authentication failures, not authorization failures', async () => {
+  let userClears = 0;
+  let adminClears = 0;
+  const responses = [
+    jsonResponse({ error: 'Invalid code' }, { ok: false, status: 401 }),
+    jsonResponse({ error: 'Forbidden' }, { ok: false, status: 403 }),
+    jsonResponse({ error: 'Invalid admin code' }, { ok: false, status: 401 }),
+    jsonResponse({ error: 'Management disabled' }, { ok: false, status: 403 }),
+  ];
+  const api = createAiApi('https://ai.example.com', {
+    fetch: async () => responses.shift(),
+    accessToken: 'user-code',
+    adminToken: 'admin-code',
+    onUnauthorized: () => { userClears += 1; },
+    onAdminUnauthorized: () => { adminClears += 1; },
+  });
+
+  await assert.rejects(() => api.classifyTask('one'));
+  await assert.rejects(() => api.classifyTask('two'));
+  await assert.rejects(() => api.fetchTrainingStats());
+  await assert.rejects(() => api.fetchTrainingStats());
+
+  assert.equal(userClears, 1);
+  assert.equal(adminClears, 1);
+});
+
 test('sends optional task revisions through If-Match without breaking legacy calls', async () => {
   const calls = [];
   const api = createTaskApi('https://api.example.com', async (...args) => {
@@ -84,6 +110,20 @@ test('sends optional task revisions through If-Match without breaking legacy cal
   assert.equal(calls[0][1].headers['If-Match'], '"3"');
   assert.equal(calls[1][1].headers['If-Match'], '"4"');
   assert.equal(calls[2][1].headers['If-Match'], undefined);
+});
+
+test('sends an optional idempotency key for safe task creation retries', async () => {
+  const calls = [];
+  const api = createTaskApi('https://api.example.com', async (...args) => {
+    calls.push(args);
+    return jsonResponse(taskFixture(), { status: 201 });
+  });
+
+  await api.createTask({ title: 'Safe retry' }, 'web-create-123');
+  await api.createTask({ title: 'Legacy create' });
+
+  assert.equal(calls[0][1].headers['Idempotency-Key'], 'web-create-123');
+  assert.equal(calls[1][1].headers['Idempotency-Key'], undefined);
 });
 
 test('publishes one canonical quadrant contract', () => {

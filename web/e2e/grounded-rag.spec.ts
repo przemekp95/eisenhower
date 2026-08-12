@@ -36,12 +36,12 @@ test.beforeEach(async ({ page }) => {
     localStorage.setItem('eisenhower-language', 'en');
   });
   await page.goto('/');
-  await page.getByLabel('Token dostępu').fill('test-api-token');
-  await page.getByRole('button', { name: 'Odblokuj' }).click();
+  await page.getByLabel('Access code').fill('test-api-token');
+  await page.getByRole('button', { name: 'Enter the system' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Eisenhower Matrix' })).toBeVisible();
 });
 
-test('renders explicit grounded mode and escaped citations on desktop and mobile', async ({
+test('renders a sourced answer with escaped citations on desktop and mobile', async ({
   page,
 }) => {
   await page.getByPlaceholder('Task title').fill('Prepare the incident review');
@@ -49,11 +49,12 @@ test('renders explicit grounded mode and escaped citations on desktop and mobile
   await opener.click();
 
   await expect(page.getByRole('button', { name: 'Close' })).toBeFocused();
-  await page.getByRole('tab', { name: 'Grounded RAG' }).click();
-  await page.getByRole('button', { name: 'Run grounded analysis' }).click();
+  await page.getByRole('tab', { name: 'Answers with sources' }).click();
+  await page.getByRole('button', { name: 'Check sources' }).click();
 
-  await expect(page.getByText('RAG', { exact: true })).toBeVisible();
-  await expect(page.getByText('1 retrieved chunks')).toBeVisible();
+  await expect(page.getByText('Answer with sources', { exact: true })).toBeVisible();
+  await expect(page.getByText('1 retrieved chunks')).toHaveCount(0);
+  await expect(page.getByText('Index minilm-v1')).toHaveCount(0);
   await expect(page.getByText('<img src=x onerror=alert(1)> Incident procedure')).toBeVisible();
   await expect(page.getByText(/<script>window.compromised=true/)).toBeVisible();
   await expect(page.locator('blockquote script')).toHaveCount(0);

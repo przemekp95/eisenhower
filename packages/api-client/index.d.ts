@@ -370,7 +370,7 @@ export const AI_API_PATHS: {
 export interface TaskApiClient {
   paths: typeof TASK_API_PATHS;
   listTasks(): Promise<TaskDto[]>;
-  createTask(task: TaskInputDto): Promise<TaskDto>;
+  createTask(task: TaskInputDto, idempotencyKey?: string): Promise<TaskDto>;
   updateTask(id: string, patch: Partial<TaskInputDto>, revision?: number): Promise<TaskDto>;
   deleteTask(id: string, revision?: number): Promise<null>;
   getHealth(): Promise<HealthResponseDto>;

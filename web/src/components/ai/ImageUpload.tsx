@@ -35,23 +35,23 @@ export default function ImageUpload({ onTasksExtracted }: Props) {
           review: 'Sprawdź zadania przed importem',
           include: 'Uwzględnij zadanie',
           quadrant: 'Kwadrant dla',
-          learn: 'Wyślij zapisane zadania jako świadomy feedback treningowy',
+          learn: 'Pomóż ulepszać podpowiedzi na podstawie zaakceptowanych zadań',
           import: 'Importuj wybrane',
           importing: 'Importowanie…',
           none: 'Wybierz co najmniej jedno niepuste zadanie.',
           summary: (imported: number, failed: number, learned: boolean) =>
-            `Zapisano: ${imported}. Nie zapisano: ${failed}. Feedback: ${learned ? 'wysłany' : 'niewysłany'}.`,
+            `Dodano: ${imported}. Nie dodano: ${failed}. Ulepszanie podpowiedzi: ${learned ? 'tak' : 'nie'}.`,
         }
       : {
           review: 'Review tasks before import',
           include: 'Include task',
           quadrant: 'Quadrant for',
-          learn: 'Send persisted tasks as explicit training feedback',
+          learn: 'Help improve suggestions using the accepted tasks',
           import: 'Import selected',
           importing: 'Importing…',
           none: 'Select at least one non-empty task.',
           summary: (imported: number, failed: number, learned: boolean) =>
-            `Persisted: ${imported}. Failed: ${failed}. Feedback: ${learned ? 'sent' : 'not sent'}.`,
+            `Added: ${imported}. Not added: ${failed}. Improve suggestions: ${learned ? 'yes' : 'no'}.`,
         };
 
   const handleSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -66,8 +66,8 @@ export default function ImageUpload({ onTasksExtracted }: Props) {
       setResult(payload);
       setReviewTasks(payload.classified_tasks.map((task) => ({ ...task, selected: true })));
       setLearnFromAccepted(false);
-    } catch (issue) {
-      setError(issue instanceof Error ? issue.message : t('ai.ocr.failed'));
+    } catch {
+      setError(t('ai.ocr.failed'));
     } finally {
       setLoading(false);
       event.target.value = '';
@@ -105,9 +105,9 @@ export default function ImageUpload({ onTasksExtracted }: Props) {
           ? { imported: response, failed: selected.length - response, learned: false }
           : (response ?? { imported: 0, failed: selected.length, learned: false });
       setStatus(copy.summary(summary.imported, summary.failed, summary.learned));
-      if (summary.feedbackError) setError(summary.feedbackError);
-    } catch (issue) {
-      setError(issue instanceof Error ? issue.message : t('ai.ocr.failed'));
+      if (summary.feedbackError) setError(t('ai.ocr.failed'));
+    } catch {
+      setError(t('ai.ocr.failed'));
     } finally {
       setImporting(false);
     }

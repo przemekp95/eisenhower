@@ -45,20 +45,21 @@ describe('GroundedAIAnalysis', () => {
     localStorage.setItem('eisenhower-language', 'en');
   });
 
-  it('renders explicit RAG mode and escaped citations from the v2 response', async () => {
+  it('renders a sourced answer and escaped citations without technical diagnostics', async () => {
     mockedApi.analyzeTaskWithRag.mockResolvedValueOnce(groundedResult());
     renderAnalysis();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Run grounded analysis' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Check sources' }));
 
-    await waitFor(() => expect(screen.getByText('RAG')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Answer with sources')).toBeInTheDocument());
     expect(mockedApi.analyzeTaskWithRag).toHaveBeenCalledWith('prepare incident review');
-    expect(screen.getByText('1 retrieved chunks')).toBeInTheDocument();
-    expect(screen.getByText('Index minilm-v1')).toBeInTheDocument();
+    expect(screen.queryByText('1 retrieved chunks')).not.toBeInTheDocument();
+    expect(screen.queryByText('Index minilm-v1')).not.toBeInTheDocument();
     expect(screen.getByText('Suggested quadrant: Do Now')).toBeInTheDocument();
     expect(screen.getByText('<img src=x onerror=alert(1)> Incident policy')).toBeInTheDocument();
     expect(screen.getByText(/<script>window.compromised/)).toBeInTheDocument();
-    expect(screen.getByText('Score 0.88')).toBeInTheDocument();
+    expect(screen.queryByText('Score 0.88')).not.toBeInTheDocument();
+    expect(screen.queryByText(/eisenhower:\/\/repository/)).not.toBeInTheDocument();
     expect(document.querySelector('script')).toBeNull();
     expect(document.querySelector('img[src="x"]')).toBeNull();
   });
@@ -73,7 +74,7 @@ describe('GroundedAIAnalysis', () => {
     );
     renderAnalysis();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Run grounded analysis' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Check sources' }));
     expect(screen.getByRole('button', { name: 'Checking approved knowledge...' })).toBeDisabled();
 
     await act(async () => {
@@ -90,7 +91,7 @@ describe('GroundedAIAnalysis', () => {
       );
     });
 
-    expect(screen.getByText('Fallback')).toBeInTheDocument();
+    expect(screen.getByText('Suggestion without sources')).toBeInTheDocument();
     expect(
       screen.getByText('The deterministic classifier handled this request.')
     ).toBeInTheDocument();
@@ -124,14 +125,17 @@ describe('GroundedAIAnalysis', () => {
       );
     renderAnalysis();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Run grounded analysis' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Check sources' }));
     await waitFor(() =>
-      expect(screen.getByText('Policy reason: insufficient_evidence')).toBeInTheDocument()
+      expect(screen.getByText(/Try a more specific question/i)).toBeInTheDocument()
     );
+    expect(screen.queryByText(/insufficient_evidence/)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Run grounded analysis' }));
-    await waitFor(() => expect(screen.queryByText(/Policy reason:/)).not.toBeInTheDocument());
-    expect(screen.getByText('No grounded answer is available.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Check sources' }));
+    await waitFor(() =>
+      expect(screen.queryByText(/insufficient_evidence/)).not.toBeInTheDocument()
+    );
+    expect(screen.getByText(/not enough approved information/i)).toBeInTheDocument();
   });
 
   it('reports typed and unknown failures and clears stale output', async () => {
@@ -141,18 +145,18 @@ describe('GroundedAIAnalysis', () => {
       .mockRejectedValueOnce('offline');
     const view = renderAnalysis();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Run grounded analysis' }));
-    await waitFor(() => expect(screen.getByText('RAG')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Check sources' }));
+    await waitFor(() => expect(screen.getByText('Answer with sources')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Run grounded analysis' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Check sources' }));
     await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent('Private RAG unavailable')
+      expect(screen.getByRole('alert')).toHaveTextContent('The sources could not be checked')
     );
     expect(screen.queryByTestId('grounded-result')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Run grounded analysis' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Check sources' }));
     await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent('Grounded analysis failed')
+      expect(screen.getByRole('alert')).toHaveTextContent('The sources could not be checked')
     );
 
     view.rerender(
@@ -183,15 +187,15 @@ describe('GroundedAIAnalysis', () => {
         <Harness />
       </LanguageProvider>
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Run grounded analysis' }));
-    await waitFor(() => expect(screen.getByText('RAG')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Check sources' }));
+    await waitFor(() => expect(screen.getByText('Answer with sources')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'switch language' }));
     await waitFor(() => expect(screen.queryByTestId('grounded-result')).not.toBeInTheDocument());
 
     view.unmount();
     localStorage.setItem('eisenhower-language', 'en');
     const empty = renderAnalysis('   ');
-    const disabled = screen.getByRole('button', { name: 'Run grounded analysis' });
+    const disabled = screen.getByRole('button', { name: 'Check sources' });
     expect(disabled).toBeDisabled();
     fireEvent.click(disabled);
     expect(mockedApi.analyzeTaskWithRag).toHaveBeenCalledTimes(1);
