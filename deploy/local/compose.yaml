@@ -44,7 +44,7 @@ services:
     <<: *common
     image: ${VOLUME_INIT_IMAGE:-alpine:3.20}
     restart: "no"
-    command: ["chown", "-R", "1001:1001", "/audit"]
+    command: ["sh", "-c", "chown -R 1001:1001 /audit && chmod 0770 /audit"]
     volumes:
       - audit_data:/audit
 
@@ -72,6 +72,7 @@ services:
   ai-service:
     <<: *common
     image: ${AI_IMAGE:?AI_IMAGE must be a versioned tag or digest}
+    group_add: ["1001"]
     ports:
       - "${AI_BIND_ADDRESS:-127.0.0.1}:${AI_BIND_PORT:-8000}:8000"
     environment:

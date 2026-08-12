@@ -106,6 +106,11 @@ class LocalProductionContractTest(unittest.TestCase):
       self.assertIn("AUDIT_HMAC_KEY=${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY is required}", environment)
 
     ai_environment = self.services["ai-service"]["environment"]
+    self.assertEqual(self.services["ai-service"]["group_add"], ["1001"])
+    self.assertEqual(
+      self.services["audit-volume-init"]["command"],
+      ["sh", "-c", "chown -R 1001:1001 /audit && chmod 0770 /audit"],
+    )
     self.assertIn(
       "INTERNAL_ALLOWED_TENANTS=${INTERNAL_ALLOWED_TENANTS:?INTERNAL_ALLOWED_TENANTS is required}",
       ai_environment,
