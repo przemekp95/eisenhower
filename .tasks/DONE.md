@@ -1,5 +1,22 @@
 # Done
 
+## TASK-041: Clear the master promotion whitespace gate
+**Priority:** P0 | **Tags:** release-gate, quality, python
+
+Remove trailing whitespace from the historical object-storage implementation so the complete `master...dev` promotion delta satisfies the production acceptance `git diff --check` gate without changing behavior.
+
+### Plan
+
+- Remove trailing whitespace only from `backend-ai/app/object_storage.py`.
+- Prove token and AST equivalence, run focused tests and the full promotion-delta check.
+- Promote the isolated cleanup through a green PR to `dev`, then require fresh exact-head checks on the updated `dev` to `master` PR.
+
+### Outcome
+
+Removed 37 trailing-whitespace-only lines from the historical object-storage implementation. The Python AST and token stream remain identical to `origin/dev`, focused object-storage and dependency-audit tests passed 21/21, and the complete `origin/master...candidate` delta now passes `git diff --check`; promotion remains gated on a normal green PR to `dev` and fresh exact-head checks for PR #163.
+
+---
+
 ## TASK-040: Stabilize the language switcher accessibility gate
 **Priority:** P1 | **Tags:** accessibility, e2e, web, release-gate
 
