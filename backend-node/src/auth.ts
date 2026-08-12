@@ -9,6 +9,7 @@ export interface AuthPrincipal {
   userId: string;
   roles: string[];
   projectIds: string[];
+  scopes?: string[];
 }
 
 export type SecurityRejectionHandler = (
@@ -21,6 +22,7 @@ declare global {
     interface Request {
       auth?: AuthPrincipal;
       requestId: string;
+      rawBody?: Buffer;
     }
   }
 }
@@ -83,6 +85,7 @@ export function requireBearerToken(expectedToken: string, onReject?: SecurityRej
     }
     request.auth = {
       tenantId: 'local', userId: 'local-user', roles: ['user'], projectIds: [],
+      scopes: ['tasks:read', 'tasks:write', 'calendar:read', 'calendar:write'],
     };
     next();
   };
@@ -130,11 +133,24 @@ function principalFromClaims(payload: JWTPayload): AuthPrincipal {
   if (!payload.sub || typeof payload.tenant_id !== 'string' || !payload.tenant_id) {
     throw new Error('Required OIDC claims are missing');
   }
+  const scopes = typeof payload.scope === 'string'
+    ? payload.scope.split(/\s+/).filter(Boolean)
+    : stringArray(payload.scp);
   return {
     tenantId: payload.tenant_id,
     userId: payload.sub,
     roles: stringArray(payload.roles),
     projectIds: stringArray(payload.project_ids),
+    ...(scopes.length ? { scopes } : {}),
+  };
+}
+
+export function requireScope(scope: string, onReject?: SecurityRejectionHandler) {
+  return (request: Request, response: Response, next: NextFunction) => {
+    if (request.auth?.scopes?.includes(scope)) return next();
+    if (auditOrFail(request, response, 'acl_rejection', onReject)) {
+      response.status(403).json({ error: 'Required scope is missing', code: 'insufficient_scope' });
+    }
   };
 }
 

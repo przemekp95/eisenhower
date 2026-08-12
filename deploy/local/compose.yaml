@@ -1,0 +1,198 @@
+name: eisenhower-local-production
+
+x-common: &common
+  restart: unless-stopped
+  networks:
+    - private
+
+services:
+  # The Mongo outbox publisher runs inside this real Node process. There is no
+  # separate outbox-worker entrypoint to deploy.
+  api-service:
+    <<: *common
+    image: ${API_IMAGE:?API_IMAGE must be a versioned tag or digest}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      audit-volume-init:
+        condition: service_completed_successfully
+    ports:
+      - "${NODE_BIND_ADDRESS:-127.0.0.1}:${NODE_BIND_PORT:-3001}:3001"
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/eisenhower?replicaSet=rs0}
+      - AI_SERVICE_URL=${AI_SERVICE_URL:-http://ai-service:8000}
+      - AUTH_MODE=${AUTH_MODE:-static}
+      - EISENHOWER_API_TOKEN=${EISENHOWER_API_TOKEN:?EISENHOWER_API_TOKEN is required}
+      - OIDC_ISSUER=${OIDC_ISSUER:-}
+      - OIDC_AUDIENCE=${OIDC_AUDIENCE:-}
+      - OIDC_JWKS_URL=${OIDC_JWKS_URL:-}
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://127.0.0.1}
+      - AUDIT_HMAC_KEY=${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY is required}
+      - CALENDAR_INTERNAL_HMAC_KEY=${CALENDAR_INTERNAL_HMAC_KEY:?CALENDAR_INTERNAL_HMAC_KEY is required}
+      - GOOGLE_CALENDAR_OAUTH_CLIENT_ID=${GOOGLE_CALENDAR_OAUTH_CLIENT_ID:?GOOGLE_CALENDAR_OAUTH_CLIENT_ID is required}
+      - GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET=${GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET:?GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET is required}
+      - GOOGLE_CALENDAR_OAUTH_CALLBACK_URL=${GOOGLE_CALENDAR_OAUTH_CALLBACK_URL:?GOOGLE_CALENDAR_OAUTH_CALLBACK_URL is required}
+      - GOOGLE_CALENDAR_OAUTH_ENCRYPTION_KEY=${GOOGLE_CALENDAR_OAUTH_ENCRYPTION_KEY:?GOOGLE_CALENDAR_OAUTH_ENCRYPTION_KEY is required}
+      - GOOGLE_CALENDAR_OAUTH_RETURN_ORIGIN=${GOOGLE_CALENDAR_OAUTH_RETURN_ORIGIN:-}
+      - GOOGLE_CALENDAR_WATCH_CALLBACK_URLS=${GOOGLE_CALENDAR_WATCH_CALLBACK_URLS:?GOOGLE_CALENDAR_WATCH_CALLBACK_URLS is required}
+      - AUDIT_LOG_PATH=/app/audit/node-audit.ndjson
+      - RELEASE_SHA=${RELEASE_SHA:?RELEASE_SHA is required}
+    volumes:
+      - audit_data:/app/audit
+
+  audit-volume-init:
+    <<: *common
+    image: ${VOLUME_INIT_IMAGE:-alpine:3.20}
+    restart: "no"
+    command: ["chown", "-R", "1001:1001", "/audit"]
+    volumes:
+      - audit_data:/audit
+
+  mongodb:
+    <<: *common
+    image: ${MONGODB_IMAGE:-mongo:7.0.24-jammy}
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "${MONGODB_BIND_ADDRESS:-127.0.0.1}:${MONGODB_BIND_PORT:-27017}:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=eisenhower
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet --eval 'try { rs.status().ok } catch (error) {
+          rs.initiate({_id:"rs0",members:[{_id:0,host:"mongodb:27017"}]}).ok }'
+          | grep 1
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  ai-service:
+    <<: *common
+    image: ${AI_IMAGE:?AI_IMAGE must be a versioned tag or digest}
+    ports:
+      - "${AI_BIND_ADDRESS:-127.0.0.1}:${AI_BIND_PORT:-8000}:8000"
+    environment:
+      - APP_ENV=production
+      - AUTH_MODE=${AUTH_MODE:-static}
+      - EISENHOWER_API_TOKEN=${EISENHOWER_API_TOKEN:?EISENHOWER_API_TOKEN is required}
+      - EISENHOWER_ADMIN_TOKEN=${EISENHOWER_ADMIN_TOKEN:?EISENHOWER_ADMIN_TOKEN is required}
+      - EISENHOWER_INTERNAL_API_TOKEN=${EISENHOWER_INTERNAL_API_TOKEN:?EISENHOWER_INTERNAL_API_TOKEN is required}
+      - OIDC_ISSUER=${OIDC_ISSUER:-}
+      - OIDC_AUDIENCE=${OIDC_AUDIENCE:-}
+      - OIDC_JWKS_URL=${OIDC_JWKS_URL:-}
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://127.0.0.1}
+      - AUDIT_HMAC_KEY=${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY is required}
+      - AUDIT_DATABASE_PATH=/app/audit/audit.sqlite3
+      - RELEASE_SHA=${RELEASE_SHA:?RELEASE_SHA is required}
+      - LOCAL_MODEL_NAME=${LOCAL_MODEL_NAME:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
+      - LOCAL_MODEL_REVISION=${LOCAL_MODEL_REVISION:-e8f8c211226b894fcb81acc59f3b34ba3efd5f42}
+      - LOCAL_MODEL_REQUIRE_EVALUATION=true
+      - LOCAL_MODEL_EVALUATION_PROFILE=production
+      - LOCAL_MODEL_APPROVED_EVALUATION_SHA256=${LOCAL_MODEL_APPROVED_EVALUATION_SHA256:?approved evaluation digest is required}
+      - EVALUATION_DATA_PATH=/app/evaluation/production.json
+      - AI_MANAGEMENT_ENABLED=false
+      - RAG_ENABLED=${RAG_ENABLED:-false}
+      - RAG_RETRIEVAL_ENABLED=${RAG_RETRIEVAL_ENABLED:-false}
+      - RAG_GENERATION_ENABLED=${RAG_GENERATION_ENABLED:-false}
+      - RAG_RESPONSE_ENABLED=${RAG_RESPONSE_ENABLED:-false}
+      - RAG_ALLOWED_TENANTS=${RAG_ALLOWED_TENANTS:-}
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+      - QDRANT_COLLECTION_ALIAS=${QDRANT_COLLECTION_ALIAS:-eisenhower-knowledge-active}
+      - INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}
+      - INFERENCE_API_KEY=${INFERENCE_API_KEY:-}
+      - INFERENCE_MODEL=${INFERENCE_MODEL:-}
+      - INFERENCE_ALLOWED_HOSTS=${INFERENCE_ALLOWED_HOSTS:-inference}
+    volumes:
+      - model_cache:/home/app/.cache/huggingface
+      - audit_data:/app/audit
+      - ${AI_EVALUATION_FILE:?approved evaluation file is required}:/app/evaluation/production.json:ro
+
+  rag-worker:
+    <<: *common
+    image: ${AI_IMAGE:?AI_IMAGE must be a versioned tag or digest}
+    command: ["python", "-m", "app.worker_runtime"]
+    environment:
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/eisenhower?replicaSet=rs0}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-eisenhower}
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+      - QDRANT_COLLECTION_ALIAS=${QDRANT_COLLECTION_ALIAS:-eisenhower-knowledge-active}
+      - JOBS_DATABASE_PATH=/app/data/jobs.sqlite3
+      - CORPUS_REPOSITORY_ROOT=/corpus
+      - CORPUS_MANIFEST_PATH=/corpus/docs/ai-rebuild/corpus-manifest-v1.json
+      - CORPUS_OWNER_ID=${CORPUS_OWNER_ID:-eisenhower-owner}
+      - CORPUS_ALLOWED_PROJECTS=${CORPUS_ALLOWED_PROJECTS:-eisenhower}
+    volumes:
+      - rag_jobs:/app/data
+      - model_cache:/home/app/.cache/huggingface
+      - ../../README.md:/corpus/README.md:ro
+      - ../../docs:/corpus/docs:ro
+      - ../../corpus:/corpus/corpus:ro
+
+  qdrant:
+    <<: *common
+    image: ${QDRANT_IMAGE:-qdrant/qdrant:v1.12.0}
+    ports:
+      - "${QDRANT_BIND_ADDRESS:-127.0.0.1}:${QDRANT_BIND_PORT:-6333}:6333"
+    environment:
+      - QDRANT__LOG_LEVEL=info
+      - QDRANT__TELEMETRY_DISABLED=true
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  n8n:
+    <<: *common
+    image: ${N8N_IMAGE:-n8nio/n8n:2.4.6}
+    ports:
+      - "${N8N_BIND_ADDRESS:-127.0.0.1}:${N8N_BIND_PORT:-5678}:5678"
+    environment:
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY is required}
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=none
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=168
+      - EISENHOWER_INTERNAL_API_URL=${EISENHOWER_INTERNAL_API_URL:-http://api-service:3001}
+      - EISENHOWER_INTERNAL_API_TOKEN=${EISENHOWER_INTERNAL_API_TOKEN:?EISENHOWER_INTERNAL_API_TOKEN is required}
+      - EISENHOWER_NODE_INTERNAL_API_URL=${EISENHOWER_NODE_INTERNAL_API_URL:-http://api-service:3001}
+      - CALENDAR_INTERNAL_HMAC_KEY=${CALENDAR_INTERNAL_HMAC_KEY:?CALENDAR_INTERNAL_HMAC_KEY is required}
+      - GOOGLE_CALENDAR_WEBHOOK_URL=${GOOGLE_CALENDAR_WEBHOOK_URL:?GOOGLE_CALENDAR_WEBHOOK_URL is required}
+      # Repository-owned Code nodes need these scoped values for HMAC-signed calls.
+      # Keep this n8n instance loopback/private and operator-only.
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - NODE_FUNCTION_ALLOW_BUILTIN=crypto
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ../../n8n/workflows:/workflows:ro
+
+  calendar-gateway:
+    <<: *common
+    image: ${CALENDAR_GATEWAY_IMAGE:-nginx:1.27.5-alpine}
+    depends_on:
+      api-service:
+        condition: service_started
+      n8n:
+        condition: service_started
+    ports:
+      - "127.0.0.1:${CALENDAR_GATEWAY_BIND_PORT:-8787}:8080"
+    environment:
+      - N8N_UPSTREAM=${CALENDAR_GATEWAY_N8N_UPSTREAM:-n8n:5678}
+      - API_UPSTREAM=${CALENDAR_GATEWAY_API_UPSTREAM:-api-service:3001}
+    volumes:
+      - ./calendar-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
+
+volumes:
+  mongodb_data:
+  qdrant_data:
+  n8n_data:
+  rag_jobs:
+  model_cache:
+  audit_data:
+
+networks:
+  private:
+    name: ${COMPOSE_PRIVATE_NETWORK:-eisenhower-local-private}

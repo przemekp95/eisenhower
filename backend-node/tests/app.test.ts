@@ -26,6 +26,12 @@ describe('app middleware', () => {
     delete process.env.AUDIT_LOG_PATH;
     delete process.env.AUDIT_HMAC_KEY;
     delete process.env.RELEASE_SHA;
+    delete process.env.CALENDAR_INTERNAL_HMAC_KEY;
+    delete process.env.GOOGLE_CALENDAR_OAUTH_CLIENT_ID;
+    delete process.env.GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET;
+    delete process.env.GOOGLE_CALENDAR_OAUTH_CALLBACK_URL;
+    delete process.env.GOOGLE_CALENDAR_OAUTH_ENCRYPTION_KEY;
+    delete process.env.GOOGLE_CALENDAR_WATCH_CALLBACK_URLS;
   });
 
   it('rejects missing and invalid bearer credentials before protected routes', async () => {
@@ -108,6 +114,22 @@ describe('app middleware', () => {
 
     process.env.RELEASE_SHA = 'not-a-sha';
     expect(() => createApp()).toThrow('exact RELEASE_SHA');
+  });
+
+  it('rejects a weak internal calendar HMAC key', () => {
+    expect(() => createApp({ calendarInternalHmacKey: 'too-short' }))
+      .toThrow('CALENDAR_INTERNAL_HMAC_KEY must contain at least 32 bytes');
+  });
+
+  it('constructs default Google OAuth and Calendar HTTP adapters from configuration', () => {
+    process.env.CALENDAR_INTERNAL_HMAC_KEY = 'configured-internal-calendar-key-at-least-32-bytes';
+    process.env.GOOGLE_CALENDAR_OAUTH_CLIENT_ID = 'client';
+    process.env.GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET = 'secret';
+    process.env.GOOGLE_CALENDAR_OAUTH_CALLBACK_URL = 'https://tasks.example.com/calendar/oauth/callback';
+    process.env.GOOGLE_CALENDAR_OAUTH_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
+    process.env.GOOGLE_CALENDAR_WATCH_CALLBACK_URLS = 'https://hooks.example.com/google-calendar';
+
+    expect(() => createApp()).not.toThrow();
   });
 
   it('authenticates before returning an authorization denial for browser origin', async () => {

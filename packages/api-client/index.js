@@ -5,6 +5,12 @@ const TASK_API_PATHS = Object.freeze({
   readiness: '/health/ready',
 });
 
+const CALENDAR_API_PATHS = Object.freeze({
+  status: '/calendar/status',
+  syncRequests: '/calendar/sync-requests',
+  conflicts: '/calendar/conflicts',
+});
+
 const MAX_TASK_LIST_PAGES = 100;
 const TASK_LIFECYCLE_STATES = Object.freeze(['active', 'completed', 'archived', 'trashed']);
 const TASK_LIFECYCLE_FILTERS = Object.freeze([...TASK_LIFECYCLE_STATES, 'all']);
@@ -403,6 +409,57 @@ function createTaskApi(baseUrl, optionsOrFetch) {
         invalidResponse: 'Task API returned an invalid response',
       });
     },
+    async getCalendarStatus() {
+      const response = await request(buildUrl(baseUrl, CALENDAR_API_PATHS.status));
+      return readJson(response, {
+        defaultError: 'Calendar request failed',
+        errorCode: 'calendar_request_failed',
+        validate: isCalendarStatusDto,
+        invalidResponse: 'Calendar API returned an invalid response',
+      });
+    },
+    async requestCalendarSync(idempotencyKey) {
+      const response = await request(buildUrl(baseUrl, CALENDAR_API_PATHS.syncRequests), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+        body: '{}',
+      });
+      return readJson(response, {
+        defaultError: 'Calendar request failed',
+        errorCode: 'calendar_request_failed',
+        validate: (value) => isRecord(value) && typeof value.eventId === 'string',
+        invalidResponse: 'Calendar API returned an invalid response',
+      });
+    },
+    async listCalendarConflicts() {
+      const response = await request(buildUrl(baseUrl, CALENDAR_API_PATHS.conflicts));
+      return readJson(response, {
+        defaultError: 'Calendar request failed',
+        errorCode: 'calendar_request_failed',
+        validate: (value) => Array.isArray(value) && value.every(isCalendarConflictDto),
+        invalidResponse: 'Calendar API returned an invalid response',
+      });
+    },
+    async resolveCalendarConflict(id, strategy, revision, idempotencyKey) {
+      const response = await request(
+        buildUrl(baseUrl, `${CALENDAR_API_PATHS.conflicts}/${encodeURIComponent(id)}/resolve`),
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'If-Match': `"${revision}"`,
+            'Idempotency-Key': idempotencyKey,
+          },
+          body: JSON.stringify({ strategy }),
+        }
+      );
+      return readJson(response, {
+        defaultError: 'Calendar request failed',
+        errorCode: 'calendar_request_failed',
+        validate: isResolvedCalendarConflictDto,
+        invalidResponse: 'Calendar API returned an invalid response',
+      });
+    },
     async getHealth() {
       const response = await request(buildUrl(baseUrl, TASK_API_PATHS.health));
       return readJson(response, {
@@ -708,6 +765,45 @@ function isTaskDto(value) {
     isOptional(value.revision, isNonNegativeInteger) &&
     isOptional(value.createdAt, (item) => typeof item === 'string') &&
     isOptional(value.updatedAt, (item) => typeof item === 'string')
+  );
+}
+
+function isCalendarStatusDto(value) {
+  if (!isRecord(value) || !['disconnected', 'connected', 'pending'].includes(value.status)) {
+    return false;
+  }
+  if (value.status === 'disconnected') return value.connection === null;
+  return Boolean(
+    isRecord(value.connection) &&
+    typeof value.connection.id === 'string' &&
+    value.connection.provider === 'google' &&
+    typeof value.connection.calendarId === 'string' &&
+    isNonNegativeInteger(value.openConflicts) &&
+    isNonNegativeInteger(value.pendingOutbox) &&
+    isOptional(value.syncState, (item) => item === null || isRecord(item))
+  );
+}
+
+function isCalendarConflictDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    typeof value._id === 'string' &&
+    typeof value.taskId === 'string' &&
+    value.status === 'open' &&
+    isNonNegativeInteger(value.revision) &&
+    isRecord(value.providerSnapshot) &&
+    typeof value.providerSnapshot.title === 'string' &&
+    isUtcIsoInstant(value.providerSnapshot.dueAt) &&
+    isIanaTimezone(value.providerSnapshot.timeZone)
+  );
+}
+
+function isResolvedCalendarConflictDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    typeof value._id === 'string' &&
+    ['resolved_local', 'resolved_provider'].includes(value.status) &&
+    isNonNegativeInteger(value.revision)
   );
 }
 
@@ -1200,6 +1296,7 @@ function isExamplesByQuadrantDto(value) {
 
 module.exports = {
   AI_API_PATHS,
+  CALENDAR_API_PATHS,
   QUADRANT_DEFINITIONS,
   TASK_API_PATHS,
   buildUrl,

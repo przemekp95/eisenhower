@@ -14,7 +14,9 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // All projects intentionally share one disposable backend database. Serial
+  // execution prevents one browser project from tearing down another's state.
+  workers: 1,
   timeout: 30_000,
   expect: {
     timeout: 10_000,
@@ -72,7 +74,7 @@ export default defineConfig({
       url: `${apiUrl}/health`,
     },
     {
-      command: 'npm run dev -- --host 127.0.0.1 --port 4173 --strictPort',
+      command: 'npm run dev -- --host 127.0.0.1 --port 4173 --strictPort --force',
       cwd: webDir,
       env: {
         ...childEnv,

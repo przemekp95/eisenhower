@@ -119,6 +119,8 @@ describe('App', () => {
     setApiToken('runtime-only-code');
     mockedApi.getTasks.mockResolvedValue([initialTask]);
     mockedApi.getDelegatedTasks.mockResolvedValue([]);
+    mockedApi.getCalendarStatus.mockResolvedValue({ status: 'disconnected', connection: null });
+    mockedApi.getCalendarConflicts.mockResolvedValue([]);
     mockedApi.createTask.mockResolvedValue({
       _id: '2',
       title: 'New task',

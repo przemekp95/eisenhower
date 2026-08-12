@@ -1,5 +1,25 @@
 # In Progress
 
+## TASK-047: Deploy the portable local AMD platform with Calendar and Remote MCP
+**Priority:** P0 | **Tags:** calendar, mcp, oauth, n8n, amd, rocm, deployment
+
+Deliver the approved platform end to end on the local AMD computer while keeping every application, automation, data, and inference boundary independently relocatable. Add controlled bidirectional Google Calendar synchronization and authenticated Remote MCP writes, then promote the exact verified result through `dev` to the default `master` branch.
+
+### Plan
+
+- Finish the mutation foundation with single-task ETags, durable idempotency, scoped OIDC authorization, privacy-safe audit coverage and a transactional Mongo outbox.
+- Implement Calendar bindings, outbound and incremental inbound synchronization, explicit conflicts, deletion safety, `410 Gone` recovery, watch renewal and reconciliation through private n8n orchestration.
+- Add narrow revision-safe Remote MCP mutation and calendar tools over Streamable HTTP with OAuth protected-resource metadata, explicit scopes, Host/Origin checks, rate limits and approval-safe annotations.
+- Add an accessible connection, synchronization and conflict-resolution surface while keeping recurrence, all-day events, attendees, Meet and automatic invitations outside the first supported contract.
+- Package application, automation, storage and inference as independently addressable services; qualify the exact local `gfx1151` ROCm/vLLM/model matrix and preserve classifier fallback when inference is unavailable.
+- Run focused red-green loops, executable BDD, full repository verification and local end-to-end runtime checks, then promote only the exact green SHA through reviewed PRs to `dev` and `master`.
+
+### Progress
+
+The portable local topology, transactional Calendar domain/outbox, HMAC-bound n8n workflows, bounded MCP write tools, API client and accessible Calendar status/conflict UI are implemented on the feature branch. Point 1 is now live on the local AMD host: per-user encrypted Google OAuth, a narrow HTTPS callback/webhook gateway, an active Google Watch channel, a completed incremental-sync baseline and published tokenless n8n workflows were verified against the real account without importing historical calendar entries. Focused backend, n8n and deployment contracts plus the complete Node suite and build are green. Final promotion remains fail-closed: no production-approved AI evaluation artifact exists; the `gfx1151` ROCm image/model has not been downloaded or qualified; Remote MCP still requires an owner-selected OIDC/gateway identity boundary; and ordinary task update/lifecycle/delegation APIs still need durable mutation receipts beyond `If-Match`.
+
+---
+
 ## TASK-043: Compare dense, hybrid RRF and optional reranked retrieval
 **Priority:** P1 | **Tags:** rag, retrieval, bm25, rrf, reranker, evaluation
 

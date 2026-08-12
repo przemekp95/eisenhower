@@ -43,7 +43,7 @@ class McpSdkV2ContractTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "loopback"):
                 server.main()
 
-    def test_official_client_lists_exactly_the_read_only_tools(self) -> None:
+    def test_official_client_lists_exactly_the_bounded_tools(self) -> None:
         async def verify() -> None:
             async with Client(server.mcp) as client:
                 result = await client.list_tools()
@@ -57,6 +57,15 @@ class McpSdkV2ContractTest(unittest.TestCase):
                     "project_context",
                     "knowledge_search",
                     "priority_explain",
+                    "task_create",
+                    "task_update",
+                    "task_lifecycle",
+                    "task_schedule",
+                    "task_delegation",
+                    "calendar_sync_status",
+                    "calendar_sync_request",
+                    "calendar_conflicts_list",
+                    "calendar_conflict_resolve",
                 },
             )
             self.assertTrue(all(tool.input_schema["type"] == "object" for tool in result.tools))

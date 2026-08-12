@@ -1,4 +1,4 @@
-import type { QueryFilter } from 'mongoose';
+import mongoose, { type QueryFilter } from 'mongoose';
 import {
   CreateOperation,
   CreateTaskPersistenceResult,
@@ -20,6 +20,7 @@ import {
   resolveLifecycleTransition,
 } from '../application/taskRepository';
 import { Task, TaskModel } from '../models/task';
+import { CalendarBindingModel, CalendarDomainAuditModel, CalendarOutboxModel } from '../models/calendar';
 
 type PersistedTask = Omit<Task, 'lifecycleState'> & {
   _id: unknown;
@@ -36,6 +37,28 @@ function revisionFilter(expectedRevision: number) {
     return { $or: [{ revision: 0 }, { revision: { $exists: false } }] };
   }
   return { revision: expectedRevision };
+}
+
+async function enqueueCalendarTaskEvent(
+  session: mongoose.ClientSession,
+  scope: TaskScope,
+  task: StoredTask,
+  type: 'event_create' | 'event_update' | 'event_delete',
+) {
+  await CalendarOutboxModel.create([{
+    eventId: `task:${task._id}:${type}:${task.revision}`,
+    ...scope,
+    aggregateId: task._id,
+    aggregateRevision: task.revision,
+    type,
+    payload: {
+      taskId: task._id,
+      title: task.title,
+      lifecycleState: task.lifecycleState,
+      schedule: task.schedule ?? null,
+    },
+    status: 'pending',
+  }], { session });
 }
 
 function toStoredTask(task: PersistedTask): StoredTask {
@@ -58,6 +81,10 @@ function toStoredTask(task: PersistedTask): StoredTask {
 }
 
 export class MongooseTaskRepository implements TaskRepository {
+  async get(scope: TaskScope, id: string) {
+    const task = await TaskModel.findOne({ _id: id, ...scope, deletedAt: { $exists: false } }).lean();
+    return task ? toStoredTask(task as PersistedTask) : null;
+  }
   async listPage(
     scope: TaskScope,
     limit: number,
@@ -140,12 +167,22 @@ export class MongooseTaskRepository implements TaskRepository {
     expectedRevision: number,
     patch: Partial<TaskPayload>
   ) {
-    const task = await TaskModel.findOneAndUpdate(
-      { _id: id, ...scope, deletedAt: { $exists: false }, ...revisionFilter(expectedRevision) },
-      { $set: patch, $inc: { revision: 1 } },
-      { returnDocument: 'after', runValidators: true }
-    );
-    return task ? toStoredTask(task.toObject() as PersistedTask) : null;
+    const session = await mongoose.startSession();
+    let stored: StoredTask | null = null;
+    try {
+      await session.withTransaction(async () => {
+        const task = await TaskModel.findOneAndUpdate(
+          { _id: id, ...scope, deletedAt: { $exists: false }, ...revisionFilter(expectedRevision) },
+          { $set: patch, $inc: { revision: 1 } },
+          { returnDocument: 'after', runValidators: true, session }
+        );
+        if (!task) return;
+        stored = toStoredTask(task.toObject() as PersistedTask);
+        const binding = await CalendarBindingModel.exists({ ...scope, taskId: id }).session(session);
+        if (binding) await enqueueCalendarTaskEvent(session, scope, stored, 'event_update');
+      });
+      return stored;
+    } finally { await session.endSession(); }
   }
 
   async transitionLifecycle(
@@ -167,21 +204,32 @@ export class MongooseTaskRepository implements TaskRepository {
     );
     if (!transition) return { status: 'invalid_transition' };
 
-    const task = await TaskModel.findOneAndUpdate(
-      { _id: id, ...scope, deletedAt: { $exists: false }, ...revisionFilter(expectedRevision) },
-      {
-        $set: {
-          lifecycleState: transition.state,
-          ...(transition.previous ? { priorLifecycleState: transition.previous } : {}),
-        },
-        ...(!transition.previous ? { $unset: { priorLifecycleState: 1 } } : {}),
-        $inc: { revision: 1 },
-      },
-      { returnDocument: 'after', runValidators: true }
-    );
-    return task
-      ? { status: 'updated', task: toStoredTask(task.toObject() as PersistedTask) }
-      : { status: 'revision_conflict' };
+    const session = await mongoose.startSession();
+    try {
+      let stored: StoredTask | null = null;
+      await session.withTransaction(async () => {
+        const task = await TaskModel.findOneAndUpdate(
+          { _id: id, ...scope, deletedAt: { $exists: false }, ...revisionFilter(expectedRevision) },
+          {
+            $set: {
+              lifecycleState: transition.state,
+              ...(transition.previous ? { priorLifecycleState: transition.previous } : {}),
+            },
+            ...(!transition.previous ? { $unset: { priorLifecycleState: 1 } } : {}),
+            $inc: { revision: 1 },
+          },
+          { returnDocument: 'after', runValidators: true, session }
+        );
+        if (!task) return;
+        stored = toStoredTask(task.toObject() as PersistedTask);
+        const binding = await CalendarBindingModel.exists({ ...scope, taskId: id }).session(session);
+        if (binding) {
+          const type = ['archived', 'trashed'].includes(stored.lifecycleState) ? 'event_delete' : 'event_update';
+          await enqueueCalendarTaskEvent(session, scope, stored, type);
+        }
+      });
+      return stored ? { status: 'updated', task: stored } : { status: 'revision_conflict' };
+    } finally { await session.endSession(); }
   }
 
   async updateSchedule(
@@ -190,14 +238,41 @@ export class MongooseTaskRepository implements TaskRepository {
     expectedRevision: number,
     schedule: TaskSchedule | null
   ) {
-    const task = await TaskModel.findOneAndUpdate(
-      { _id: id, ...scope, deletedAt: { $exists: false }, ...revisionFilter(expectedRevision) },
-      schedule
-        ? { $set: { schedule }, $inc: { revision: 1 } }
-        : { $unset: { schedule: 1 }, $inc: { revision: 1 } },
-      { returnDocument: 'after', runValidators: true }
-    );
-    return task ? toStoredTask(task.toObject() as PersistedTask) : null;
+    const session = await mongoose.startSession();
+    let stored: StoredTask | null = null;
+    try {
+      await session.withTransaction(async () => {
+        const task = await TaskModel.findOneAndUpdate(
+          { _id: id, ...scope, deletedAt: { $exists: false }, ...revisionFilter(expectedRevision) },
+          schedule
+            ? { $set: { schedule }, $inc: { revision: 1 } }
+            : { $unset: { schedule: 1 }, $inc: { revision: 1 } },
+          { returnDocument: 'after', runValidators: true, session }
+        );
+        if (!task) return;
+        stored = toStoredTask(task.toObject() as PersistedTask);
+        const binding = await CalendarBindingModel.exists({ ...scope, taskId: id }).session(session);
+        await enqueueCalendarTaskEvent(
+          session,
+          scope,
+          stored,
+          schedule ? (binding ? 'event_update' : 'event_create') : 'event_delete',
+        );
+        await CalendarDomainAuditModel.create([{
+          eventId: `task:${id}:schedule:${stored.revision}`,
+          ...scope,
+          actorId: scope.ownerId,
+          action: schedule ? 'task.schedule.set' : 'task.schedule.clear',
+          outcome: 'success',
+          resourceId: id,
+          beforeRevision: expectedRevision,
+          afterRevision: stored.revision,
+        }], { session });
+      });
+      return stored;
+    } finally {
+      await session.endSession();
+    }
   }
 
   async listDelegated(scope: TaskPrincipalScope, limit: number) {

@@ -1,7 +1,7 @@
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
 import request from 'supertest';
 import express from 'express';
-import { createOidcTokenVerifier, requireOidcToken } from '../src/auth';
+import { createOidcTokenVerifier, requireOidcToken, requireScope } from '../src/auth';
 
 describe('OIDC bearer verification', () => {
   it('verifies signature, issuer, audience and derives tenant scope from claims', async () => {
@@ -95,6 +95,42 @@ describe('OIDC bearer verification', () => {
       .sign(privateKey);
 
     await expect(verify(token)).resolves.toMatchObject({ roles: [], projectIds: [] });
+  });
+
+  it.each([
+    { claims: { scope: 'tasks:read  calendar:write' }, scopes: ['tasks:read', 'calendar:write'] },
+    { claims: { scp: ['tasks:read'] }, scopes: ['tasks:read'] },
+  ])('maps supported OIDC scope claim shape %#', async ({ claims, scopes }) => {
+    const { privateKey, publicKey } = await generateKeyPair('RS256');
+    const jwk = await exportJWK(publicKey);
+    const verify = createOidcTokenVerifier(
+      {
+        issuer: 'https://identity.example.com', audience: 'eisenhower-api',
+        jwksUrl: 'https://identity.example.com/.well-known/jwks.json',
+      },
+      createLocalJWKSet({ keys: [{ ...jwk, kid: 'key-1', alg: 'RS256' }] })
+    );
+    const token = await new SignJWT({ tenant_id: 'tenant-a', ...claims })
+      .setProtectedHeader({ alg: 'RS256', kid: 'key-1' })
+      .setIssuer('https://identity.example.com').setAudience('eisenhower-api')
+      .setSubject('user-1').setExpirationTime('5m').sign(privateKey);
+
+    await expect(verify(token)).resolves.toMatchObject({ scopes });
+  });
+
+  it('enforces required scopes and fails closed if rejection auditing fails', async () => {
+    const app = express();
+    app.use((req, _res, next) => {
+      req.auth = { tenantId: 't', userId: 'u', roles: [], projectIds: [], scopes: ['tasks:read'] };
+      next();
+    });
+    app.get('/allowed', requireScope('tasks:read'), (_req, res) => res.sendStatus(204));
+    app.get('/denied', requireScope('tasks:write'), (_req, res) => res.sendStatus(204));
+    app.get('/audit-failed', requireScope('tasks:write', () => { throw new Error('audit failed'); }));
+
+    expect((await request(app).get('/allowed')).status).toBe(204);
+    expect((await request(app).get('/denied')).status).toBe(403);
+    expect((await request(app).get('/audit-failed')).status).toBe(503);
   });
 
   it('enforces OIDC bearer authentication in Express middleware', async () => {

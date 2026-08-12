@@ -1,6 +1,6 @@
 # Eisenhower MCP adapter
 
-This is a thin, query-only adapter over the public Eisenhower HTTP API. It exposes exactly:
+This is a thin, bounded adapter over the public Eisenhower HTTP API. It exposes read tools:
 
 - `matrix_summary`
 - `tasks_search`
@@ -9,7 +9,21 @@ This is a thin, query-only adapter over the public Eisenhower HTTP API. It expos
 - `knowledge_search`
 - `priority_explain`
 
-It intentionally exposes no mutation, arbitrary URL fetch, shell command, n8n executor, or generic workflow tool. `task_get` and `project_context` currently derive their answer from the existing `GET /tasks` endpoint; the response states the current project-metadata limitation rather than inventing data. `knowledge_search` expects the versioned public `POST /v2/knowledge/search` contract and returns its citations unchanged.
+and narrow write tools:
+
+- `task_create`
+- `task_update`
+- `task_lifecycle`
+- `task_schedule`
+- `task_delegation`
+- `calendar_sync_status`
+- `calendar_sync_request`
+- `calendar_conflicts_list`
+- `calendar_conflict_resolve`
+
+It intentionally exposes no final delete, arbitrary URL fetch, shell command, n8n executor, or generic workflow tool. Every task mutation requires an idempotency key; every mutation of an existing task also requires `expected_revision`, mapped to the upstream `If-Match` precondition. Scheduling and delegation require one explicit mode so a missing argument cannot silently clear state. `task_get` and `project_context` currently derive their answer from the existing `GET /tasks` endpoint; the response states the current project-metadata limitation rather than inventing data. `knowledge_search` expects the versioned public `POST /v2/knowledge/search` contract and returns its citations unchanged.
+
+Calendar tools use only the published status, sync-request, conflict-list, and conflict-resolution contracts. Sync requests require an idempotency key; conflict resolution additionally requires the expected conflict revision and allows only `eisenhower` or `google` as the strategy. The adapter does not accept or construct caller-selected endpoints.
 
 ## Transport and authentication
 
@@ -21,7 +35,7 @@ Configuration:
 | --- | --- | --- |
 | `EISENHOWER_TASK_API_BASE_URL` | yes | Task API base URL, for example local Node on port 3001 |
 | `EISENHOWER_AI_API_BASE_URL` | yes | AI API base URL, for example local FastAPI on port 8000 |
-| `EISENHOWER_API_TOKEN` | production | Scoped read-only bearer token |
+| `EISENHOWER_API_TOKEN` | production | Scoped bearer token limited to the exposed operations |
 | `EISENHOWER_API_TIMEOUT_SECONDS` | no | Upstream timeout, default 5 seconds |
 | `MCP_TRANSPORT` | no | `stdio` by default |
 | `MCP_HOST` | no | Streamable HTTP loopback bind, default `127.0.0.1`; non-loopback is rejected |
