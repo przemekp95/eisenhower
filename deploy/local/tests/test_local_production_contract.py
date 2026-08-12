@@ -106,6 +106,10 @@ class LocalProductionContractTest(unittest.TestCase):
       self.assertIn("AUDIT_HMAC_KEY=${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY is required}", environment)
 
     ai_environment = self.services["ai-service"]["environment"]
+    self.assertIn(
+      "INTERNAL_ALLOWED_TENANTS=${INTERNAL_ALLOWED_TENANTS:?INTERNAL_ALLOWED_TENANTS is required}",
+      ai_environment,
+    )
     self.assertIn("LOCAL_MODEL_REQUIRE_EVALUATION=true", ai_environment)
     self.assertIn(
       "LOCAL_MODEL_APPROVED_EVALUATION_SHA256=${LOCAL_MODEL_APPROVED_EVALUATION_SHA256:?approved evaluation digest is required}",
@@ -346,6 +350,7 @@ class LocalProductionContractTest(unittest.TestCase):
       gateway["volumes"],
     )
     config = ACCESS_GATEWAY_CONFIG_PATH.read_text()
+    self.assertIn("map_hash_bucket_size 128;", config)
     self.assertIn("limit_req_zone", config)
     self.assertIn("client_max_body_size", config)
     self.assertIn("if ($host != \"${ACCESS_GATEWAY_HOST}\")", config)

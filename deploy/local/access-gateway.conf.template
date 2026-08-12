@@ -1,4 +1,5 @@
 limit_req_zone $binary_remote_addr zone=access_per_ip:10m rate=30r/s;
+map_hash_bucket_size 128;
 
 map $http_origin $origin_allowed {
     default 0;
