@@ -66,7 +66,10 @@ class PinnedMultilingualReranker:
 
   def score(self, query_text, ranked_candidates):
     scores = self.encoder.predict(
-      [(query_text, candidate.text) for candidate in ranked_candidates],
+      [
+        (query_text, f"{candidate.title}\n{candidate.text}")
+        for candidate in ranked_candidates
+      ],
       show_progress_bar=False,
     )
     return [float(score) for score in scores]
