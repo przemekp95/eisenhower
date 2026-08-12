@@ -13,6 +13,29 @@ from .models import AccessScope, RetrievalQuery
 from .ports import Retriever
 
 
+def select_train_strategy(reports: dict[str, dict]) -> str:
+  """Select a safe candidate using train metrics without consulting dev or holdout."""
+  ranked: list[tuple[tuple[float, ...], str]] = []
+  for name, report in reports.items():
+    metrics = report["metrics"]
+    if any(metrics[key] != 0.0 for key in (
+      "forbidden_hit_rate", "stale_hit_rate", "isolation_violation_rate",
+    )):
+      continue
+    languages = metrics["by_language"]
+    score = (
+      min(languages["pl"]["recall_at_k"], languages["en"]["recall_at_k"]),
+      min(languages["pl"]["mrr"], languages["en"]["mrr"]),
+      metrics["recall_at_k"],
+      metrics["mrr"],
+      -metrics["document_duplicate_rate"],
+    )
+    ranked.append((score, name))
+  if not ranked:
+    raise ValueError("train selection has no candidate passing zero-tolerance gates")
+  return max(ranked, key=lambda item: (item[0], item[1]))[1]
+
+
 class GoldenEvaluationRunner:
   def __init__(self, rag_service, *, clock: Callable[[], float] = perf_counter):
     self.rag_service = rag_service

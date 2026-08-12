@@ -1,0 +1,3110 @@
+{
+  "approval_status": "human_review_required",
+  "candidate_sha256": "9bd58f71daadcaf46faaf05a2c4d2bec43d56d1865d69f4ce914b830cb589506",
+  "cleanup": {
+    "mongo_database_dropped": true,
+    "qdrant_collection_deleted": true
+  },
+  "collection": {
+    "name": "task013_candidate_f464b14ce5f444218c7e80927bf94f73",
+    "revision": "minilm-v1"
+  },
+  "corpus_snapshot_sha256": "e851ef8725cf22ee858f706b1f7b1becbec051ba30f85a6dc531c5b24a407f37",
+  "deployment_proven": false,
+  "evaluation": {
+    "cases": [
+      {
+        "actual_citation_ids": [],
+        "actual_no_answer": false,
+        "actual_quadrant": null,
+        "allowed_citation_ids": [],
+        "case_id": "train-pl-fastapi-boundary",
+        "duplicate_hit_ids": [],
+        "execution_id": null,
+        "expected_content_versions": {
+          "dad8a42bab7ada70cb2b7eacd84d77c95929796b09f8b2f0b2ab8aa23e3d98f3": "eisenhower-corpus-v1:880dc8f430bb2e52b8ef94485fb8a97d81a5e6c5acbcc3e07a98794f28030d80"
+        },
+        "expected_no_answer": false,
+        "expected_quadrant": null,
+        "forbidden_document_ids": [],
+        "grounded": false,
+        "injection_attempt": false,
+        "injection_success": false,
+        "language": "pl",
+        "latency_ms": 16.808615007903427,
+        "model_id": null,
+        "model_revision": null,
+        "output_tokens": 0,
+        "prompt_id": null,
+        "prompt_tokens": 0,
+        "prompt_version": null,
+        "raw_confidence": null,
+        "relevant_document_ids": [
+          "dad8a42bab7ada70cb2b7eacd84d77c95929796b09f8b2f0b2ab8aa23e3d98f3"
+        ],
+        "result_mode": "rag",
+        "retrieved_chunk_ids": [
+          "afe30627a89caf532430cd5f0bff5ffc3f5dee3b427cb18545ec2147c5429dff",
+          "469e8a2122ba26a970713336bc837f92020267c28dce1d544c7a1866f0699432",
+          "e720e1fc1da78633af735d86bceff30ea031c2c2d85f410ebe743d0541fd1c1e",
+          "ce36547becb3ff3ed0097b69c786b42dd90a54a50d76c9ab0838e0e21d8424c1",
+          "ecfefbba9e7fda93ab12d8ca21e15827a9c5da0307fb13d45dafc1eeda08f3a4"
+        ],
+        "retrieved_content_versions": [
+          "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a",
+          "eisenhower-corpus-v1:a6d4fe50f25a405b6a74c8b09b517f69f41269ecaadf18316b8a76399cc92cc7",
+          "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02",
+          "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6",
+          "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff"
+        ],
+        "retrieved_document_ids": [
+          "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349",
+          "a15ecec4e605d792571456120580b1c996abf893d2cb378b23ca2f4ac42e6682",
+          "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d",
+          "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+          "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c"
+        ],
+        "schema_valid": true,
+        "schema_version": null,
+        "split": "train",
+        "stale_document_ids": []
+      },
+      {
+        "actual_citation_ids": [],
+        "actual_no_answer": false,
+        "actual_quadrant": null,
+        "allowed_citation_ids": [],
+        "case_id": "train-en-qdrant-choice",
+        "duplicate_hit_ids": [],
+        "execution_id": null,
+        "expected_content_versions": {
+          "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec": "eisenhower-corpus-v1:798e88324008bc881d122d5795475f0266edd88dd8a1c1390c1e9c026c059f8a"
+        },
+        "expected_no_answer": false,
+        "expected_quadrant": null,
+        "forbidden_document_ids": [],
+        "grounded": false,
+        "injection_attempt": false,
+        "injection_success": false,
+        "language": "en",
+        "latency_ms": 15.240281994920224,
+        "model_id": null,
+        "model_revision": null,
+        "output_tokens": 0,
+        "prompt_id": null,
+        "prompt_tokens": 0,
+        "prompt_version": null,
+        "raw_confidence": null,
+        "relevant_document_ids": [
+          "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec"
+        ],
+        "result_mode": "rag",
+        "retrieved_chunk_ids": [
+          "d80d8b77bd694641cabedc2e12564fb590ddd5284885b8098ef70e790d751dd6",
+          "02a196d56008c93bcbbb4acffc8bdd9fc1f998afdd5ec85c51b9de277776c997",
+          "3b068aa16964c31a19c40de92d99d41a1d9fdfef2e5bfc6118fbb1175db3171c",
+          "e768f5b2723b6af8239995a868fefb79e949d1c06d64e960e49a9e33a4dbbcf6",
+          "4e30153fbaa97fff1e14d8050deb763af12bdc0f67f8873ce3f32b40e6772328"
+        ],
+        "retrieved_content_versions": [
+          "eisenhower-corpus-v1:798e88324008bc881d122d5795475f0266edd88dd8a1c1390c1e9c026c059f8a",
+          "eisenhower-corpus-v1:52686331a28e8c00ec50c02be133cb7305a72923c1b4b0ccc49b565ef60603ea",
+          "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6",
+          "eisenhower-corpus-v1:2fef8812bbfbead6b0b576714011b6f976a3cd99e3aeb910bf96d895ae3b2ab2",
+          "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff"
+        ],
+        "retrieved_document_ids": [
+          "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec",
+          "c16a06e30b55bb570105b18a161802a8e1fc8556e039fd27f1c69f7dd1ca2fac",
+          "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+          "829eae5c303638639220c821ea397445e97c5f0b58b27103377f3d4b948e26e6",
+          "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c"
+        ],
+        "schema_valid": true,
+        "schema_version": null,
+        "split": "train",
+        "stale_document_ids": []
+      },
+      {
+        "actual_citation_ids": [],
+        "actual_no_answer": false,
+        "actual_quadrant": null,
+        "allowed_citation_ids": [],
+        "case_id": "train-pl-n8n-boundary",
+        "duplicate_hit_ids": [],
+        "execution_id": null,
+        "expected_content_versions": {
+          "7e4a68f3f60fa02e47af3988fbf8350d029bda2e7bad19d5f3a8a57fc9e309ec": "eisenhower-corpus-v1:f58cf8618d835b3cf70c61c339c76d9dad2ac61cc1fbc91b4d9a3f0889557b3c"
+        },
+        "expected_no_answer": false,
+        "expected_quadrant": null,
+        "forbidden_document_ids": [],
+        "grounded": false,
+        "injection_attempt": false,
+        "injection_success": false,
+        "language": "pl",
+        "latency_ms": 16.48433698574081,
+        "model_id": null,
+        "model_revision": null,
+        "output_tokens": 0,
+        "prompt_id": null,
+        "prompt_tokens": 0,
+        "prompt_version": null,
+        "raw_confidence": null,
+        "relevant_document_ids": [
+          "7e4a68f3f60fa02e47af3988fbf8350d029bda2e7bad19d5f3a8a57fc9e309ec"
+        ],
+        "result_mode": "rag",
+        "retrieved_chunk_ids": [
+          "cd26766b1e065f9dbd1c6e5f658479836d1e64799fcdb379997e4e6054a6eb34",
+          "4c08e420e185d73739ba03bf7743b63e07387e253ffd0eb5c5c7730305e5d057",
+          "3f561ae7379f80f9b22cdc4cf464a8efecb1e36511ecfe607195e695a4ca87bc",
+          "8577df7e26090b8d4b6b0ba7d9dbc87b01699dfc94ed4db1f872dbc4c61d54cb",
+          "f6b727f0f4087d3830c139c36d3b0eca51486ea8485c4520b4702254c1ce3fee"
+        ],
+        "retrieved_content_versions": [
+          "eisenhower-corpus-v1:f58cf8618d835b3cf70c61c339c76d9dad2ac61cc1fbc91b4d9a3f0889557b3c",
+          "eisenhower-corpus-v1:a3a5df474c7dc890942ddc6d0a1d5da348f056099e933358eca52e902d15b8e8",
+          "eisenhower-corpus-v1:2bf1221bf376dd6912123f9a0c30de38241a2f7026cbab4b8105ea19cdfd221c",
+          "eisenhower-corpus-v1:a6d4fe50f25a405b6a74c8b09b517f69f41269ecaadf18316b8a76399cc92cc7",
+          "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a"
+        ],
+        "retrieved_document_ids": [
+          "7e4a68f3f60fa02e47af3988fbf8350d029bda2e7bad19d5f3a8a57fc9e309ec",
+          "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714",
+          "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130",
+          "a15ecec4e605d792571456120580b1c996abf893d2cb378b23ca2f4ac42e6682",
+          "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349"
+        ],
+        "schema_valid": true,
+        "schema_version": null,
+        "split": "train",
+        "stale_document_ids": []
+      },
+      {
+        "actual_citation_ids": [],
+        "actual_no_answer": false,
+        "actual_quadrant": null,
+        "allowed_citation_ids": [],
+        "case_id": "train-en-mcp-tools",
+        "duplicate_hit_ids": [],
+        "execution_id": null,
+        "expected_content_versions": {
+          "4628f4fe3c7142c9963f23c323c5c3ef23346aafcaf07e71815c236d8598e018": "eisenhower-corpus-v1:e1e4671c983c3d0224d352ce453c3c8b29ea0800583da450a6e6d3d531a19ef2"
+        },
+        "expected_no_answer": false,
+        "expected_quadrant": null,
+        "forbidden_document_ids": [],
+        "grounded": false,
+        "injection_attempt": false,
+        "injection_success": false,
+        "language": "en",
+        "latency_ms": 19.93994999793358,
+        "model_id": null,
+        "model_revision": null,
+        "output_tokens": 0,
+        "prompt_id": null,
+        "prompt_tokens": 0,
+        "prompt_version": null,
+        "raw_confidence": null,
+        "relevant_document_ids": [
+          "4628f4fe3c7142c9963f23c323c5c3ef23346aafcaf07e71815c236d8598e018"
+        ],
+        "result_mode": "rag",
+        "retrieved_chunk_ids": [
+          "8b3e0a45bfae8c1e7cb166ab1a0b1dbe0ebbd6dc1670893f549f43c60d4a855b",
+          "edc019ddf97290b9e9a7da12f678e1e8e07a667a53f417b7d34121fdd3356460",
+          "603905bce9581c26f5516104c59c73586537fb302d482e803aedee3c91bb58d9",
+          "c6dd133c238065a084a335fa7471f09e5e3a0499108f10df48f2004706f64a64",
+          "6b822d8f372be17cead7ac0de6911b83a3a9fcb023ac7784c2e860f47c6a8aec"
+        ],
+        "retrieved_content_versions": [
+          "eisenhower-corpus-v1:7c40b2742030da356bc2f049d3b67ffc7f1a5c92f46b424af3304a015ab685ee",
+          "eisenhower-corpus-v1:e1e4671c983c3d0224d352ce453c3c8b29ea0800583da450a6e6d3d531a19ef2",
+          "eisenhower-corpus-v1:a3a5df474c7dc890942ddc6d0a1d5da348f056099e933358eca52e902d15b8e8",
+          "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582",
+          "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a"
+        ],
+        "retrieved_document_ids": [
+          "1c2db50c264df20f3eeedcd9c748edcbe663bc925d817d3ee7c8da663eabcd6d",
+          "4628f4fe3c7142c9963f23c323c5c3ef23346aafcaf07e71815c236d8598e018",
+          "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714",
+          "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251",
+          "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349"
+        ],
+        "schema_valid": true,
+        "schema_version": null,
+        "split": "train",
+        "stale_document_ids": []
+      },
+      {
+        "actual_citation_ids": [],
+        "actual_no_answer": false,
+        "actual_quadrant": null,
+        "allowed_citation_ids": [],
+        "case_id": "train-pl-light-cqrs",
+        "duplicate_hit_ids": [],
+        "execution_id": null,
+        "expected_content_versions": {
+          "529a08ad8f46e87f60ce05c1a9cc4795ee291d22a4949c42e6e527c4da559715": "eisenhower-corpus-v1:32f2ac336a14cb1496d8c3ef080bb018139592a3af0f1fea58187cf57740fba0"
+        },
+        "expected_no_answer": false,
+        "expected_quadrant": null,
+        "forbidden_document_ids": [],
+        "grounded": false,
+        "injection_attempt": false,
+        "injection_success": false,
+        "language": "pl",
+        "latency_ms": 13.763865979854017,
+        "model_id": null,
+        "model_revision": null,
+        "output_tokens": 0,
+        "prompt_id": null,
+        "prompt_tokens": 0,
+        "prompt_version": null,
+        "raw_confidence": null,
+        "relevant_document_ids": [
+          "529a08ad8f46e87f60ce05c1a9cc4795ee291d22a4949c42e6e527c4da559715"
+        ],
+        "result_mode": "rag",
+        "retrieved_chunk_ids": [
+          "35c81ce5aee38bc6d12a410946b0db76f3bc11cd5d80cbdd827372534048dd0a",
+          "b8b71951516cea480f30119096b20d98067b04e56c91031200f58cce1e69e01b",
+          "3d87e305bac097dc61d3867721d181319863dcde2245dc23286545038ecb8039",
+          "f8d77cc985efa28abec911faec28df79532906c1dff91ecedb671ed393792ca2",
+          "ece49b4ad19211bd060de7a252863af6c0bdf38762ec323f65a20af7a52d061e"
+        ],
+        "retrieved_content_versions": [
+          "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6",
+          "eisenhower-corpus-v1:7c40b2742030da356bc2f049d3b67ffc7f1a5c92f46b424af3304a015ab685ee",
+          "eisenhower-corpus-v1:52686331a28e8c00ec50c02be133cb7305a72923c1b4b0ccc49b565ef60603ea",
+          "eisenhower-corpus-v1:1b7d4c9053120ac715c5f4457d9227f12ac75a241deca807ec2ec78603ed5fa3",
+          "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6"
+        ],
+        "retrieved_document_ids": [
+          "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+          "1c2db50c264df20f3eeedcd9c748edcbe663bc925d817d3ee7c8da663eabcd6d",
+          "c16a06e30b55bb570105b18a161802a8e1fc8556e039fd27f1c69f7dd1ca2fac",
+          "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45",
+          "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5"
+        ],
+        "schema_valid": true,
+        "schema_version": null,
+        "split": "train",
+        "stale_document_ids": []
+      },
+      {
+        "actual_citation_ids": [],
+        "actual_no_answer": false,
+        "actual_quadrant": null,
+        "allowed_citation_ids": [],
+        "case_id": "train-en-vllm-hardware-gate",
+        "duplicate_hit_ids": [],
+        "execution_id": null,
+        "expected_content_versions": {
+          "e6b4f85bad442748a410f84958a6129e6441114dfffcdf3d42ddcbfc81587626": "eisenhower-corpus-v1:13372fa141f184ca91530f3658c1a3984aece3673384155ff09427e0102333c7"
+        },
+        "expected_no_answer": false,
+        "expected_quadrant": null,
+        "forbidden_document_ids": [],
+        "grounded": false,
+        "injection_attempt": false,
+        "injection_success": false,
+        "language": "en",
+        "latency_ms": 17.920804006280378,
+        "model_id": null,
+        "model_revision": null,
+        "output_tokens": 0,
+        "prompt_id": null,
+        "prompt_tokens": 0,
+        "prompt_version": null,
+        "raw_confidence": null,
+        "relevant_document_ids": [
+          "e6b4f85bad442748a410f84958a6129e6441114dfffcdf3d42ddcbfc81587626"
+        ],
+        "result_mode": "rag",
+        "retrieved_chunk_ids": [
+          "cb23fd57a58c3141a3b4ff44e4f5c57e374844b29033632b535d4acee78602c2",
+          "a8984544a90d4ed2ddcd179b7dad8044241d3c7bad81794e780a5024d492482c",
+          "9fa752dbc3ebd4a3ea30cc159c475f46a78b5db0a5ed8934b63060c5c2bfcf92",
+          "0baf1a6aab1d6f25a57a03a9a8c176a89ced05e46fb2806b1bf82ac82ae6c6a3",
+          "005d0af4e2552815d54ff42f2d501267406bdee0a935678f9eb2fed71af9d4a6"
+        ],
+        "retrieved_content_versions": [
+          "eisenhower-corpus-v1:13372fa141f184ca91530f3658c1a3984aece3673384155ff09427e0102333c7",
+          "eisenhower-corpus-v1:13372fa141f184ca91530f3658c1a3984aece3673384155ff09427e0102333c7",
+          "eisenhower-corpus-v1:2fef8812bbfbead6b0b576714011b6f976a3cd99e3aeb910bf96d895ae3b2ab2",
+          "eisenhower-corpus-v1:2bf1221bf376dd6912123f9a0c30de38241a2f7026cbab4b8105ea19cdfd221c",
+          "eisenhower-corpus-v1:52686331a28e8c00ec50c02be133cb7305a72923c1b4b0ccc49b565ef60603ea"
+        ],
+        "retrieved_document_ids": [
+          "e6b4f85bad442748a410f84958a6129e6441114dfffcdf3d42ddcbfc81587626",
+          "e6b4f85bad442748a410f84958a6129e6441114dfffcdf3d42ddcbfc81587626",
+          "829eae5c303638639220c821ea397445e97c5f0b58b27103377f3d4b948e26e6",
+          "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130",
+          "c16a06e30b55bb570105b18a161802a8e1fc8556e039fd27f1c69f7dd1ca2fac"
+        ],
+        "schema_valid": true,
+        "schema_version": null,
+        "split": "train",
+        "stale_document_ids": []
+      },
+      {
+        "actual_citation_ids": [],
+        "actual_no_answer": false,
+        "actual_quadrant": null,
+        "allowed_citation_ids": [],
+        "case_id": "dev-pl-framework-boundary",
+        "duplicate_hit_ids": [],
+        "execution_id": null,
+        "expected_content_versions": {
+          "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349": "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a"
+        },
+        "expected_no_answer": false,
+        "expected_quadrant": null,
+        "forbidden_document_ids": [],
+        "grounded": false,
+        "injection_attempt": false,
+        "injection_success": false,
+        "language": "pl",
+        "latency_ms": 16.22935599880293,
+        "model_id": null,
+        "model_revision": null,
+        "output_tokens": 0,
+        "prompt_id": null,
+        "prompt_tokens": 0,
+        "prompt_version": null,
+        "raw_confidence": null,
+        "relevant_document_ids": [
+          "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349"
+        ],
+        "result_mode": "rag",
+        "retrieved_chunk_ids": [
+          "3b068aa16964c31a19c40de92d99d41a1d9fdfef2e5bfc6118fbb1175db3171c",
+          "a291a977bb23f78489190b3f9cbd7f707eb7776cc4c6c2bf5fa6c1050c092075",
+          "961a0bf4b3ce1dea4e89ed1a454df7da259be373d70a40662532f47e37c7f9ba",
+          "d19bb9dd9725d0d60c0433139ef164a3f039030955558d185a6161e13679318b",
+          "bf7d932aac054237843b4642bbcfd6e9d2326879e24745e2a15f665c6690b9bd"
+        ],
+        "retrieved_content_versions": [
+          "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6",
+          "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a",
+          "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02",
+          "eisenhower-corpus-v1:798e88324008bc881d122d5795475f0266edd88dd8a1c1390c1e9c026c059f8a",
+          "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02"
+        ],
+        "retrieved_document_ids": [
+          "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+          "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349",
+          "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d",
+          "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec",
+          "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d"
+        ],
+        "schema_valid": true,
+        "schema_version": null,
+        "split": "dev",
+        "stale_document_ids": []
+      },
+      {
+        "actual_citation_ids": [],
+        "actual_no_answer": false,
+        "actual_quadrant": null,
+        "allowed_citation_ids": [],
+        "case_id": "dev-en-corpus-acl",
+        "duplicate_hit_ids": [],
+        "execution_id": null,
+        "expected_content_versions": {
+          "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d": "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02"
+        },
+        "expected_no_answer": false,
+        "expected_quadrant": null,
+        "forbidden_document_ids": [],
+        "grounded": false,
+        "injection_attempt": false,
+        "injection_success": false,
+        "language": "en",
+        "latency_ms": 19.36856098473072,
+        "model_id": null,
+        "model_revision": null,
+        "output_tokens": 0,
+        "prompt_id": null,
+        "prompt_tokens": 0,
+        "prompt_version": null,
+        "raw_confidence": null,
+        "relevant_document_ids": [
+          "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d"
+        ],
+        "result_mode": "rag",
+        "retrieved_chunk_ids": [
+          "6b79ec87476ce852a7c40e48a46f8c46be656be6afff41f8e1c956157f47134e",
+          "6f4fbe210d2c87af921bd8180c88b8bde7cee078bcbc95f6360c31e9e58b4889",
+          "e720e1fc1da78633af735d86bceff30ea031c2c2d85f410ebe743d0541fd1c1e",
+          "a291a977bb23f78489190b3f9cbd7f707eb7776cc4c6c2bf5fa6c1050c092075",
+          "36d2fc56944df88a7a46c70207cb83433323fe8672ff808faf7184bb748d4713"
+        ],
+        "retrieved_content_versions": [
+          "eisenhower-corpus-v1:52686331a28e8c00ec50c02be133cb7305a72923c1b4b0ccc49b565ef60603ea",
+          "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02",
+          "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02",
+          "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a",
+          "eisenhower-corpus-v1:7c40b2742030da356bc2f049d3b67ffc7f1a5c92f46b424af3304a015ab685ee"
+        ],
+        "retrieved_document_ids": [
+          "c16a06e30b55bb570105b18a161802a8e1fc8556e039fd27f1c69f7dd1ca2fac",
+          "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d",
+          "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d",
+          "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349",
+          "1c2db50c264df20f3eeedcd9c748edcbe663bc925d817d3ee7c8da663eabcd6d"
+        ],
+        "schema_valid": true,
+        "schema_version": null,
+        "split": "dev",
+        "stale_document_ids": []
+      },
+      {
+        "actual_citation_ids": [],
+        "actual_no_answer": false,
+        "actual_quadrant": null,
+        "allowed_citation_ids": [],
+        "case_id": "dev-pl-qdrant-rollback",
+        "duplicate_hit_ids": [],
+        "execution_id": null,
+        "expected_content_versions": {
+          "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec": "eisenhower-corpus-v1:798e88324008bc881d122d5795475f0266edd88dd8a1c1390c1e9c026c059f8a",
+          "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c": "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff"
+        },
+        "expected_no_answer": false,
+        "expected_quadrant": null,
+        "forbidden_document_ids": [],
+        "grounded": false,
+        "injection_attempt": false,
+        "injection_success": false,
+        "language": "pl",
+        "latency_ms": 18.04675901075825,
+        "model_id": null,
+        "model_revision": null,
+        "output_tokens": 0,
+        "prompt_id": null,
+        "prompt_tokens": 0,
+        "prompt_version": null,
+        "raw_confidence": null,
+        "relevant_document_ids": [
+          "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c",
+          "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec"
+        ],
+        "result_mode": "rag",
+        "retrieved_chunk_ids": [
+          "961a0bf4b3ce1dea4e89ed1a454df7da259be373d70a40662532f47e37c7f9ba",
+          "d19bb9dd9725d0d60c0433139ef164a3f039030955558d185a6161e13679318b",
+          "4e30153fbaa97fff1e14d8050deb763af12bdc0f67f8873ce3f32b40e6772328",
+          "a291a977bb23f78489190b3f9cbd7f707eb7776cc4c6c2bf5fa6c1050c092075",
+          "a22a3971bdc61ab2f90d19b769d535d4ba30fc181cc534b4bb51d0891246bd4f"
+        ],
+        "retrieved_content_versions": [
+          "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02",
+          "eisenhower-corpus-v1:798e88324008bc881d122d5795475f0266edd88dd8a1c1390c1e9c026c059f8a",
+          "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff",
+          "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a",
+          "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582"
+        ],
+        "retrieved_document_ids": [
+          "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d",
+          "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec",
+          "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c",
+          "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349",
+          "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251"
+        ],
+        "schema_valid": true,
+        "schema_version": null,
+        "split": "dev",
+        "stale_document_ids": []
+      },
+      {
+        "actual_citation_ids": [],
+        "actual_no_answer": false,
+        "actual_quadrant": null,
+        "allowed_citation_ids": [],
+        "case_id": "dev-en-pii-logging",
+        "duplicate_hit_ids": [],
+        "execution_id": null,
+        "expected_content_versions": {
+          "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c": "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff",
+          "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714": "eisenhower-corpus-v1:a3a5df474c7dc890942ddc6d0a1d5da348f056099e933358eca52e902d15b8e8"
+        },
+        "expected_no_answer": false,
+        "expected_quadrant": null,
+        "forbidden_document_ids": [],
+        "grounded": false,
+        "injection_attempt": false,
+        "injection_success": false,
+        "language": "en",
+        "latency_ms": 18.926368007669225,
+        "model_id": null,
+        "model_revision": null,
+        "output_tokens": 0,
+        "prompt_id": null,
+        "prompt_tokens": 0,
+        "prompt_version": null,
+        "raw_confidence": null,
+        "relevant_document_ids": [
+          "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714",
+          "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c"
+        ],
+        "result_mode": "rag",
+        "retrieved_chunk_ids": [
+          "603905bce9581c26f5516104c59c73586537fb302d482e803aedee3c91bb58d9",
+          "4ca7fa7f3bd50b11dcf54df0be28fad58f815570360e38f72d63644d64b9bbbb",
+          "ce36547becb3ff3ed0097b69c786b42dd90a54a50d76c9ab0838e0e21d8424c1",
+          "c16a75549ca44ae4d0da60e4bf66112f4bcdd0621e14d6e17b6ef51b34ebf833",
+          "599a4ad1da27a11abab163ad7b6325ff8e61c32bf81c859fe126b9d61603b703"
+        ],
+        "retrieved_content_versions": [
+          "eisenhower-corpus-v1:a3a5df474c7dc890942ddc6d0a1d5da348f056099e933358eca52e902d15b8e8",
+          "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6",
+          "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6",
+          "eisenhower-corpus-v1:1b7d4c9053120ac715c5f4457d9227f12ac75a241deca807ec2ec78603ed5fa3",
+          "eisenhower-corpus-v1:1b7d4c9053120ac715c5f4457d9227f12ac75a241deca807ec2ec78603ed5fa3"
+        ],
+        "retrieved_document_ids": [
+          "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714",
+          "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+          "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+          "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45",
+          "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45"
+        ],
+        "schema_valid": true,
+        "schema_version": null,
+        "split": "dev",
+        "stale_document_ids": []
+      },
+      {
+        "actual_citation_ids": [],
+        "actual_no_answer": false,
+        "actual_quadrant": null,
+        "allowed_citation_ids": [],
+        "case_id": "dev-pl-retrieval-metrics",
+        "duplicate_hit_ids": [],
+        "execution_id": null,
+        "expected_content_versions": {
+          "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130": "eisenhower-corpus-v1:2bf1221bf376dd6912123f9a0c30de38241a2f7026cbab4b8105ea19cdfd221c"
+        },
+        "expected_no_answer": false,
+        "expected_quadrant": null,
+        "forbidden_document_ids": [],
+        "grounded": false,
+        "injection_attempt": false,
+        "injection_success": false,
+        "language": "pl",
+        "latency_ms": 16.37103100074455,
+        "model_id": null,
+        "model_revision": null,
+        "output_tokens": 0,
+        "prompt_id": null,
+        "prompt_tokens": 0,
+        "prompt_version": null,
+        "raw_confidence": null,
+        "relevant_document_ids": [
+          "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130"
+        ],
+        "result_mode": "rag",
+        "retrieved_chunk_ids": [
+          "29135adbb1a87fe2f06d779fd855481b59c2c9973132b873aae7e07c8df679c0",
+          "bbe4e80cb2fa75b3d908e3f75a91b0d8c3016bd4e2751bdd8b49e39cb6a2ee97",
+          "ecfefbba9e7fda93ab12d8ca21e15827a9c5da0307fb13d45dafc1eeda08f3a4",
+          "b05f0a393b2bd98dee20e9bbd399146fa6f1ab4da1137eaf6fdede087cb8f8b3",
+          "269adac41962ba4684dee91d5e4cb66135cf89f36196bb3a3c92af9709da9575"
+        ],
+        "retrieved_content_versions": [
+          "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582",
+          "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582",
+          "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff",
+          "eisenhower-corpus-v1:2fef8812bbfbead6b0b576714011b6f976a3cd99e3aeb910bf96d895ae3b2ab2",
+          "eisenhower-corpus-v1:a3a5df474c7dc890942ddc6d0a1d5da348f056099e933358eca52e902d15b8e8"
+        ],
+        "retrieved_document_ids": [
+          "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251",
+          "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251",
+          "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c",
+          "829eae5c303638639220c821ea397445e97c5f0b58b27103377f3d4b948e26e6",
+          "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714"
+        ],
+        "schema_valid": true,
+        "schema_version": null,
+        "split": "dev",
+        "stale_document_ids": []
+      },
+      {
+        "actual_citation_ids": [],
+        "actual_no_answer": false,
+        "actual_quadrant": null,
+        "allowed_citation_ids": [],
+        "case_id": "dev-en-production-acceptance",
+        "duplicate_hit_ids": [],
+        "execution_id": null,
+        "expected_content_versions": {
+          "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45": "eisenhower-corpus-v1:1b7d4c9053120ac715c5f4457d9227f12ac75a241deca807ec2ec78603ed5fa3",
+          "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130": "eisenhower-corpus-v1:2bf1221bf376dd6912123f9a0c30de38241a2f7026cbab4b8105ea19cdfd221c"
+        },
+        "expected_no_answer": false,
+        "expected_quadrant": null,
+        "forbidden_document_ids": [],
+        "grounded": false,
+        "injection_attempt": false,
+        "injection_success": false,
+        "language": "en",
+        "latency_ms": 25.788017024751753,
+        "model_id": null,
+        "model_revision": null,
+        "output_tokens": 0,
+        "prompt_id": null,
+        "prompt_tokens": 0,
+        "prompt_version": null,
+        "raw_confidence": null,
+        "relevant_document_ids": [
+          "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45",
+          "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130"
+        ],
+        "result_mode": "rag",
+        "retrieved_chunk_ids": [
+          "e98d984e137010ee222b2cf854409ee468c55a3e6f95b1d595a89107d47ff9e3",
+          "0baf1a6aab1d6f25a57a03a9a8c176a89ced05e46fb2806b1bf82ac82ae6c6a3",
+          "9daef0356d8a1f42d1106e68c516f9a06bc74f97f77ed2c7f2a2508829960757",
+          "05b003ae3e227d20cd9cc4e34eb40822ab5d121a9748752fe245ae7c96dbb2e9",
+          "bb52ee3af7dd088b4525e351e12e57d6d993895e4fe249208fe345baeed92fbf"
+        ],
+        "retrieved_content_versions": [
+          "eisenhower-corpus-v1:1b7d4c9053120ac715c5f4457d9227f12ac75a241deca807ec2ec78603ed5fa3",
+          "eisenhower-corpus-v1:2bf1221bf376dd6912123f9a0c30de38241a2f7026cbab4b8105ea19cdfd221c",
+          "eisenhower-corpus-v1:1b7d4c9053120ac715c5f4457d9227f12ac75a241deca807ec2ec78603ed5fa3",
+          "eisenhower-corpus-v1:a6d4fe50f25a405b6a74c8b09b517f69f41269ecaadf18316b8a76399cc92cc7",
+          "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6"
+        ],
+        "retrieved_document_ids": [
+          "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45",
+          "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130",
+          "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45",
+          "a15ecec4e605d792571456120580b1c996abf893d2cb378b23ca2f4ac42e6682",
+          "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5"
+        ],
+        "schema_valid": true,
+        "schema_version": null,
+        "split": "dev",
+        "stale_document_ids": []
+      }
+    ],
+    "dataset_version": "retrieval-review-candidate-v2-unapproved",
+    "metrics": {
+      "accuracy": 0.0,
+      "by_language": {
+        "en": {
+          "accuracy": 0.0,
+          "calibration": {
+            "brier_score": 0.0,
+            "cases": 0,
+            "ece": 0.0
+          },
+          "cases": 6,
+          "citation_correctness": 1.0,
+          "citation_recall": 1.0,
+          "duplicate_hit_rate": 0.0,
+          "fallback_rate": 0.0,
+          "forbidden_case_rate": 0.0,
+          "forbidden_hit_rate": 0.0,
+          "freshness_rate": 1.0,
+          "groundedness": 0.0,
+          "injection_attack_success_rate": 0.0,
+          "isolation_hit_rate": 0.0,
+          "isolation_violation_rate": 0.0,
+          "latency_ms": {
+            "max": 25.788017024751753,
+            "p50": 18.926368007669225,
+            "p95": 25.788017024751753
+          },
+          "macro_f1": 0.0,
+          "mrr": 0.8333,
+          "no_answer": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          "no_answer_accuracy": 1.0,
+          "no_hit_rate": 0.0,
+          "per_quadrant": {
+            "0": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            },
+            "1": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            },
+            "2": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            },
+            "3": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            }
+          },
+          "recall_at_k": 0.9167,
+          "schema_valid_rate": 1.0,
+          "semantic_consistency": 1.0,
+          "stale_case_rate": 0.0,
+          "stale_hit_rate": 0.0,
+          "tokens": {
+            "output_mean": 0.0,
+            "prompt_mean": 0.0
+          }
+        },
+        "pl": {
+          "accuracy": 0.0,
+          "calibration": {
+            "brier_score": 0.0,
+            "cases": 0,
+            "ece": 0.0
+          },
+          "cases": 6,
+          "citation_correctness": 1.0,
+          "citation_recall": 1.0,
+          "duplicate_hit_rate": 0.0,
+          "fallback_rate": 0.0,
+          "forbidden_case_rate": 0.0,
+          "forbidden_hit_rate": 0.0,
+          "freshness_rate": 1.0,
+          "groundedness": 0.0,
+          "injection_attack_success_rate": 0.0,
+          "isolation_hit_rate": 0.0,
+          "isolation_violation_rate": 0.0,
+          "latency_ms": {
+            "max": 18.04675901075825,
+            "p50": 16.37103100074455,
+            "p95": 18.04675901075825
+          },
+          "macro_f1": 0.0,
+          "mrr": 0.3333,
+          "no_answer": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          "no_answer_accuracy": 1.0,
+          "no_hit_rate": 0.0,
+          "per_quadrant": {
+            "0": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            },
+            "1": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            },
+            "2": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            },
+            "3": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            }
+          },
+          "recall_at_k": 0.5,
+          "schema_valid_rate": 1.0,
+          "semantic_consistency": 1.0,
+          "stale_case_rate": 0.0,
+          "stale_hit_rate": 0.0,
+          "tokens": {
+            "output_mean": 0.0,
+            "prompt_mean": 0.0
+          }
+        }
+      },
+      "by_split": {
+        "dev": {
+          "accuracy": 0.0,
+          "calibration": {
+            "brier_score": 0.0,
+            "cases": 0,
+            "ece": 0.0
+          },
+          "cases": 6,
+          "citation_correctness": 1.0,
+          "citation_recall": 1.0,
+          "duplicate_hit_rate": 0.0,
+          "fallback_rate": 0.0,
+          "forbidden_case_rate": 0.0,
+          "forbidden_hit_rate": 0.0,
+          "freshness_rate": 1.0,
+          "groundedness": 0.0,
+          "injection_attack_success_rate": 0.0,
+          "isolation_hit_rate": 0.0,
+          "isolation_violation_rate": 0.0,
+          "latency_ms": {
+            "max": 25.788017024751753,
+            "p50": 18.04675901075825,
+            "p95": 25.788017024751753
+          },
+          "macro_f1": 0.0,
+          "mrr": 0.5833,
+          "no_answer": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          "no_answer_accuracy": 1.0,
+          "no_hit_rate": 0.0,
+          "per_quadrant": {
+            "0": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            },
+            "1": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            },
+            "2": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            },
+            "3": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            }
+          },
+          "recall_at_k": 0.75,
+          "schema_valid_rate": 1.0,
+          "semantic_consistency": 1.0,
+          "stale_case_rate": 0.0,
+          "stale_hit_rate": 0.0,
+          "tokens": {
+            "output_mean": 0.0,
+            "prompt_mean": 0.0
+          }
+        },
+        "train": {
+          "accuracy": 0.0,
+          "calibration": {
+            "brier_score": 0.0,
+            "cases": 0,
+            "ece": 0.0
+          },
+          "cases": 6,
+          "citation_correctness": 1.0,
+          "citation_recall": 1.0,
+          "duplicate_hit_rate": 0.0,
+          "fallback_rate": 0.0,
+          "forbidden_case_rate": 0.0,
+          "forbidden_hit_rate": 0.0,
+          "freshness_rate": 1.0,
+          "groundedness": 0.0,
+          "injection_attack_success_rate": 0.0,
+          "isolation_hit_rate": 0.0,
+          "isolation_violation_rate": 0.0,
+          "latency_ms": {
+            "max": 19.93994999793358,
+            "p50": 16.48433698574081,
+            "p95": 19.93994999793358
+          },
+          "macro_f1": 0.0,
+          "mrr": 0.5833,
+          "no_answer": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          "no_answer_accuracy": 1.0,
+          "no_hit_rate": 0.0,
+          "per_quadrant": {
+            "0": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            },
+            "1": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            },
+            "2": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            },
+            "3": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            }
+          },
+          "recall_at_k": 0.6667,
+          "schema_valid_rate": 1.0,
+          "semantic_consistency": 1.0,
+          "stale_case_rate": 0.0,
+          "stale_hit_rate": 0.0,
+          "tokens": {
+            "output_mean": 0.0,
+            "prompt_mean": 0.0
+          }
+        }
+      },
+      "calibration": {
+        "brier_score": 0.0,
+        "cases": 0,
+        "ece": 0.0
+      },
+      "cases": 12,
+      "citation_correctness": 1.0,
+      "citation_recall": 1.0,
+      "duplicate_hit_rate": 0.0,
+      "fallback_rate": 0.0,
+      "forbidden_case_rate": 0.0,
+      "forbidden_hit_rate": 0.0,
+      "freshness_rate": 1.0,
+      "groundedness": 0.0,
+      "injection_attack_success_rate": 0.0,
+      "isolation_hit_rate": 0.0,
+      "isolation_violation_rate": 0.0,
+      "latency_ms": {
+        "max": 25.788017024751753,
+        "p50": 16.808615007903427,
+        "p95": 25.788017024751753
+      },
+      "macro_f1": 0.0,
+      "mrr": 0.5833,
+      "no_answer": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0
+      },
+      "no_answer_accuracy": 1.0,
+      "no_hit_rate": 0.0,
+      "per_quadrant": {
+        "0": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0
+        },
+        "1": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0
+        },
+        "2": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0
+        },
+        "3": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0
+        }
+      },
+      "recall_at_k": 0.7083,
+      "schema_valid_rate": 1.0,
+      "semantic_consistency": 1.0,
+      "stale_case_rate": 0.0,
+      "stale_hit_rate": 0.0,
+      "tokens": {
+        "output_mean": 0.0,
+        "prompt_mean": 0.0
+      }
+    },
+    "mode": "retrieval_only"
+  },
+  "evidence_level": "local-container-runtime",
+  "ingestion": {
+    "accepted": 19,
+    "conflict": 0,
+    "duplicate": 0,
+    "embedding_version": "minilm-v1",
+    "pending": 0,
+    "projected": 19,
+    "stale": 0
+  },
+  "manifest_sha256": "0528fe77fd68e46afba65e1febc8f1a8372d6f98e9dcdb83caaff54cc51fbbef",
+  "model": {
+    "embedding_version": "minilm-v1",
+    "id": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+    "vector_size": 384
+  },
+  "public_evidence_proven": false,
+  "reconciliation": {
+    "drifted": 0,
+    "pending": 0,
+    "projected": 0
+  },
+  "runtime": {
+    "pymongo_version": "4.17.0",
+    "qdrant_client_version": "1.12.0",
+    "qdrant_server_commit": "a0d2eccac0c179116214e7cb3583359c80d41998",
+    "qdrant_server_version": "1.12.0",
+    "sentence_transformers_version": "5.7.0"
+  },
+  "schema_version": "retrieval-candidate-runtime-v1",
+  "snapshot_restore": null,
+  "source_git_dirty": false,
+  "source_git_sha": "a7a55bd8fa795937df9d458c3dd626012a26a437",
+  "strategy_comparison": {
+    "case_ids": [
+      "train-pl-fastapi-boundary",
+      "train-en-qdrant-choice",
+      "train-pl-n8n-boundary",
+      "train-en-mcp-tools",
+      "train-pl-light-cqrs",
+      "train-en-vllm-hardware-gate",
+      "dev-pl-framework-boundary",
+      "dev-en-corpus-acl",
+      "dev-pl-qdrant-rollback",
+      "dev-en-pii-logging",
+      "dev-pl-retrieval-metrics",
+      "dev-en-production-acceptance"
+    ],
+    "dataset_version": "retrieval-review-candidate-v2-unapproved",
+    "evaluated_split": "non_holdout",
+    "schema_version": "retrieval-strategy-comparison-v1",
+    "strategies": {
+      "dense": {
+        "cases": [
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "train-pl-fastapi-boundary",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "dad8a42bab7ada70cb2b7eacd84d77c95929796b09f8b2f0b2ab8aa23e3d98f3": "eisenhower-corpus-v1:880dc8f430bb2e52b8ef94485fb8a97d81a5e6c5acbcc3e07a98794f28030d80"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "pl",
+            "latency_ms": 16.808615007903427,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "dad8a42bab7ada70cb2b7eacd84d77c95929796b09f8b2f0b2ab8aa23e3d98f3"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "afe30627a89caf532430cd5f0bff5ffc3f5dee3b427cb18545ec2147c5429dff",
+              "469e8a2122ba26a970713336bc837f92020267c28dce1d544c7a1866f0699432",
+              "e720e1fc1da78633af735d86bceff30ea031c2c2d85f410ebe743d0541fd1c1e",
+              "ce36547becb3ff3ed0097b69c786b42dd90a54a50d76c9ab0838e0e21d8424c1",
+              "ecfefbba9e7fda93ab12d8ca21e15827a9c5da0307fb13d45dafc1eeda08f3a4"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a",
+              "eisenhower-corpus-v1:a6d4fe50f25a405b6a74c8b09b517f69f41269ecaadf18316b8a76399cc92cc7",
+              "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02",
+              "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6",
+              "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff"
+            ],
+            "retrieved_document_ids": [
+              "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349",
+              "a15ecec4e605d792571456120580b1c996abf893d2cb378b23ca2f4ac42e6682",
+              "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d",
+              "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+              "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "train",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "train-en-qdrant-choice",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec": "eisenhower-corpus-v1:798e88324008bc881d122d5795475f0266edd88dd8a1c1390c1e9c026c059f8a"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "en",
+            "latency_ms": 15.240281994920224,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "d80d8b77bd694641cabedc2e12564fb590ddd5284885b8098ef70e790d751dd6",
+              "02a196d56008c93bcbbb4acffc8bdd9fc1f998afdd5ec85c51b9de277776c997",
+              "3b068aa16964c31a19c40de92d99d41a1d9fdfef2e5bfc6118fbb1175db3171c",
+              "e768f5b2723b6af8239995a868fefb79e949d1c06d64e960e49a9e33a4dbbcf6",
+              "4e30153fbaa97fff1e14d8050deb763af12bdc0f67f8873ce3f32b40e6772328"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:798e88324008bc881d122d5795475f0266edd88dd8a1c1390c1e9c026c059f8a",
+              "eisenhower-corpus-v1:52686331a28e8c00ec50c02be133cb7305a72923c1b4b0ccc49b565ef60603ea",
+              "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6",
+              "eisenhower-corpus-v1:2fef8812bbfbead6b0b576714011b6f976a3cd99e3aeb910bf96d895ae3b2ab2",
+              "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff"
+            ],
+            "retrieved_document_ids": [
+              "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec",
+              "c16a06e30b55bb570105b18a161802a8e1fc8556e039fd27f1c69f7dd1ca2fac",
+              "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+              "829eae5c303638639220c821ea397445e97c5f0b58b27103377f3d4b948e26e6",
+              "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "train",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "train-pl-n8n-boundary",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "7e4a68f3f60fa02e47af3988fbf8350d029bda2e7bad19d5f3a8a57fc9e309ec": "eisenhower-corpus-v1:f58cf8618d835b3cf70c61c339c76d9dad2ac61cc1fbc91b4d9a3f0889557b3c"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "pl",
+            "latency_ms": 16.48433698574081,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "7e4a68f3f60fa02e47af3988fbf8350d029bda2e7bad19d5f3a8a57fc9e309ec"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "cd26766b1e065f9dbd1c6e5f658479836d1e64799fcdb379997e4e6054a6eb34",
+              "4c08e420e185d73739ba03bf7743b63e07387e253ffd0eb5c5c7730305e5d057",
+              "3f561ae7379f80f9b22cdc4cf464a8efecb1e36511ecfe607195e695a4ca87bc",
+              "8577df7e26090b8d4b6b0ba7d9dbc87b01699dfc94ed4db1f872dbc4c61d54cb",
+              "f6b727f0f4087d3830c139c36d3b0eca51486ea8485c4520b4702254c1ce3fee"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:f58cf8618d835b3cf70c61c339c76d9dad2ac61cc1fbc91b4d9a3f0889557b3c",
+              "eisenhower-corpus-v1:a3a5df474c7dc890942ddc6d0a1d5da348f056099e933358eca52e902d15b8e8",
+              "eisenhower-corpus-v1:2bf1221bf376dd6912123f9a0c30de38241a2f7026cbab4b8105ea19cdfd221c",
+              "eisenhower-corpus-v1:a6d4fe50f25a405b6a74c8b09b517f69f41269ecaadf18316b8a76399cc92cc7",
+              "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a"
+            ],
+            "retrieved_document_ids": [
+              "7e4a68f3f60fa02e47af3988fbf8350d029bda2e7bad19d5f3a8a57fc9e309ec",
+              "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714",
+              "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130",
+              "a15ecec4e605d792571456120580b1c996abf893d2cb378b23ca2f4ac42e6682",
+              "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "train",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "train-en-mcp-tools",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "4628f4fe3c7142c9963f23c323c5c3ef23346aafcaf07e71815c236d8598e018": "eisenhower-corpus-v1:e1e4671c983c3d0224d352ce453c3c8b29ea0800583da450a6e6d3d531a19ef2"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "en",
+            "latency_ms": 19.93994999793358,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "4628f4fe3c7142c9963f23c323c5c3ef23346aafcaf07e71815c236d8598e018"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "8b3e0a45bfae8c1e7cb166ab1a0b1dbe0ebbd6dc1670893f549f43c60d4a855b",
+              "edc019ddf97290b9e9a7da12f678e1e8e07a667a53f417b7d34121fdd3356460",
+              "603905bce9581c26f5516104c59c73586537fb302d482e803aedee3c91bb58d9",
+              "c6dd133c238065a084a335fa7471f09e5e3a0499108f10df48f2004706f64a64",
+              "6b822d8f372be17cead7ac0de6911b83a3a9fcb023ac7784c2e860f47c6a8aec"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:7c40b2742030da356bc2f049d3b67ffc7f1a5c92f46b424af3304a015ab685ee",
+              "eisenhower-corpus-v1:e1e4671c983c3d0224d352ce453c3c8b29ea0800583da450a6e6d3d531a19ef2",
+              "eisenhower-corpus-v1:a3a5df474c7dc890942ddc6d0a1d5da348f056099e933358eca52e902d15b8e8",
+              "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582",
+              "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a"
+            ],
+            "retrieved_document_ids": [
+              "1c2db50c264df20f3eeedcd9c748edcbe663bc925d817d3ee7c8da663eabcd6d",
+              "4628f4fe3c7142c9963f23c323c5c3ef23346aafcaf07e71815c236d8598e018",
+              "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714",
+              "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251",
+              "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "train",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "train-pl-light-cqrs",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "529a08ad8f46e87f60ce05c1a9cc4795ee291d22a4949c42e6e527c4da559715": "eisenhower-corpus-v1:32f2ac336a14cb1496d8c3ef080bb018139592a3af0f1fea58187cf57740fba0"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "pl",
+            "latency_ms": 13.763865979854017,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "529a08ad8f46e87f60ce05c1a9cc4795ee291d22a4949c42e6e527c4da559715"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "35c81ce5aee38bc6d12a410946b0db76f3bc11cd5d80cbdd827372534048dd0a",
+              "b8b71951516cea480f30119096b20d98067b04e56c91031200f58cce1e69e01b",
+              "3d87e305bac097dc61d3867721d181319863dcde2245dc23286545038ecb8039",
+              "f8d77cc985efa28abec911faec28df79532906c1dff91ecedb671ed393792ca2",
+              "ece49b4ad19211bd060de7a252863af6c0bdf38762ec323f65a20af7a52d061e"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6",
+              "eisenhower-corpus-v1:7c40b2742030da356bc2f049d3b67ffc7f1a5c92f46b424af3304a015ab685ee",
+              "eisenhower-corpus-v1:52686331a28e8c00ec50c02be133cb7305a72923c1b4b0ccc49b565ef60603ea",
+              "eisenhower-corpus-v1:1b7d4c9053120ac715c5f4457d9227f12ac75a241deca807ec2ec78603ed5fa3",
+              "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6"
+            ],
+            "retrieved_document_ids": [
+              "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+              "1c2db50c264df20f3eeedcd9c748edcbe663bc925d817d3ee7c8da663eabcd6d",
+              "c16a06e30b55bb570105b18a161802a8e1fc8556e039fd27f1c69f7dd1ca2fac",
+              "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45",
+              "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "train",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "train-en-vllm-hardware-gate",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "e6b4f85bad442748a410f84958a6129e6441114dfffcdf3d42ddcbfc81587626": "eisenhower-corpus-v1:13372fa141f184ca91530f3658c1a3984aece3673384155ff09427e0102333c7"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "en",
+            "latency_ms": 17.920804006280378,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "e6b4f85bad442748a410f84958a6129e6441114dfffcdf3d42ddcbfc81587626"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "cb23fd57a58c3141a3b4ff44e4f5c57e374844b29033632b535d4acee78602c2",
+              "a8984544a90d4ed2ddcd179b7dad8044241d3c7bad81794e780a5024d492482c",
+              "9fa752dbc3ebd4a3ea30cc159c475f46a78b5db0a5ed8934b63060c5c2bfcf92",
+              "0baf1a6aab1d6f25a57a03a9a8c176a89ced05e46fb2806b1bf82ac82ae6c6a3",
+              "005d0af4e2552815d54ff42f2d501267406bdee0a935678f9eb2fed71af9d4a6"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:13372fa141f184ca91530f3658c1a3984aece3673384155ff09427e0102333c7",
+              "eisenhower-corpus-v1:13372fa141f184ca91530f3658c1a3984aece3673384155ff09427e0102333c7",
+              "eisenhower-corpus-v1:2fef8812bbfbead6b0b576714011b6f976a3cd99e3aeb910bf96d895ae3b2ab2",
+              "eisenhower-corpus-v1:2bf1221bf376dd6912123f9a0c30de38241a2f7026cbab4b8105ea19cdfd221c",
+              "eisenhower-corpus-v1:52686331a28e8c00ec50c02be133cb7305a72923c1b4b0ccc49b565ef60603ea"
+            ],
+            "retrieved_document_ids": [
+              "e6b4f85bad442748a410f84958a6129e6441114dfffcdf3d42ddcbfc81587626",
+              "e6b4f85bad442748a410f84958a6129e6441114dfffcdf3d42ddcbfc81587626",
+              "829eae5c303638639220c821ea397445e97c5f0b58b27103377f3d4b948e26e6",
+              "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130",
+              "c16a06e30b55bb570105b18a161802a8e1fc8556e039fd27f1c69f7dd1ca2fac"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "train",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "dev-pl-framework-boundary",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349": "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "pl",
+            "latency_ms": 16.22935599880293,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "3b068aa16964c31a19c40de92d99d41a1d9fdfef2e5bfc6118fbb1175db3171c",
+              "a291a977bb23f78489190b3f9cbd7f707eb7776cc4c6c2bf5fa6c1050c092075",
+              "961a0bf4b3ce1dea4e89ed1a454df7da259be373d70a40662532f47e37c7f9ba",
+              "d19bb9dd9725d0d60c0433139ef164a3f039030955558d185a6161e13679318b",
+              "bf7d932aac054237843b4642bbcfd6e9d2326879e24745e2a15f665c6690b9bd"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6",
+              "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a",
+              "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02",
+              "eisenhower-corpus-v1:798e88324008bc881d122d5795475f0266edd88dd8a1c1390c1e9c026c059f8a",
+              "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02"
+            ],
+            "retrieved_document_ids": [
+              "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+              "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349",
+              "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d",
+              "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec",
+              "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "dev",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "dev-en-corpus-acl",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d": "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "en",
+            "latency_ms": 19.36856098473072,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "6b79ec87476ce852a7c40e48a46f8c46be656be6afff41f8e1c956157f47134e",
+              "6f4fbe210d2c87af921bd8180c88b8bde7cee078bcbc95f6360c31e9e58b4889",
+              "e720e1fc1da78633af735d86bceff30ea031c2c2d85f410ebe743d0541fd1c1e",
+              "a291a977bb23f78489190b3f9cbd7f707eb7776cc4c6c2bf5fa6c1050c092075",
+              "36d2fc56944df88a7a46c70207cb83433323fe8672ff808faf7184bb748d4713"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:52686331a28e8c00ec50c02be133cb7305a72923c1b4b0ccc49b565ef60603ea",
+              "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02",
+              "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02",
+              "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a",
+              "eisenhower-corpus-v1:7c40b2742030da356bc2f049d3b67ffc7f1a5c92f46b424af3304a015ab685ee"
+            ],
+            "retrieved_document_ids": [
+              "c16a06e30b55bb570105b18a161802a8e1fc8556e039fd27f1c69f7dd1ca2fac",
+              "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d",
+              "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d",
+              "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349",
+              "1c2db50c264df20f3eeedcd9c748edcbe663bc925d817d3ee7c8da663eabcd6d"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "dev",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "dev-pl-qdrant-rollback",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec": "eisenhower-corpus-v1:798e88324008bc881d122d5795475f0266edd88dd8a1c1390c1e9c026c059f8a",
+              "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c": "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "pl",
+            "latency_ms": 18.04675901075825,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c",
+              "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "961a0bf4b3ce1dea4e89ed1a454df7da259be373d70a40662532f47e37c7f9ba",
+              "d19bb9dd9725d0d60c0433139ef164a3f039030955558d185a6161e13679318b",
+              "4e30153fbaa97fff1e14d8050deb763af12bdc0f67f8873ce3f32b40e6772328",
+              "a291a977bb23f78489190b3f9cbd7f707eb7776cc4c6c2bf5fa6c1050c092075",
+              "a22a3971bdc61ab2f90d19b769d535d4ba30fc181cc534b4bb51d0891246bd4f"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02",
+              "eisenhower-corpus-v1:798e88324008bc881d122d5795475f0266edd88dd8a1c1390c1e9c026c059f8a",
+              "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff",
+              "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a",
+              "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582"
+            ],
+            "retrieved_document_ids": [
+              "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d",
+              "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec",
+              "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c",
+              "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349",
+              "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "dev",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "dev-en-pii-logging",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c": "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff",
+              "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714": "eisenhower-corpus-v1:a3a5df474c7dc890942ddc6d0a1d5da348f056099e933358eca52e902d15b8e8"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "en",
+            "latency_ms": 18.926368007669225,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714",
+              "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "603905bce9581c26f5516104c59c73586537fb302d482e803aedee3c91bb58d9",
+              "4ca7fa7f3bd50b11dcf54df0be28fad58f815570360e38f72d63644d64b9bbbb",
+              "ce36547becb3ff3ed0097b69c786b42dd90a54a50d76c9ab0838e0e21d8424c1",
+              "c16a75549ca44ae4d0da60e4bf66112f4bcdd0621e14d6e17b6ef51b34ebf833",
+              "599a4ad1da27a11abab163ad7b6325ff8e61c32bf81c859fe126b9d61603b703"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:a3a5df474c7dc890942ddc6d0a1d5da348f056099e933358eca52e902d15b8e8",
+              "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6",
+              "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6",
+              "eisenhower-corpus-v1:1b7d4c9053120ac715c5f4457d9227f12ac75a241deca807ec2ec78603ed5fa3",
+              "eisenhower-corpus-v1:1b7d4c9053120ac715c5f4457d9227f12ac75a241deca807ec2ec78603ed5fa3"
+            ],
+            "retrieved_document_ids": [
+              "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714",
+              "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+              "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+              "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45",
+              "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "dev",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "dev-pl-retrieval-metrics",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130": "eisenhower-corpus-v1:2bf1221bf376dd6912123f9a0c30de38241a2f7026cbab4b8105ea19cdfd221c"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "pl",
+            "latency_ms": 16.37103100074455,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "29135adbb1a87fe2f06d779fd855481b59c2c9973132b873aae7e07c8df679c0",
+              "bbe4e80cb2fa75b3d908e3f75a91b0d8c3016bd4e2751bdd8b49e39cb6a2ee97",
+              "ecfefbba9e7fda93ab12d8ca21e15827a9c5da0307fb13d45dafc1eeda08f3a4",
+              "b05f0a393b2bd98dee20e9bbd399146fa6f1ab4da1137eaf6fdede087cb8f8b3",
+              "269adac41962ba4684dee91d5e4cb66135cf89f36196bb3a3c92af9709da9575"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582",
+              "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582",
+              "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff",
+              "eisenhower-corpus-v1:2fef8812bbfbead6b0b576714011b6f976a3cd99e3aeb910bf96d895ae3b2ab2",
+              "eisenhower-corpus-v1:a3a5df474c7dc890942ddc6d0a1d5da348f056099e933358eca52e902d15b8e8"
+            ],
+            "retrieved_document_ids": [
+              "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251",
+              "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251",
+              "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c",
+              "829eae5c303638639220c821ea397445e97c5f0b58b27103377f3d4b948e26e6",
+              "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "dev",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "dev-en-production-acceptance",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45": "eisenhower-corpus-v1:1b7d4c9053120ac715c5f4457d9227f12ac75a241deca807ec2ec78603ed5fa3",
+              "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130": "eisenhower-corpus-v1:2bf1221bf376dd6912123f9a0c30de38241a2f7026cbab4b8105ea19cdfd221c"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "en",
+            "latency_ms": 25.788017024751753,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45",
+              "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "e98d984e137010ee222b2cf854409ee468c55a3e6f95b1d595a89107d47ff9e3",
+              "0baf1a6aab1d6f25a57a03a9a8c176a89ced05e46fb2806b1bf82ac82ae6c6a3",
+              "9daef0356d8a1f42d1106e68c516f9a06bc74f97f77ed2c7f2a2508829960757",
+              "05b003ae3e227d20cd9cc4e34eb40822ab5d121a9748752fe245ae7c96dbb2e9",
+              "bb52ee3af7dd088b4525e351e12e57d6d993895e4fe249208fe345baeed92fbf"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:1b7d4c9053120ac715c5f4457d9227f12ac75a241deca807ec2ec78603ed5fa3",
+              "eisenhower-corpus-v1:2bf1221bf376dd6912123f9a0c30de38241a2f7026cbab4b8105ea19cdfd221c",
+              "eisenhower-corpus-v1:1b7d4c9053120ac715c5f4457d9227f12ac75a241deca807ec2ec78603ed5fa3",
+              "eisenhower-corpus-v1:a6d4fe50f25a405b6a74c8b09b517f69f41269ecaadf18316b8a76399cc92cc7",
+              "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6"
+            ],
+            "retrieved_document_ids": [
+              "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45",
+              "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130",
+              "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45",
+              "a15ecec4e605d792571456120580b1c996abf893d2cb378b23ca2f4ac42e6682",
+              "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "dev",
+            "stale_document_ids": []
+          }
+        ],
+        "dataset_version": "retrieval-review-candidate-v2-unapproved",
+        "metrics": {
+          "accuracy": 0.0,
+          "by_language": {
+            "en": {
+              "accuracy": 0.0,
+              "calibration": {
+                "brier_score": 0.0,
+                "cases": 0,
+                "ece": 0.0
+              },
+              "cases": 6,
+              "citation_correctness": 1.0,
+              "citation_recall": 1.0,
+              "duplicate_hit_rate": 0.0,
+              "fallback_rate": 0.0,
+              "forbidden_case_rate": 0.0,
+              "forbidden_hit_rate": 0.0,
+              "freshness_rate": 1.0,
+              "groundedness": 0.0,
+              "injection_attack_success_rate": 0.0,
+              "isolation_hit_rate": 0.0,
+              "isolation_violation_rate": 0.0,
+              "latency_ms": {
+                "max": 25.788017024751753,
+                "p50": 18.926368007669225,
+                "p95": 25.788017024751753
+              },
+              "macro_f1": 0.0,
+              "mrr": 0.8333,
+              "no_answer": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "no_answer_accuracy": 1.0,
+              "no_hit_rate": 0.0,
+              "per_quadrant": {
+                "0": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "1": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "2": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "3": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                }
+              },
+              "recall_at_k": 0.9167,
+              "schema_valid_rate": 1.0,
+              "semantic_consistency": 1.0,
+              "stale_case_rate": 0.0,
+              "stale_hit_rate": 0.0,
+              "tokens": {
+                "output_mean": 0.0,
+                "prompt_mean": 0.0
+              }
+            },
+            "pl": {
+              "accuracy": 0.0,
+              "calibration": {
+                "brier_score": 0.0,
+                "cases": 0,
+                "ece": 0.0
+              },
+              "cases": 6,
+              "citation_correctness": 1.0,
+              "citation_recall": 1.0,
+              "duplicate_hit_rate": 0.0,
+              "fallback_rate": 0.0,
+              "forbidden_case_rate": 0.0,
+              "forbidden_hit_rate": 0.0,
+              "freshness_rate": 1.0,
+              "groundedness": 0.0,
+              "injection_attack_success_rate": 0.0,
+              "isolation_hit_rate": 0.0,
+              "isolation_violation_rate": 0.0,
+              "latency_ms": {
+                "max": 18.04675901075825,
+                "p50": 16.37103100074455,
+                "p95": 18.04675901075825
+              },
+              "macro_f1": 0.0,
+              "mrr": 0.3333,
+              "no_answer": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "no_answer_accuracy": 1.0,
+              "no_hit_rate": 0.0,
+              "per_quadrant": {
+                "0": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "1": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "2": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "3": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                }
+              },
+              "recall_at_k": 0.5,
+              "schema_valid_rate": 1.0,
+              "semantic_consistency": 1.0,
+              "stale_case_rate": 0.0,
+              "stale_hit_rate": 0.0,
+              "tokens": {
+                "output_mean": 0.0,
+                "prompt_mean": 0.0
+              }
+            }
+          },
+          "by_split": {
+            "dev": {
+              "accuracy": 0.0,
+              "calibration": {
+                "brier_score": 0.0,
+                "cases": 0,
+                "ece": 0.0
+              },
+              "cases": 6,
+              "citation_correctness": 1.0,
+              "citation_recall": 1.0,
+              "duplicate_hit_rate": 0.0,
+              "fallback_rate": 0.0,
+              "forbidden_case_rate": 0.0,
+              "forbidden_hit_rate": 0.0,
+              "freshness_rate": 1.0,
+              "groundedness": 0.0,
+              "injection_attack_success_rate": 0.0,
+              "isolation_hit_rate": 0.0,
+              "isolation_violation_rate": 0.0,
+              "latency_ms": {
+                "max": 25.788017024751753,
+                "p50": 18.04675901075825,
+                "p95": 25.788017024751753
+              },
+              "macro_f1": 0.0,
+              "mrr": 0.5833,
+              "no_answer": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "no_answer_accuracy": 1.0,
+              "no_hit_rate": 0.0,
+              "per_quadrant": {
+                "0": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "1": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "2": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "3": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                }
+              },
+              "recall_at_k": 0.75,
+              "schema_valid_rate": 1.0,
+              "semantic_consistency": 1.0,
+              "stale_case_rate": 0.0,
+              "stale_hit_rate": 0.0,
+              "tokens": {
+                "output_mean": 0.0,
+                "prompt_mean": 0.0
+              }
+            },
+            "train": {
+              "accuracy": 0.0,
+              "calibration": {
+                "brier_score": 0.0,
+                "cases": 0,
+                "ece": 0.0
+              },
+              "cases": 6,
+              "citation_correctness": 1.0,
+              "citation_recall": 1.0,
+              "duplicate_hit_rate": 0.0,
+              "fallback_rate": 0.0,
+              "forbidden_case_rate": 0.0,
+              "forbidden_hit_rate": 0.0,
+              "freshness_rate": 1.0,
+              "groundedness": 0.0,
+              "injection_attack_success_rate": 0.0,
+              "isolation_hit_rate": 0.0,
+              "isolation_violation_rate": 0.0,
+              "latency_ms": {
+                "max": 19.93994999793358,
+                "p50": 16.48433698574081,
+                "p95": 19.93994999793358
+              },
+              "macro_f1": 0.0,
+              "mrr": 0.5833,
+              "no_answer": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "no_answer_accuracy": 1.0,
+              "no_hit_rate": 0.0,
+              "per_quadrant": {
+                "0": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "1": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "2": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "3": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                }
+              },
+              "recall_at_k": 0.6667,
+              "schema_valid_rate": 1.0,
+              "semantic_consistency": 1.0,
+              "stale_case_rate": 0.0,
+              "stale_hit_rate": 0.0,
+              "tokens": {
+                "output_mean": 0.0,
+                "prompt_mean": 0.0
+              }
+            }
+          },
+          "calibration": {
+            "brier_score": 0.0,
+            "cases": 0,
+            "ece": 0.0
+          },
+          "cases": 12,
+          "citation_correctness": 1.0,
+          "citation_recall": 1.0,
+          "duplicate_hit_rate": 0.0,
+          "fallback_rate": 0.0,
+          "forbidden_case_rate": 0.0,
+          "forbidden_hit_rate": 0.0,
+          "freshness_rate": 1.0,
+          "groundedness": 0.0,
+          "injection_attack_success_rate": 0.0,
+          "isolation_hit_rate": 0.0,
+          "isolation_violation_rate": 0.0,
+          "latency_ms": {
+            "max": 25.788017024751753,
+            "p50": 16.808615007903427,
+            "p95": 25.788017024751753
+          },
+          "macro_f1": 0.0,
+          "mrr": 0.5833,
+          "no_answer": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          "no_answer_accuracy": 1.0,
+          "no_hit_rate": 0.0,
+          "per_quadrant": {
+            "0": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            },
+            "1": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            },
+            "2": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            },
+            "3": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            }
+          },
+          "recall_at_k": 0.7083,
+          "schema_valid_rate": 1.0,
+          "semantic_consistency": 1.0,
+          "stale_case_rate": 0.0,
+          "stale_hit_rate": 0.0,
+          "tokens": {
+            "output_mean": 0.0,
+            "prompt_mean": 0.0
+          }
+        },
+        "mode": "retrieval_only"
+      },
+      "hybrid": {
+        "cases": [
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "train-pl-fastapi-boundary",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "dad8a42bab7ada70cb2b7eacd84d77c95929796b09f8b2f0b2ab8aa23e3d98f3": "eisenhower-corpus-v1:880dc8f430bb2e52b8ef94485fb8a97d81a5e6c5acbcc3e07a98794f28030d80"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "pl",
+            "latency_ms": 34.72526898258366,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "dad8a42bab7ada70cb2b7eacd84d77c95929796b09f8b2f0b2ab8aa23e3d98f3"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "afe30627a89caf532430cd5f0bff5ffc3f5dee3b427cb18545ec2147c5429dff",
+              "3b068aa16964c31a19c40de92d99d41a1d9fdfef2e5bfc6118fbb1175db3171c",
+              "05e5c41d79304f8e71f515b915ddd1fd4a17e259d0b2a4f895a5cd084e419961",
+              "2d17457db5be2d41239164fe0ad648da59ae2cdc4a00f09782ab17ed16d554f2",
+              "469e8a2122ba26a970713336bc837f92020267c28dce1d544c7a1866f0699432"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a",
+              "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6",
+              "eisenhower-corpus-v1:7a834f647213811a9967e3a4806de66c0200d933dd988450c746ee89721347db",
+              "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a",
+              "eisenhower-corpus-v1:a6d4fe50f25a405b6a74c8b09b517f69f41269ecaadf18316b8a76399cc92cc7"
+            ],
+            "retrieved_document_ids": [
+              "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349",
+              "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+              "bae5208325e3f095be743146b433e20b44d6251cb3b3244b750a609f81915554",
+              "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349",
+              "a15ecec4e605d792571456120580b1c996abf893d2cb378b23ca2f4ac42e6682"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "train",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "train-en-qdrant-choice",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec": "eisenhower-corpus-v1:798e88324008bc881d122d5795475f0266edd88dd8a1c1390c1e9c026c059f8a"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "en",
+            "latency_ms": 40.7350400055293,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "d80d8b77bd694641cabedc2e12564fb590ddd5284885b8098ef70e790d751dd6",
+              "02a196d56008c93bcbbb4acffc8bdd9fc1f998afdd5ec85c51b9de277776c997",
+              "e720e1fc1da78633af735d86bceff30ea031c2c2d85f410ebe743d0541fd1c1e",
+              "3b068aa16964c31a19c40de92d99d41a1d9fdfef2e5bfc6118fbb1175db3171c",
+              "7e8f7a31d2fef59efa9ef699cf6de6dab7e30c7375eadcd2e91322797e35333f"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:798e88324008bc881d122d5795475f0266edd88dd8a1c1390c1e9c026c059f8a",
+              "eisenhower-corpus-v1:52686331a28e8c00ec50c02be133cb7305a72923c1b4b0ccc49b565ef60603ea",
+              "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02",
+              "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6",
+              "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff"
+            ],
+            "retrieved_document_ids": [
+              "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec",
+              "c16a06e30b55bb570105b18a161802a8e1fc8556e039fd27f1c69f7dd1ca2fac",
+              "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d",
+              "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+              "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "train",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "train-pl-n8n-boundary",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "7e4a68f3f60fa02e47af3988fbf8350d029bda2e7bad19d5f3a8a57fc9e309ec": "eisenhower-corpus-v1:f58cf8618d835b3cf70c61c339c76d9dad2ac61cc1fbc91b4d9a3f0889557b3c"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "pl",
+            "latency_ms": 32.504870992852375,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "7e4a68f3f60fa02e47af3988fbf8350d029bda2e7bad19d5f3a8a57fc9e309ec"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "afe30627a89caf532430cd5f0bff5ffc3f5dee3b427cb18545ec2147c5429dff",
+              "cd26766b1e065f9dbd1c6e5f658479836d1e64799fcdb379997e4e6054a6eb34",
+              "8577df7e26090b8d4b6b0ba7d9dbc87b01699dfc94ed4db1f872dbc4c61d54cb",
+              "36d2fc56944df88a7a46c70207cb83433323fe8672ff808faf7184bb748d4713",
+              "a291a977bb23f78489190b3f9cbd7f707eb7776cc4c6c2bf5fa6c1050c092075"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a",
+              "eisenhower-corpus-v1:f58cf8618d835b3cf70c61c339c76d9dad2ac61cc1fbc91b4d9a3f0889557b3c",
+              "eisenhower-corpus-v1:a6d4fe50f25a405b6a74c8b09b517f69f41269ecaadf18316b8a76399cc92cc7",
+              "eisenhower-corpus-v1:7c40b2742030da356bc2f049d3b67ffc7f1a5c92f46b424af3304a015ab685ee",
+              "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a"
+            ],
+            "retrieved_document_ids": [
+              "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349",
+              "7e4a68f3f60fa02e47af3988fbf8350d029bda2e7bad19d5f3a8a57fc9e309ec",
+              "a15ecec4e605d792571456120580b1c996abf893d2cb378b23ca2f4ac42e6682",
+              "1c2db50c264df20f3eeedcd9c748edcbe663bc925d817d3ee7c8da663eabcd6d",
+              "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "train",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "train-en-mcp-tools",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "4628f4fe3c7142c9963f23c323c5c3ef23346aafcaf07e71815c236d8598e018": "eisenhower-corpus-v1:e1e4671c983c3d0224d352ce453c3c8b29ea0800583da450a6e6d3d531a19ef2"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "en",
+            "latency_ms": 42.25695400964469,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "4628f4fe3c7142c9963f23c323c5c3ef23346aafcaf07e71815c236d8598e018"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "edc019ddf97290b9e9a7da12f678e1e8e07a667a53f417b7d34121fdd3356460",
+              "603905bce9581c26f5516104c59c73586537fb302d482e803aedee3c91bb58d9",
+              "c6dd133c238065a084a335fa7471f09e5e3a0499108f10df48f2004706f64a64",
+              "39c3c3f035bf86cff93df83cbda21fb38891bc4613c51c5279bef64c3c5d0e73",
+              "6b822d8f372be17cead7ac0de6911b83a3a9fcb023ac7784c2e860f47c6a8aec"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:e1e4671c983c3d0224d352ce453c3c8b29ea0800583da450a6e6d3d531a19ef2",
+              "eisenhower-corpus-v1:a3a5df474c7dc890942ddc6d0a1d5da348f056099e933358eca52e902d15b8e8",
+              "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582",
+              "eisenhower-corpus-v1:a6d4fe50f25a405b6a74c8b09b517f69f41269ecaadf18316b8a76399cc92cc7",
+              "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a"
+            ],
+            "retrieved_document_ids": [
+              "4628f4fe3c7142c9963f23c323c5c3ef23346aafcaf07e71815c236d8598e018",
+              "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714",
+              "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251",
+              "a15ecec4e605d792571456120580b1c996abf893d2cb378b23ca2f4ac42e6682",
+              "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "train",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "train-pl-light-cqrs",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "529a08ad8f46e87f60ce05c1a9cc4795ee291d22a4949c42e6e527c4da559715": "eisenhower-corpus-v1:32f2ac336a14cb1496d8c3ef080bb018139592a3af0f1fea58187cf57740fba0"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "pl",
+            "latency_ms": 32.01327900751494,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "529a08ad8f46e87f60ce05c1a9cc4795ee291d22a4949c42e6e527c4da559715"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "f6b727f0f4087d3830c139c36d3b0eca51486ea8485c4520b4702254c1ce3fee",
+              "ec6e36a0a4b9726134731099ad553d0c8d95ff834ca9d6d48b2af14ab97436c2",
+              "afe30627a89caf532430cd5f0bff5ffc3f5dee3b427cb18545ec2147c5429dff",
+              "1bd455275c72d887455737b26f940748b43ca20feea75ceea3afe6c391c12cea",
+              "35c81ce5aee38bc6d12a410946b0db76f3bc11cd5d80cbdd827372534048dd0a"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a",
+              "eisenhower-corpus-v1:2bf1221bf376dd6912123f9a0c30de38241a2f7026cbab4b8105ea19cdfd221c",
+              "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a",
+              "eisenhower-corpus-v1:32f2ac336a14cb1496d8c3ef080bb018139592a3af0f1fea58187cf57740fba0",
+              "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6"
+            ],
+            "retrieved_document_ids": [
+              "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349",
+              "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130",
+              "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349",
+              "529a08ad8f46e87f60ce05c1a9cc4795ee291d22a4949c42e6e527c4da559715",
+              "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "train",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "train-en-vllm-hardware-gate",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "e6b4f85bad442748a410f84958a6129e6441114dfffcdf3d42ddcbfc81587626": "eisenhower-corpus-v1:13372fa141f184ca91530f3658c1a3984aece3673384155ff09427e0102333c7"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "en",
+            "latency_ms": 39.17113700299524,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "e6b4f85bad442748a410f84958a6129e6441114dfffcdf3d42ddcbfc81587626"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "cb23fd57a58c3141a3b4ff44e4f5c57e374844b29033632b535d4acee78602c2",
+              "9fa752dbc3ebd4a3ea30cc159c475f46a78b5db0a5ed8934b63060c5c2bfcf92",
+              "a8984544a90d4ed2ddcd179b7dad8044241d3c7bad81794e780a5024d492482c",
+              "e056c1cef48c87bec14e873e3ae895b82fd66c67d4845e3702a4db9501e2c3e3",
+              "f2ed28167644e9044ee58d06d566dc0040b9eed884b9103fa4649d61de23d157"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:13372fa141f184ca91530f3658c1a3984aece3673384155ff09427e0102333c7",
+              "eisenhower-corpus-v1:2fef8812bbfbead6b0b576714011b6f976a3cd99e3aeb910bf96d895ae3b2ab2",
+              "eisenhower-corpus-v1:13372fa141f184ca91530f3658c1a3984aece3673384155ff09427e0102333c7",
+              "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582",
+              "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff"
+            ],
+            "retrieved_document_ids": [
+              "e6b4f85bad442748a410f84958a6129e6441114dfffcdf3d42ddcbfc81587626",
+              "829eae5c303638639220c821ea397445e97c5f0b58b27103377f3d4b948e26e6",
+              "e6b4f85bad442748a410f84958a6129e6441114dfffcdf3d42ddcbfc81587626",
+              "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251",
+              "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "train",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "dev-pl-framework-boundary",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349": "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "pl",
+            "latency_ms": 39.96368800289929,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "a291a977bb23f78489190b3f9cbd7f707eb7776cc4c6c2bf5fa6c1050c092075",
+              "3b068aa16964c31a19c40de92d99d41a1d9fdfef2e5bfc6118fbb1175db3171c",
+              "3d87e305bac097dc61d3867721d181319863dcde2245dc23286545038ecb8039",
+              "961a0bf4b3ce1dea4e89ed1a454df7da259be373d70a40662532f47e37c7f9ba",
+              "d19bb9dd9725d0d60c0433139ef164a3f039030955558d185a6161e13679318b"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a",
+              "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6",
+              "eisenhower-corpus-v1:52686331a28e8c00ec50c02be133cb7305a72923c1b4b0ccc49b565ef60603ea",
+              "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02",
+              "eisenhower-corpus-v1:798e88324008bc881d122d5795475f0266edd88dd8a1c1390c1e9c026c059f8a"
+            ],
+            "retrieved_document_ids": [
+              "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349",
+              "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+              "c16a06e30b55bb570105b18a161802a8e1fc8556e039fd27f1c69f7dd1ca2fac",
+              "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d",
+              "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "dev",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "dev-en-corpus-acl",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d": "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "en",
+            "latency_ms": 42.42680800962262,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "6f4fbe210d2c87af921bd8180c88b8bde7cee078bcbc95f6360c31e9e58b4889",
+              "e056c1cef48c87bec14e873e3ae895b82fd66c67d4845e3702a4db9501e2c3e3",
+              "d80d8b77bd694641cabedc2e12564fb590ddd5284885b8098ef70e790d751dd6",
+              "6b79ec87476ce852a7c40e48a46f8c46be656be6afff41f8e1c956157f47134e",
+              "e720e1fc1da78633af735d86bceff30ea031c2c2d85f410ebe743d0541fd1c1e"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02",
+              "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582",
+              "eisenhower-corpus-v1:798e88324008bc881d122d5795475f0266edd88dd8a1c1390c1e9c026c059f8a",
+              "eisenhower-corpus-v1:52686331a28e8c00ec50c02be133cb7305a72923c1b4b0ccc49b565ef60603ea",
+              "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02"
+            ],
+            "retrieved_document_ids": [
+              "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d",
+              "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251",
+              "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec",
+              "c16a06e30b55bb570105b18a161802a8e1fc8556e039fd27f1c69f7dd1ca2fac",
+              "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "dev",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "dev-pl-qdrant-rollback",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec": "eisenhower-corpus-v1:798e88324008bc881d122d5795475f0266edd88dd8a1c1390c1e9c026c059f8a",
+              "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c": "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "pl",
+            "latency_ms": 36.92947901436128,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c",
+              "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "a291a977bb23f78489190b3f9cbd7f707eb7776cc4c6c2bf5fa6c1050c092075",
+              "961a0bf4b3ce1dea4e89ed1a454df7da259be373d70a40662532f47e37c7f9ba",
+              "d19bb9dd9725d0d60c0433139ef164a3f039030955558d185a6161e13679318b",
+              "a22a3971bdc61ab2f90d19b769d535d4ba30fc181cc534b4bb51d0891246bd4f",
+              "4e30153fbaa97fff1e14d8050deb763af12bdc0f67f8873ce3f32b40e6772328"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a",
+              "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02",
+              "eisenhower-corpus-v1:798e88324008bc881d122d5795475f0266edd88dd8a1c1390c1e9c026c059f8a",
+              "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582",
+              "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff"
+            ],
+            "retrieved_document_ids": [
+              "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349",
+              "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d",
+              "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec",
+              "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251",
+              "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "dev",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "dev-en-pii-logging",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c": "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff",
+              "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714": "eisenhower-corpus-v1:a3a5df474c7dc890942ddc6d0a1d5da348f056099e933358eca52e902d15b8e8"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "en",
+            "latency_ms": 41.07749697868712,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714",
+              "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "603905bce9581c26f5516104c59c73586537fb302d482e803aedee3c91bb58d9",
+              "150708ae597b2baf5c498f45319097ade1bc1e7fb474e48cd7d44eea1a69da5b",
+              "269adac41962ba4684dee91d5e4cb66135cf89f36196bb3a3c92af9709da9575",
+              "4ca7fa7f3bd50b11dcf54df0be28fad58f815570360e38f72d63644d64b9bbbb",
+              "488f395fc703ad734ed05e3d325eb686f73fdd853c94f9d3d48826ef3606d3de"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:a3a5df474c7dc890942ddc6d0a1d5da348f056099e933358eca52e902d15b8e8",
+              "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02",
+              "eisenhower-corpus-v1:a3a5df474c7dc890942ddc6d0a1d5da348f056099e933358eca52e902d15b8e8",
+              "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6",
+              "eisenhower-corpus-v1:a6d4fe50f25a405b6a74c8b09b517f69f41269ecaadf18316b8a76399cc92cc7"
+            ],
+            "retrieved_document_ids": [
+              "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714",
+              "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d",
+              "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714",
+              "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+              "a15ecec4e605d792571456120580b1c996abf893d2cb378b23ca2f4ac42e6682"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "dev",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "dev-pl-retrieval-metrics",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130": "eisenhower-corpus-v1:2bf1221bf376dd6912123f9a0c30de38241a2f7026cbab4b8105ea19cdfd221c"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "pl",
+            "latency_ms": 34.579934988869354,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "29135adbb1a87fe2f06d779fd855481b59c2c9973132b873aae7e07c8df679c0",
+              "3f561ae7379f80f9b22cdc4cf464a8efecb1e36511ecfe607195e695a4ca87bc",
+              "bbe4e80cb2fa75b3d908e3f75a91b0d8c3016bd4e2751bdd8b49e39cb6a2ee97",
+              "635105fb97c8a1c5384033c135ce25448d9431152a7a27a1fcc3dd8b8d0ecfba",
+              "8c98a0d59e01db06d9a2bd458b531c1f3b3ae2c23f96c907dd0e153b360d514e"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582",
+              "eisenhower-corpus-v1:2bf1221bf376dd6912123f9a0c30de38241a2f7026cbab4b8105ea19cdfd221c",
+              "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582",
+              "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582",
+              "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff"
+            ],
+            "retrieved_document_ids": [
+              "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251",
+              "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130",
+              "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251",
+              "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251",
+              "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "dev",
+            "stale_document_ids": []
+          },
+          {
+            "actual_citation_ids": [],
+            "actual_no_answer": false,
+            "actual_quadrant": null,
+            "allowed_citation_ids": [],
+            "case_id": "dev-en-production-acceptance",
+            "duplicate_hit_ids": [],
+            "execution_id": null,
+            "expected_content_versions": {
+              "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45": "eisenhower-corpus-v1:1b7d4c9053120ac715c5f4457d9227f12ac75a241deca807ec2ec78603ed5fa3",
+              "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130": "eisenhower-corpus-v1:2bf1221bf376dd6912123f9a0c30de38241a2f7026cbab4b8105ea19cdfd221c"
+            },
+            "expected_no_answer": false,
+            "expected_quadrant": null,
+            "forbidden_document_ids": [],
+            "grounded": false,
+            "injection_attempt": false,
+            "injection_success": false,
+            "language": "en",
+            "latency_ms": 37.23860700847581,
+            "model_id": null,
+            "model_revision": null,
+            "output_tokens": 0,
+            "prompt_id": null,
+            "prompt_tokens": 0,
+            "prompt_version": null,
+            "raw_confidence": null,
+            "relevant_document_ids": [
+              "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45",
+              "a58f50c77cad9a08d9e2f679f10e39947b4a157e90ce648621f7b2b34d0ba130"
+            ],
+            "result_mode": "rag",
+            "retrieved_chunk_ids": [
+              "e98d984e137010ee222b2cf854409ee468c55a3e6f95b1d595a89107d47ff9e3",
+              "9daef0356d8a1f42d1106e68c516f9a06bc74f97f77ed2c7f2a2508829960757",
+              "bb52ee3af7dd088b4525e351e12e57d6d993895e4fe249208fe345baeed92fbf",
+              "5c4d0d3d77e2280db07d50cd9ac14c29d7a5fe39220f5fbf605c3fc17fbed2a3",
+              "5d25c240e4f495ae21261ace801260353cfca143eae81cd86e608821a7f9ef0a"
+            ],
+            "retrieved_content_versions": [
+              "eisenhower-corpus-v1:1b7d4c9053120ac715c5f4457d9227f12ac75a241deca807ec2ec78603ed5fa3",
+              "eisenhower-corpus-v1:1b7d4c9053120ac715c5f4457d9227f12ac75a241deca807ec2ec78603ed5fa3",
+              "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6",
+              "eisenhower-corpus-v1:1b7d4c9053120ac715c5f4457d9227f12ac75a241deca807ec2ec78603ed5fa3",
+              "eisenhower-corpus-v1:7c40b2742030da356bc2f049d3b67ffc7f1a5c92f46b424af3304a015ab685ee"
+            ],
+            "retrieved_document_ids": [
+              "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45",
+              "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45",
+              "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+              "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45",
+              "1c2db50c264df20f3eeedcd9c748edcbe663bc925d817d3ee7c8da663eabcd6d"
+            ],
+            "schema_valid": true,
+            "schema_version": null,
+            "split": "dev",
+            "stale_document_ids": []
+          }
+        ],
+        "dataset_version": "retrieval-review-candidate-v2-unapproved",
+        "metrics": {
+          "accuracy": 0.0,
+          "by_language": {
+            "en": {
+              "accuracy": 0.0,
+              "calibration": {
+                "brier_score": 0.0,
+                "cases": 0,
+                "ece": 0.0
+              },
+              "cases": 6,
+              "citation_correctness": 1.0,
+              "citation_recall": 1.0,
+              "duplicate_hit_rate": 0.0,
+              "fallback_rate": 0.0,
+              "forbidden_case_rate": 0.0,
+              "forbidden_hit_rate": 0.0,
+              "freshness_rate": 1.0,
+              "groundedness": 0.0,
+              "injection_attack_success_rate": 0.0,
+              "isolation_hit_rate": 0.0,
+              "isolation_violation_rate": 0.0,
+              "latency_ms": {
+                "max": 42.42680800962262,
+                "p50": 40.7350400055293,
+                "p95": 42.42680800962262
+              },
+              "macro_f1": 0.0,
+              "mrr": 1.0,
+              "no_answer": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "no_answer_accuracy": 1.0,
+              "no_hit_rate": 0.0,
+              "per_quadrant": {
+                "0": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "1": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "2": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "3": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                }
+              },
+              "recall_at_k": 0.8333,
+              "schema_valid_rate": 1.0,
+              "semantic_consistency": 1.0,
+              "stale_case_rate": 0.0,
+              "stale_hit_rate": 0.0,
+              "tokens": {
+                "output_mean": 0.0,
+                "prompt_mean": 0.0
+              }
+            },
+            "pl": {
+              "accuracy": 0.0,
+              "calibration": {
+                "brier_score": 0.0,
+                "cases": 0,
+                "ece": 0.0
+              },
+              "cases": 6,
+              "citation_correctness": 1.0,
+              "citation_recall": 1.0,
+              "duplicate_hit_rate": 0.0,
+              "fallback_rate": 0.0,
+              "forbidden_case_rate": 0.0,
+              "forbidden_hit_rate": 0.0,
+              "freshness_rate": 1.0,
+              "groundedness": 0.0,
+              "injection_attack_success_rate": 0.0,
+              "isolation_hit_rate": 0.0,
+              "isolation_violation_rate": 0.0,
+              "latency_ms": {
+                "max": 39.96368800289929,
+                "p50": 34.579934988869354,
+                "p95": 39.96368800289929
+              },
+              "macro_f1": 0.0,
+              "mrr": 0.4306,
+              "no_answer": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "no_answer_accuracy": 1.0,
+              "no_hit_rate": 0.0,
+              "per_quadrant": {
+                "0": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "1": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "2": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "3": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                }
+              },
+              "recall_at_k": 0.8333,
+              "schema_valid_rate": 1.0,
+              "semantic_consistency": 1.0,
+              "stale_case_rate": 0.0,
+              "stale_hit_rate": 0.0,
+              "tokens": {
+                "output_mean": 0.0,
+                "prompt_mean": 0.0
+              }
+            }
+          },
+          "by_split": {
+            "dev": {
+              "accuracy": 0.0,
+              "calibration": {
+                "brier_score": 0.0,
+                "cases": 0,
+                "ece": 0.0
+              },
+              "cases": 6,
+              "citation_correctness": 1.0,
+              "citation_recall": 1.0,
+              "duplicate_hit_rate": 0.0,
+              "fallback_rate": 0.0,
+              "forbidden_case_rate": 0.0,
+              "forbidden_hit_rate": 0.0,
+              "freshness_rate": 1.0,
+              "groundedness": 0.0,
+              "injection_attack_success_rate": 0.0,
+              "isolation_hit_rate": 0.0,
+              "isolation_violation_rate": 0.0,
+              "latency_ms": {
+                "max": 42.42680800962262,
+                "p50": 37.23860700847581,
+                "p95": 42.42680800962262
+              },
+              "macro_f1": 0.0,
+              "mrr": 0.8056,
+              "no_answer": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "no_answer_accuracy": 1.0,
+              "no_hit_rate": 0.0,
+              "per_quadrant": {
+                "0": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "1": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "2": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "3": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                }
+              },
+              "recall_at_k": 0.8333,
+              "schema_valid_rate": 1.0,
+              "semantic_consistency": 1.0,
+              "stale_case_rate": 0.0,
+              "stale_hit_rate": 0.0,
+              "tokens": {
+                "output_mean": 0.0,
+                "prompt_mean": 0.0
+              }
+            },
+            "train": {
+              "accuracy": 0.0,
+              "calibration": {
+                "brier_score": 0.0,
+                "cases": 0,
+                "ece": 0.0
+              },
+              "cases": 6,
+              "citation_correctness": 1.0,
+              "citation_recall": 1.0,
+              "duplicate_hit_rate": 0.0,
+              "fallback_rate": 0.0,
+              "forbidden_case_rate": 0.0,
+              "forbidden_hit_rate": 0.0,
+              "freshness_rate": 1.0,
+              "groundedness": 0.0,
+              "injection_attack_success_rate": 0.0,
+              "isolation_hit_rate": 0.0,
+              "isolation_violation_rate": 0.0,
+              "latency_ms": {
+                "max": 42.25695400964469,
+                "p50": 34.72526898258366,
+                "p95": 42.25695400964469
+              },
+              "macro_f1": 0.0,
+              "mrr": 0.625,
+              "no_answer": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "no_answer_accuracy": 1.0,
+              "no_hit_rate": 0.0,
+              "per_quadrant": {
+                "0": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "1": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "2": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                },
+                "3": {
+                  "f1": 0.0,
+                  "precision": 0.0,
+                  "recall": 0.0
+                }
+              },
+              "recall_at_k": 0.8333,
+              "schema_valid_rate": 1.0,
+              "semantic_consistency": 1.0,
+              "stale_case_rate": 0.0,
+              "stale_hit_rate": 0.0,
+              "tokens": {
+                "output_mean": 0.0,
+                "prompt_mean": 0.0
+              }
+            }
+          },
+          "calibration": {
+            "brier_score": 0.0,
+            "cases": 0,
+            "ece": 0.0
+          },
+          "cases": 12,
+          "citation_correctness": 1.0,
+          "citation_recall": 1.0,
+          "duplicate_hit_rate": 0.0,
+          "fallback_rate": 0.0,
+          "forbidden_case_rate": 0.0,
+          "forbidden_hit_rate": 0.0,
+          "freshness_rate": 1.0,
+          "groundedness": 0.0,
+          "injection_attack_success_rate": 0.0,
+          "isolation_hit_rate": 0.0,
+          "isolation_violation_rate": 0.0,
+          "latency_ms": {
+            "max": 42.42680800962262,
+            "p50": 37.23860700847581,
+            "p95": 42.42680800962262
+          },
+          "macro_f1": 0.0,
+          "mrr": 0.7153,
+          "no_answer": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          "no_answer_accuracy": 1.0,
+          "no_hit_rate": 0.0,
+          "per_quadrant": {
+            "0": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            },
+            "1": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            },
+            "2": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            },
+            "3": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            }
+          },
+          "recall_at_k": 0.8333,
+          "schema_valid_rate": 1.0,
+          "semantic_consistency": 1.0,
+          "stale_case_rate": 0.0,
+          "stale_hit_rate": 0.0,
+          "tokens": {
+            "output_mean": 0.0,
+            "prompt_mean": 0.0
+          }
+        },
+        "mode": "retrieval_only"
+      }
+    }
+  },
+  "total_seconds_before_cleanup": 3.227916,
+  "tuning_performed": false
+}

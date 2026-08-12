@@ -82,6 +82,7 @@ def _retrieval_quality_counts(
 ) -> dict[str, int]:
   hit_count = 0
   duplicate_count = 0
+  document_duplicate_count = 0
   forbidden_count = 0
   stale_count = 0
   no_hit_count = 0
@@ -98,6 +99,7 @@ def _retrieval_quality_counts(
     if not duplicate_ids:
       duplicate_ids = _duplicate_ids(chunk_ids or document_ids)
     duplicate_count += min(len(duplicate_ids), len(document_ids))
+    document_duplicate_count += len(_duplicate_ids(document_ids))
 
     forbidden = set(result.forbidden_document_ids)
     forbidden_hits = sum(document_id in forbidden for document_id in document_ids)
@@ -117,6 +119,7 @@ def _retrieval_quality_counts(
   return {
     "hits": hit_count,
     "duplicates": duplicate_count,
+    "document_duplicates": document_duplicate_count,
     "forbidden": forbidden_count,
     "stale": stale_count,
     "no_hit_cases": no_hit_count,
@@ -224,6 +227,9 @@ def evaluate_results(
     "mrr": round(_mean(reciprocal_ranks), 4),
     "duplicate_hit_rate": round(
       retrieval_counts["duplicates"] / hit_count, 4
+    ) if hit_count else 0.0,
+    "document_duplicate_rate": round(
+      retrieval_counts["document_duplicates"] / hit_count, 4
     ) if hit_count else 0.0,
     "freshness_rate": round(
       (hit_count - retrieval_counts["stale"]) / hit_count, 4

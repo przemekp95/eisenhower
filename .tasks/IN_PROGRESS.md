@@ -27,10 +27,10 @@ Implement a disabled-by-default comparison path for the existing dense retriever
 
 ### Plan
 
-- Retrieve lexical candidates from the canonical authorized corpus, then add deterministic BM25 and equal-contribution RRF contracts without choosing parameters from the untouched holdout.
-- Add strategy-neutral dense/hybrid/optional-reranked evaluation for PL/EN Recall@k, MRR, no-hit, duplicate, freshness, isolation and latency slices.
-- Keep dense as the runtime default, pin and bound any optional reranker, and fail closed rather than silently changing strategy when it is unavailable.
-- Produce immutable comparison evidence before any reversible promotion flag is changed.
+- Add document-diverse fielded BM25/RRF candidates so repeated chunks cannot crowd out distinct relevant documents, while preserving canonical ACL/version/tombstone checks.
+- Expand only train/dev with PL/EN, multi-document, exact-identifier and negative no-hit cases; keep the existing holdout byte-for-byte untouched.
+- Select bounded parameters on train, validate once on dev, and keep dense as the runtime default unless every approved quality and zero-tolerance gate passes.
+- Produce a new immutable exact-SHA comparison, run full regression and CI, then promote only evidence that remains truthful about the independent-human gate.
 
 ### Conditional checkpoint
 
@@ -38,7 +38,7 @@ The repository owner approves the human decision gate green without reservations
 
 ### Progress
 
-The disabled comparison implementation now provides canonical BM25, independently retrieved dense and lexical candidates, equal-contribution RRF, and a typed optional reranker bounded to 20 candidates. The strategy-neutral runner preserves PL/EN, isolation, freshness, duplicate, no-hit and latency slices while leaving dense retrieval as the runtime default. A real comparison report cannot yet be emitted: the governed 19-file corpus no longer matches the frozen manifest snapshot even from a clean worktree at `cbc91d54dfbf23ea00b3ebff7bedc4730c854931`. Refreezing the actual corpus and then running the immutable comparison is a technical evidence requirement, not a human approval gate; no strategy or parameter has been promoted.
+The approved 19-file allowlist is refrozen at snapshot `2994f809649d3dd155faf09419557de7af70c7a77dae9aa4d3cf67f717ac70a8`; the v3 packet expands only train/dev to 42 balanced PL/EN exact-ID, multi-document, no-hit and ACL cases while preserving all six v2 holdout records semantically unchanged. Train-only selection chose document-diverse fielded BM25/RRF plus the revision-pinned `BAAI/bge-reranker-v2-m3`, bounded to 20 candidates and 192 tokens. The clean exact-SHA local MongoDB/Qdrant/private-ROCm comparison passes the proposed non-holdout gates: Recall@5 `0.9107`, MRR@5 `0.8048`, PL `0.8929`/`0.8000`, EN `0.9286`/`0.8095`, no-answer `1.0`, p95 `231.83 ms`, and zero duplicate, forbidden, stale or isolation hits. ROCm 7.2 on `gfx1151` served the pinned reranker over loopback-only vLLM; the temporary service and isolated stores were removed after evaluation. Dense remains the runtime default and holdout remains unobserved because `human-review-v3.json` still has 42 truthful `PENDING` decisions; independent human review is the only remaining gate before final holdout and promotion.
 ---
 
 ## TASK-013: Approve representative retrieval quality gates

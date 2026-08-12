@@ -14,6 +14,11 @@ from .ports import Retriever
 _TOKEN_PATTERN = re.compile(r"\w+", flags=re.UNICODE)
 _BM25_K1 = 1.2
 _BM25_B = 0.75
+_DEFAULT_TITLE_WEIGHT = 2.0
+_DEFAULT_TEXT_WEIGHT = 1.0
+_DEFAULT_DENSE_RRF_WEIGHT = 1.0
+_DEFAULT_LEXICAL_RRF_WEIGHT = 1.5
+_MAX_RANKING_WEIGHT = 10.0
 _MAX_RERANKER_CANDIDATES = 20
 
 
@@ -48,16 +53,32 @@ class HybridRetrievalCore:
     self,
     *,
     rrf_k: int = 60,
+    dense_rrf_weight: float = _DEFAULT_DENSE_RRF_WEIGHT,
+    lexical_rrf_weight: float = _DEFAULT_LEXICAL_RRF_WEIGHT,
+    title_weight: float = _DEFAULT_TITLE_WEIGHT,
+    text_weight: float = _DEFAULT_TEXT_WEIGHT,
     reranker: Reranker | None = None,
     reranker_candidate_limit: int = 20,
+    reranker_weight: float = 1.0,
   ):
     if rrf_k < 1:
       raise ValueError("rrf_k must be positive")
+    self._validate_weight("dense_rrf_weight", dense_rrf_weight)
+    self._validate_weight("lexical_rrf_weight", lexical_rrf_weight)
+    self._validate_weight("title_weight", title_weight)
+    self._validate_weight("text_weight", text_weight)
     if not 1 <= reranker_candidate_limit <= _MAX_RERANKER_CANDIDATES:
       raise ValueError("reranker_candidate_limit must be between 1 and 20")
+    if not 0 < reranker_weight <= 1:
+      raise ValueError("reranker_weight must be between 0 and 1")
     self.rrf_k = rrf_k
+    self.dense_rrf_weight = float(dense_rrf_weight)
+    self.lexical_rrf_weight = float(lexical_rrf_weight)
+    self.title_weight = float(title_weight)
+    self.text_weight = float(text_weight)
     self.reranker = reranker
     self.reranker_candidate_limit = reranker_candidate_limit
+    self.reranker_weight = float(reranker_weight)
 
   def rank(
     self,
@@ -68,7 +89,12 @@ class HybridRetrievalCore:
     self._validate_candidates(query, dense_candidates)
     if lexical_candidates is None:
       lexical_candidates = dense_candidates
-      lexical_scores = self._bm25_scores(query.text, lexical_candidates)
+      lexical_scores = self._bm25_scores(
+        query.text,
+        lexical_candidates,
+        title_weight=self.title_weight,
+        text_weight=self.text_weight,
+      )
     else:
       self._validate_candidates(query, lexical_candidates)
       lexical_scores = {item.chunk_id: item.score for item in lexical_candidates}
@@ -86,7 +112,7 @@ class HybridRetrievalCore:
     )
     fused = self._fuse(dense_order, lexical_order)
     ranked = self._rerank(query.text, fused) if self.reranker is not None else fused
-    return ranked[:query.limit]
+    return self._diversify_documents(ranked)[:query.limit]
 
   def _fuse(
     self,
@@ -96,9 +122,13 @@ class HybridRetrievalCore:
     candidates = {item.chunk_id: item for item in lexical_order}
     candidates.update({item.chunk_id: item for item in dense_order})
     scores = {chunk_id: 0.0 for chunk_id in candidates}
-    for ranking in (dense_order, lexical_order):
+    weighted_rankings = (
+      (dense_order, self.dense_rrf_weight),
+      (lexical_order, self.lexical_rrf_weight),
+    )
+    for ranking, weight in weighted_rankings:
       for rank, item in enumerate(ranking, start=1):
-        scores[item.chunk_id] += 1 / (self.rrf_k + rank)
+        scores[item.chunk_id] += weight / (self.rrf_k + rank)
 
     fused = [
       item.model_copy(update={"score": scores[item.chunk_id]})
@@ -129,14 +159,37 @@ class HybridRetrievalCore:
     ):
       raise RerankerUnavailable("reranker returned a non-finite score")
 
-    reranked = [
-      item.model_copy(update={"score": float(raw_scores[index])})
-      for index, item in enumerate(prefix)
-    ]
+    fused_scores = self._normalize_scores([item.score for item in prefix])
+    cross_scores = self._normalize_scores([float(score) for score in raw_scores])
+    reranked = [item.model_copy(update={"score": (
+      (1 - self.reranker_weight) * fused_scores[index]
+      + self.reranker_weight * cross_scores[index]
+    )}) for index, item in enumerate(prefix)]
     reranked.sort(
       key=lambda item: (-item.score, self._rank_of(item.chunk_id, prefix), item.chunk_id),
     )
     return reranked + fused[prefix_size:]
+
+  @staticmethod
+  def _normalize_scores(scores: Sequence[float]) -> list[float]:
+    minimum = min(scores)
+    span = max(scores) - minimum
+    if span == 0:
+      return [0.0 for _ in scores]
+    return [(score - minimum) / span for score in scores]
+
+  @staticmethod
+  def _diversify_documents(ranked: Sequence[RetrievalHit]) -> list[RetrievalHit]:
+    first_chunks: list[RetrievalHit] = []
+    additional_chunks: list[RetrievalHit] = []
+    seen_document_ids: set[str] = set()
+    for item in ranked:
+      if item.document_id in seen_document_ids:
+        additional_chunks.append(item)
+        continue
+      seen_document_ids.add(item.document_id)
+      first_chunks.append(item)
+    return first_chunks + additional_chunks
 
   @staticmethod
   def _rank_of(chunk_id: str, candidates: Sequence[RetrievalHit]) -> int:
@@ -179,31 +232,62 @@ class HybridRetrievalCore:
     cls,
     query_text: str,
     candidates: Sequence[RetrievalHit],
+    *,
+    title_weight: float = _DEFAULT_TITLE_WEIGHT,
+    text_weight: float = _DEFAULT_TEXT_WEIGHT,
   ) -> dict[str, float]:
-    tokenized = {
-      item.chunk_id: cls._tokens(f"{item.title} {item.text}")
+    cls._validate_weight("title_weight", title_weight)
+    cls._validate_weight("text_weight", text_weight)
+    tokenized_fields = {
+      item.chunk_id: {
+        "title": cls._tokens(item.title),
+        "text": cls._tokens(item.text),
+      }
       for item in candidates
     }
     query_terms = set(cls._tokens(query_text))
-    average_length = sum(len(tokens) for tokens in tokenized.values()) / len(tokenized)
+    average_lengths = {
+      field_name: sum(
+        len(fields[field_name]) for fields in tokenized_fields.values()
+      ) / len(tokenized_fields)
+      for field_name in ("title", "text")
+    }
+    field_weights = {"title": float(title_weight), "text": float(text_weight)}
     scores = {item.chunk_id: 0.0 for item in candidates}
     for term in query_terms:
-      document_frequency = sum(term in tokens for tokens in tokenized.values())
+      document_frequency = sum(
+        any(term in tokens for tokens in fields.values())
+        for fields in tokenized_fields.values()
+      )
       if document_frequency == 0:
         continue
       inverse_document_frequency = log(
         1 + ((len(candidates) - document_frequency + 0.5) / (document_frequency + 0.5))
       )
-      for chunk_id, tokens in tokenized.items():
-        term_frequency = Counter(tokens)[term]
-        if term_frequency == 0:
-          continue
-        length_ratio = len(tokens) / average_length if average_length else 0.0
-        denominator = term_frequency + (_BM25_K1 * (1 - _BM25_B + (_BM25_B * length_ratio)))
-        scores[chunk_id] += inverse_document_frequency * (
-          (term_frequency * (_BM25_K1 + 1)) / denominator
-        )
+      for chunk_id, fields in tokenized_fields.items():
+        for field_name, tokens in fields.items():
+          term_frequency = Counter(tokens)[term]
+          if term_frequency == 0:
+            continue
+          average_length = average_lengths[field_name]
+          length_ratio = len(tokens) / average_length if average_length else 0.0
+          denominator = term_frequency + (
+            _BM25_K1 * (1 - _BM25_B + (_BM25_B * length_ratio))
+          )
+          scores[chunk_id] += field_weights[field_name] * inverse_document_frequency * (
+            (term_frequency * (_BM25_K1 + 1)) / denominator
+          )
     return scores
+
+  @staticmethod
+  def _validate_weight(name: str, value: float) -> None:
+    if (
+      isinstance(value, bool)
+      or not isinstance(value, (int, float))
+      or not isfinite(float(value))
+      or not 0 < float(value) <= _MAX_RANKING_WEIGHT
+    ):
+      raise ValueError(f"{name} must be finite and between 0 and 10")
 
   @staticmethod
   def _tokens(text: str) -> list[str]:
@@ -219,10 +303,16 @@ class CanonicalBm25Retriever:
     *,
     embedding_version: str,
     chunker: DeterministicChunker | None = None,
+    title_weight: float = _DEFAULT_TITLE_WEIGHT,
+    text_weight: float = _DEFAULT_TEXT_WEIGHT,
   ):
+    HybridRetrievalCore._validate_weight("title_weight", title_weight)
+    HybridRetrievalCore._validate_weight("text_weight", text_weight)
     self.document_store = document_store
     self.embedding_version = embedding_version
     self.chunker = chunker or DeterministicChunker()
+    self.title_weight = float(title_weight)
+    self.text_weight = float(text_weight)
 
   def retrieve(self, query: RetrievalQuery) -> list[RetrievalHit]:
     enumerated = self.document_store.project_documents(
@@ -265,7 +355,12 @@ class CanonicalBm25Retriever:
         ))
     if not candidates:
       return []
-    scores = HybridRetrievalCore._bm25_scores(query.text, candidates)
+    scores = HybridRetrievalCore._bm25_scores(
+      query.text,
+      candidates,
+      title_weight=self.title_weight,
+      text_weight=self.text_weight,
+    )
     ranked = [
       candidate.model_copy(update={"score": scores[candidate.chunk_id]})
       for candidate in candidates
@@ -279,7 +374,7 @@ class CanonicalBm25Retriever:
 
 
 class HybridRetriever:
-  """Composes canonical dense and lexical retrievers with equal RRF weight."""
+  """Composes canonical dense and lexical retrievers with weighted RRF."""
 
   def __init__(
     self,
@@ -287,9 +382,12 @@ class HybridRetriever:
     lexical_retriever: Retriever,
     *,
     rrf_k: int = 60,
+    dense_rrf_weight: float = _DEFAULT_DENSE_RRF_WEIGHT,
+    lexical_rrf_weight: float = _DEFAULT_LEXICAL_RRF_WEIGHT,
     candidate_multiplier: int = 4,
     reranker: Reranker | None = None,
     reranker_candidate_limit: int = 20,
+    reranker_weight: float = 1.0,
   ):
     if candidate_multiplier < 1:
       raise ValueError("candidate_multiplier must be positive")
@@ -298,8 +396,11 @@ class HybridRetriever:
     self.candidate_multiplier = candidate_multiplier
     self.core = HybridRetrievalCore(
       rrf_k=rrf_k,
+      dense_rrf_weight=dense_rrf_weight,
+      lexical_rrf_weight=lexical_rrf_weight,
       reranker=reranker,
       reranker_candidate_limit=reranker_candidate_limit,
+      reranker_weight=reranker_weight,
     )
 
   def retrieve(self, query: RetrievalQuery) -> list[RetrievalHit]:

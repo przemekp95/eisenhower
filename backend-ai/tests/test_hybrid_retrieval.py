@@ -175,11 +175,72 @@ def test_lexical_canonical_store_failure_propagates_instead_of_falling_back():
 
 
 def test_bm25_and_dense_ranks_are_fused_with_equal_rrf_contributions():
-  ranked = HybridRetrievalCore(rrf_k=60).rank(query(), candidates())
+  ranked = HybridRetrievalCore(
+    rrf_k=60,
+    dense_rrf_weight=1.0,
+    lexical_rrf_weight=1.0,
+  ).rank(query(), candidates())
 
   assert [item.chunk_id for item in ranked] == ["semantic", "exact", "noise"]
   assert ranked[0].score == pytest.approx((1 / 61) + (1 / 62))
   assert ranked[1].score == pytest.approx((1 / 63) + (1 / 61))
+
+
+def test_weighted_rrf_can_prioritize_the_lexical_ranking():
+  dense_first = hit("dense-first", "semantic match", score=0.9)
+  lexical_first = hit("lexical-first", "exact identifier", score=0.8)
+  dense = [dense_first, lexical_first]
+  lexical = [
+    lexical_first.model_copy(update={"score": 0.9}),
+    dense_first.model_copy(update={"score": 0.8}),
+  ]
+
+  ranked = HybridRetrievalCore(
+    rrf_k=10,
+    dense_rrf_weight=1.0,
+    lexical_rrf_weight=2.0,
+  ).rank(query(limit=2), dense, lexical)
+
+  assert [item.chunk_id for item in ranked] == ["lexical-first", "dense-first"]
+  assert ranked[0].score == pytest.approx((1 / 12) + (2 / 11))
+
+
+def test_distinct_documents_are_ranked_before_additional_chunks_from_the_same_document():
+  first = hit("doc-a-1", "first", score=0.9, document_id="doc-a")
+  second = hit("doc-a-2", "second", score=0.8, document_id="doc-a")
+  distinct = hit("doc-b-1", "third", score=0.7, document_id="doc-b")
+
+  ranked = HybridRetrievalCore().rank(
+    query(limit=3),
+    [first, second, distinct],
+    [first, second, distinct],
+  )
+
+  assert [(item.chunk_id, item.document_id) for item in ranked] == [
+    ("doc-a-1", "doc-a"),
+    ("doc-b-1", "doc-b"),
+    ("doc-a-2", "doc-a"),
+  ]
+  assert ranked[1].tenant_id == "tenant-a"
+  assert ranked[1].project_id == "project-1"
+
+
+def test_fielded_bm25_can_give_titles_more_weight_than_body_text():
+  title_match = hit("title-match", "unrelated body", score=0.0).model_copy(
+    update={"title": "FastAPI boundary"}
+  )
+  body_match = hit("body-match", "FastAPI boundary", score=0.0).model_copy(
+    update={"title": "Unrelated title"}
+  )
+
+  scores = HybridRetrievalCore._bm25_scores(
+    "FastAPI",
+    [title_match, body_match],
+    title_weight=2.0,
+    text_weight=1.0,
+  )
+
+  assert scores["title-match"] > scores["body-match"]
 
 
 def test_ties_are_deterministic_and_preserve_canonical_identifiers():
@@ -225,6 +286,18 @@ class RecordingReranker:
     if self.error is not None:
       raise self.error
     return self.scores
+
+
+def test_bounded_reranker_weight_blends_cross_encoder_with_fused_order():
+  reranker = RecordingReranker(scores=[0.0, 1.0, 0.5])
+
+  ranked = HybridRetrievalCore(
+    rrf_k=60,
+    reranker=reranker,
+    reranker_weight=0.5,
+  ).rank(query(), candidates())
+
+  assert [item.chunk_id for item in ranked] == ["exact", "semantic", "noise"]
 
 
 def test_optional_reranker_receives_only_the_bounded_fused_prefix():
@@ -280,6 +353,10 @@ def test_non_sequence_reranker_output_is_mapped_to_the_typed_failure():
   "kwargs",
   [
     {"rrf_k": 0},
+    {"dense_rrf_weight": 0},
+    {"dense_rrf_weight": 10.1},
+    {"lexical_rrf_weight": 0},
+    {"lexical_rrf_weight": 10.1},
     {"reranker_candidate_limit": 0},
     {"reranker_candidate_limit": 21},
   ],
@@ -287,3 +364,21 @@ def test_non_sequence_reranker_output_is_mapped_to_the_typed_failure():
 def test_configuration_bounds_are_fail_closed(kwargs):
   with pytest.raises(ValueError):
     HybridRetrievalCore(**kwargs)
+
+
+@pytest.mark.parametrize(
+  "kwargs",
+  [
+    {"title_weight": 0},
+    {"title_weight": 10.1},
+    {"text_weight": 0},
+    {"text_weight": 10.1},
+  ],
+)
+def test_bm25_field_weight_configuration_is_bounded(kwargs):
+  with pytest.raises(ValueError):
+    CanonicalBm25Retriever(
+      CanonicalStore([], {}),
+      embedding_version="minilm-v1",
+      **kwargs,
+    )

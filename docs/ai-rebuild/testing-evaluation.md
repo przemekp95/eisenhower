@@ -19,11 +19,14 @@ One parameterized truth table must cover backend, API client, web, mobile and MC
 
 ## Retrieval metrics
 
-The controlled comparison runner now evaluates the existing canonical dense path against canonical
+The controlled comparison runner evaluates the existing canonical dense path against canonical
 BM25 + dense RRF, with an optional bounded reranker port. It defaults to `train` + `dev` and refuses
-to touch holdout unless `split="holdout"` is explicit. Dense remains the runtime default. A fresh
-comparison report is currently blocked because the physical 19-file corpus no longer matches the
-frozen manifest; do not regenerate that manifest from a dirty worktree or tune against holdout.
+to touch holdout unless `split="holdout"` is explicit. The 19-file allowlist was refrozen on
+2026-08-12 and the write-once v2 comparison was executed from clean source SHA
+`a7a55bd8fa795937df9d458c3dd626012a26a437`. Hybrid improved non-holdout Recall@5 from `0.7083`
+to `0.8333` and MRR@5 from `0.5833` to `0.7153`, but still missed the proposed global and Polish
+quality thresholds. Dense therefore remains the runtime default. The v2 candidate and review
+template remain explicitly unapproved until all independent human decisions are recorded.
 
 For each query `q` with relevant chunk/document set `R_q`:
 
