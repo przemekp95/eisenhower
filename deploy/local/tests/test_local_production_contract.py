@@ -109,7 +109,13 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertEqual(self.services["ai-service"]["group_add"], ["1001"])
     self.assertEqual(
       self.services["audit-volume-init"]["command"],
-      ["sh", "-c", "chown -R 1001:1001 /audit && chmod 0770 /audit"],
+      [
+        "sh",
+        "-c",
+        "chown 1001:1001 /audit && chmod 0770 /audit && "
+        "find /audit -maxdepth 1 -type f -name 'audit.sqlite3*' "
+        "-exec chown 1000:1001 {} + -exec chmod 0600 {} +",
+      ],
     )
     self.assertIn(
       "INTERNAL_ALLOWED_TENANTS=${INTERNAL_ALLOWED_TENANTS:?INTERNAL_ALLOWED_TENANTS is required}",
@@ -356,6 +362,9 @@ class LocalProductionContractTest(unittest.TestCase):
     )
     config = ACCESS_GATEWAY_CONFIG_PATH.read_text()
     self.assertIn("map_hash_bucket_size 128;", config)
+    self.assertIn("resolver 127.0.0.11 valid=10s ipv6=off;", config)
+    for upstream in ("identity", "mcp", "api", "ai"):
+      self.assertIn(f"set ${upstream}_upstream ${{{upstream.upper()}_UPSTREAM}};", config)
     self.assertIn("limit_req_zone", config)
     self.assertIn("client_max_body_size", config)
     self.assertIn("if ($host != \"${ACCESS_GATEWAY_HOST}\")", config)

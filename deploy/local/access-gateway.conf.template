@@ -10,6 +10,11 @@ map $http_origin $origin_allowed {
 server {
     listen 8080;
     server_name _;
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    set $identity_upstream ${IDENTITY_UPSTREAM};
+    set $mcp_upstream ${MCP_UPSTREAM};
+    set $api_upstream ${API_UPSTREAM};
+    set $ai_upstream ${AI_UPSTREAM};
     access_log off;
     server_tokens off;
     client_max_body_size 1m;
@@ -30,25 +35,27 @@ server {
 
     location = /identity { return 308 /identity/; }
     location /identity/ {
-        proxy_pass http://${IDENTITY_UPSTREAM};
+        proxy_pass http://$identity_upstream;
     }
 
     location = /mcp {
         proxy_buffering off;
         proxy_read_timeout 3600s;
-        proxy_pass http://${MCP_UPSTREAM}/mcp;
+        proxy_pass http://$mcp_upstream/mcp;
     }
 
     location = /.well-known/oauth-protected-resource/mcp {
-        proxy_pass http://${MCP_UPSTREAM}/.well-known/oauth-protected-resource/mcp;
+        proxy_pass http://$mcp_upstream/.well-known/oauth-protected-resource/mcp;
     }
 
     location /api/ {
-        proxy_pass http://${API_UPSTREAM}/;
+        rewrite ^/api/(.*)$ /$1 break;
+        proxy_pass http://$api_upstream;
     }
 
     location /ai/ {
-        proxy_pass http://${AI_UPSTREAM}/;
+        rewrite ^/ai/(.*)$ /$1 break;
+        proxy_pass http://$ai_upstream;
     }
 
     location / { return 404; }
