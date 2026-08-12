@@ -1,18 +1,5 @@
 # In Progress
 
-## TASK-039: Build a shadow CI impact classifier
-**Priority:** P1 | **Tags:** ci, mlops, classifier, shadow, safety
-
-Build and verify a separate multilabel change-impact classifier that predicts CI job probabilities with explicit unknown/abstain behavior. Keep full CI authoritative in shadow mode and preserve the existing four-class Eisenhower task classifier contract.
-
-### Plan
-
-- Define isolated versioned dataset, feature, model, prediction, evaluation and lineage contracts with fail-closed validation and conservative human-review labels.
-- Implement deterministic path/change/dependency features, a rule baseline, a dependency-light multilabel model, temporal/epoch evaluation and counterfactual shadow planning.
-- Add red-green tests for dependency, workflow, lockfile, rename, delete, binary and unknown-path epochs plus metrics, calibration, abstention and immutable evidence.
-- Document data acquisition, labeling, shadow operation, additive integration, threat/risk boundaries and exact local verification without changing CI workflow, deployment or production.
-
----
 ## TASK-013: Approve representative retrieval quality gates
 **Priority:** P1 | **Tags:** rag, evaluation, recall, mrr, human-gate
 
