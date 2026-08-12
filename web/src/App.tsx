@@ -12,8 +12,27 @@ import {
 import { LanguageProvider, useLanguage } from './i18n/LanguageContext';
 import type { TranslationKey } from './i18n/translations';
 import { replaceTaskById } from './lib/uiState';
-import { createTask, deleteTask, getTasks, updateTask } from './services/api';
-import type { Task, TaskInput } from './types';
+import {
+  createTask,
+  deleteTask,
+  getDelegatedTasks,
+  getTasks,
+  transitionTaskDelegation,
+  transitionTaskLifecycle,
+  updateTask,
+  updateTaskDelegation,
+  updateTaskSchedule,
+} from './services/api';
+import type {
+  Task,
+  TaskDelegationAssignment,
+  TaskDelegationStatus,
+  TaskInput,
+  TaskLifecycleAction,
+  TaskLifecycleFilter,
+  TaskSchedule,
+  TaskView,
+} from './types';
 
 type LoadState = 'loading' | 'ready' | 'offline' | 'error';
 type RequestError = Error & { status?: number; code?: string };
@@ -114,12 +133,17 @@ function AppContent() {
   const [loadError, setLoadError] = useState('');
   const [lastSyncedAt, setLastSyncedAt] = useState(() => new Date());
   const [showAdministration, setShowAdministration] = useState(false);
+  const [lifecycleFilter, setLifecycleFilter] = useState<TaskLifecycleFilter>('active');
+  const [taskView, setTaskView] = useState<TaskView>('owned');
 
-  const loadTasks = async () => {
+  const loadTasks = async (
+    filter: TaskLifecycleFilter = lifecycleFilter,
+    view: TaskView = taskView
+  ) => {
     setLoadState('loading');
     setLoadError('');
     try {
-      const nextTasks = await getTasks();
+      const nextTasks = view === 'delegated' ? await getDelegatedTasks() : await getTasks(filter);
       setTasks(nextTasks);
       setLastSyncedAt(new Date());
       setLoadState('ready');
@@ -131,8 +155,8 @@ function AppContent() {
   };
 
   useEffect(() => {
-    void loadTasks();
-  }, []);
+    void loadTasks(lifecycleFilter, taskView);
+  }, [lifecycleFilter, taskView]);
 
   useEffect(() => {
     const offline = () => {
@@ -174,6 +198,58 @@ function AppContent() {
       const revision = tasks.find((task) => task._id === id)?.revision;
       await deleteTask(id, revision);
       setTasks((current) => current.filter((task) => task._id !== id));
+      setLastSyncedAt(new Date());
+    } catch (issue) {
+      throw new Error(safeMessage(issue, 'save', t));
+    }
+  };
+
+  const handleLifecycleTask = async (id: string, action: TaskLifecycleAction) => {
+    try {
+      const revision = tasks.find((task) => task._id === id)?.revision;
+      const updated = await transitionTaskLifecycle(id, action, revision);
+      setTasks((current) => {
+        if (lifecycleFilter !== 'all' && updated.lifecycleState !== lifecycleFilter) {
+          return current.filter((task) => task._id !== id);
+        }
+        return replaceTaskById(current, id, updated);
+      });
+      setLastSyncedAt(new Date());
+    } catch (issue) {
+      throw new Error(safeMessage(issue, 'save', t));
+    }
+  };
+
+  const handleUpdateSchedule = async (id: string, schedule: TaskSchedule | null) => {
+    try {
+      const revision = tasks.find((task) => task._id === id)?.revision;
+      const updated = await updateTaskSchedule(id, schedule, revision);
+      setTasks((current) => replaceTaskById(current, id, updated));
+      setLastSyncedAt(new Date());
+    } catch (issue) {
+      throw new Error(safeMessage(issue, 'save', t));
+    }
+  };
+
+  const handleUpdateDelegation = async (
+    id: string,
+    delegation: TaskDelegationAssignment | null
+  ) => {
+    try {
+      const revision = tasks.find((task) => task._id === id)?.revision;
+      const updated = await updateTaskDelegation(id, delegation, revision);
+      setTasks((current) => replaceTaskById(current, id, updated));
+      setLastSyncedAt(new Date());
+    } catch (issue) {
+      throw new Error(safeMessage(issue, 'save', t));
+    }
+  };
+
+  const handleDelegationStatus = async (id: string, status: TaskDelegationStatus) => {
+    try {
+      const revision = tasks.find((task) => task._id === id)?.revision;
+      const updated = await transitionTaskDelegation(id, status, revision);
+      setTasks((current) => replaceTaskById(current, id, updated));
       setLastSyncedAt(new Date());
     } catch (issue) {
       throw new Error(safeMessage(issue, 'save', t));
@@ -259,12 +335,38 @@ function AppContent() {
           </div>
         </header>
 
+        <nav
+          aria-label={t('taskView.label')}
+          className="mb-3 flex w-fit gap-1 rounded-full border border-white/10 bg-white/5 p-1"
+        >
+          {(['owned', 'delegated'] as TaskView[]).map((view) => (
+            <button
+              key={view}
+              type="button"
+              aria-pressed={taskView === view}
+              onClick={() => setTaskView(view)}
+              className={`min-h-11 rounded-full px-4 py-2 text-sm ${
+                taskView === view ? 'bg-white text-slate-950' : 'text-white/70 hover:text-white'
+              }`}
+            >
+              {t(`taskView.${view}`)}
+            </button>
+          ))}
+        </nav>
+
         <Matrix
           tasks={tasks}
           loading={loadState === 'loading'}
           onAddTask={handleAddTask}
           onUpdateTask={handleUpdateTask}
           onDeleteTask={handleDeleteTask}
+          lifecycleFilter={lifecycleFilter}
+          onLifecycleFilterChange={setLifecycleFilter}
+          onLifecycleTask={handleLifecycleTask}
+          onUpdateSchedule={handleUpdateSchedule}
+          taskView={taskView}
+          onUpdateDelegation={handleUpdateDelegation}
+          onDelegationStatus={handleDelegationStatus}
         />
       </div>
 

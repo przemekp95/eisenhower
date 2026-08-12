@@ -4,6 +4,7 @@ import { normalizeStoredTasks } from '../utils/taskSync';
 
 const TASKS_KEY = 'eisenhower-mobile/tasks';
 const LANGUAGE_KEY = 'eisenhower-mobile/language';
+const DELEGATED_TASKS_KEY = 'eisenhower-mobile/delegated-tasks';
 
 export async function loadLanguage() {
   const stored = await AsyncStorage.getItem(LANGUAGE_KEY);
@@ -29,4 +30,21 @@ export async function loadTasks(language) {
 
 export async function saveTasks(tasks) {
   await AsyncStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
+}
+
+export async function loadDelegatedTasks(language) {
+  const stored = await AsyncStorage.getItem(DELEGATED_TASKS_KEY);
+  if (!stored) return [];
+  try {
+    return normalizeStoredTasks(JSON.parse(stored), language).map((task) => ({
+      ...task,
+      delegationRole: 'assignee',
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function saveDelegatedTasks(tasks) {
+  await AsyncStorage.setItem(DELEGATED_TASKS_KEY, JSON.stringify(tasks));
 }

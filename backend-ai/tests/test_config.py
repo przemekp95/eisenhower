@@ -19,6 +19,8 @@ def test_load_settings_uses_defaults():
   assert settings.memory_write_enabled is False
   assert settings.memory_retrieval_enabled is False
   assert settings.memory_response_enabled is False
+  assert settings.audit_database_path.name == "audit.sqlite3"
+  assert settings.release_sha == "0" * 40
   assert settings.inference_base_url == "http://inference:8000/v1"
   assert settings.inference_api_key is None
   assert settings.inference_model is None
@@ -76,6 +78,9 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
       "MEMORY_RETRIEVAL_ENABLED": "true",
       "MEMORY_RESPONSE_ENABLED": "false",
       "MEMORY_POLICY_PATH": str(tmp_path / "memory-policy.json"),
+      "AUDIT_DATABASE_PATH": str(tmp_path / "security-audit.sqlite3"),
+      "AUDIT_HMAC_KEY": "a" * 32,
+      "RELEASE_SHA": "1" * 40,
     }
   )
 
@@ -117,6 +122,9 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
   assert settings.memory_retrieval_enabled is True
   assert settings.memory_response_enabled is False
   assert settings.memory_policy_path == tmp_path / "memory-policy.json"
+  assert settings.audit_database_path == tmp_path / "security-audit.sqlite3"
+  assert settings.audit_hmac_key == "a" * 32
+  assert settings.release_sha == "1" * 40
 
 
 def test_load_settings_accepts_legacy_vllm_environment_as_compatibility_input():
@@ -151,6 +159,8 @@ def test_production_oidc_requires_issuer_audience_and_explicit_cors():
       "VLLM_MODEL": "approved-model",
       "RAG_RESPONSE_ENABLED": "false",
       "RAG_ALLOWED_TENANTS": "tenant-a,tenant-b",
+      "AUDIT_HMAC_KEY": "a" * 32,
+      "RELEASE_SHA": "1" * 40,
     }
   )
 
@@ -192,8 +202,31 @@ def test_production_static_auth_requires_distinct_long_tokens():
         "EISENHOWER_API_TOKEN": "short",
         "EISENHOWER_ADMIN_TOKEN": "short",
         "CORS_ALLOW_ORIGINS": "https://app.example.com",
+        "AUDIT_HMAC_KEY": "a" * 32,
+        "RELEASE_SHA": "1" * 40,
       }
     )
+
+
+def test_production_requires_separate_audit_key_and_immutable_release_sha():
+  common = {
+    "APP_ENV": "production",
+    "AUTH_MODE": "static",
+    "EISENHOWER_API_TOKEN": "u" * 32,
+    "EISENHOWER_ADMIN_TOKEN": "a" * 32,
+    "CORS_ALLOW_ORIGINS": "https://app.example.com",
+  }
+
+  with pytest.raises(ValueError, match="AUDIT_HMAC_KEY"):
+    load_settings(common)
+  with pytest.raises(ValueError, match="RELEASE_SHA"):
+    load_settings({**common, "AUDIT_HMAC_KEY": "k" * 32})
+
+  settings = load_settings(
+    {**common, "AUDIT_HMAC_KEY": "k" * 32, "RELEASE_SHA": "1" * 40}
+  )
+
+  assert settings.release_sha == "1" * 40
 
 
 @pytest.mark.parametrize(

@@ -248,7 +248,10 @@ jobs:
     runs-on:
       - self-hosted
       - mikrus
-    needs: [docker-release, android-release]
+    # Public web/API availability is independent from the separately signed
+    # Android artifact. A missing owner keystore must not suppress deployment
+    # of otherwise green exact-SHA service images.
+    needs: docker-release
     env:
       MIKRUS_HOST: ${{ secrets.MIKRUS_HOST }}
       MIKRUS_USER: ${{ secrets.MIKRUS_USER }}

@@ -15,11 +15,12 @@ from sentence_transformers import SentenceTransformer
 
 from app.config import Settings
 from app.rag.adapters import QdrantIngestionAdapter, QdrantRetriever
-from app.rag.canonical import CanonicalIngestionApplication
+from app.rag.canonical import CanonicalIngestionApplication, CanonicalRetriever
 from app.rag.collections import QdrantCollectionManager
 from app.rag.corpus_manifest import CorpusManifest, RepositoryCorpusConnector
 from app.rag.golden import load_golden_dataset
-from app.rag.golden_runner import RetrievalGoldenRunner
+from app.rag.golden_runner import RetrievalStrategyComparisonRunner
+from app.rag.hybrid import CanonicalBm25Retriever, HybridRetriever
 from app.rag.ingestion import DeterministicChunker
 from app.rag.models import AccessScope
 from app.rag.mongo_document_store import MongoCanonicalDocumentStore
@@ -52,8 +53,12 @@ def _delete_alias(client: QdrantClient, alias: str) -> None:
     ])
 
 
-def run(candidate_path: Path, snapshot_output: Path | None = None) -> dict:
-  repository_root = Path(__file__).resolve().parents[2]
+def run(
+  candidate_path: Path,
+  snapshot_output: Path | None = None,
+  repository_root: Path | None = None,
+) -> dict:
+  repository_root = (repository_root or Path(__file__).resolve().parents[2]).resolve()
   manifest_path = repository_root / "docs" / "ai-rebuild" / "corpus-manifest-v1.json"
   manifest = CorpusManifest.load(manifest_path)
   candidate_bytes = candidate_path.read_bytes()
@@ -105,8 +110,22 @@ def run(candidate_path: Path, snapshot_output: Path | None = None) -> dict:
     if reconciliation != {"projected": 0, "pending": 0, "drifted": 0}:
       raise RuntimeError("candidate corpus projection did not reconcile cleanly")
 
-    retriever = QdrantRetriever(qdrant, embedding, collection_alias=alias)
-    evaluation = RetrievalGoldenRunner(retriever).run(cases, k=5)
+    dense_retriever = CanonicalRetriever(
+      QdrantRetriever(qdrant, embedding, collection_alias=alias),
+      store,
+      embedding_version=embedding.version,
+      chunker=DeterministicChunker(max_chars=1200, overlap_chars=160),
+    )
+    lexical_retriever = CanonicalBm25Retriever(
+      store,
+      embedding_version=embedding.version,
+      chunker=DeterministicChunker(max_chars=1200, overlap_chars=160),
+    )
+    hybrid_retriever = HybridRetriever(dense_retriever, lexical_retriever)
+    strategy_comparison = RetrievalStrategyComparisonRunner({
+      "dense": dense_retriever,
+      "hybrid": hybrid_retriever,
+    }).run(cases, k=5)
     recovery = (
       verify_candidate_collection_snapshot(qdrant, manager, collection_name, snapshot_output)
       if snapshot_output is not None else None
@@ -136,7 +155,8 @@ def run(candidate_path: Path, snapshot_output: Path | None = None) -> dict:
       },
       "ingestion": ingestion_result,
       "reconciliation": reconciliation,
-      "evaluation": evaluation,
+      "evaluation": strategy_comparison["strategies"]["dense"],
+      "strategy_comparison": strategy_comparison,
       "collection": {"name": collection_name, "revision": embedding.version},
       "snapshot_restore": recovery,
       "total_seconds_before_cleanup": round(perf_counter() - started, 6),
@@ -160,8 +180,12 @@ def main() -> None:
   parser = argparse.ArgumentParser()
   parser.add_argument("--candidate", type=Path, required=True)
   parser.add_argument("--output", type=Path, required=True)
+  parser.add_argument(
+    "--repository-root", type=Path,
+    help="Read the frozen corpus from an explicit clean exact-SHA checkout.",
+  )
   args = parser.parse_args()
-  report = run(args.candidate)
+  report = run(args.candidate, repository_root=args.repository_root)
   args.output.parent.mkdir(parents=True, exist_ok=True)
   args.output.write_text(
     json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
@@ -170,7 +194,7 @@ def main() -> None:
   print(json.dumps({
     "output": str(args.output),
     "sha256": sha256(args.output.read_bytes()).hexdigest(),
-    "metrics": report["evaluation"]["metrics"],
+    "metrics": report["strategy_comparison"]["strategies"],
     "cleanup": report["cleanup"],
   }, ensure_ascii=False, sort_keys=True))
 

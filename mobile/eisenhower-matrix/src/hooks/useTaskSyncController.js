@@ -5,13 +5,26 @@ import {
   suggestTaskQuadrant,
 } from '../services/ai';
 import { scanTasksFromImage } from '../services/media';
-import { loadLanguage, loadTasks, saveLanguage, saveTasks } from '../services/storage';
+import {
+  loadDelegatedTasks,
+  loadLanguage,
+  loadTasks,
+  saveDelegatedTasks,
+  saveLanguage,
+  saveTasks,
+} from '../services/storage';
 import {
   createRemoteTask,
   deleteRemoteTask,
+  fetchRemoteDelegatedTasks,
   fetchRemoteTasks,
+  transitionRemoteTaskLifecycle,
+  transitionRemoteTaskDelegation,
   updateRemoteTask,
+  updateRemoteTaskSchedule,
+  updateRemoteTaskDelegation,
 } from '../services/tasks';
+import { resyncTaskReminders, syncTaskReminder } from '../services/reminders';
 import { translations } from '../i18n/translations';
 import {
   createTaskRecord,
@@ -32,6 +45,10 @@ import {
   getTaskRemoteId,
   hasPendingTasks,
   markTaskPendingDelete,
+  markTaskPendingDelegation,
+  markTaskPendingDelegationStatus,
+  markTaskPendingLifecycle,
+  markTaskPendingSchedule,
   markTaskSyncFailed,
   markTaskPendingUpdate,
   normalizeStoredTasks,
@@ -53,17 +70,23 @@ const EMPTY_TASK = {
 export default function useTaskSyncController() {
   const [language, setLanguage] = useState('pl');
   const [tasks, setTasks] = useState([]);
+  const [delegatedTasks, setDelegatedTasks] = useState([]);
+  const [taskView, setTaskView] = useState('owned');
   const [loading, setLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(true);
   const [notice, setNotice] = useState('');
   const [aiCapabilities, setAiCapabilities] = useState(null);
   const [newTask, setNewTask] = useState(EMPTY_TASK);
   const tasksRef = useRef([]);
+  const delegatedTasksRef = useRef([]);
   const syncInFlightRef = useRef(null);
 
   const t = translations[language];
   const quadrantOptions = useMemo(() => getQuadrantOptions(t), [t]);
-  const groupedTasks = useMemo(() => groupTasksByQuadrant(tasks), [tasks]);
+  const groupedTasks = useMemo(
+    () => groupTasksByQuadrant(taskView === 'delegated' ? delegatedTasks : tasks),
+    [delegatedTasks, taskView, tasks]
+  );
   const providerControls = aiCapabilities?.provider_controls || {};
   const aiConnected = Boolean(aiCapabilities);
   const suggestDisabled = !providerControls.local_model?.active;
@@ -74,11 +97,16 @@ export default function useTaskSyncController() {
   }, [tasks]);
 
   useEffect(() => {
+    delegatedTasksRef.current = delegatedTasks;
+  }, [delegatedTasks]);
+
+  useEffect(() => {
     let active = true;
 
     const bootstrap = async () => {
       let nextLanguage = 'pl';
       let cachedTasks = getSampleTasks('pl');
+      let cachedDelegatedTasks = [];
 
       try {
         nextLanguage = await loadLanguage();
@@ -91,8 +119,15 @@ export default function useTaskSyncController() {
       } catch {
         cachedTasks = getSampleTasks(nextLanguage);
       }
+      try {
+        cachedDelegatedTasks = await loadDelegatedTasks(nextLanguage);
+      } catch {
+        cachedDelegatedTasks = [];
+      }
 
       const normalizedCachedTasks = normalizeStoredTasks(cachedTasks, nextLanguage);
+      const normalizedCachedDelegatedTasks = normalizeStoredTasks(cachedDelegatedTasks, nextLanguage)
+        .map((task) => ({ ...task, delegationRole: 'assignee' }));
 
       if (!active) {
         return;
@@ -101,21 +136,47 @@ export default function useTaskSyncController() {
       setLanguage(nextLanguage);
       tasksRef.current = normalizedCachedTasks;
       setTasks(normalizedCachedTasks);
+      delegatedTasksRef.current = normalizedCachedDelegatedTasks;
+      setDelegatedTasks(normalizedCachedDelegatedTasks);
       setLoading(false);
 
       const [remoteTasksResult, capabilitiesResult] = await Promise.allSettled([
         runSingleFlight(syncInFlightRef, async () => {
-          const remoteTasks = normalizeStoredTasks(await fetchRemoteTasks(nextLanguage), nextLanguage);
-          const resolvedTasks = await reconcilePendingTasks({
+          const [remoteTasks, remoteDelegatedTasks] = await Promise.all([
+            fetchRemoteTasks(nextLanguage),
+            fetchRemoteDelegatedTasks(nextLanguage),
+          ]);
+          const reconciledTasks = await reconcilePendingTasks({
             cachedTasks: normalizedCachedTasks,
             remoteTasks,
             language: nextLanguage,
             createRemoteTask,
             updateRemoteTask,
+            updateRemoteTaskSchedule,
+            updateRemoteTaskDelegation,
+            transitionRemoteTaskDelegation,
+            transitionRemoteTaskLifecycle,
             deleteRemoteTask,
           });
-          await saveTasks(resolvedTasks);
-          return { resolvedTasks, success: !hasPendingTasks(resolvedTasks) };
+          const resolvedDelegatedTasks = await reconcilePendingTasks({
+            cachedTasks: normalizedCachedDelegatedTasks,
+            remoteTasks: remoteDelegatedTasks,
+            language: nextLanguage,
+            createRemoteTask,
+            updateRemoteTask,
+            updateRemoteTaskSchedule,
+            updateRemoteTaskDelegation,
+            transitionRemoteTaskDelegation,
+            transitionRemoteTaskLifecycle,
+            deleteRemoteTask,
+          });
+          const resolvedTasks = await resyncTaskReminders(reconciledTasks);
+          await Promise.all([saveTasks(resolvedTasks), saveDelegatedTasks(resolvedDelegatedTasks)]);
+          return {
+            resolvedTasks,
+            resolvedDelegatedTasks,
+            success: !hasPendingTasks(resolvedTasks) && !hasPendingTasks(resolvedDelegatedTasks),
+          };
         }),
         fetchAICapabilities(),
       ]);
@@ -125,7 +186,7 @@ export default function useTaskSyncController() {
       }
 
       if (remoteTasksResult.status === 'fulfilled') {
-        const { resolvedTasks } = remoteTasksResult.value;
+        const { resolvedTasks, resolvedDelegatedTasks } = remoteTasksResult.value;
 
         if (!active) {
           return;
@@ -133,12 +194,19 @@ export default function useTaskSyncController() {
 
         tasksRef.current = resolvedTasks;
         setTasks(resolvedTasks);
+        delegatedTasksRef.current = resolvedDelegatedTasks;
+        setDelegatedTasks(resolvedDelegatedTasks);
         setNotice(
-          hasPendingTasks(resolvedTasks)
+          hasPendingTasks(resolvedTasks) || hasPendingTasks(resolvedDelegatedTasks)
             ? translations[nextLanguage].pendingSyncNotice
             : translations[nextLanguage].syncedRemote
         );
       } else {
+        const remindedCachedTasks = await resyncTaskReminders(normalizedCachedTasks);
+        tasksRef.current = remindedCachedTasks;
+        setTasks(remindedCachedTasks);
+        await saveTasks(remindedCachedTasks);
+        await saveDelegatedTasks(normalizedCachedDelegatedTasks);
         setNotice(translations[nextLanguage].cachedLocal);
       }
 
@@ -153,6 +221,7 @@ export default function useTaskSyncController() {
 
       setLanguage('pl');
       setTasks(getSampleTasks('pl'));
+      setDelegatedTasks([]);
       setAiCapabilities(null);
       setLoading(false);
       setAiLoading(false);
@@ -169,6 +238,15 @@ export default function useTaskSyncController() {
     setTasks(normalizedTasks);
     setNotice(nextNotice);
     await saveTasks(normalizedTasks);
+  };
+
+  const persistDelegatedTasks = async (nextTasks, nextNotice = '') => {
+    const normalizedTasks = normalizeStoredTasks(nextTasks, language)
+      .map((task) => ({ ...task, delegationRole: 'assignee' }));
+    delegatedTasksRef.current = normalizedTasks;
+    setDelegatedTasks(normalizedTasks);
+    setNotice(nextNotice);
+    await saveDelegatedTasks(normalizedTasks);
   };
 
   const refreshCapabilities = async () => {
@@ -250,20 +328,41 @@ export default function useTaskSyncController() {
 
     return runSingleFlight(syncInFlightRef, async () => {
       try {
-        const remoteTasks = normalizeStoredTasks(await fetchRemoteTasks(language), language);
-        const resolvedTasks = await reconcilePendingTasks({
+        const [remoteTasks, remoteDelegatedTasks] = await Promise.all([
+          fetchRemoteTasks(language),
+          fetchRemoteDelegatedTasks(language),
+        ]);
+        const reconciledTasks = await reconcilePendingTasks({
           cachedTasks,
           remoteTasks,
           language,
           createRemoteTask,
           updateRemoteTask,
+          updateRemoteTaskSchedule,
+          updateRemoteTaskDelegation,
+          transitionRemoteTaskDelegation,
+          transitionRemoteTaskLifecycle,
           deleteRemoteTask,
         });
-        await persistTasks(
-          resolvedTasks,
-          hasPendingTasks(resolvedTasks) ? t.pendingSyncNotice : t.syncedRemote
-        );
-        return { resolvedTasks, success: !hasPendingTasks(resolvedTasks) };
+        const resolvedDelegatedTasks = await reconcilePendingTasks({
+          cachedTasks: delegatedTasksRef.current,
+          remoteTasks: remoteDelegatedTasks,
+          language,
+          createRemoteTask,
+          updateRemoteTask,
+          updateRemoteTaskSchedule,
+          updateRemoteTaskDelegation,
+          transitionRemoteTaskDelegation,
+          transitionRemoteTaskLifecycle,
+          deleteRemoteTask,
+        });
+        const resolvedTasks = await resyncTaskReminders(reconciledTasks);
+        const pending = hasPendingTasks(resolvedTasks) || hasPendingTasks(resolvedDelegatedTasks);
+        await Promise.all([
+          persistTasks(resolvedTasks, pending ? t.pendingSyncNotice : t.syncedRemote),
+          persistDelegatedTasks(resolvedDelegatedTasks, pending ? t.pendingSyncNotice : t.syncedRemote),
+        ]);
+        return { resolvedTasks, success: !pending };
       } catch {
         setNotice(hasPendingTasks(cachedTasks) ? t.pendingSyncNotice : t.syncFailed);
         return { resolvedTasks: cachedTasks, success: false };
@@ -289,6 +388,18 @@ export default function useTaskSyncController() {
 
     await persistTasks(nextTasks, t.pendingSyncNotice);
     await retrySync(nextTasks);
+  };
+
+  const handleDelegatedResolveConflict = async (id, resolution) => {
+    const conflictTask = delegatedTasksRef.current.find((task) => task.id === id);
+    if (!conflictTask || conflictTask.syncState !== TASK_SYNC_STATE.conflict) return;
+    const resolvedTask = resolveTaskConflict(conflictTask, resolution);
+    const nextTasks = resolvedTask
+      ? upsertTask(delegatedTasksRef.current, resolvedTask)
+      : removeTask(delegatedTasksRef.current, conflictTask);
+    await persistDelegatedTasks(nextTasks,
+      hasPendingTasks(nextTasks) ? t.pendingSyncNotice : t.syncedRemote);
+    if (resolution === 'local') await retrySync();
   };
 
   const addAnalysisTaskToMatrix = async (analysis) => {
@@ -387,6 +498,10 @@ export default function useTaskSyncController() {
       return;
     }
 
+    if (currentTask.lifecycleState !== 'trashed') {
+      return;
+    }
+
     const remoteId = getTaskRemoteId(currentTask);
 
     if (
@@ -399,7 +514,7 @@ export default function useTaskSyncController() {
     }
 
     try {
-      await deleteRemoteTask(remoteId, currentTask.revision);
+      await deleteRemoteTask(remoteId, currentTask.revision, currentTask.lifecycleState);
       await persistTasks(removeTask(tasksRef.current, currentTask), t.syncedRemote);
     } catch (error) {
       const pendingDeleteTask = markTaskPendingDelete(currentTask);
@@ -411,6 +526,139 @@ export default function useTaskSyncController() {
       if (status === 409 || status === 412 || status === 428) {
         await retrySync(nextTasks);
       }
+    }
+  };
+
+  const handleLifecycle = async (id, action) => {
+    const currentTask = tasksRef.current.find((task) => task.id === id);
+    if (!currentTask || currentTask.syncState === TASK_SYNC_STATE.conflict) {
+      return;
+    }
+
+    const localTask = markTaskPendingLifecycle(currentTask, action);
+    if (!localTask) {
+      return;
+    }
+    const nextTasks = upsertTask(tasksRef.current, localTask);
+    const remoteId = getTaskRemoteId(currentTask);
+    if (!remoteId) {
+      await persistTasks(nextTasks, t.cachedLocal);
+      return;
+    }
+
+    await persistTasks(nextTasks, t.pendingSyncNotice);
+    try {
+      const remoteTask = await transitionRemoteTaskLifecycle(
+        remoteId,
+        action,
+        language,
+        currentTask.revision,
+      );
+      await persistTasks(upsertTask(tasksRef.current, remoteTask), t.syncedRemote);
+    } catch (error) {
+      const pendingTask = markTaskSyncFailed(localTask, error);
+      const pendingTasks = upsertTask(tasksRef.current, pendingTask);
+      await persistTasks(pendingTasks, t.pendingSyncNotice);
+      const status = Number(error?.status || error?.response?.status || 0);
+      if (status === 409 || status === 412 || status === 428) {
+        await retrySync(pendingTasks);
+      }
+    }
+  };
+
+  const handleSchedule = async (id, schedule) => {
+    const currentTask = tasksRef.current.find((task) => task.id === id);
+    if (!currentTask || currentTask.syncState === TASK_SYNC_STATE.conflict) {
+      return;
+    }
+
+    const pendingTask = markTaskPendingSchedule(currentTask, schedule);
+    let localTask = pendingTask;
+    try {
+      const reminder = await syncTaskReminder(pendingTask, { requestPermission: true });
+      localTask = {
+        ...pendingTask,
+        ...(reminder.notificationId ? { notificationId: reminder.notificationId } : {}),
+        reminderStatus: reminder.status,
+      };
+    } catch {
+      localTask = { ...pendingTask, reminderStatus: 'error' };
+    }
+
+    const nextTasks = upsertTask(tasksRef.current, localTask);
+    const remoteId = getTaskRemoteId(currentTask);
+    await persistTasks(nextTasks, remoteId ? t.pendingSyncNotice : t.cachedLocal);
+    if (!remoteId) return;
+
+    try {
+      const remoteTask = await updateRemoteTaskSchedule(
+        remoteId,
+        schedule,
+        language,
+        currentTask.revision,
+      );
+      const syncedTask = {
+        ...remoteTask,
+        ...(localTask.notificationId ? { notificationId: localTask.notificationId } : {}),
+        reminderStatus: localTask.reminderStatus,
+      };
+      await persistTasks(upsertTask(tasksRef.current, syncedTask),
+        localTask.reminderStatus === 'permission_denied'
+          ? t.reminderPermissionDenied
+          : localTask.reminderStatus === 'missed'
+            ? t.reminderMissed
+            : t.syncedRemote);
+    } catch (error) {
+      const failedTask = markTaskSyncFailed(localTask, error);
+      const failedTasks = upsertTask(tasksRef.current, failedTask);
+      await persistTasks(failedTasks, t.pendingSyncNotice);
+      const status = Number(error?.status || error?.response?.status || 0);
+      if (status === 409 || status === 412 || status === 428) {
+        await retrySync(failedTasks);
+      }
+    }
+  };
+
+  const handleDelegation = async (id, delegation) => {
+    const currentTask = tasksRef.current.find((task) => task.id === id);
+    if (!currentTask || currentTask.syncState === TASK_SYNC_STATE.conflict) return;
+    const localTask = markTaskPendingDelegation(currentTask, delegation);
+    const nextTasks = upsertTask(tasksRef.current, localTask);
+    const remoteId = getTaskRemoteId(currentTask);
+    await persistTasks(nextTasks, remoteId ? t.pendingSyncNotice : t.cachedLocal);
+    if (!remoteId) return;
+    try {
+      const remoteTask = await updateRemoteTaskDelegation(
+        remoteId, delegation, language, currentTask.revision,
+      );
+      await persistTasks(upsertTask(tasksRef.current, remoteTask), t.syncedRemote);
+    } catch (error) {
+      const failedTask = markTaskSyncFailed(localTask, error);
+      const failedTasks = upsertTask(tasksRef.current, failedTask);
+      await persistTasks(failedTasks, t.pendingSyncNotice);
+      const status = Number(error?.status || error?.response?.status || 0);
+      if (status === 409 || status === 412 || status === 428) await retrySync(failedTasks);
+    }
+  };
+
+  const handleDelegationStatus = async (id, status) => {
+    const currentTask = delegatedTasksRef.current.find((task) => task.id === id);
+    if (!currentTask || currentTask.syncState === TASK_SYNC_STATE.conflict) return;
+    const localTask = markTaskPendingDelegationStatus(currentTask, status);
+    if (!localTask) return;
+    const nextTasks = upsertTask(delegatedTasksRef.current, localTask);
+    await persistDelegatedTasks(nextTasks, t.pendingSyncNotice);
+    try {
+      const remoteTask = await transitionRemoteTaskDelegation(
+        getTaskRemoteId(currentTask), status, language, currentTask.revision,
+      );
+      await persistDelegatedTasks(upsertTask(delegatedTasksRef.current, remoteTask), t.syncedRemote);
+    } catch (error) {
+      const failedTask = markTaskSyncFailed(localTask, error);
+      const failedTasks = upsertTask(delegatedTasksRef.current, failedTask);
+      await persistDelegatedTasks(failedTasks, t.pendingSyncNotice);
+      const errorStatus = Number(error?.status || error?.response?.status || 0);
+      if (errorStatus === 409 || errorStatus === 412 || errorStatus === 428) await retrySync();
     }
   };
 
@@ -473,7 +721,12 @@ export default function useTaskSyncController() {
     handleAddTask,
     handleDelete,
     handleLanguageChange,
+    handleLifecycle,
+    handleDelegation,
+    handleDelegationStatus,
+    handleDelegatedResolveConflict,
     handleResolveConflict,
+    handleSchedule,
     handleScan,
     handleSuggest,
     handleToggle,
@@ -488,6 +741,8 @@ export default function useTaskSyncController() {
     retrySync,
     scanDisabled,
     suggestDisabled,
+    taskView,
+    setTaskView,
     t,
     updateNewTaskField,
   };

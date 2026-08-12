@@ -11,6 +11,7 @@ import {
   deleteTask,
   extractTasksFromImage,
   getCapabilities,
+  getDelegatedTasks,
   getExamplesByQuadrant,
   getTasks,
   getTrainingStats,
@@ -18,6 +19,10 @@ import {
   learnFromFeedback,
   retrainModel,
   setProviderEnabled,
+  transitionTaskLifecycle,
+  transitionTaskDelegation,
+  updateTaskDelegation,
+  updateTaskSchedule,
   updateTask,
   clearApiToken,
   setApiToken,
@@ -29,6 +34,7 @@ const taskResponse = {
   description: '',
   urgent: false,
   important: false,
+  lifecycleState: 'active' as const,
   revision: 4,
 };
 
@@ -234,6 +240,143 @@ describe('api service', () => {
       expect.objectContaining({
         method: 'DELETE',
         headers: expect.objectContaining({ 'If-Match': '"4"' }),
+      })
+    );
+  });
+
+  it('filters lifecycle views and sends revision-safe lifecycle actions', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => [{ ...taskResponse, lifecycleState: 'trashed' }],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({ ...taskResponse, lifecycleState: 'active', revision: 5 }),
+      });
+
+    await getTasks('trashed');
+    await transitionTaskLifecycle('task/1', 'restore', 4);
+
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      `${runtimeConfig.apiUrl}/tasks?lifecycle=trashed`,
+      expect.any(Object)
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      `${runtimeConfig.apiUrl}/tasks/task%2F1/lifecycle`,
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ action: 'restore' }),
+        headers: expect.objectContaining({ 'If-Match': '"4"' }),
+      })
+    );
+  });
+
+  it('sets and clears task schedules through the shared client', async () => {
+    const schedule = {
+      dueAt: '2026-08-15T12:00:00.000Z',
+      timeZone: 'Europe/Warsaw',
+      remindAt: '2026-08-15T10:00:00.000Z',
+    };
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({ ...taskResponse, schedule, revision: 5 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({ ...taskResponse, revision: 6 }),
+      });
+
+    await updateTaskSchedule('task/1', schedule, 4);
+    await updateTaskSchedule('task/1', null, 5);
+
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      `${runtimeConfig.apiUrl}/tasks/task%2F1/schedule`,
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ schedule }),
+        headers: expect.objectContaining({ 'If-Match': '"4"' }),
+      })
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      `${runtimeConfig.apiUrl}/tasks/task%2F1/schedule`,
+      expect.objectContaining({ body: JSON.stringify({ schedule: null }) })
+    );
+  });
+
+  it('lists delegated work and sends delegation commands through the shared client', async () => {
+    const delegation = {
+      assigneeUserId: 'user-b',
+      displayLabel: 'Pat',
+      handoffNote: 'Use the runbook.',
+      status: 'offered' as const,
+      offeredAt: '2026-08-12T12:00:00.000Z',
+      statusUpdatedAt: '2026-08-12T12:00:00.000Z',
+    };
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => [{ ...taskResponse, delegation }],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({ ...taskResponse, delegation, revision: 5 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({
+          ...taskResponse,
+          delegation: { ...delegation, status: 'accepted' },
+          revision: 6,
+        }),
+      });
+
+    await getDelegatedTasks();
+    await updateTaskDelegation(
+      'task/1',
+      { assigneeUserId: 'user-b', displayLabel: 'Pat', handoffNote: 'Use the runbook.' },
+      4
+    );
+    await transitionTaskDelegation('task/1', 'accepted', 5);
+
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      `${runtimeConfig.apiUrl}/tasks/delegated`,
+      expect.any(Object)
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      `${runtimeConfig.apiUrl}/tasks/task%2F1/delegation`,
+      expect.objectContaining({
+        method: 'PUT',
+        headers: expect.objectContaining({ 'If-Match': '"4"' }),
+      })
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      3,
+      `${runtimeConfig.apiUrl}/tasks/task%2F1/delegation/status`,
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ status: 'accepted' }),
       })
     );
   });

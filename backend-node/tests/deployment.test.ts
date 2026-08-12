@@ -20,6 +20,7 @@ describe('production deployment boundaries', () => {
       CORS_ALLOW_ORIGINS: 'https://tasks.example.com',
       LOCAL_MODEL_APPROVED_EVALUATION_SHA256: '0'.repeat(64),
       AI_EVALUATION_FILE: '/tmp/production-evaluation.json',
+      AUDIT_HMAC_KEY: 'audit-hmac-key-at-least-32-characters',
     };
     const { stdout } = await execFileAsync(
       'docker',
@@ -27,7 +28,10 @@ describe('production deployment boundaries', () => {
       { cwd: repositoryRoot, env: environment }
     );
     const rendered = JSON.parse(stdout) as {
-      services: { 'api-service': { environment: Record<string, string> } };
+      services: {
+        'api-service': { environment: Record<string, string>; volumes: unknown[] };
+        'ai-service': { environment: Record<string, string>; volumes: unknown[] };
+      };
     };
     const apiEnvironment = rendered.services['api-service'].environment;
 
@@ -35,8 +39,18 @@ describe('production deployment boundaries', () => {
       NODE_ENV: 'production',
       AUTH_MODE: 'static',
       EISENHOWER_API_TOKEN: environment.EISENHOWER_API_TOKEN,
+      AUDIT_HMAC_KEY: environment.AUDIT_HMAC_KEY,
+      AUDIT_LOG_PATH: '/app/audit/node-audit.ndjson',
+      RELEASE_SHA: environment.IMAGE_TAG,
     });
     expect(() => loadConfig(apiEnvironment)).not.toThrow();
+    expect(rendered.services['ai-service'].environment).toMatchObject({
+      AUDIT_HMAC_KEY: environment.AUDIT_HMAC_KEY,
+      RELEASE_SHA: environment.IMAGE_TAG,
+      AUDIT_DATABASE_PATH: '/app/audit/audit.sqlite3',
+    });
+    expect(JSON.stringify(rendered.services['ai-service'].volumes)).toContain('/app/audit');
+    expect(JSON.stringify(rendered.services['api-service'].volumes)).toContain('/app/audit');
   });
 
   it('does not publish backend service ports from the Mikrus compose file', () => {
@@ -53,6 +67,29 @@ describe('production deployment boundaries', () => {
     expect(compose).toMatch(/\$\{WEB_PORT:-8080\}:3000/);
     expect(aiBlock).toContain('APP_ENV: production');
     expect(aiBlock).toContain('EISENHOWER_API_TOKEN:');
+    expect(aiBlock).toContain('AUDIT_HMAC_KEY:');
+    expect(aiBlock).toContain('RELEASE_SHA:');
+  });
+
+  it('activates private same-SHA metrics scraping and bounded alert rules on Mikrus', () => {
+    const compose = fs.readFileSync(
+      path.join(repositoryRoot, 'deploy/mikrus/docker-compose.yml'), 'utf8'
+    );
+    const prometheus = fs.readFileSync(
+      path.join(repositoryRoot, 'deploy/mikrus/prometheus.yml'), 'utf8'
+    );
+    const alerts = fs.readFileSync(
+      path.join(repositoryRoot, 'deploy/mikrus/alert_rules.yml'), 'utf8'
+    );
+    const deployScript = fs.readFileSync(
+      path.join(repositoryRoot, '.github/scripts/deploy-mikrus.sh'), 'utf8'
+    );
+
+    expect(compose).toMatch(/prom\/prometheus:[^\s]+@sha256:[a-f0-9]{64}/);
+    expect(compose).not.toMatch(/prometheus:[\s\S]*?ports:/);
+    expect(prometheus).toContain("targets: ['ai-service:8000']");
+    expect(alerts).toContain('EisenhowerAuditWriteFailed');
+    expect(deployScript).toContain('eisenhower_release_info{sha=');
   });
 
   it('keeps deploy ownership fail-closed and has no demo-fortis target', () => {
@@ -85,7 +122,8 @@ describe('production deployment boundaries', () => {
     expect(release).toContain("github.event.workflow_run.conclusion == 'success'");
     expect(release).toContain('IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}');
     expect(release).toContain("format('{0}/{1}:{2}', env.DOCKER_HUB_USERNAME, matrix.tag, env.RELEASE_SHA)");
-    expect(release).toMatch(/deploy-mikrus:[\s\S]*?needs:\s*\[docker-release, android-release\]/);
+    expect(release).toMatch(/deploy-mikrus:[\s\S]*?needs:\s*docker-release/);
+    expect(release).not.toMatch(/deploy-mikrus:[\s\S]*?needs:\s*\[docker-release, android-release\]/);
     expect(deployScript).toContain('MIKRUS_PUBLIC_URL');
     expect(deployScript).toContain('rollback_deployment');
     expect(deployScript).toContain('/health');
@@ -129,12 +167,15 @@ describe('production deployment boundaries', () => {
     const envExample = fs.readFileSync(path.join(repositoryRoot, '.env.example'), 'utf8');
 
     const aiBlock = compose.slice(compose.indexOf('  ai-service:'), compose.indexOf('  rag-worker:'));
+    const redisBlock = compose.slice(compose.indexOf('\n  redis:'), compose.indexOf('\n  qdrant:'));
     const qdrantBlock = compose.slice(compose.indexOf('  qdrant:'), compose.indexOf('  minio:'));
     const minioBlock = compose.slice(compose.indexOf('  minio:'), compose.indexOf('  nginx:'));
 
     expect(aiBlock).toContain('RAG_ENABLED=${RAG_ENABLED:-false}');
     expect(aiBlock).toContain('QDRANT_URL=http://qdrant:6333');
     expect(aiBlock).toContain('INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}');
+    expect(redisBlock).toContain('profiles:');
+    expect(redisBlock).toContain('- cache');
     expect(compose).not.toContain('driver: nvidia');
     expect(aiBlock).not.toContain('MINIO_');
     expect(qdrantBlock).toMatch(/profiles:\n\s+- experimental\n\s+- rag/);

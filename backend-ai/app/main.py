@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from hashlib import sha256
 from typing import Literal
+from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +13,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .auth import AuthError, OIDCVerifier, ServiceTokenVerifier, StaticTokenVerifier, TokenVerifier
+from .audit import AuditAction, AuditEvent, AuditOutcome, SqliteAuditSink
 from .config import Settings, load_settings
 from .device import get_device
 from .defaults import QUADRANT_NAMES
@@ -35,6 +38,19 @@ WEBHOOK_JOB_TYPES = {
   "tombstone": "rag.tombstone",
   "reindex_project": "rag.reindex_project",
   "start_rag_evaluation": "rag.evaluate",
+}
+REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+SENSITIVE_ACTIONS = {
+  "/add-example": AuditAction.ADMIN_OPERATION,
+  "/retrain": AuditAction.ADMIN_OPERATION,
+  "/learn-feedback": AuditAction.ADMIN_OPERATION,
+  "/learn-ocr-feedback": AuditAction.ADMIN_OPERATION,
+  "/training-data": AuditAction.ADMIN_OPERATION,
+  "/internal/webhooks/n8n/verify": AuditAction.INGEST,
+  "/internal/rag/ingestion/upsert": AuditAction.INGEST,
+  "/internal/rag/ingestion/tombstone": AuditAction.INGEST,
+  "/internal/rag/reindex": AuditAction.REINDEX,
+  "/internal/rag/evaluations": AuditAction.ADMIN_OPERATION,
 }
 
 
@@ -123,6 +139,7 @@ def create_app(
   rag_service=None,
   token_verifier: TokenVerifier | None = None,
   metrics_registry: MetricsRegistry | None = None,
+  audit_sink=None,
 ) -> FastAPI:
   resolved_settings = settings or load_settings()
   resolved_store = store or TrainingStore(resolved_settings.training_data_path)
@@ -167,6 +184,11 @@ def create_app(
     )
   ai_rate_limiter = SlidingWindowRateLimiter(limit=30, window_seconds=60)
   metrics = metrics_registry or MetricsRegistry()
+  metrics.set_release_sha(resolved_settings.release_sha)
+  audit = audit_sink or SqliteAuditSink(
+    resolved_settings.audit_database_path,
+    hmac_key=resolved_settings.audit_hmac_key.encode("utf-8"),
+  )
 
   app = FastAPI(
     title=resolved_settings.app_name,
@@ -180,16 +202,79 @@ def create_app(
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
   )
 
+  def record_audit(
+    request: Request,
+    action: AuditAction,
+    outcome: AuditOutcome,
+    *,
+    principal=None,
+  ) -> None:
+    resolved_principal = principal or getattr(request.state, "principal", None)
+    try:
+      audit.record(
+        AuditEvent(
+          service="backend-ai",
+          release_sha=resolved_settings.release_sha,
+          event_id=uuid4().hex,
+          request_id=request.state.request_id,
+          action=action,
+          outcome=outcome,
+          tenant_id=(resolved_principal.tenant_id if resolved_principal else "unknown"),
+          actor_id=(resolved_principal.user_id if resolved_principal else "anonymous"),
+          resource_id=request.url.path,
+        )
+      )
+    except Exception:
+      metrics.observe_audit("error")
+      raise
+    metrics.observe_audit(outcome.value)
+
+  @app.middleware("http")
+  async def audit_sensitive_requests(request: Request, call_next):
+    action = SENSITIVE_ACTIONS.get(request.url.path)
+    if action is None and request.url.path.startswith("/providers/"):
+      action = AuditAction.ADMIN_OPERATION
+    if action is None or request.method not in UNSAFE_METHODS:
+      return await call_next(request)
+    try:
+      record_audit(request, action, AuditOutcome.ATTEMPT)
+    except Exception:
+      request_logger.error("Required security audit preflight failed", exc_info=True)
+      return JSONResponse(status_code=503, content={"error": "Security audit is unavailable"})
+    try:
+      response = await call_next(request)
+    except Exception:
+      try:
+        record_audit(request, action, AuditOutcome.ERROR)
+      except Exception:
+        request_logger.critical("Security audit result write failed", exc_info=True)
+      raise
+    outcome = AuditOutcome.SUCCESS if response.status_code < 400 else AuditOutcome.REJECTED
+    try:
+      record_audit(request, action, outcome)
+    except Exception:
+      request_logger.critical("Security audit result write failed", exc_info=True)
+      return JSONResponse(status_code=503, content={"error": "Security audit is unavailable"})
+    return response
+
   @app.middleware("http")
   async def authenticate_requests(request: Request, call_next):
     if request.url.path in {"/", "/metrics", "/health/live", "/health/ready"} or request.method == "OPTIONS":
       return await call_next(request)
     origin = request.headers.get("origin")
     if origin and request.method in UNSAFE_METHODS and origin not in resolved_settings.cors_allow_origins:
+      try:
+        record_audit(request, AuditAction.ACL_REJECTION, AuditOutcome.REJECTED)
+      except Exception:
+        return JSONResponse(status_code=503, content={"error": "Security audit is unavailable"})
       return JSONResponse(status_code=403, content={"error": "Untrusted browser origin"})
     authorization = request.headers.get("authorization", "")
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() != "bearer" or not token:
+      try:
+        record_audit(request, AuditAction.AUTH_REJECTION, AuditOutcome.REJECTED)
+      except Exception:
+        return JSONResponse(status_code=503, content={"error": "Security audit is unavailable"})
       return JSONResponse(
         status_code=401,
         content={"error": "Authentication required"},
@@ -201,6 +286,10 @@ def create_app(
         raise AuthError("Internal API is disabled")
       request.state.principal = verifier.verify(token)
     except AuthError:
+      try:
+        record_audit(request, AuditAction.AUTH_REJECTION, AuditOutcome.REJECTED)
+      except Exception:
+        return JSONResponse(status_code=503, content={"error": "Security audit is unavailable"})
       return JSONResponse(
         status_code=401,
         content={"error": "Access denied"},
@@ -271,6 +360,14 @@ def create_app(
     else:
       request_logger.info(message)
 
+    return response
+
+  @app.middleware("http")
+  async def bind_request_id(request: Request, call_next):
+    supplied = request.headers.get("x-request-id", "")
+    request.state.request_id = supplied if REQUEST_ID_PATTERN.fullmatch(supplied) else uuid4().hex
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request.state.request_id
     return response
 
   @app.get("/")

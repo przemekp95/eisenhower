@@ -19,6 +19,14 @@ PRIVATE_ERROR_DETAIL = "private-upstream-debug-detail"
 
 
 @dataclass
+class _AuditRecorder:
+    events: list[tuple[str, str, str, str]] = field(default_factory=list)
+
+    def record_tool(self, tool_name: str, phase: str, outcome: str, request_id: str) -> None:
+        self.events.append((tool_name, phase, outcome, request_id))
+
+
+@dataclass
 class _UpstreamState:
     service: str
     requests: list[dict[str, object]] = field(default_factory=list)
@@ -183,9 +191,12 @@ class McpRealHttpIntegrationTest(unittest.TestCase):
         task_address = task_upstream.address
         ai_address = ai_upstream.address
         original_service = server.service
+        original_audit = server.audit_recorder
+        recorder = _AuditRecorder()
 
         try:
             with task_upstream, ai_upstream:
+                server.audit_recorder = recorder
                 server.service = EisenhowerMcpService(
                     EisenhowerApiClient(
                         task_upstream.url,
@@ -290,6 +301,16 @@ class McpRealHttpIntegrationTest(unittest.TestCase):
                 self.assertTrue(ai_upstream.state.timeout_completed.wait(timeout=1))
         finally:
             server.service = original_service
+            server.audit_recorder = original_audit
+
+        self.assertEqual(len(recorder.events), 18)
+        self.assertEqual(
+            [outcome for _tool, _phase, outcome, _request_id in recorder.events].count("error"),
+            3,
+        )
+        self.assertEqual(len({event[3] for event in recorder.events}), 9)
+        self.assertNotIn(PRIVATE_ERROR_DETAIL, repr(recorder.events))
+        self.assertNotIn(READ_TOKEN, repr(recorder.events))
 
         self.assertFalse(task_upstream.thread.is_alive())
         self.assertFalse(ai_upstream.thread.is_alive())

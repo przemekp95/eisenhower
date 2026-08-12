@@ -11,10 +11,16 @@ export interface AuthPrincipal {
   projectIds: string[];
 }
 
+export type SecurityRejectionHandler = (
+  request: Request,
+  action: 'auth_rejection' | 'acl_rejection',
+) => void;
+
 declare global {
   namespace Express {
     interface Request {
       auth?: AuthPrincipal;
+      requestId: string;
     }
   }
 }
@@ -25,10 +31,31 @@ function tokensMatch(actual: string, expected: string) {
   return timingSafeEqual(actualDigest, expectedDigest);
 }
 
-function readBearer(request: Request, response: Response): string | null {
+function auditOrFail(
+  request: Request,
+  response: Response,
+  action: 'auth_rejection' | 'acl_rejection',
+  onReject?: SecurityRejectionHandler,
+): boolean {
+  try {
+    onReject?.(request, action);
+    return true;
+  } catch {
+    console.error('backend-node required security audit write failed');
+    response.status(503).json({ error: 'Security audit is unavailable' });
+    return false;
+  }
+}
+
+function readBearer(
+  request: Request,
+  response: Response,
+  onReject?: SecurityRejectionHandler,
+): string | null {
   const authorization = request.get('authorization');
   const match = authorization ? /^Bearer[ \t]+(.+)$/i.exec(authorization) : null;
   if (!match) {
+    if (!auditOrFail(request, response, 'auth_rejection', onReject)) return null;
     response.set('WWW-Authenticate', 'Bearer');
     response.status(401).json({ error: 'Authentication required' });
     return null;
@@ -36,17 +63,22 @@ function readBearer(request: Request, response: Response): string | null {
   return match[1];
 }
 
-function rejectInvalidBearer(response: Response) {
+function rejectInvalidBearer(
+  request: Request,
+  response: Response,
+  onReject?: SecurityRejectionHandler,
+) {
+  if (!auditOrFail(request, response, 'auth_rejection', onReject)) return;
   response.set('WWW-Authenticate', 'Bearer error="invalid_token"');
   response.status(401).json({ error: 'Invalid bearer token' });
 }
 
-export function requireBearerToken(expectedToken: string) {
+export function requireBearerToken(expectedToken: string, onReject?: SecurityRejectionHandler) {
   return (request: Request, response: Response, next: NextFunction) => {
-    const token = readBearer(request, response);
+    const token = readBearer(request, response, onReject);
     if (token === null) return;
     if (!tokensMatch(token, expectedToken)) {
-      rejectInvalidBearer(response);
+      rejectInvalidBearer(request, response, onReject);
       return;
     }
     request.auth = {
@@ -106,20 +138,26 @@ function principalFromClaims(payload: JWTPayload): AuthPrincipal {
   };
 }
 
-export function requireOidcToken(verifier: (token: string) => Promise<AuthPrincipal>) {
+export function requireOidcToken(
+  verifier: (token: string) => Promise<AuthPrincipal>,
+  onReject?: SecurityRejectionHandler,
+) {
   return async (request: Request, response: Response, next: NextFunction) => {
-    const token = readBearer(request, response);
+    const token = readBearer(request, response, onReject);
     if (token === null) return;
     try {
       request.auth = await verifier(token);
       next();
     } catch {
-      rejectInvalidBearer(response);
+      rejectInvalidBearer(request, response, onReject);
     }
   };
 }
 
-export function requireTrustedBrowserOrigin(allowedOrigins: string[]) {
+export function requireTrustedBrowserOrigin(
+  allowedOrigins: string[],
+  onReject?: SecurityRejectionHandler,
+) {
   const allowed = new Set(allowedOrigins);
   return (request: Request, response: Response, next: NextFunction) => {
     const origin = request.get('origin');
@@ -127,6 +165,8 @@ export function requireTrustedBrowserOrigin(allowedOrigins: string[]) {
       next();
       return;
     }
-    response.status(403).json({ error: 'Untrusted browser origin' });
+    if (auditOrFail(request, response, 'acl_rejection', onReject)) {
+      response.status(403).json({ error: 'Untrusted browser origin' });
+    }
   };
 }

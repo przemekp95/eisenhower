@@ -43,6 +43,13 @@ groups:
           severity: warning
         annotations:
           summary: "Consent-governed memory operation failed"
+      - alert: EisenhowerAuditWriteFailed
+        expr: increase(eisenhower_audit_events_total{outcome="error"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "A required durable audit write failed; sensitive operations fail closed"
       - alert: QdrantUnavailable
         expr: up{job="qdrant"} == 0
         for: 5m

@@ -1,10 +1,21 @@
 const TASK_API_PATHS = Object.freeze({
   tasks: '/tasks',
+  delegatedTasks: '/tasks/delegated',
   health: '/health',
   readiness: '/health/ready',
 });
 
 const MAX_TASK_LIST_PAGES = 100;
+const TASK_LIFECYCLE_STATES = Object.freeze(['active', 'completed', 'archived', 'trashed']);
+const TASK_LIFECYCLE_FILTERS = Object.freeze([...TASK_LIFECYCLE_STATES, 'all']);
+const TASK_DELEGATION_STATUSES = Object.freeze([
+  'offered',
+  'accepted',
+  'in_progress',
+  'blocked',
+  'completed',
+  'declined',
+]);
 
 const QUADRANT_DEFINITIONS = Object.freeze([
   Object.freeze({ value: 0, key: 'do', name: 'Do Now', urgent: true, important: true }),
@@ -149,20 +160,15 @@ async function readJson(response, options = {}) {
     invalidResponse = 'The API returned an invalid response',
   } = options;
 
-  const canReadJson =
-    response?.status !== 204 &&
-    typeof response?.json === 'function';
+  const canReadJson = response?.status !== 204 && typeof response?.json === 'function';
   const payload = canReadJson ? await response.json().catch(() => null) : null;
 
   if (!response.ok) {
     const errorPayload = isErrorResponseDto(payload) ? payload : null;
-    throw createRequestError(
-      errorPayload?.error || defaultError,
-      {
-        code: errorPayload?.code || errorCode,
-        status: response.status,
-      }
-    );
+    throw createRequestError(errorPayload?.error || defaultError, {
+      code: errorPayload?.code || errorCode,
+      status: response.status,
+    });
   }
 
   const result = response.status === 204 ? null : payload;
@@ -188,7 +194,9 @@ function toTaskInputDto(task) {
 function toTaskPatchDto(patch) {
   return {
     ...(patch?.title !== undefined ? { title: String(patch.title || '').trim() } : {}),
-    ...(patch?.description !== undefined ? { description: String(patch.description || '').trim() } : {}),
+    ...(patch?.description !== undefined
+      ? { description: String(patch.description || '').trim() }
+      : {}),
     ...(patch?.urgent !== undefined ? { urgent: Boolean(patch.urgent) } : {}),
     ...(patch?.important !== undefined ? { important: Boolean(patch.important) } : {}),
   };
@@ -200,7 +208,8 @@ function resolveTaskQuadrant(task) {
   }
 
   return QUADRANT_DEFINITIONS.find(
-    (quadrant) => quadrant.urgent === Boolean(task?.urgent) && quadrant.important === Boolean(task?.important)
+    (quadrant) =>
+      quadrant.urgent === Boolean(task?.urgent) && quadrant.important === Boolean(task?.important)
   ).value;
 }
 
@@ -216,15 +225,25 @@ function createTaskApi(baseUrl, optionsOrFetch) {
 
   return {
     paths: TASK_API_PATHS,
-    async listTasks() {
+    async listTasks(lifecycle = 'active') {
       const tasks = [];
       const seenCursors = new Set();
       let cursor;
 
+      if (!TASK_LIFECYCLE_FILTERS.includes(lifecycle)) {
+        throw createRequestError('Task lifecycle filter is invalid', { code: 'invalid_request' });
+      }
+
       for (let page = 0; page < MAX_TASK_LIST_PAGES; page += 1) {
-        const path = cursor === undefined
-          ? TASK_API_PATHS.tasks
-          : `${TASK_API_PATHS.tasks}?cursor=${encodeURIComponent(cursor)}`;
+        const query = [];
+        if (lifecycle !== 'active') {
+          query.push(`lifecycle=${encodeURIComponent(lifecycle)}`);
+        }
+        if (cursor !== undefined) {
+          query.push(`cursor=${encodeURIComponent(cursor)}`);
+        }
+        const path =
+          query.length > 0 ? `${TASK_API_PATHS.tasks}?${query.join('&')}` : TASK_API_PATHS.tasks;
         const response = await request(buildUrl(baseUrl, path));
         const pageTasks = await readJson(response, {
           defaultError: 'Task request failed',
@@ -252,6 +271,15 @@ function createTaskApi(baseUrl, optionsOrFetch) {
         code: 'invalid_response',
       });
     },
+    async listDelegatedTasks() {
+      const response = await request(buildUrl(baseUrl, TASK_API_PATHS.delegatedTasks));
+      return readJson(response, {
+        defaultError: 'Task request failed',
+        errorCode: 'task_request_failed',
+        validate: isTaskListDto,
+        invalidResponse: 'Task API returned an invalid response',
+      });
+    },
     async createTask(task, idempotencyKey) {
       const idempotencyHeaders = typeof idempotencyKey === 'string' && idempotencyKey.length > 0
         ? { 'Idempotency-Key': idempotencyKey }
@@ -269,14 +297,88 @@ function createTaskApi(baseUrl, optionsOrFetch) {
       });
     },
     async updateTask(id, patch, revision) {
-      const revisionHeaders = Number.isInteger(revision) && revision >= 0
-        ? { 'If-Match': `"${revision}"` }
-        : {};
-      const response = await request(buildUrl(baseUrl, `${TASK_API_PATHS.tasks}/${encodeURIComponent(id)}`), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...revisionHeaders },
-        body: JSON.stringify(toTaskPatchDto(patch)),
+      const revisionHeaders =
+        Number.isInteger(revision) && revision >= 0 ? { 'If-Match': `"${revision}"` } : {};
+      const response = await request(
+        buildUrl(baseUrl, `${TASK_API_PATHS.tasks}/${encodeURIComponent(id)}`),
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...revisionHeaders },
+          body: JSON.stringify(toTaskPatchDto(patch)),
+        }
+      );
+      return readJson(response, {
+        defaultError: 'Task request failed',
+        errorCode: 'task_request_failed',
+        validate: isTaskDto,
+        invalidResponse: 'Task API returned an invalid response',
       });
+    },
+    async transitionTaskLifecycle(id, action, revision) {
+      const revisionHeaders =
+        Number.isInteger(revision) && revision >= 0 ? { 'If-Match': `"${revision}"` } : {};
+      const response = await request(
+        buildUrl(baseUrl, `${TASK_API_PATHS.tasks}/${encodeURIComponent(id)}/lifecycle`),
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...revisionHeaders },
+          body: JSON.stringify({ action }),
+        }
+      );
+      return readJson(response, {
+        defaultError: 'Task request failed',
+        errorCode: 'task_request_failed',
+        validate: isTaskDto,
+        invalidResponse: 'Task API returned an invalid response',
+      });
+    },
+    async updateTaskSchedule(id, schedule, revision) {
+      const revisionHeaders =
+        Number.isInteger(revision) && revision >= 0 ? { 'If-Match': `"${revision}"` } : {};
+      const response = await request(
+        buildUrl(baseUrl, `${TASK_API_PATHS.tasks}/${encodeURIComponent(id)}/schedule`),
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...revisionHeaders },
+          body: JSON.stringify({ schedule }),
+        }
+      );
+      return readJson(response, {
+        defaultError: 'Task request failed',
+        errorCode: 'task_request_failed',
+        validate: isTaskDto,
+        invalidResponse: 'Task API returned an invalid response',
+      });
+    },
+    async updateTaskDelegation(id, delegation, revision) {
+      const revisionHeaders =
+        Number.isInteger(revision) && revision >= 0 ? { 'If-Match': `"${revision}"` } : {};
+      const response = await request(
+        buildUrl(baseUrl, `${TASK_API_PATHS.tasks}/${encodeURIComponent(id)}/delegation`),
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...revisionHeaders },
+          body: JSON.stringify({ delegation }),
+        }
+      );
+      return readJson(response, {
+        defaultError: 'Task request failed',
+        errorCode: 'task_request_failed',
+        validate: isTaskDto,
+        invalidResponse: 'Task API returned an invalid response',
+      });
+    },
+    async transitionTaskDelegation(id, status, revision) {
+      const revisionHeaders =
+        Number.isInteger(revision) && revision >= 0 ? { 'If-Match': `"${revision}"` } : {};
+      const response = await request(
+        buildUrl(baseUrl, `${TASK_API_PATHS.tasks}/${encodeURIComponent(id)}/delegation/status`),
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...revisionHeaders },
+          body: JSON.stringify({ status }),
+        }
+      );
       return readJson(response, {
         defaultError: 'Task request failed',
         errorCode: 'task_request_failed',
@@ -285,13 +387,15 @@ function createTaskApi(baseUrl, optionsOrFetch) {
       });
     },
     async deleteTask(id, revision) {
-      const revisionHeaders = Number.isInteger(revision) && revision >= 0
-        ? { 'If-Match': `"${revision}"` }
-        : {};
-      const response = await request(buildUrl(baseUrl, `${TASK_API_PATHS.tasks}/${encodeURIComponent(id)}`), {
-        method: 'DELETE',
-        headers: revisionHeaders,
-      });
+      const revisionHeaders =
+        Number.isInteger(revision) && revision >= 0 ? { 'If-Match': `"${revision}"` } : {};
+      const response = await request(
+        buildUrl(baseUrl, `${TASK_API_PATHS.tasks}/${encodeURIComponent(id)}`),
+        {
+          method: 'DELETE',
+          headers: revisionHeaders,
+        }
+      );
       return readJson(response, {
         defaultError: 'Task request failed',
         errorCode: 'task_request_failed',
@@ -341,11 +445,14 @@ function createAiApi(baseUrl, optionsOrFetch) {
   return {
     paths: AI_API_PATHS,
     async classifyTask(title, includeSimilarExamples = true) {
-      const response = await request(buildUrl(baseUrl, getClassifyPath(title, includeSimilarExamples)), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, use_rag: includeSimilarExamples }),
-      });
+      const response = await request(
+        buildUrl(baseUrl, getClassifyPath(title, includeSimilarExamples)),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, use_rag: includeSimilarExamples }),
+        }
+      );
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',
@@ -478,14 +585,17 @@ function createAiApi(baseUrl, optionsOrFetch) {
         return { examples_added: 0, retrained: false };
       }
 
-      const response = await adminRequest(buildUrl(baseUrl, AI_API_PATHS.learnFromAcceptedOcrTasks), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tasks: toAcceptedOcrLearningPayload(tasks),
-          retrain,
-        }),
-      });
+      const response = await adminRequest(
+        buildUrl(baseUrl, AI_API_PATHS.learnFromAcceptedOcrTasks),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tasks: toAcceptedOcrLearningPayload(tasks),
+            retrain,
+          }),
+        }
+      );
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',
@@ -509,9 +619,12 @@ function createAiApi(baseUrl, optionsOrFetch) {
       });
     },
     async clearTrainingData(keepDefaults = true) {
-      const response = await adminRequest(buildUrl(baseUrl, getClearTrainingDataPath(keepDefaults)), {
-        method: 'DELETE',
-      });
+      const response = await adminRequest(
+        buildUrl(baseUrl, getClearTrainingDataPath(keepDefaults)),
+        {
+          method: 'DELETE',
+        }
+      );
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',
@@ -520,7 +633,9 @@ function createAiApi(baseUrl, optionsOrFetch) {
       });
     },
     async getExamplesByQuadrant(quadrant, limit = 10) {
-      const response = await adminRequest(buildUrl(baseUrl, getExamplesByQuadrantPath(quadrant, limit)));
+      const response = await adminRequest(
+        buildUrl(baseUrl, getExamplesByQuadrantPath(quadrant, limit))
+      );
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',
@@ -587,9 +702,77 @@ function isTaskDto(value) {
     typeof value.description === 'string' &&
     typeof value.urgent === 'boolean' &&
     typeof value.important === 'boolean' &&
+    TASK_LIFECYCLE_STATES.includes(value.lifecycleState) &&
+    isOptional(value.schedule, isTaskScheduleDto) &&
+    isOptional(value.delegation, isTaskDelegationDto) &&
     isOptional(value.revision, isNonNegativeInteger) &&
     isOptional(value.createdAt, (item) => typeof item === 'string') &&
     isOptional(value.updatedAt, (item) => typeof item === 'string')
+  );
+}
+
+function isUtcIsoInstant(value) {
+  return (
+    typeof value === 'string' &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value) &&
+    !Number.isNaN(Date.parse(value))
+  );
+}
+
+function isIanaTimezone(value) {
+  if (typeof value !== 'string' || !value) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isTaskScheduleDto(value) {
+  const scheduleFields = new Set(['dueAt', 'timeZone', 'remindAt']);
+  return Boolean(
+    isRecord(value) &&
+    Object.keys(value).every((field) => scheduleFields.has(field)) &&
+    isUtcIsoInstant(value.dueAt) &&
+    isIanaTimezone(value.timeZone) &&
+    isOptional(
+      value.remindAt,
+      (item) => isUtcIsoInstant(item) && Date.parse(item) <= Date.parse(value.dueAt)
+    )
+  );
+}
+
+function isTaskDelegationDto(value) {
+  const fields = new Set([
+    'assigneeUserId',
+    'displayLabel',
+    'handoffNote',
+    'status',
+    'offeredAt',
+    'statusUpdatedAt',
+    'acceptedAt',
+    'inProgressAt',
+    'blockedAt',
+    'completedAt',
+    'declinedAt',
+  ]);
+  return Boolean(
+    isRecord(value) &&
+    Object.keys(value).every((field) => fields.has(field)) &&
+    typeof value.assigneeUserId === 'string' &&
+    value.assigneeUserId.length > 0 &&
+    typeof value.displayLabel === 'string' &&
+    value.displayLabel.length > 0 &&
+    typeof value.handoffNote === 'string' &&
+    TASK_DELEGATION_STATUSES.includes(value.status) &&
+    isUtcIsoInstant(value.offeredAt) &&
+    isUtcIsoInstant(value.statusUpdatedAt) &&
+    isOptional(value.acceptedAt, isUtcIsoInstant) &&
+    isOptional(value.inProgressAt, isUtcIsoInstant) &&
+    isOptional(value.blockedAt, isUtcIsoInstant) &&
+    isOptional(value.completedAt, isUtcIsoInstant) &&
+    isOptional(value.declinedAt, isUtcIsoInstant)
   );
 }
 
@@ -711,7 +894,8 @@ function isInformationDeltaClaimDto(value) {
     isOptional(
       value.reminder_reason,
       (item) =>
-        item === null || ['direct_answer', 'decision_constraint', 'safety_constraint'].includes(item)
+        item === null ||
+        ['direct_answer', 'decision_constraint', 'safety_constraint'].includes(item)
     )
   );
 }
@@ -719,9 +903,13 @@ function isInformationDeltaClaimDto(value) {
 function isInformationDeltaDto(value) {
   return Boolean(
     isRecord(value) &&
-    ['new_information', 'mixed', 'confirmation_only', 'no_new_information', 'freshness_unverified'].includes(
-      value.status
-    ) &&
+    [
+      'new_information',
+      'mixed',
+      'confirmation_only',
+      'no_new_information',
+      'freshness_unverified',
+    ].includes(value.status) &&
     Array.isArray(value.claims) &&
     value.claims.every(isInformationDeltaClaimDto) &&
     [
@@ -747,7 +935,9 @@ function isGroundedAnalysisDto(value) {
     Array.isArray(value.citations) &&
     value.citations.every(isCitationDto) &&
     isRetrievalSummaryDto(value.retrieval) &&
-    isOptional(value.fallback_reason, (item) => isNullable(item, (entry) => typeof entry === 'string')) &&
+    isOptional(value.fallback_reason, (item) =>
+      isNullable(item, (entry) => typeof entry === 'string')
+    ) &&
     isOptional(value.generation, (item) => isNullable(item, isGenerationMetadataDto)) &&
     isOptional(value.information_delta, (item) => isNullable(item, isInformationDeltaDto))
   );
@@ -761,7 +951,9 @@ function isKnowledgeSearchDto(value) {
     Array.isArray(value.citations) &&
     value.citations.every(isCitationDto) &&
     isRetrievalSummaryDto(value.retrieval) &&
-    isOptional(value.no_answer_reason, (item) => isNullable(item, (entry) => typeof entry === 'string'))
+    isOptional(value.no_answer_reason, (item) =>
+      isNullable(item, (entry) => typeof entry === 'string')
+    )
   );
 }
 
@@ -871,9 +1063,7 @@ function isCapabilitiesDto(value) {
     isOptional(
       value.provider_controls,
       (item) =>
-        isRecord(item) &&
-        isProviderStateDto(item.local_model) &&
-        isProviderStateDto(item.tesseract)
+        isRecord(item) && isProviderStateDto(item.local_model) && isProviderStateDto(item.tesseract)
     ) &&
     isOptional(
       value.legacy,
@@ -892,9 +1082,13 @@ function isCapabilitiesDto(value) {
         typeof item.encoder_name === 'string' &&
         typeof item.artifact_path === 'string' &&
         typeof item.index_path === 'string' &&
-        isOptional(item.trained_at, (entry) => isNullable(entry, (nested) => typeof nested === 'string')) &&
+        isOptional(item.trained_at, (entry) =>
+          isNullable(entry, (nested) => typeof nested === 'string')
+        ) &&
         isOptional(item.validation_skipped, (entry) => typeof entry === 'boolean') &&
-        isOptional(item.last_error, (entry) => isNullable(entry, (nested) => typeof nested === 'string')) &&
+        isOptional(item.last_error, (entry) =>
+          isNullable(entry, (nested) => typeof nested === 'string')
+        ) &&
         isOptional(item.examples_seen, isNonNegativeInteger)
     ) &&
     isRecord(device) &&
@@ -923,7 +1117,9 @@ function isTrainingStatsDto(value) {
     isOptional(value.model_name, (item) => typeof item === 'string') &&
     isOptional(value.model_ready, (item) => typeof item === 'boolean') &&
     isOptional(value.model_encoder, (item) => typeof item === 'string') &&
-    isOptional(value.model_trained_at, (item) => isNullable(item, (entry) => typeof entry === 'string')) &&
+    isOptional(value.model_trained_at, (item) =>
+      isNullable(item, (entry) => typeof entry === 'string')
+    ) &&
     isOptional(value.model_validation_skipped, (item) => typeof item === 'boolean') &&
     isOptional(value.model_error, (item) => isNullable(item, (entry) => typeof entry === 'string'))
   );
@@ -931,8 +1127,7 @@ function isTrainingStatsDto(value) {
 
 function isProviderControlDto(value) {
   return Boolean(
-    isProviderStateDto(value) &&
-    ['local_model', 'tesseract'].includes(value.provider)
+    isProviderStateDto(value) && ['local_model', 'tesseract'].includes(value.provider)
   );
 }
 
@@ -948,9 +1143,7 @@ function isTrainingExampleDto(value) {
 
 function isTrainingExampleAddedDto(value) {
   return Boolean(
-    isRecord(value) &&
-    typeof value.message === 'string' &&
-    isTrainingExampleDto(value.example)
+    isRecord(value) && typeof value.message === 'string' && isTrainingExampleDto(value.example)
   );
 }
 

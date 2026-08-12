@@ -18,7 +18,7 @@ Upgraded both affected pytest manifests to patched `9.0.3` and the isolated Lang
 
 ---
 
-## TASK-042: Rebuild the web UX for nontechnical users and administrators
+## TASK-046: Rebuild the web UX for nontechnical users and administrators
 **Priority:** P0 | **Tags:** web, ux, accessibility, auth, admin
 
 Make the web application self-explanatory for nontechnical users and administrators while preserving static Bearer authentication, ACL, optimistic concurrency, fail-closed AI controls and existing quality gates.
@@ -34,6 +34,97 @@ Make the web application self-explanatory for nontechnical users and administrat
 
 Replaced the technical landing page with a task-first PL/EN experience, in-memory access-code guidance, honest local sync/offline states, keyboard-safe create/edit/classify/delete flows and an independent Administration entry with guarded high-impact AI actions. Preserved Bearer/ACL/origin/revision/fail-closed contracts, added create idempotency and correct 401/403 handling, expanded bounded Cucumber scenarios and Playwright/Axe coverage at desktop, 390 px and 320 px, and documented both personas. Removed the temporary mobile audit exception and both Trivy ignores by replacing the vulnerable Metro-only image parser with a tested local adapter; clean install audit, Android export, full `make verify` and 18/18 Playwright passed locally. No CI, merge, deployment, production or human usability validation was performed.
 
+---
+
+## TASK-042: Add a durable privacy-safe security audit log
+**Priority:** P0 | **Tags:** security, audit, operations, privacy
+
+Persist append-only, integrity-verifiable audit events for sensitive Eisenhower operations without retaining prompts, task text, document content, tokens, MCP arguments, private identifiers, or other user data.
+
+### Plan
+
+- Add strict red contracts for durable restart-safe storage, pseudonymous actors/resources, allowlisted metadata, integrity verification, retention and fail-closed writes.
+- Audit administrative operations, auth/ACL denials, ingestion/reindex, memory/consent changes, MCP tool use and rollout/rollback decisions at their application boundaries.
+- Bind events to service/release/request identity, expose privacy-safe operational metrics, document access/retention, and verify focused plus broader regression gates.
+- Keep remote MCP, OIDC multi-user rollout and public RAG gated until their audit-producing paths are covered.
+
+### Outcome
+
+Added fail-closed durable HMAC-chained audit sinks for FastAPI and Node, authenticated head/retention evidence, pseudonymous identities and allowlisted metadata. Sensitive admin, auth/ACL denial, ingest/reindex, memory/consent, local MCP and rollout/rollback paths now emit attempt/result events without content or arguments. The supported Compose candidate carries persistent storage, exact-release metrics and private Prometheus rules; source/configuration and local tests are green, while deployment, retention execution and real alert delivery remain unclaimed.
+
+---
+
+## TASK-027: Add complete, archive, and trash lifecycle states
+**Priority:** P2 | **Tags:** product, lifecycle, tasks
+
+Define and implement reversible task completion, archive, trash, restore, and final deletion semantics without conflating the Delete quadrant with physical deletion.
+
+### Plan
+
+- Add explicit `active`, `completed`, `archived` and `trashed` states with revision-safe action transitions and restoration to the pre-trash state.
+- Keep list filters explicit, preserve offline/client fields, and allow irreversible deletion only from trash with no automatic retention purge.
+- Implement API, shared client, web and mobile behavior with accessibility, conflict and migration-default coverage.
+- Extend executable BDD for complete, reopen, archive, trash, restore and final purge; verify broader Node/web/mobile gates.
+
+### Outcome
+
+Implemented revision-safe active/completed/archived/trashed transitions, restoration to the prior state, explicit filters and permanent deletion only from trash across Node, shared API, web and mobile. The Delete matrix quadrant remains a priority label, offline/conflict behavior is preserved, and the live-process web integration now proves create, update, trash and permanent deletion rather than the removed direct-delete path.
+
+---
+
+## TASK-025: Add Schedule due dates and reminders
+**Priority:** P2 | **Tags:** product, schedule, reminders
+
+Add an explicit, timezone-safe Schedule contract without pretending that mocked notifications prove physical delivery.
+
+### Plan
+
+- Persist an optional UTC due instant, IANA display timezone and optional UTC reminder instant; reject incomplete or inconsistent schedules and omit recurrence from this bounded first version.
+- Expose revision-safe schedule/set/clear behavior through the API and shared client, preserving offline data and lifecycle state.
+- Show editable due/reminder information in web and mobile; schedule/cancel Android local notifications with permission-denied and offline behavior covered.
+- Verify timezone boundaries, missed-reminder handling, conflicts and executable BDD; record physical Android notification delivery separately.
+
+### Outcome
+
+Implemented optional UTC due/reminder instants with validated IANA display zones, consistency checks and revision-safe set/clear behavior across Node, shared API, web and mobile. Android local reminders use generic content, survive the offline intent flow and handle denied permissions without corrupting task state. Recurrence remains out of scope and physical notification delivery is still a separate Android acceptance fact.
+
+---
+
+## TASK-026: Add Delegate assignee and status workflow
+**Priority:** P2 | **Tags:** product, delegate, tasks
+
+Implement an authenticated in-app handoff workflow, not just an assignee label.
+
+### Plan
+
+- Persist a tenant-scoped assignee subject, bounded display label, handoff note and explicit `offered`, `accepted`, `in_progress`, `blocked`, `completed` or `declined` status with timestamps.
+- Let owners assign/reassign/cancel while assignees can list delegated work and perform only valid status transitions; keep core task edits owner-only and enforce tenant isolation plus revision checks.
+- Expose owned/delegated views and accessible handoff/status actions in shared, web and mobile clients, with offline conflict handling on mobile.
+- Treat the delegated-work view as the supported in-app notification channel; do not claim email/push delivery or current static-runtime cross-user reachability.
+
+### Outcome
+
+Implemented tenant-scoped owner handoff, delegated-work listing and the offered/accepted/in-progress/blocked/completed/declined state machine with revision checks and owner-versus-assignee permissions. Shared, web and mobile clients expose separate owned/delegated views with accessible actions and mobile offline conflict handling. Notification is intentionally in-app only; real cross-user OIDC reachability, email and push are not claimed.
+
+---
+
+## TASK-044: Reassess evidence-triggered optional infrastructure without CDN or managed queues
+**Priority:** P2 | **Tags:** architecture, measurement, conditional, checkpoint
+
+Keep cache, remote MCP, horizontal scaling and GraphRAG as measured decisions rather than default infrastructure. CDN and managed queues are explicitly out of scope because the product does not need them now; retain the existing SQLite worker queue.
+
+### Plan
+
+- Measure repeated expensive queries before adding result or prefix cache; require scoped keys, invalidation, privacy boundaries and benefit evidence.
+- Revisit remote MCP only for a real external ChatGPT/Codex use case and require OAuth resource-server validation, TLS/gateway, Host/Origin validation, limits and durable audit events.
+- Retain the current SQLite worker queue and do not add Kafka, RabbitMQ, a service bus or another managed queue under this task.
+- Revisit horizontal replicas only after throughput or availability measurements show the current single-host runtime is insufficient.
+- Revisit GraphRAG only if representative multi-hop/entity-relation questions remain materially worse after approved hybrid retrieval.
+- Do not add or evaluate a CDN or managed queue under this task.
+
+### Outcome
+
+Recorded explicit measurable triggers for cache, remote MCP, horizontal replicas and GraphRAG, with every capability deferred because current evidence does not satisfy its technical trigger. Redis is disabled behind an explicit experimental profile. CDN and managed queues are out, the existing SQLite worker stays, and no Kafka, RabbitMQ or service bus was added.
 ---
 
 ## TASK-041: Clear the master promotion whitespace gate

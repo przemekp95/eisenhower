@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from app.config import Settings
+from app.audit import AuditAction, AuditOutcome
 from app.generation.models import InformationDelta, statement_checksum
 from app.local_model import LocalMiniLMClassifier, LocalPrediction, ModelNotReadyError, SimilarExample
 from app.jobs import SqliteJobQueue
@@ -103,6 +104,7 @@ def build_client(
   *,
   local_model: FakeLocalModel | None = None,
   tesseract_available: bool | None = None,
+  audit_sink=None,
 ) -> TestClient:
   settings = Settings(
     training_data_path=tmp_path / "training.json",
@@ -117,7 +119,7 @@ def build_client(
   if tesseract_available is not None:
     service._tesseract_available = lambda: tesseract_available  # type: ignore[method-assign]
   return TestClient(
-    create_app(settings=settings, store=store, ai_service=service),
+    create_app(settings=settings, store=store, ai_service=service, audit_sink=audit_sink),
     headers={"Authorization": "Bearer test-admin-token"},
   )
 
@@ -441,6 +443,70 @@ def test_non_root_endpoint_requires_bearer_token(tmp_path: Path):
 
   assert response.status_code == 401
   assert response.headers["www-authenticate"] == "Bearer"
+
+
+class RecordingAuditSink:
+  def __init__(self, *, fail: bool = False):
+    self.events = []
+    self.fail = fail
+
+  def record(self, event):
+    if self.fail:
+      raise RuntimeError("audit unavailable")
+    self.events.append(event)
+    return event
+
+
+def test_auth_rejection_is_durably_audited_without_request_content(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  audit = RecordingAuditSink()
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service, audit_sink=audit)
+  )
+
+  response = client.post(
+    "/v2/knowledge/search",
+    json={"query": "private query body"},
+    headers={"X-Request-ID": "request-auth-rejection"},
+  )
+
+  assert response.status_code == 401
+  assert response.headers["X-Request-ID"] == "request-auth-rejection"
+  assert len(audit.events) == 1
+  event = audit.events[0]
+  assert event.action is AuditAction.AUTH_REJECTION
+  assert event.outcome is AuditOutcome.REJECTED
+  assert event.request_id == "request-auth-rejection"
+  assert "private query body" not in repr(event)
+
+
+def test_admin_mutation_records_attempt_and_success_and_fails_closed_without_audit(tmp_path: Path):
+  audit = RecordingAuditSink()
+  client = build_client(tmp_path, audit_sink=audit)
+
+  response = client.post(
+    "/add-example",
+    data={"text": "private example", "quadrant": 2},
+    headers={"X-Request-ID": "request-admin-mutation"},
+  )
+
+  assert response.status_code == 200
+  assert [(event.action, event.outcome) for event in audit.events] == [
+    (AuditAction.ADMIN_OPERATION, AuditOutcome.ATTEMPT),
+    (AuditAction.ADMIN_OPERATION, AuditOutcome.SUCCESS),
+  ]
+  assert all("private example" not in repr(event) for event in audit.events)
+
+  blocked = build_client(tmp_path / "blocked", audit_sink=RecordingAuditSink(fail=True)).post(
+    "/add-example",
+    data={"text": "must not persist", "quadrant": 2},
+  )
+  assert blocked.status_code == 503
 
 
 def test_metrics_exposes_aggregate_prometheus_signals_without_auth(tmp_path: Path):

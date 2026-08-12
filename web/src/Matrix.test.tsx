@@ -286,8 +286,87 @@ describe('Matrix', () => {
     expect(screen.getByText('Later task')).toBeInTheDocument();
   });
 
+  it('runs lifecycle filters and default workflow callbacks safely', async () => {
+    renderMatrix({
+      tasks: [
+        {
+          _id: 'workflow',
+          title: 'Workflow task',
+          description: '',
+          urgent: true,
+          important: false,
+          lifecycleState: 'active',
+        },
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Wszystkie' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ukończ Workflow task' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dodaj termin Workflow task' }));
+    fireEvent.change(screen.getByLabelText('Termin'), { target: { value: '2026-08-16T09:30' } });
+    fireEvent.change(screen.getByLabelText('Strefa czasowa'), { target: { value: 'UTC' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Zapisz termin' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Przekaż Workflow task' }));
+    fireEvent.change(screen.getByLabelText('Identyfikator osoby'), { target: { value: 'user-b' } });
+    fireEvent.change(screen.getByLabelText('Nazwa wyświetlana'), { target: { value: 'Pat' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Wyślij przekazanie' }));
+
+    await act(async () => Promise.resolve());
+  });
+
+  it('renders delegated read-only cards with and without handoff details', () => {
+    const view = renderMatrix({
+      taskView: 'delegated',
+      tasks: [
+        {
+          _id: 'plain',
+          title: 'Plain delegated',
+          description: '',
+          urgent: true,
+          important: false,
+          lifecycleState: 'active',
+        },
+      ],
+    });
+
+    expect(
+      screen.queryByRole('button', { name: 'Dodaj termin Plain delegated' })
+    ).not.toBeInTheDocument();
+    view.rerender(
+      <LanguageProvider>
+        <Matrix
+          tasks={[
+            {
+              _id: 'assigned',
+              title: 'Assigned delegated',
+              description: '',
+              urgent: true,
+              important: false,
+              lifecycleState: 'active',
+              delegation: {
+                assigneeUserId: 'user-b',
+                displayLabel: 'Pat',
+                handoffNote: '',
+                status: 'offered',
+                offeredAt: '2026-08-12T12:00:00.000Z',
+                statusUpdatedAt: '2026-08-12T12:05:00.000Z',
+              },
+            },
+          ]}
+          loading={false}
+          taskView="delegated"
+          onAddTask={jest.fn()}
+          onUpdateTask={jest.fn()}
+          onDeleteTask={jest.fn()}
+        />
+      </LanguageProvider>
+    );
+    expect(screen.getByText('Pat')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Akceptuj Assigned delegated' }));
+  });
+
   it('places delegate and schedule tasks under their canonical quadrant labels', () => {
-    render(
+    const view = render(
       <LanguageProvider>
         <Matrix
           tasks={[
@@ -458,10 +537,19 @@ describe('Matrix', () => {
     const onUpdateTask = jest.fn().mockResolvedValue(undefined);
     const onDeleteTask = jest.fn().mockResolvedValue(undefined);
 
-    render(
+    const view = render(
       <LanguageProvider>
         <Matrix
-          tasks={[{ _id: '1', title: 'Task', description: '', urgent: false, important: false }]}
+          tasks={[
+            {
+              _id: '1',
+              title: 'Task',
+              description: '',
+              urgent: false,
+              important: false,
+              lifecycleState: 'active',
+            },
+          ]}
           loading={false}
           onAddTask={jest.fn()}
           onUpdateTask={onUpdateTask}
@@ -474,10 +562,32 @@ describe('Matrix', () => {
     await waitFor(() => expect(onUpdateTask).toHaveBeenCalledWith('1', { urgent: true }));
     fireEvent.click(screen.getByLabelText('Przełącz ważność zadania Task'));
     await waitFor(() => expect(onUpdateTask).toHaveBeenCalledWith('1', { important: true }));
-    fireEvent.click(screen.getAllByText(/Usuń/i).at(-1)!);
+
+    view.rerender(
+      <LanguageProvider>
+        <Matrix
+          tasks={[
+            {
+              _id: '1',
+              title: 'Task',
+              description: '',
+              urgent: false,
+              important: false,
+              lifecycleState: 'trashed',
+            },
+          ]}
+          loading={false}
+          lifecycleFilter="trashed"
+          onAddTask={jest.fn()}
+          onUpdateTask={onUpdateTask}
+          onDeleteTask={onDeleteTask}
+        />
+      </LanguageProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń trwale Task' }));
     fireEvent.click(screen.getByText('Anuluj'));
     expect(onDeleteTask).not.toHaveBeenCalled();
-    fireEvent.click(screen.getAllByText(/Usuń/i).at(-1)!);
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń trwale Task' }));
     fireEvent.click(screen.getByText('Potwierdź trwałe usunięcie'));
 
     await waitFor(() => expect(onDeleteTask).toHaveBeenCalledWith('1'));
@@ -488,7 +598,7 @@ describe('Matrix', () => {
       .fn()
       .mockRejectedValueOnce(new Error('To zadanie zmieniło się w innym miejscu.'))
       .mockResolvedValueOnce(undefined);
-    renderMatrix({
+    const view = renderMatrix({
       tasks: [
         {
           _id: '1',
@@ -522,7 +632,7 @@ describe('Matrix', () => {
       .fn()
       .mockRejectedValueOnce(new Error('Delete unavailable'))
       .mockRejectedValueOnce('offline');
-    renderMatrix({
+    const view = renderMatrix({
       tasks: [
         { _id: '1', title: 'Task', description: 'Description', urgent: true, important: true },
       ],
@@ -541,7 +651,28 @@ describe('Matrix', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Anuluj edycję' }));
     expect(screen.queryByLabelText('Tytuł edytowanego zadania')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Usuń Task' }));
+    view.rerender(
+      <LanguageProvider>
+        <Matrix
+          tasks={[
+            {
+              _id: '1',
+              title: 'Task',
+              description: 'Description',
+              urgent: true,
+              important: true,
+              lifecycleState: 'trashed',
+            },
+          ]}
+          loading={false}
+          lifecycleFilter="trashed"
+          onAddTask={jest.fn()}
+          onUpdateTask={onUpdateTask}
+          onDeleteTask={onDeleteTask}
+        />
+      </LanguageProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń trwale Task' }));
     for (const expected of [/Delete unavailable/i, /nie udało się zapisać/i]) {
       fireEvent.click(screen.getByRole('button', { name: 'Potwierdź trwałe usunięcie' }));
       expect(await screen.findByRole('alert')).toHaveTextContent(expected);

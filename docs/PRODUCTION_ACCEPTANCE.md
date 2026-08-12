@@ -24,12 +24,26 @@ Security behavior must also be covered by executable tests:
 - unsafe browser requests from an untrusted `Origin` receive `403`;
 - CORS uses an explicit production allowlist and never enables credentials;
 - credentials are entered at runtime and are not persisted or embedded in web/mobile bundles.
+- sensitive FastAPI mutations and auth/ACL rejections write a durable privacy-safe audit event bound
+  to the exact `RELEASE_SHA` and request ID; an unavailable sink fails closed before mutation.
 
 The current Mikrus Compose profile is intentionally static single-tenant: it must render
 `NODE_ENV=production`, `AUTH_MODE=static`, a strong `EISENHOWER_API_TOKEN`, and the production CORS
 allowlist. It maps all task access to `local/local-user`; it is not evidence of OIDC or multi-user
 production. An OIDC candidate additionally requires negative tests proving that two subjects in one
 tenant cannot list, update, or delete one another's tasks.
+
+The AI and Node services additionally require a separate `AUDIT_HMAC_KEY`, exact 40-character
+`RELEASE_SHA` and persistent `/app/audit` volume. FastAPI uses the integrity-chained SQLite ledger;
+Node uses a separate HMAC-chained file and authenticated head for auth/Origin rejections. Raw
+task/document/prompt/token/MCP-argument content is forbidden
+from the audit schema. Local chain verification does not prove deployed retention, access review or
+an alert receiver.
+
+The supported Mikrus Compose now includes a private, digest-pinned Prometheus instance with a
+15-day metrics volume and bounded AI/audit/RAG rules. Deployment checks the process-exposed
+`eisenhower_release_info` against `IMAGE_TAG` and verifies the rules API. Prometheus is not publicly
+published; notification routing to an external receiver remains an environment acceptance item.
 
 Task-write acceptance includes the additive `ETag`/`If-Match` contract: a stale conditional write
 returns `412` without overwriting the stored revision. A deleted idempotent create must retain only

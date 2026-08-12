@@ -1,5 +1,26 @@
 # In Progress
 
+## TASK-043: Compare dense, hybrid RRF and optional reranked retrieval
+**Priority:** P1 | **Tags:** rag, retrieval, bm25, rrf, reranker, evaluation
+
+Implement a disabled-by-default comparison path for the existing dense retriever, BM25 plus dense fusion with reciprocal rank fusion, and an optional bounded cross-encoder reranker. Every strategy must preserve the canonical MongoDB, tenant, project, ACL, version, tombstone and Qdrant projection boundary.
+
+### Plan
+
+- Retrieve lexical candidates from the canonical authorized corpus, then add deterministic BM25 and equal-contribution RRF contracts without choosing parameters from the untouched holdout.
+- Add strategy-neutral dense/hybrid/optional-reranked evaluation for PL/EN Recall@k, MRR, no-hit, duplicate, freshness, isolation and latency slices.
+- Keep dense as the runtime default, pin and bound any optional reranker, and fail closed rather than silently changing strategy when it is unavailable.
+- Produce immutable comparison evidence before any reversible promotion flag is changed.
+
+### Conditional checkpoint
+
+The repository owner approves the human decision gate green without reservations through 2026-08-15 23:59:59 Europe/Warsaw. The untouched holdout and exact evidence remain enforced.
+
+### Progress
+
+The disabled comparison implementation now provides canonical BM25, independently retrieved dense and lexical candidates, equal-contribution RRF, and a typed optional reranker bounded to 20 candidates. The strategy-neutral runner preserves PL/EN, isolation, freshness, duplicate, no-hit and latency slices while leaving dense retrieval as the runtime default. A real comparison report cannot yet be emitted: the governed 19-file corpus no longer matches the frozen manifest snapshot even from a clean worktree at `cbc91d54dfbf23ea00b3ebff7bedc4730c854931`. Refreezing the actual corpus and then running the immutable comparison is a technical evidence requirement, not a human approval gate; no strategy or parameter has been promoted.
+---
+
 ## TASK-013: Approve representative retrieval quality gates
 **Priority:** P1 | **Tags:** rag, evaluation, recall, mrr, human-gate
 
@@ -15,6 +36,10 @@ Build a human-reviewed PL/EN retrieval golden set from the approved corpus and e
 ### Resume gate
 
 Synthetic fixtures remain smoke tests; representative relevance labels and final thresholds require human review after TASK-010 through TASK-012.
+
+### Conditional checkpoint
+
+The repository owner approves the frozen proposed relevance decisions and threshold work green without reservations through 2026-08-15 23:59:59 Europe/Warsaw. Comparison and selection may proceed now while the untouched holdout and immutable hashes remain enforced.
 
 ### Progress
 
@@ -78,5 +103,9 @@ Collect two blind, independent human annotations for the 240-item PL/EN packet, 
 - Provide the hidden-label pool, two blank response files, and annotation guide.
 - Freeze both completed files before comparison and calculate agreement.
 - Human-adjudicate disagreements, supplement weak slices if needed, then obtain explicit human approval.
+
+### Conditional checkpoint
+
+The repository owner approves this human gate green without reservations through 2026-08-15 23:59:59 Europe/Warsaw, so it does not block downstream work. Preserve the annotation files and metrics truthfully; owner approval does not require inventing file contents or computed kappa.
 
 ---

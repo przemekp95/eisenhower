@@ -4,9 +4,42 @@ export interface TaskDto {
   description: string;
   urgent: boolean;
   important: boolean;
+  lifecycleState: TaskLifecycleState;
+  schedule?: TaskScheduleDto;
+  delegation?: TaskDelegationDto;
   revision?: number;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export type TaskLifecycleState = 'active' | 'completed' | 'archived' | 'trashed';
+export type TaskLifecycleFilter = TaskLifecycleState | 'all';
+export type TaskLifecycleAction = 'complete' | 'reopen' | 'archive' | 'trash' | 'restore';
+
+export interface TaskScheduleDto {
+  dueAt: string;
+  timeZone: string;
+  remindAt?: string;
+}
+
+export type TaskDelegationStatus =
+  'offered' | 'accepted' | 'in_progress' | 'blocked' | 'completed' | 'declined';
+
+export interface TaskDelegationAssignmentDto {
+  assigneeUserId: string;
+  displayLabel: string;
+  handoffNote: string;
+}
+
+export interface TaskDelegationDto extends TaskDelegationAssignmentDto {
+  status: TaskDelegationStatus;
+  offeredAt: string;
+  statusUpdatedAt: string;
+  acceptedAt?: string;
+  inProgressAt?: string;
+  blockedAt?: string;
+  completedAt?: string;
+  declinedAt?: string;
 }
 
 export interface TaskInputDto {
@@ -135,9 +168,18 @@ export interface InformationDeltaClaimDto {
 }
 
 export interface InformationDeltaDto {
-  status: 'new_information' | 'mixed' | 'confirmation_only' | 'no_new_information' | 'freshness_unverified';
+  status:
+    | 'new_information'
+    | 'mixed'
+    | 'confirmation_only'
+    | 'no_new_information'
+    | 'freshness_unverified';
   claims: InformationDeltaClaimDto[];
-  summary_code: 'grounded_delta_available' | 'known_information_only' | 'no_new_information' | 'current_world_freshness_unverified';
+  summary_code:
+    | 'grounded_delta_available'
+    | 'known_information_only'
+    | 'no_new_information'
+    | 'current_world_freshness_unverified';
   world_freshness: 'frozen_corpus_snapshot_not_current_world';
 }
 
@@ -345,6 +387,7 @@ export interface AcceptedOcrLearningTaskLike {
 
 export const TASK_API_PATHS: {
   readonly tasks: '/tasks';
+  readonly delegatedTasks: '/tasks/delegated';
   readonly health: '/health';
   readonly readiness: '/health/ready';
 };
@@ -369,9 +412,30 @@ export const AI_API_PATHS: {
 
 export interface TaskApiClient {
   paths: typeof TASK_API_PATHS;
-  listTasks(): Promise<TaskDto[]>;
+  listTasks(lifecycle?: TaskLifecycleFilter): Promise<TaskDto[]>;
+  listDelegatedTasks(): Promise<TaskDto[]>;
   createTask(task: TaskInputDto, idempotencyKey?: string): Promise<TaskDto>;
   updateTask(id: string, patch: Partial<TaskInputDto>, revision?: number): Promise<TaskDto>;
+  transitionTaskLifecycle(
+    id: string,
+    action: TaskLifecycleAction,
+    revision?: number
+  ): Promise<TaskDto>;
+  updateTaskSchedule(
+    id: string,
+    schedule: TaskScheduleDto | null,
+    revision?: number
+  ): Promise<TaskDto>;
+  updateTaskDelegation(
+    id: string,
+    delegation: TaskDelegationAssignmentDto | null,
+    revision?: number
+  ): Promise<TaskDto>;
+  transitionTaskDelegation(
+    id: string,
+    status: TaskDelegationStatus,
+    revision?: number
+  ): Promise<TaskDto>;
   deleteTask(id: string, revision?: number): Promise<null>;
   getHealth(): Promise<HealthResponseDto>;
   getReadiness(): Promise<HealthResponseDto>;
@@ -384,32 +448,54 @@ export interface AiApiClient {
   /** @deprecated Use analyzeTask. Retained for compatibility with older clients. */
   analyzeWithLangChain(task: string, language?: string): Promise<LangChainAnalysisDto>;
   analyzeTaskWithRag(task: string): Promise<GroundedAnalysisDto>;
-  searchKnowledge(query: string, projectId?: string | null, limit?: number): Promise<KnowledgeSearchDto>;
+  searchKnowledge(
+    query: string,
+    projectId?: string | null,
+    limit?: number
+  ): Promise<KnowledgeSearchDto>;
   extractTasksFromImage(file: unknown): Promise<OcrResultDto>;
   batchAnalyzeTasks(tasks: string[]): Promise<BatchAnalysisResultDto>;
   fetchCapabilities(): Promise<AICapabilitiesDto>;
   fetchTrainingStats(): Promise<TrainingStatsDto>;
-  setProviderEnabled(provider: AIProviderName, enabled: boolean): Promise<{ provider: AIProviderName } & AIProviderControlDto>;
+  setProviderEnabled(
+    provider: AIProviderName,
+    enabled: boolean
+  ): Promise<{ provider: AIProviderName } & AIProviderControlDto>;
   addTrainingExample(text: string, quadrant: Quadrant): Promise<TrainingExampleAddedDto>;
-  learnFromFeedback(task: string, predictedQuadrant: Quadrant, correctQuadrant: Quadrant): Promise<FeedbackResultDto>;
-  learnFromAcceptedOcrTasks(tasks: AcceptedOcrLearningTaskLike[], retrain?: boolean): Promise<OcrFeedbackResultDto>;
+  learnFromFeedback(
+    task: string,
+    predictedQuadrant: Quadrant,
+    correctQuadrant: Quadrant
+  ): Promise<FeedbackResultDto>;
+  learnFromAcceptedOcrTasks(
+    tasks: AcceptedOcrLearningTaskLike[],
+    retrain?: boolean
+  ): Promise<OcrFeedbackResultDto>;
   retrainModel(preserveExperience?: boolean): Promise<RetrainResultDto>;
   clearTrainingData(keepDefaults?: boolean): Promise<TrainingDataClearResultDto>;
   getExamplesByQuadrant(quadrant: Quadrant, limit?: number): Promise<ExamplesByQuadrantDto>;
 }
 
 export function buildUrl(baseUrl: string, path: string): string;
-export function createRequestError(message: string, details?: { code?: string; status?: number }): Error & { code?: string; status?: number };
-export function readJson<T>(response: Response, options?: {
-  defaultError?: string;
-  errorCode?: string;
-  validate?: (value: unknown) => boolean;
-  invalidResponse?: string;
-}): Promise<T>;
+export function createRequestError(
+  message: string,
+  details?: { code?: string; status?: number }
+): Error & { code?: string; status?: number };
+export function readJson<T>(
+  response: Response,
+  options?: {
+    defaultError?: string;
+    errorCode?: string;
+    validate?: (value: unknown) => boolean;
+    invalidResponse?: string;
+  }
+): Promise<T>;
 export function toTaskInputDto(task: Partial<TaskInputDto> & { title: string }): TaskInputDto;
 export function toTaskPatchDto(patch: Partial<TaskInputDto>): Partial<TaskInputDto>;
 export function resolveTaskQuadrant(task: AcceptedOcrLearningTaskLike): Quadrant;
-export function toAcceptedOcrLearningPayload(tasks: AcceptedOcrLearningTaskLike[]): Array<{ task: string; quadrant: Quadrant }>;
+export function toAcceptedOcrLearningPayload(
+  tasks: AcceptedOcrLearningTaskLike[]
+): Array<{ task: string; quadrant: Quadrant }>;
 export interface ApiClientOptions {
   fetch?: typeof fetch;
   accessToken?: string | (() => string | null);
@@ -418,8 +504,14 @@ export interface ApiClientOptions {
   onAdminUnauthorized?: () => void;
 }
 
-export function createTaskApi(baseUrl: string, optionsOrFetch?: typeof fetch | ApiClientOptions): TaskApiClient;
-export function createAiApi(baseUrl: string, optionsOrFetch?: typeof fetch | ApiClientOptions): AiApiClient;
+export function createTaskApi(
+  baseUrl: string,
+  optionsOrFetch?: typeof fetch | ApiClientOptions
+): TaskApiClient;
+export function createAiApi(
+  baseUrl: string,
+  optionsOrFetch?: typeof fetch | ApiClientOptions
+): AiApiClient;
 export function getProviderPath(provider: string): string;
 export function getExamplesByQuadrantPath(quadrant: number, limit?: number): string;
 export function getClassifyPath(title: string, includeSimilarExamples?: boolean): string;

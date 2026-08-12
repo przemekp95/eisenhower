@@ -43,8 +43,13 @@ function AuthenticatedApp() {
     groupedTasks,
     handleAddTask,
     handleDelete,
+    handleDelegation,
+    handleDelegationStatus,
+    handleDelegatedResolveConflict,
     handleLanguageChange,
+    handleLifecycle,
     handleResolveConflict,
+    handleSchedule,
     handleScan,
     handleSuggest,
     handleToggle,
@@ -59,6 +64,8 @@ function AuthenticatedApp() {
     retrySync,
     scanDisabled,
     suggestDisabled,
+    taskView,
+    setTaskView,
     t,
     updateNewTaskField: updateTaskDraftField,
   } = useTaskSyncController();
@@ -430,7 +437,28 @@ function AuthenticatedApp() {
           </View>
         ) : null}
 
-        <TaskComposer
+        <View accessibilityRole="tablist" style={styles.actions}>
+          <Pressable
+            testID="task-view-owned"
+            accessibilityRole="tab"
+            accessibilityState={{ selected: taskView === 'owned' }}
+            onPress={() => setTaskView('owned')}
+            style={taskView === 'owned' ? styles.primaryButton : styles.secondaryButton}
+          >
+            <Text style={taskView === 'owned' ? styles.primaryButtonText : styles.secondaryButtonText}>{t.taskViewOwned}</Text>
+          </Pressable>
+          <Pressable
+            testID="task-view-delegated"
+            accessibilityRole="tab"
+            accessibilityState={{ selected: taskView === 'delegated' }}
+            onPress={() => setTaskView('delegated')}
+            style={taskView === 'delegated' ? styles.primaryButton : styles.secondaryButton}
+          >
+            <Text style={taskView === 'delegated' ? styles.primaryButtonText : styles.secondaryButtonText}>{t.taskViewDelegated}</Text>
+          </Pressable>
+        </View>
+
+        {taskView === 'owned' ? <TaskComposer
           newTask={newTask}
           onChangeTask={updateTaskDraftField}
           onAddTask={handleAddTask}
@@ -443,20 +471,26 @@ function AuthenticatedApp() {
           suggestDisabled={suggestDisabled}
           scanDisabled={scanDisabled}
           t={t}
-        />
+        /> : null}
 
-        <AIStatusPanel
+        {taskView === 'owned' ? <AIStatusPanel
           aiLoading={aiLoading}
           aiConnected={aiConnected}
           providerControls={providerControls}
           t={t}
-        />
+        /> : null}
 
         <MatrixBoard
           quadrantOptions={quadrantOptions}
           groupedTasks={groupedTasks}
           onDelete={handleDelete}
-          onResolveConflict={handleResolveConflict}
+          onLifecycle={handleLifecycle}
+          onResolveConflict={taskView === 'delegated' ? handleDelegatedResolveConflict : handleResolveConflict}
+          onSchedule={handleSchedule}
+          onClearSchedule={(id) => handleSchedule(id, null)}
+          onDelegation={handleDelegation}
+          onDelegationStatus={handleDelegationStatus}
+          taskView={taskView}
           onToggle={handleToggle}
           t={t}
         />

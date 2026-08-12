@@ -33,6 +33,17 @@ class CanonicalDocumentStore(Protocol):
   def retrieval_state(self, tenant_id: str, document_id: str) -> CanonicalDocumentState | None: ...
 
 
+def canonical_document_is_visible(document: SourceDocument, query: RetrievalQuery) -> bool:
+  """Apply the canonical tenant, project, tombstone, and ACL read boundary."""
+  if document.deleted or document.tenant_id != query.scope.tenant_id:
+    return False
+  if document.project_id is not None and document.project_id not in query.scope.project_ids:
+    return False
+  if query.project_id is not None and document.project_id != query.project_id:
+    return False
+  return bool(set(document.acl_subjects) & set(query.scope.acl_subjects))
+
+
 class CanonicalRetriever:
   """Treats vector results only as candidates and returns canonical content."""
 
@@ -63,7 +74,7 @@ class CanonicalRetriever:
       if state is None or state.projection_pending:
         continue
       canonical = state.document
-      if not self._document_is_visible(canonical, query):
+      if not canonical_document_is_visible(canonical, query):
         continue
       expected = next(
         (
@@ -101,16 +112,6 @@ class CanonicalRetriever:
       if len(accepted) >= query.limit:
         break
     return accepted
-
-  @staticmethod
-  def _document_is_visible(document: SourceDocument, query: RetrievalQuery) -> bool:
-    if document.deleted or document.tenant_id != query.scope.tenant_id:
-      return False
-    if document.project_id is not None and document.project_id not in query.scope.project_ids:
-      return False
-    if query.project_id is not None and document.project_id != query.project_id:
-      return False
-    return bool(set(document.acl_subjects) & set(query.scope.acl_subjects))
 
   @staticmethod
   def _candidate_matches(candidate: RetrievalHit, expected) -> bool:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from threading import Lock
+import re
 
 
 RAG_MODES = {"rag", "fallback", "no_answer"}
@@ -38,6 +39,8 @@ INFORMATION_DELTA_STATUSES = {
   "no_new_information",
   "freshness_unverified",
 }
+AUDIT_OUTCOMES = {"attempt", "success", "rejected", "error"}
+RELEASE_SHA_PATTERN = re.compile(r"^[a-f0-9]{40}$")
 LATENCY_BUCKETS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0)
 
 
@@ -88,6 +91,18 @@ class MetricsRegistry:
     self._job_depth: dict[str, int] = {}
     self._job_queue_enabled = False
     self._job_worker_heartbeat_age_seconds: float | None = None
+    self._release_sha = "0" * 40
+    self._audit = Counter()
+
+  def set_release_sha(self, release_sha: str) -> None:
+    if RELEASE_SHA_PATTERN.fullmatch(release_sha) is None:
+      raise ValueError("release_sha must be a lowercase 40-character Git commit")
+    with self._lock:
+      self._release_sha = release_sha
+
+  def observe_audit(self, outcome: str) -> None:
+    with self._lock:
+      self._audit[_bounded(outcome, AUDIT_OUTCOMES)] += 1
 
   def observe_http(self, method: str, route: str, status: int, duration_seconds: float) -> None:
     key = (method.upper(), route, str(status))
@@ -201,9 +216,18 @@ class MetricsRegistry:
   def render(self) -> str:
     with self._lock:
       lines = [
+        "# HELP eisenhower_release_info Exact source revision exposed by this process.",
+        "# TYPE eisenhower_release_info gauge",
+        f"eisenhower_release_info{{{_labels(sha=self._release_sha)}}} 1",
+        "# HELP eisenhower_audit_events_total Privacy-safe durable audit outcomes.",
+        "# TYPE eisenhower_audit_events_total counter",
         "# HELP eisenhower_http_requests_total HTTP requests by stable route and status.",
         "# TYPE eisenhower_http_requests_total counter",
       ]
+      for outcome, value in sorted(self._audit.items()):
+        lines.append(
+          f"eisenhower_audit_events_total{{{_labels(outcome=outcome)}}} {value}"
+        )
       for (method, route, status), value in sorted(self._http.items()):
         lines.append(
           f"eisenhower_http_requests_total{{{_labels(method=method, route=route, status=status)}}} {value}"
