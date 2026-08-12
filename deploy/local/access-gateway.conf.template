@@ -15,6 +15,7 @@ server {
     set $mcp_upstream ${MCP_UPSTREAM};
     set $api_upstream ${API_UPSTREAM};
     set $ai_upstream ${AI_UPSTREAM};
+    set $knowledge_upstream ${KNOWLEDGE_UPSTREAM};
     set $web_upstream ${WEB_UPSTREAM};
     access_log off;
     server_tokens off;
@@ -52,6 +53,10 @@ server {
     location /api/ {
         rewrite ^/api/(.*)$ /$1 break;
         proxy_pass http://$api_upstream;
+    }
+
+    location = /ai/v2/knowledge/answer {
+        proxy_pass http://$knowledge_upstream/v2/knowledge/answer;
     }
 
     location /ai/ {

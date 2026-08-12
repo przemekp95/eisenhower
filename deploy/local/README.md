@@ -60,6 +60,12 @@ fail-closed. FastAPI keeps its deterministic classifier fallback when private ge
      -f deploy/local/compose.yaml ps
    ```
 
+For the independently governed AMD knowledge-answer canary, use `deploy.sh deploy-response`.
+It builds and starts only the knowledge runtime plus the private gateway and does not weaken or
+reuse the classifier's separate 240-case production-evaluation gate. The service exposes only the
+answer route, liveness and aggregate metrics; the atomic pointer, candidate ID, tenant/user
+allowlists and inference/reranker credentials are all mandatory.
+
 This binds host ports to `127.0.0.1` by default. Compose DNS names provide same-host service-to-service
 URLs. A reverse proxy or private client may reach only the endpoints explicitly selected by the owner.
 
