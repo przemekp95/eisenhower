@@ -141,7 +141,10 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn('WEB_IMAGE="local/eisenhower-web:${release_sha}"', script)
     self.assertIn('docker image inspect', script)
     self.assertIn('deploy-response)', script)
-    self.assertIn('compose up -d --wait knowledge-service access-gateway', script)
+    self.assertIn(
+        'compose up -d --wait inference reranker knowledge-service access-gateway',
+        script,
+    )
     self.assertIn('validate_response_inputs', script)
     self.assertIn('rollback.env', script)
     self.assertIn('docker compose', script)
