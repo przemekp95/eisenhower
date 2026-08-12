@@ -13,7 +13,7 @@ from uuid import uuid4
 import httpx
 from pymongo import MongoClient
 from qdrant_client import QdrantClient, models as qmodels
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import CrossEncoder, SentenceTransformer
 
 from app.config import Settings
 from app.rag.adapters import QdrantIngestionAdapter, QdrantRetriever
@@ -49,6 +49,27 @@ class PinnedMiniLMEmbedding:
       show_progress_bar=False,
     )
     return [[float(value) for value in vector] for vector in vectors.tolist()]
+
+
+class PinnedMultilingualReranker:
+  model_name = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+  revision = "1427fd652930e4ba29e8149678df786c240d8825"
+
+  def __init__(self):
+    revision = {"revision": self.revision}
+    self.encoder = CrossEncoder(
+      self.model_name,
+      automodel_args=revision,
+      tokenizer_args=revision,
+      config_args=revision,
+    )
+
+  def score(self, query_text, ranked_candidates):
+    scores = self.encoder.predict(
+      [(query_text, candidate.text) for candidate in ranked_candidates],
+      show_progress_bar=False,
+    )
+    return [float(score) for score in scores]
 
 
 def _delete_alias(client: QdrantClient, alias: str) -> None:
@@ -176,6 +197,37 @@ def run(
       name: RetrievalGoldenRunner(retriever).run(train_cases, k=5)
       for name, retriever in candidate_retrievers.items()
     }
+    selected_base = select_train_strategy(train_reports)
+    base_configuration = configurations[selected_base]
+    reranker = PinnedMultilingualReranker()
+    for candidate_limit in (10, 20):
+      name = f"{selected_base}-reranked{candidate_limit}"
+      configurations[name] = {
+        **base_configuration,
+        "reranker_candidate_limit": candidate_limit,
+        "reranker_model": reranker.model_name,
+        "reranker_revision": reranker.revision,
+      }
+      lexical_retriever = CanonicalBm25Retriever(
+        store,
+        embedding_version=embedding.version,
+        chunker=chunker,
+        title_weight=base_configuration["title_weight"],
+        text_weight=base_configuration["text_weight"],
+      )
+      candidate_retrievers[name] = HybridRetriever(
+        dense_retriever,
+        lexical_retriever,
+        rrf_k=base_configuration["rrf_k"],
+        dense_rrf_weight=base_configuration["dense_rrf_weight"],
+        lexical_rrf_weight=base_configuration["lexical_rrf_weight"],
+        candidate_multiplier=base_configuration["candidate_multiplier"],
+        reranker=reranker,
+        reranker_candidate_limit=candidate_limit,
+      )
+      train_reports[name] = RetrievalGoldenRunner(
+        candidate_retrievers[name]
+      ).run(train_cases, k=5)
     selected_name = select_train_strategy(train_reports)
     hybrid_retriever = candidate_retrievers[selected_name]
     dev_validation = RetrievalStrategyComparisonRunner({
