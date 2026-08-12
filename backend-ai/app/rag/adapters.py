@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from ipaddress import ip_address
 from threading import Lock
 from time import monotonic
@@ -294,6 +295,14 @@ class OpenAICompatibleGenerationProvider:
     spec = self.prompt_registry.get(self.prompt_id, self.prompt_version, request.language)
     rendered = self.prompt_renderer.render(spec, request)
     generation = spec.generation_config
+    output_schema = deepcopy(ClassificationOutput.model_json_schema())
+    delta_requested = (
+      request.known_state is not None
+      or request.previous_output_statements is not None
+      or request.freshness_requirement == "current_world_required"
+    )
+    if not delta_requested:
+      output_schema["properties"]["information_delta"] = {"type": "null"}
     payload = {
       "model": spec.model_id,
       "temperature": generation.temperature,
@@ -306,7 +315,7 @@ class OpenAICompatibleGenerationProvider:
         "json_schema": {
           "name": spec.output_schema_id,
           "strict": True,
-          "schema": ClassificationOutput.model_json_schema(),
+          "schema": output_schema,
         },
       },
     }
