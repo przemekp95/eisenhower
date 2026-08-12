@@ -21,6 +21,7 @@ from .local_model import ModelNotReadyError
 from .generation.models import KnownStatement
 from .jobs import JobConflictError, SqliteJobQueue
 from .metrics import MetricsRegistry
+from .rag.errors import RerankerUnavailable
 from .rag.models import AccessScope, AnalyzeResult, Citation, RetrievalSummary
 from .service import ProviderDisabledError, QuadrantAIService
 from .security_controls import SlidingWindowRateLimiter
@@ -597,6 +598,16 @@ def create_app(
         limit=request.limit,
         project_id=request.project_id,
       )
+    except RerankerUnavailable as error:
+      metrics.observe_rag_retrieval(
+        "search",
+        hit_count=None,
+        duration_seconds=time.perf_counter() - retrieval_started,
+      )
+      raise HTTPException(
+        status_code=503,
+        detail="Default retrieval reranker is unavailable.",
+      ) from error
     except Exception:
       metrics.observe_rag_retrieval(
         "search",

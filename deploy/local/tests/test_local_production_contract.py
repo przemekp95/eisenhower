@@ -34,7 +34,7 @@ class LocalProductionContractTest(unittest.TestCase):
       {
         "api-service", "mongodb", "ai-service", "rag-worker", "qdrant", "n8n",
         "calendar-gateway", "audit-volume-init", "identity-db", "identity-service",
-        "mcp-service", "access-gateway", "inference",
+        "mcp-service", "access-gateway", "inference", "reranker",
       },
     )
     self.assertNotIn("outbox-worker", self.services)
@@ -48,6 +48,8 @@ class LocalProductionContractTest(unittest.TestCase):
       "ai-service": [
         "QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}",
         "INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}",
+        "RAG_RETRIEVAL_STRATEGY=${RAG_RETRIEVAL_STRATEGY:-hybrid-bge-v1}",
+        "RERANKER_BASE_URL=${RERANKER_BASE_URL:-http://reranker:8000}",
       ],
       "rag-worker": [
         "MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/eisenhower?replicaSet=rs0}",
@@ -85,6 +87,7 @@ class LocalProductionContractTest(unittest.TestCase):
       "access-gateway": "ACCESS_GATEWAY_IMAGE",
       "audit-volume-init": "VOLUME_INIT_IMAGE",
       "inference": "AMD_INFERENCE_IMAGE",
+      "reranker": "AMD_RERANKER_IMAGE",
     }
     for name, variable in expected_image_inputs.items():
       image = self._service(name)["image"]
@@ -124,6 +127,24 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn("ENTRYPOINT []", rocm_dockerfile)
     self.assertIn("grpcio==1.78.0", rocm_dockerfile)
     self.assertIn("'protobuf>=6.31.1,<7'", rocm_dockerfile)
+
+  def test_amd_reranker_is_a_separate_pinned_bounded_private_service(self):
+    reranker = self.amd_services["reranker"]
+    self.assertEqual(reranker["profiles"], ["reranker-amd"])
+    self.assertEqual(reranker["devices"], ["/dev/kfd:/dev/kfd", "/dev/dri:/dev/dri"])
+    self.assertNotIn("healthcheck", reranker)
+    self.assertIn("--runner", reranker["command"])
+    self.assertIn("pooling", reranker["command"])
+    self.assertNotIn("--task", reranker["command"])
+    self.assertIn("--max-model-len", reranker["command"])
+    self.assertIn("192", reranker["command"])
+    self.assertIn("953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e", reranker["command"])
+    self.assertIn("--no-enable-log-requests", reranker["command"])
+    self.assertTrue(any(
+      "RERANKER_MODEL_CACHE" in volume and volume.endswith(":/root/.cache/huggingface")
+      for volume in reranker["volumes"]
+    ))
+    self.assertIn("RERANKER_API_KEY is required", self.amd_compose_text)
 
   def test_application_images_receive_required_production_identity_and_audit_config(self):
     for name in ("api-service", "ai-service"):

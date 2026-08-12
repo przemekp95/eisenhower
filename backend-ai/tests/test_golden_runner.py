@@ -7,6 +7,7 @@ from app.rag.golden_runner import (
   RepositoryEvaluationHandler,
   RetrievalGoldenRunner,
   RetrievalStrategyComparisonRunner,
+  select_train_strategy,
 )
 from app.rag.models import AnalyzeResult, Citation, RetrievalHit, RetrievalSummary
 
@@ -232,3 +233,41 @@ def test_strategy_comparison_requires_dense_hybrid_and_both_language_slices():
       "dense": ComparisonRetriever("doc-dense"),
       "hybrid": ComparisonRetriever("doc-hybrid"),
     }).run(only_polish)
+
+
+def test_train_strategy_selection_prioritizes_worst_language_then_global_quality():
+  def report(recall, mrr, pl_recall, pl_mrr, en_recall, en_mrr, duplicates=0.0):
+    return {"metrics": {
+      "recall_at_k": recall, "mrr": mrr,
+      "document_duplicate_rate": duplicates,
+      "forbidden_hit_rate": 0.0, "stale_hit_rate": 0.0,
+      "isolation_violation_rate": 0.0,
+      "by_language": {
+        "pl": {"recall_at_k": pl_recall, "mrr": pl_mrr},
+        "en": {"recall_at_k": en_recall, "mrr": en_mrr},
+      },
+    }}
+
+  selected = select_train_strategy({
+    "high-global-weak-pl": report(0.95, 0.9, 0.7, 0.7, 1.0, 1.0),
+    "balanced": report(0.9, 0.85, 0.9, 0.8, 0.9, 0.9),
+  })
+
+  assert selected == "balanced"
+
+
+def test_train_strategy_selection_rejects_security_or_freshness_violations():
+  safe = {
+    "metrics": {
+      "recall_at_k": 0.8, "mrr": 0.8, "document_duplicate_rate": 0.0,
+      "forbidden_hit_rate": 0.0, "stale_hit_rate": 0.0,
+      "isolation_violation_rate": 0.0,
+      "by_language": {
+        "pl": {"recall_at_k": 0.8, "mrr": 0.8},
+        "en": {"recall_at_k": 0.8, "mrr": 0.8},
+      },
+    },
+  }
+  unsafe = {"metrics": {**safe["metrics"], "recall_at_k": 1.0, "forbidden_hit_rate": 0.1}}
+
+  assert select_train_strategy({"unsafe": unsafe, "safe": safe}) == "safe"

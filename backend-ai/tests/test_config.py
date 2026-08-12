@@ -17,6 +17,9 @@ def test_load_settings_uses_defaults():
   assert settings.rag_generation_enabled is False
   assert settings.rag_response_enabled is False
   assert not settings.rag_response_allowed_users
+  assert settings.rag_retrieval_strategy == "hybrid-bge-v1"
+  assert settings.reranker_base_url == "http://reranker:8000"
+  assert settings.reranker_api_key is None
   assert settings.memory_write_enabled is False
   assert settings.memory_retrieval_enabled is False
   assert settings.memory_response_enabled is False
@@ -64,6 +67,10 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
       "RAG_EMBEDDING_MODEL_NAME": "BAAI/bge-m3",
       "RAG_EMBEDDING_MODEL_REVISION": "5617a9f61b028005a4858fdac845db406aefb181",
       "RAG_EMBEDDING_DEVICE": "cuda",
+      "RAG_RETRIEVAL_STRATEGY": "dense-v1",
+      "RERANKER_BASE_URL": "http://reranker.internal:8000",
+      "RERANKER_API_KEY": "reranker-token",
+      "RERANKER_ALLOWED_HOSTS": "reranker.internal",
       "INFERENCE_BASE_URL": "https://gpu.mesh.example/v1",
       "INFERENCE_API_KEY": "service-token",
       "INFERENCE_MODEL": "approved-model",
@@ -111,6 +118,10 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
   assert settings.rag_embedding_model_name == "BAAI/bge-m3"
   assert settings.rag_embedding_model_revision == "5617a9f61b028005a4858fdac845db406aefb181"
   assert settings.rag_embedding_device == "cuda"
+  assert settings.rag_retrieval_strategy == "dense-v1"
+  assert settings.reranker_base_url == "http://reranker.internal:8000"
+  assert settings.reranker_api_key == "reranker-token"
+  assert settings.reranker_allowed_hosts == ("reranker.internal",)
   assert settings.inference_base_url == "https://gpu.mesh.example/v1"
   assert settings.inference_api_key == "service-token"
   assert settings.inference_model == "approved-model"
@@ -208,6 +219,15 @@ def test_production_response_canary_requires_explicit_tenant_and_user_cohorts(tm
     rag_response_allowed_users=("owner-sub",),
   )
   assert settings.rag_response_allowed_users == ("owner-sub",)
+
+
+def test_unknown_retrieval_strategy_fails_closed(tmp_path: Path):
+  with pytest.raises(ValueError, match="RAG_RETRIEVAL_STRATEGY"):
+    Settings(
+      training_data_path=tmp_path / "training.json",
+      model_cache_dir=tmp_path / "runtime",
+      rag_retrieval_strategy="silent-dense-fallback",
+    )
 
 
 def test_memory_flags_fail_closed_in_rollout_order(tmp_path: Path):

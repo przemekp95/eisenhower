@@ -23,6 +23,7 @@ from .application import RagAnalysisService
 from .canonical import CanonicalIngestionApplication, CanonicalRetriever
 from .collections import QdrantCollectionManager
 from .ingestion import DeterministicChunker
+from .hybrid import CanonicalBm25Retriever, HybridRetriever, PrivateVllmReranker
 from .mongo_document_store import MongoCanonicalDocumentStore
 
 
@@ -45,6 +46,7 @@ def build_rag_service(
   *,
   qdrant_client=None,
   mongo_client=None,
+  reranker_client=None,
 ) -> RagAnalysisService:
   if not settings.rag_retrieval_enabled:
     raise ValueError("RAG retrieval is disabled")
@@ -74,12 +76,41 @@ def build_rag_service(
   canonical_store = MongoCanonicalDocumentStore(
     mongo_client[settings.mongodb_database][settings.canonical_documents_collection]
   )
-  retriever = CanonicalRetriever(
+  dense_retriever = CanonicalRetriever(
     projection_retriever,
     canonical_store,
     embedding_version=settings.embedding_version,
     chunker=DeterministicChunker(max_chars=1200, overlap_chars=160),
   )
+  if settings.rag_retrieval_strategy == "dense-v1":
+    retriever = dense_retriever
+  else:
+    if not settings.reranker_api_key:
+      raise ValueError("RERANKER_API_KEY is required for hybrid-bge-v1")
+    lexical_retriever = CanonicalBm25Retriever(
+      canonical_store,
+      embedding_version=settings.embedding_version,
+      chunker=DeterministicChunker(max_chars=1200, overlap_chars=160),
+      title_weight=2.0,
+      text_weight=1.0,
+    )
+    reranker = PrivateVllmReranker(
+      settings.reranker_base_url,
+      settings.reranker_api_key,
+      allowed_hosts=settings.reranker_allowed_hosts,
+      client=reranker_client,
+    )
+    retriever = HybridRetriever(
+      dense_retriever,
+      lexical_retriever,
+      rrf_k=20,
+      dense_rrf_weight=1.0,
+      lexical_rrf_weight=2.0,
+      candidate_multiplier=4,
+      reranker=reranker,
+      reranker_candidate_limit=20,
+      reranker_weight=1.0,
+    )
   return RagAnalysisService(
     retriever,
     generator,

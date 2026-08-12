@@ -104,6 +104,7 @@ def test_evaluation_reports_duplicate_freshness_isolation_no_hit_and_split_metri
   metrics = evaluate_results(results, k=3)
 
   assert metrics["duplicate_hit_rate"] == 0.3333
+  assert metrics["document_duplicate_rate"] == 0.3333
   assert metrics["freshness_rate"] == 0.6667
   assert metrics["stale_hit_rate"] == 0.3333
   assert metrics["stale_case_rate"] == 0.5
@@ -132,4 +133,5 @@ def test_evaluation_derives_duplicate_hits_for_backward_compatible_results():
   metrics = evaluate_results([result], k=2)
 
   assert metrics["duplicate_hit_rate"] == 0.5
+  assert metrics["document_duplicate_rate"] == 0.5
   assert metrics["freshness_rate"] == 1.0

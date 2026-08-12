@@ -2,13 +2,13 @@
   "manifest_version": "eisenhower-corpus-v1",
   "approved_at": "2026-08-12",
   "review_by": "2026-11-10",
-  "approval_evidence": "Repository owner granted full-scope local approval in the Codex task; the same 19-file allowlist was refrozen on 2026-08-12 after approved Calendar, Remote MCP, deployment and evaluation documentation changed.",
+  "approval_evidence": "Repository owner granted full-scope local approval in the Codex task; the unchanged 19-file allowlist was refrozen on 2026-08-12 after the reviewed delivery, security and evaluation documents changed.",
   "use_case": "Retrieve cited project constraints, decisions, procedures, runbooks and active delivery context relevant to task prioritization.",
   "initial_snapshot": {
     "algorithm": "sha256(sorted newline-separated sha256sum records)",
-    "sha256": "e851ef8725cf22ee858f706b1f7b1becbec051ba30f85a6dc531c5b24a407f37",
+    "sha256": "2994f809649d3dd155faf09419557de7af70c7a77dae9aa4d3cf67f717ac70a8",
     "document_count": 19,
-    "total_bytes": 142469,
+    "total_bytes": 142721,
     "documents": [
       "README.md",
       "docs/PRODUCTION_ACCEPTANCE.md",

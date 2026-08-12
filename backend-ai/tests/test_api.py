@@ -13,6 +13,7 @@ from app.generation.models import InformationDelta, statement_checksum
 from app.local_model import LocalMiniLMClassifier, LocalPrediction, ModelNotReadyError, SimilarExample
 from app.jobs import SqliteJobQueue
 from app.main import create_app
+from app.rag.hybrid import RerankerUnavailable
 from app.rag.models import AnalyzeResult, RetrievalSummary
 from app.service import QuadrantAIService
 from app.store import TrainingStore
@@ -483,6 +484,32 @@ def test_v2_knowledge_search_forwards_the_authorized_project_filter(tmp_path: Pa
   assert rag.search_calls[0][1].project_ids == ["local-project"]
   assert 'eisenhower_rag_retrieval_duration_seconds_count{stage="search",outcome="hit"} 1' in metrics.text
   assert 'eisenhower_rag_retrieved_chunks_sum{stage="search"} 1' in metrics.text
+
+
+def test_v2_knowledge_search_reports_default_reranker_unavailable_without_dense_results(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    rag_retrieval_enabled=True,
+    rag_generation_enabled=False,
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  rag = FakeRagService()
+
+  def unavailable(*_args, **_kwargs):
+    raise RerankerUnavailable("reranker provider failed")
+
+  rag.search = unavailable
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service, rag_service=rag),
+    headers={"Authorization": "Bearer test-admin-token"},
+  )
+
+  response = client.post("/v2/knowledge/search", json={"query": "roadmap"})
+
+  assert response.status_code == 503
+  assert response.json()["error"] == "Default retrieval reranker is unavailable."
 
 
 def test_non_root_endpoint_requires_bearer_token(tmp_path: Path):
