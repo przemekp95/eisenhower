@@ -1,0 +1,31 @@
+groups:
+  - name: eisenhower-supported-runtime
+    rules:
+      - alert: EisenhowerAIServiceDown
+        expr: up{job="eisenhower-ai"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "AI service is unavailable"
+      - alert: EisenhowerAuditWriteFailed
+        expr: increase(eisenhower_audit_events_total{outcome="error"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "A required durable audit write failed"
+      - alert: EisenhowerRagFallbackRateHigh
+        expr: sum(rate(eisenhower_rag_results_total{mode="fallback"}[10m])) / clamp_min(sum(rate(eisenhower_rag_results_total[10m])), 0.001) > 0.25
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RAG fallback rate exceeds 25 percent"
+      - alert: EisenhowerRagRetrievalLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le) (rate(eisenhower_rag_retrieval_duration_seconds_bucket[10m]))) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RAG retrieval p95 exceeds 500 milliseconds"

@@ -19,6 +19,12 @@ One parameterized truth table must cover backend, API client, web, mobile and MC
 
 ## Retrieval metrics
 
+The controlled comparison runner now evaluates the existing canonical dense path against canonical
+BM25 + dense RRF, with an optional bounded reranker port. It defaults to `train` + `dev` and refuses
+to touch holdout unless `split="holdout"` is explicit. Dense remains the runtime default. A fresh
+comparison report is currently blocked because the physical 19-file corpus no longer matches the
+frozen manifest; do not regenerate that manifest from a dirty worktree or tune against holdout.
+
 For each query `q` with relevant chunk/document set `R_q`:
 
 - `Recall@k = |top_k(q) ∩ R_q| / |R_q|`; report macro average and slices.

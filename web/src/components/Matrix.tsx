@@ -1,11 +1,37 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd';
-import { Task, TaskInput } from '../types';
+import {
+  Task,
+  TaskDelegationAssignment,
+  TaskDelegationStatus,
+  TaskInput,
+  TaskLifecycleAction,
+  TaskLifecycleFilter,
+  TaskSchedule,
+  TaskView,
+} from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
 import { shouldDisableMotion } from '../lib/motion';
 import { restoreReadyState } from '../lib/uiState';
 import { useMatrixController } from '../hooks/useMatrixController';
 import { AIToolsComponent, MatrixSceneComponent } from './matrixLazyComponents';
+import TaskDelegationPanel from './TaskDelegationPanel';
+import TaskScheduleEditor from './TaskScheduleEditor';
+
+const LIFECYCLE_FILTERS: TaskLifecycleFilter[] = [
+  'active',
+  'completed',
+  'archived',
+  'trashed',
+  'all',
+];
+
+const LIFECYCLE_ACTIONS: Record<Exclude<TaskLifecycleFilter, 'all'>, TaskLifecycleAction[]> = {
+  active: ['complete', 'archive', 'trash'],
+  completed: ['reopen', 'archive', 'trash'],
+  archived: ['restore', 'trash'],
+  trashed: ['restore'],
+};
 
 interface Props {
   tasks: Task[];
@@ -13,9 +39,29 @@ interface Props {
   onAddTask: (task: TaskInput, idempotencyKey?: string) => Promise<void>;
   onUpdateTask: (id: string, patch: Partial<TaskInput>) => Promise<void>;
   onDeleteTask: (id: string) => Promise<void>;
+  lifecycleFilter?: TaskLifecycleFilter;
+  onLifecycleFilterChange?: (filter: TaskLifecycleFilter) => void;
+  onLifecycleTask?: (id: string, action: TaskLifecycleAction) => Promise<void>;
+  onUpdateSchedule?: (id: string, schedule: TaskSchedule | null) => Promise<void>;
+  taskView?: TaskView;
+  onUpdateDelegation?: (id: string, delegation: TaskDelegationAssignment | null) => Promise<void>;
+  onDelegationStatus?: (id: string, status: TaskDelegationStatus) => Promise<void>;
 }
 
-export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDeleteTask }: Props) {
+export default function Matrix({
+  tasks,
+  loading,
+  onAddTask,
+  onUpdateTask,
+  onDeleteTask,
+  lifecycleFilter = 'active',
+  onLifecycleFilterChange = () => undefined,
+  onLifecycleTask = async () => undefined,
+  onUpdateSchedule = async () => undefined,
+  taskView = 'owned',
+  onUpdateDelegation = async () => undefined,
+  onDelegationStatus = async () => undefined,
+}: Props) {
   const { t } = useLanguage();
   const format = (template: string, values: Record<string, string>) =>
     Object.entries(values).reduce(
@@ -33,6 +79,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
     description: string;
   } | null>(null);
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
+  const [pendingLifecycleId, setPendingLifecycleId] = useState<string | null>(null);
   const [taskErrors, setTaskErrors] = useState<Record<string, string>>({});
   const {
     aiError,
@@ -202,6 +249,26 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
       </Suspense>
 
       <div className="relative z-10 space-y-4 sm:space-y-6">
+        <nav
+          aria-label={t('lifecycle.filter.label')}
+          className="flex flex-wrap gap-2 rounded-2xl border border-white/10 bg-black/20 p-2"
+        >
+          {LIFECYCLE_FILTERS.map((filter) => (
+            <button
+              key={filter}
+              type="button"
+              aria-pressed={lifecycleFilter === filter}
+              onClick={() => onLifecycleFilterChange(filter)}
+              className={`min-h-11 rounded-full px-4 py-2 text-sm font-medium ${
+                lifecycleFilter === filter
+                  ? 'bg-cyan-200 text-slate-950'
+                  : 'bg-white/7 text-white/70 hover:bg-white/12 hover:text-white'
+              }`}
+            >
+              {t(`lifecycle.filter.${filter}`)}
+            </button>
+          ))}
+        </nav>
         <p className="text-sm leading-6 text-white/70">{t('matrix.help')}</p>
         <form
           data-matrix-form
@@ -466,54 +533,61 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
                                         {task.description}
                                       </p>
                                     ) : null}
+                                    <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100/70">
+                                      {t(`lifecycle.state.${task.lifecycleState ?? 'active'}`)}
+                                    </p>
                                   </div>
                                 )}
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    {...dragProvided.dragHandleProps}
-                                    aria-label={format(t('task.drag'), { title: task.title })}
-                                    className="min-h-11 cursor-grab rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold text-white/70 transition-all hover:bg-white/15 hover:text-white active:cursor-grabbing"
-                                  >
-                                    ⋮⋮
-                                  </button>
-                                  {pendingDeleteId === task._id ? (
-                                    <div
-                                      role="group"
-                                      aria-label={`${t('task.delete')} ${task.title}`}
-                                      className="flex gap-1"
-                                    >
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          void runTaskDelete(task._id);
-                                        }}
-                                        disabled={pendingTaskId === task._id}
-                                        className="min-h-11 rounded-xl bg-red-500 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40"
-                                      >
-                                        {t('task.confirmDelete')}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => setPendingDeleteId(null)}
-                                        className="min-h-11 rounded-xl bg-white/10 px-3 py-2 text-xs"
-                                      >
-                                        {t('task.cancelDelete')}
-                                      </button>
-                                    </div>
-                                  ) : (
+                                {taskView === 'owned' ? (
+                                  <div className="flex items-center gap-1">
                                     <button
                                       type="button"
-                                      aria-label={`${t('task.delete')} ${task.title}`}
-                                      onClick={() => setPendingDeleteId(task._id)}
-                                      className="min-h-11 rounded-xl bg-red-500/20 px-3 py-2 text-xs font-semibold text-red-100 transition-all hover:bg-red-500/30 hover:text-white"
+                                      {...dragProvided.dragHandleProps}
+                                      disabled={(task.lifecycleState ?? 'active') !== 'active'}
+                                      aria-label={format(t('task.drag'), { title: task.title })}
+                                      className="min-h-11 cursor-grab rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold text-white/70 transition-all hover:bg-white/15 hover:text-white active:cursor-grabbing"
                                     >
-                                      {t('task.delete')}
+                                      ⋮⋮
                                     </button>
-                                  )}
-                                </div>
+                                    {(task.lifecycleState ?? 'active') === 'trashed' &&
+                                    pendingDeleteId === task._id ? (
+                                      <div
+                                        role="alertdialog"
+                                        aria-label={`${t('lifecycle.action.delete')} ${task.title}`}
+                                        className="flex gap-1"
+                                      >
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            void runTaskDelete(task._id);
+                                          }}
+                                          disabled={pendingTaskId === task._id}
+                                          className="min-h-11 rounded-xl bg-red-500 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40"
+                                        >
+                                          {t('task.confirmDelete')}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setPendingDeleteId(null)}
+                                          className="min-h-11 rounded-xl bg-white/10 px-3 py-2 text-xs"
+                                        >
+                                          {t('task.cancelDelete')}
+                                        </button>
+                                      </div>
+                                    ) : (task.lifecycleState ?? 'active') === 'trashed' ? (
+                                      <button
+                                        type="button"
+                                        aria-label={`${t('lifecycle.action.delete')} ${task.title}`}
+                                        onClick={() => setPendingDeleteId(task._id)}
+                                        className="min-h-11 rounded-xl bg-red-500/20 px-3 py-2 text-xs font-semibold text-red-100 transition-all hover:bg-red-500/30 hover:text-white"
+                                      >
+                                        {t('lifecycle.action.delete')}
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                ) : null}
                               </div>
-                              {editingTask?.id !== task._id ? (
+                              {taskView === 'owned' && editingTask?.id !== task._id ? (
                                 <button
                                   type="button"
                                   aria-label={format(t('task.edit'), { title: task.title })}
@@ -534,43 +608,86 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
                                   {taskErrors[task._id]}
                                 </p>
                               ) : null}
-                              <div className="mt-4 flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  aria-label={format(t('task.toggleUrgent'), { title: task.title })}
-                                  aria-pressed={task.urgent}
-                                  onClick={() => {
-                                    void runTaskUpdate(task._id, { urgent: !task.urgent });
-                                  }}
-                                  disabled={pendingTaskId === task._id}
-                                  className={`min-h-11 rounded-xl px-3 py-2 text-xs transition-all disabled:opacity-40 ${
-                                    task.urgent
-                                      ? 'bg-rose-400 text-slate-950 hover:bg-rose-300'
-                                      : 'bg-white/10 text-white hover:bg-white/15'
-                                  }`}
-                                >
-                                  {t('form.urgent')}: {task.urgent ? t('state.on') : t('state.off')}
-                                </button>
-                                <button
-                                  type="button"
-                                  aria-label={format(t('task.toggleImportant'), {
-                                    title: task.title,
-                                  })}
-                                  aria-pressed={task.important}
-                                  onClick={() => {
-                                    void runTaskUpdate(task._id, { important: !task.important });
-                                  }}
-                                  disabled={pendingTaskId === task._id}
-                                  className={`min-h-11 rounded-xl px-3 py-2 text-xs transition-all disabled:opacity-40 ${
-                                    task.important
-                                      ? 'bg-cyan-300 text-slate-950 hover:bg-cyan-200'
-                                      : 'bg-white/10 text-white hover:bg-white/15'
-                                  }`}
-                                >
-                                  {t('form.important')}:{' '}
-                                  {task.important ? t('state.on') : t('state.off')}
-                                </button>
-                              </div>
+                              {taskView === 'owned' ? (
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                  {LIFECYCLE_ACTIONS[task.lifecycleState ?? 'active'].map(
+                                    (action) => (
+                                      <button
+                                        key={action}
+                                        type="button"
+                                        disabled={pendingLifecycleId === task._id}
+                                        aria-label={`${t(`lifecycle.action.${action}`)} ${task.title}`}
+                                        onClick={async () => {
+                                          setPendingLifecycleId(task._id);
+                                          try {
+                                            await onLifecycleTask(task._id, action);
+                                          } finally {
+                                            setPendingLifecycleId(null);
+                                          }
+                                        }}
+                                        className="min-h-11 rounded-xl border border-emerald-200/20 bg-emerald-300/10 px-3 py-2 text-xs font-semibold text-emerald-50 disabled:opacity-50"
+                                      >
+                                        {t(`lifecycle.action.${action}`)}
+                                      </button>
+                                    )
+                                  )}
+                                  <button
+                                    type="button"
+                                    aria-label={format(t('task.toggleUrgent'), {
+                                      title: task.title,
+                                    })}
+                                    aria-pressed={task.urgent}
+                                    onClick={() => {
+                                      void runTaskUpdate(task._id, { urgent: !task.urgent });
+                                    }}
+                                    disabled={
+                                      pendingTaskId === task._id ||
+                                      (task.lifecycleState ?? 'active') !== 'active'
+                                    }
+                                    className={`min-h-11 rounded-xl px-3 py-2 text-xs transition-all disabled:opacity-40 ${
+                                      task.urgent
+                                        ? 'bg-rose-400 text-slate-950 hover:bg-rose-300'
+                                        : 'bg-white/10 text-white hover:bg-white/15'
+                                    }`}
+                                  >
+                                    {t('form.urgent')}:{' '}
+                                    {task.urgent ? t('state.on') : t('state.off')}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label={format(t('task.toggleImportant'), {
+                                      title: task.title,
+                                    })}
+                                    aria-pressed={task.important}
+                                    onClick={() => {
+                                      void runTaskUpdate(task._id, { important: !task.important });
+                                    }}
+                                    disabled={
+                                      pendingTaskId === task._id ||
+                                      (task.lifecycleState ?? 'active') !== 'active'
+                                    }
+                                    className={`min-h-11 rounded-xl px-3 py-2 text-xs transition-all disabled:opacity-40 ${
+                                      task.important
+                                        ? 'bg-cyan-300 text-slate-950 hover:bg-cyan-200'
+                                        : 'bg-white/10 text-white hover:bg-white/15'
+                                    }`}
+                                  >
+                                    {t('form.important')}:{' '}
+                                    {task.important ? t('state.on') : t('state.off')}
+                                  </button>
+                                </div>
+                              ) : null}
+                              <TaskScheduleEditor
+                                task={task}
+                                onSave={onUpdateSchedule}
+                                readOnly={taskView === 'delegated'}
+                              />
+                              <TaskDelegationPanel
+                                task={task}
+                                view={taskView}
+                                onAssign={onUpdateDelegation}
+                                onStatus={onDelegationStatus}
+                              />
                             </article>
                           )}
                         </Draggable>

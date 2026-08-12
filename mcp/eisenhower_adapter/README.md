@@ -28,8 +28,18 @@ Configuration:
 | `MCP_PORT` | no | Streamable HTTP port, default `8000` |
 | `MCP_HTTP_PATH` | no | Streamable HTTP path, default `/mcp` |
 | `MCP_MAX_REQUEST_BODY_BYTES` | no | Request-body limit, default 1 MiB |
+| `EISENHOWER_AUDIT_DB_PATH` | yes | Durable SQLite audit path shared with or separately retained beside the AI ledger |
+| `EISENHOWER_AUDIT_HMAC_KEY_FILE` | yes | `0600`, minimum 32-byte audit key file; never a tool argument |
+| `EISENHOWER_RELEASE_SHA` | yes | Exact 40-character lowercase release SHA |
+| `EISENHOWER_AUDIT_TENANT_ID` | yes | Server-owned tenant identity to pseudonymize |
+| `EISENHOWER_AUDIT_ACTOR_ID` | yes | Server-owned MCP client identity to pseudonymize |
 
 Do not put secrets in the URL or tool arguments. Tenant/user/project scope comes only from verified bearer-token claims; the adapter never sends a client-controlled tenant header. The public API remains responsible for authorization, rate limiting, and audit events for sensitive reads.
+
+Every tool call writes content-free attempt/result events and fails closed before the upstream HTTP
+call when durable audit is unavailable. The local monorepo launch must make the canonical audit
+module importable, for example with `PYTHONPATH=backend-ai`; a standalone packaged deployment must
+package that same module rather than silently substituting a second audit format.
 
 The adapter uses the official MCP Python SDK v2 `MCPServer`, pinned to
 `mcp==2.0.0`. Before enabling a remote transport, apply the current [MCP

@@ -24,6 +24,7 @@
       }
     },
     "plugins": [
+      "expo-notifications",
       [
         "expo-image-picker",
         {

@@ -18,6 +18,7 @@ function taskFixture(overrides = {}) {
     description: '',
     urgent: false,
     important: false,
+    lifecycleState: 'active',
     revision: 4,
     ...overrides,
   };
@@ -52,7 +53,12 @@ function classificationFixture(overrides = {}) {
 function analysisFixture() {
   return {
     task: 'Task',
-    langchain_analysis: { quadrant: 0, reasoning: 'urgent', confidence: 0.9, method: 'local-analysis' },
+    langchain_analysis: {
+      quadrant: 0,
+      reasoning: 'urgent',
+      confidence: 0.9,
+      method: 'local-analysis',
+    },
     rag_classification: { quadrant: 0, quadrant_name: 'Do Now', confidence: 0.9 },
     comparison: { methods_agree: true, confidence_difference: 0 },
   };
@@ -124,6 +130,146 @@ test('sends an optional idempotency key for safe task creation retries', async (
 
   assert.equal(calls[0][1].headers['Idempotency-Key'], 'web-create-123');
   assert.equal(calls[1][1].headers['Idempotency-Key'], undefined);
+});
+
+test('filters task lists by lifecycle and sends conflict-safe lifecycle transitions', async () => {
+  const calls = [];
+  const api = createTaskApi('https://api.example.com', async (...args) => {
+    calls.push(args);
+    return jsonResponse(
+      args[0].includes('/lifecycle')
+        ? taskFixture({ lifecycleState: 'completed', revision: 5 })
+        : [taskFixture({ lifecycleState: 'trashed' })],
+      { headers: { get: () => null } }
+    );
+  });
+
+  const trashedTasks = await api.listTasks('trashed');
+  const completedTask = await api.transitionTaskLifecycle('task/1', 'complete', 4);
+
+  assert.equal(trashedTasks[0].lifecycleState, 'trashed');
+  assert.equal(completedTask.lifecycleState, 'completed');
+  assert.equal(calls[0][0], 'https://api.example.com/tasks?lifecycle=trashed');
+  assert.equal(calls[1][0], 'https://api.example.com/tasks/task%2F1/lifecycle');
+  assert.equal(calls[1][1].method, 'PUT');
+  assert.equal(calls[1][1].headers['If-Match'], '"4"');
+  assert.deepEqual(JSON.parse(calls[1][1].body), { action: 'complete' });
+});
+
+test('sets and clears task schedules with an optional revision', async () => {
+  const calls = [];
+  const api = createTaskApi('https://api.example.com', async (...args) => {
+    calls.push(args);
+    return jsonResponse(
+      taskFixture({
+        schedule:
+          args[1].body === '{"schedule":null}'
+            ? undefined
+            : {
+                dueAt: '2026-08-15T12:00:00.000Z',
+                timeZone: 'Europe/Warsaw',
+                remindAt: '2026-08-15T10:00:00.000Z',
+              },
+      })
+    );
+  });
+
+  const schedule = {
+    dueAt: '2026-08-15T12:00:00.000Z',
+    timeZone: 'Europe/Warsaw',
+    remindAt: '2026-08-15T10:00:00.000Z',
+  };
+  await api.updateTaskSchedule('task/1', schedule, 4);
+  await api.updateTaskSchedule('task/1', null);
+
+  assert.equal(calls[0][0], 'https://api.example.com/tasks/task%2F1/schedule');
+  assert.equal(calls[0][1].method, 'PUT');
+  assert.equal(calls[0][1].headers['If-Match'], '"4"');
+  assert.deepEqual(JSON.parse(calls[0][1].body), { schedule });
+  assert.deepEqual(JSON.parse(calls[1][1].body), { schedule: null });
+  assert.equal(calls[1][1].headers['If-Match'], undefined);
+});
+
+test('lists delegated work and sends revision-safe owner and assignee delegation commands', async () => {
+  const calls = [];
+  const delegation = {
+    assigneeUserId: 'user-b',
+    displayLabel: 'Pat',
+    handoffNote: 'Use the release runbook.',
+    status: 'offered',
+    offeredAt: '2026-08-12T12:00:00.000Z',
+    statusUpdatedAt: '2026-08-12T12:00:00.000Z',
+  };
+  const api = createTaskApi('https://api.example.com', async (...args) => {
+    calls.push(args);
+    return jsonResponse(
+      args[0].endsWith('/delegated') ? [taskFixture({ delegation })] : taskFixture({ delegation })
+    );
+  });
+
+  const delegated = await api.listDelegatedTasks();
+  await api.updateTaskDelegation(
+    'task/1',
+    { assigneeUserId: 'user-b', displayLabel: 'Pat', handoffNote: 'Use the release runbook.' },
+    4
+  );
+  await api.transitionTaskDelegation('task/1', 'accepted', 5);
+
+  assert.equal(delegated[0].delegation.status, 'offered');
+  assert.equal(calls[0][0], 'https://api.example.com/tasks/delegated');
+  assert.equal(calls[1][0], 'https://api.example.com/tasks/task%2F1/delegation');
+  assert.equal(calls[1][1].headers['If-Match'], '"4"');
+  assert.deepEqual(JSON.parse(calls[1][1].body), {
+    delegation: {
+      assigneeUserId: 'user-b',
+      displayLabel: 'Pat',
+      handoffNote: 'Use the release runbook.',
+    },
+  });
+  assert.equal(calls[2][0], 'https://api.example.com/tasks/task%2F1/delegation/status');
+  assert.equal(calls[2][1].headers['If-Match'], '"5"');
+  assert.deepEqual(JSON.parse(calls[2][1].body), { status: 'accepted' });
+});
+
+test('rejects malformed delegation state at the public API boundary', async () => {
+  const api = createTaskApi('https://api.example.com', async () =>
+    jsonResponse([
+      taskFixture({
+        delegation: {
+          assigneeUserId: 'user-b',
+          displayLabel: 'Pat',
+          handoffNote: '',
+          status: 'queued',
+          offeredAt: '2026-08-12T12:00:00.000Z',
+          statusUpdatedAt: '2026-08-12T12:00:00.000Z',
+        },
+      }),
+    ])
+  );
+
+  await assert.rejects(
+    api.listDelegatedTasks(),
+    (error) => error.code === 'invalid_response' && error.status === 200
+  );
+});
+
+test('rejects malformed task schedules at the public API boundary', async () => {
+  const api = createTaskApi('https://api.example.com', async () =>
+    jsonResponse(
+      taskFixture({
+        schedule: {
+          dueAt: '2026-08-15T12:00:00.000Z',
+          timeZone: 'Europe/Warsaw',
+          recurrence: 'daily',
+        },
+      })
+    )
+  );
+
+  await assert.rejects(
+    api.createTask({ title: 'Task', description: '', urgent: false, important: false }),
+    (error) => error.code === 'invalid_response' && error.status === 200
+  );
 });
 
 test('publishes one canonical quadrant contract', () => {
@@ -209,7 +355,9 @@ test('listTasks follows encoded pagination cursors with bearer auth and aggregat
   const calls = [];
   const responses = [
     jsonResponse([taskFixture({ _id: 'task-1' })], {
-      headers: { get: (name) => name.toLowerCase() === 'x-next-cursor' ? 'next cursor/+?' : null },
+      headers: {
+        get: (name) => (name.toLowerCase() === 'x-next-cursor' ? 'next cursor/+?' : null),
+      },
     }),
     jsonResponse([taskFixture({ _id: 'task-2' })], {
       headers: { get: () => null },
@@ -225,7 +373,10 @@ test('listTasks follows encoded pagination cursors with bearer auth and aggregat
 
   const tasks = await api.listTasks();
 
-  assert.deepEqual(tasks.map((task) => task._id), ['task-1', 'task-2']);
+  assert.deepEqual(
+    tasks.map((task) => task._id),
+    ['task-1', 'task-2']
+  );
   assert.equal(calls[0][0], 'https://api.example.com/tasks');
   assert.equal(calls[1][0], 'https://api.example.com/tasks?cursor=next%20cursor%2F%2B%3F');
   assert.equal(calls[0][1].headers.Authorization, 'Bearer access-token');
@@ -233,9 +384,10 @@ test('listTasks follows encoded pagination cursors with bearer auth and aggregat
 });
 
 test('listTasks rejects malformed later pages and repeated cursors', async () => {
-  const page = (payload, cursor) => jsonResponse(payload, {
-    headers: { get: () => cursor },
-  });
+  const page = (payload, cursor) =>
+    jsonResponse(payload, {
+      headers: { get: () => cursor },
+    });
 
   const malformedApi = createTaskApi('https://api.example.com', async () =>
     malformedApi.calls++ === 0
@@ -410,9 +562,7 @@ test('accepts representative payloads for every declared public response contrac
       filename: 'tasks.txt',
       image_info: { size_bytes: 4, shape: 'unknown' },
       ocr: { extracted_text: 'Task', raw_tasks_detected: 1, method: 'plain-text' },
-      classified_tasks: [
-        { text: 'Task', quadrant: 0, quadrant_name: 'Do Now', confidence: 0.9 },
-      ],
+      classified_tasks: [{ text: 'Task', quadrant: 0, quadrant_name: 'Do Now', confidence: 0.9 }],
       summary: {
         total_tasks: 1,
         quadrant_distribution: {
@@ -428,7 +578,12 @@ test('accepts representative payloads for every declared public response contrac
           task: 'Task',
           analyses: {
             rag: { quadrant: 0, quadrant_name: 'Do Now', confidence: 0.9 },
-            langchain: { quadrant: 0, reasoning: 'urgent', confidence: 0.9, method: 'local-analysis' },
+            langchain: {
+              quadrant: 0,
+              reasoning: 'urgent',
+              confidence: 0.9,
+              method: 'local-analysis',
+            },
           },
         },
       ],

@@ -41,7 +41,9 @@ test('explains access and rejects an incorrect code without losing focus', async
   await expect(page.getByText(/przechowywany tylko do zamknięcia tej karty/i)).toBeVisible();
 });
 
-test('shows a task-first, honest and accessible board at the current viewport', async ({ page }) => {
+test('shows a task-first, honest and accessible board at the current viewport', async ({
+  page,
+}) => {
   await enter(page);
   await expect(page.getByRole('heading', { level: 1, name: 'Eisenhower Matrix' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Dodaj zadanie' })).toBeVisible();
@@ -82,7 +84,9 @@ test('shows offline state, never claims current data, and recovers locally', asy
   await expect(page.getByRole('status')).toContainText('Dane są aktualne');
 });
 
-test('opens administration independently and explains the separate credential', async ({ page }) => {
+test('opens administration independently and explains the separate credential', async ({
+  page,
+}) => {
   await enter(page);
   await expect(page.getByLabel('Tytuł zadania')).toHaveValue('');
   await page.getByRole('button', { name: 'Administracja' }).click();
@@ -95,7 +99,9 @@ test('opens administration independently and explains the separate credential', 
   await expectAccessible(page);
 });
 
-test('creates, edits, classifies and permanently deletes a task with keyboard controls', async ({ page }) => {
+test('creates, edits, classifies and permanently deletes a task with keyboard controls', async ({
+  page,
+}) => {
   test.setTimeout(45_000);
   await enter(page);
 
@@ -135,9 +141,18 @@ test('creates, edits, classifies and permanently deletes a task with keyboard co
 
   const removableCard = taskCard(quadrant(page, 'Usuń'), editedTitle);
   await expect(removableCard).toBeVisible();
-  await removableCard.getByRole('button', { name: `Usuń ${editedTitle}`, exact: true }).focus();
+  await removableCard
+    .getByRole('button', { name: `Przenieś do kosza ${editedTitle}`, exact: true })
+    .focus();
   await page.keyboard.press('Enter');
-  await removableCard.getByRole('button', { name: 'Potwierdź trwałe usunięcie' }).focus();
+  await expect(page.getByRole('heading', { name: editedTitle, exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Kosz', exact: true }).click();
+  const trashedCard = taskCard(page, editedTitle);
+  await trashedCard
+    .getByRole('button', { name: `Usuń trwale ${editedTitle}`, exact: true })
+    .focus();
+  await page.keyboard.press('Enter');
+  await trashedCard.getByRole('button', { name: 'Potwierdź trwałe usunięcie' }).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: editedTitle, exact: true })).toHaveCount(0);
   await expectAccessible(page);

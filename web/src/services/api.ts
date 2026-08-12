@@ -10,7 +10,12 @@ import apiClient, {
   type OcrResultDto,
   type SimilarExampleResultDto,
   type TaskDto,
+  type TaskDelegationAssignmentDto,
+  type TaskDelegationStatus,
   type TaskInputDto,
+  type TaskLifecycleAction,
+  type TaskLifecycleFilter,
+  type TaskScheduleDto,
   type TrainingDataClearResultDto,
   type TrainingStatsDto,
 } from '@eisenhower/api-client';
@@ -66,10 +71,23 @@ export type AICapabilities = AICapabilitiesDto;
 export type AIProviderControl = AIProviderControlDto;
 export type OCRAcceptedTask = AcceptedOcrTaskDto;
 export type TrainingDataClearResult = TrainingDataClearResultDto;
-export type { AIProviderName, TaskDto, TaskInputDto };
+export type {
+  AIProviderName,
+  TaskDto,
+  TaskDelegationAssignmentDto,
+  TaskDelegationStatus,
+  TaskInputDto,
+  TaskLifecycleAction,
+  TaskLifecycleFilter,
+  TaskScheduleDto,
+};
 
-export async function getTasks(): Promise<TaskDto[]> {
-  return getTaskApi().listTasks();
+export async function getTasks(lifecycle: TaskLifecycleFilter = 'active'): Promise<TaskDto[]> {
+  return getTaskApi().listTasks(lifecycle);
+}
+
+export async function getDelegatedTasks(): Promise<TaskDto[]> {
+  return getTaskApi().listDelegatedTasks();
 }
 
 export async function createTask(task: TaskInputDto, idempotencyKey?: string): Promise<TaskDto> {
@@ -82,6 +100,38 @@ export async function updateTask(
   revision?: number
 ): Promise<TaskDto> {
   return getTaskApi().updateTask(id, patch, revision);
+}
+
+export async function transitionTaskLifecycle(
+  id: string,
+  action: TaskLifecycleAction,
+  revision?: number
+): Promise<TaskDto> {
+  return getTaskApi().transitionTaskLifecycle(id, action, revision);
+}
+
+export async function updateTaskSchedule(
+  id: string,
+  schedule: TaskScheduleDto | null,
+  revision?: number
+): Promise<TaskDto> {
+  return getTaskApi().updateTaskSchedule(id, schedule, revision);
+}
+
+export async function updateTaskDelegation(
+  id: string,
+  delegation: TaskDelegationAssignmentDto | null,
+  revision?: number
+): Promise<TaskDto> {
+  return getTaskApi().updateTaskDelegation(id, delegation, revision);
+}
+
+export async function transitionTaskDelegation(
+  id: string,
+  status: TaskDelegationStatus,
+  revision?: number
+): Promise<TaskDto> {
+  return getTaskApi().transitionTaskDelegation(id, status, revision);
 }
 
 export async function deleteTask(id: string, revision?: number): Promise<void> {

@@ -13,45 +13,6 @@ Define the supported Grounded RAG and camera workflows on both clients, includin
 
 ---
 
-## TASK-027: Add complete, archive, and trash lifecycle states
-**Priority:** P2 | **Tags:** product, lifecycle, tasks
-
-Define and implement reversible task completion, archive, trash, restore, and final deletion semantics without conflating the Delete quadrant with physical deletion.
-
-### Plan
-
-- Decide lifecycle transitions, retention, restore behavior, filtering, and synchronization conflict rules.
-- Implement the API, storage, web, and mobile contracts with migration and accessibility coverage.
-- Verify reversible and permanent operations independently.
-
----
-
-## TASK-026: Add Delegate assignee and status workflow
-**Priority:** P2 | **Tags:** product, delegate, tasks
-
-Define the assignee identity, handoff, status, authorization, and notification model for Delegate tasks before extending persistence or clients.
-
-### Plan
-
-- Decide supported assignee identities, permissions, delivery states, and single-tenant versus OIDC behavior.
-- Implement the approved API/storage/client workflow with audit and conflict coverage.
-- Verify cross-user authorization and notification behavior against the chosen product contract.
-
----
-
-## TASK-025: Add Schedule due dates and reminders
-**Priority:** P2 | **Tags:** product, schedule, reminders
-
-Define due-date, timezone, recurrence, delivery, permission, offline, and notification semantics for Schedule tasks before implementation.
-
-### Plan
-
-- Decide timezone and reminder ownership semantics plus supported delivery channels.
-- Implement persistence, API, web, mobile, and background delivery only after the product contract is approved.
-- Verify timezone boundaries, missed reminders, retries, permissions, and physical notification delivery.
-
----
-
 ## TASK-014: Run the retrieval-only shadow pilot
 **Priority:** P1 | **Tags:** rag, shadow, production, observability
 
@@ -66,6 +27,10 @@ Deploy retrieval-only to an allowlisted internal cohort with `RAG_GENERATION_ENA
 ### Resume gate
 
 Requires explicit deployment authorization, approved production origins/identity, real traffic, monitoring ownership, and privacy-safe sampling.
+
+### Conditional checkpoint
+
+The repository owner approves deployment, cohort, sampling, monitoring and alert-ownership decisions green without reservations through 2026-08-15 23:59:59 Europe/Warsaw. Real deployment, privacy-safe traffic, active monitoring and rollback remain technical acceptance evidence.
 
 ---
 

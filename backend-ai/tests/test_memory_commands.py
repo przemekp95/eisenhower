@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from app.audit import AuditAction, AuditOutcome
 from app.memory.application import MemoryApplication, MemoryConflict, MemoryPolicyError
 from app.memory.commands import CreateConfirmedMemory, DeleteMemory, RevokeConsent, SupersedeMemory
 from app.memory.models import ConsentReceipt, MemoryScope, MemoryStatus, intent_checksum
@@ -104,6 +105,50 @@ def create_command(memory_id="memory-1", content="Prefer Polish responses", **ov
 
 def app(*, repository=None, clock=None):
   return MemoryApplication(repository or Repository(), Verifier(), clock or Clock())
+
+
+class RecordingAuditSink:
+  def __init__(self, *, fail=False):
+    self.events = []
+    self.fail = fail
+
+  def record(self, event):
+    if self.fail:
+      raise RuntimeError("audit unavailable")
+    self.events.append(event)
+    return event
+
+
+def test_memory_change_is_audited_before_and_after_mutation_and_fails_closed():
+  audit = RecordingAuditSink()
+  service = MemoryApplication(
+    Repository(),
+    Verifier(),
+    Clock(),
+    audit_sink=audit,
+    audit_release_sha="a" * 40,
+  )
+
+  created = service.create(create_command())
+
+  assert created.memory_id == "memory-1"
+  assert [(event.action, event.outcome) for event in audit.events] == [
+    (AuditAction.MEMORY_CHANGE, AuditOutcome.ATTEMPT),
+    (AuditAction.MEMORY_CHANGE, AuditOutcome.SUCCESS),
+  ]
+  assert all("Prefer Polish responses" not in repr(event) for event in audit.events)
+
+  repository = Repository()
+  blocked = MemoryApplication(
+    repository,
+    Verifier(),
+    Clock(),
+    audit_sink=RecordingAuditSink(fail=True),
+    audit_release_sha="a" * 40,
+  )
+  with pytest.raises(RuntimeError, match="audit unavailable"):
+    blocked.create(create_command())
+  assert not repository.records
 
 
 def test_create_requires_actor_action_intent_and_unexpired_confirmation():

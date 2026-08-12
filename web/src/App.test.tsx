@@ -6,7 +6,18 @@ import * as api from './services/api';
 jest.mock('./services/api');
 jest.mock('./components/Matrix', () => ({
   __esModule: true,
-  default: ({ tasks, loading, onAddTask, onUpdateTask, onDeleteTask }: any) => (
+  default: ({
+    tasks,
+    loading,
+    onAddTask,
+    onUpdateTask,
+    onDeleteTask,
+    onLifecycleFilterChange,
+    onLifecycleTask,
+    onUpdateSchedule,
+    onUpdateDelegation,
+    onDelegationStatus,
+  }: any) => (
     <section aria-label="Test board">
       <p>{loading ? 'board-loading' : 'board-ready'}</p>
       {tasks.map((task: any) => (
@@ -33,6 +44,36 @@ jest.mock('./components/Matrix', () => ({
       </button>
       <button type="button" onClick={() => void onDeleteTask('1').catch(() => undefined)}>
         test-delete
+      </button>
+      <button type="button" onClick={() => onLifecycleFilterChange('all')}>
+        test-filter-all
+      </button>
+      <button
+        type="button"
+        onClick={() => void onLifecycleTask('1', 'complete').catch(() => undefined)}
+      >
+        test-lifecycle
+      </button>
+      <button type="button" onClick={() => void onUpdateSchedule('1', null).catch(() => undefined)}>
+        test-schedule
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          void onUpdateDelegation('1', {
+            assigneeUserId: 'user-b',
+            displayLabel: 'Pat',
+            handoffNote: '',
+          }).catch(() => undefined)
+        }
+      >
+        test-delegation
+      </button>
+      <button
+        type="button"
+        onClick={() => void onDelegationStatus('1', 'accepted').catch(() => undefined)}
+      >
+        test-delegation-status
       </button>
     </section>
   ),
@@ -77,6 +118,7 @@ describe('App', () => {
     localStorage.setItem('eisenhower-language', 'pl');
     setApiToken('runtime-only-code');
     mockedApi.getTasks.mockResolvedValue([initialTask]);
+    mockedApi.getDelegatedTasks.mockResolvedValue([]);
     mockedApi.createTask.mockResolvedValue({
       _id: '2',
       title: 'New task',
@@ -87,6 +129,42 @@ describe('App', () => {
     });
     mockedApi.updateTask.mockResolvedValue({ ...initialTask, title: 'Updated title', revision: 8 });
     mockedApi.deleteTask.mockResolvedValue(undefined);
+    mockedApi.transitionTaskLifecycle.mockResolvedValue({
+      ...initialTask,
+      lifecycleState: 'completed',
+      revision: 8,
+    });
+    mockedApi.updateTaskSchedule.mockResolvedValue({
+      ...initialTask,
+      lifecycleState: 'active',
+      revision: 8,
+    });
+    mockedApi.updateTaskDelegation.mockResolvedValue({
+      ...initialTask,
+      lifecycleState: 'active',
+      revision: 8,
+      delegation: {
+        assigneeUserId: 'user-b',
+        displayLabel: 'Pat',
+        handoffNote: '',
+        status: 'offered',
+        offeredAt: '2026-08-12T12:00:00.000Z',
+        statusUpdatedAt: '2026-08-12T12:00:00.000Z',
+      },
+    });
+    mockedApi.transitionTaskDelegation.mockResolvedValue({
+      ...initialTask,
+      lifecycleState: 'active',
+      revision: 8,
+      delegation: {
+        assigneeUserId: 'user-b',
+        displayLabel: 'Pat',
+        handoffNote: '',
+        status: 'accepted',
+        offeredAt: '2026-08-12T12:00:00.000Z',
+        statusUpdatedAt: '2026-08-12T12:05:00.000Z',
+      },
+    });
   });
 
   afterEach(() => {
@@ -198,6 +276,53 @@ describe('App', () => {
     await waitFor(() =>
       expect(mockedApi.updateTask).toHaveBeenCalledWith('1', { title: 'Updated title' }, undefined)
     );
+  });
+
+  it('runs lifecycle, schedule and delegation workflows from the compact board', async () => {
+    render(<App />);
+    await screen.findByText('Existing task');
+
+    fireEvent.click(screen.getByText('test-lifecycle'));
+    await waitFor(() => expect(screen.queryByText('Existing task')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByText('test-filter-all'));
+    await waitFor(() => expect(mockedApi.getTasks).toHaveBeenLastCalledWith('all'));
+    fireEvent.click(screen.getByText('test-lifecycle'));
+    await waitFor(() =>
+      expect(mockedApi.transitionTaskLifecycle).toHaveBeenCalledWith('1', 'complete', 7)
+    );
+    fireEvent.click(screen.getByText('test-schedule'));
+    await waitFor(() => expect(mockedApi.updateTaskSchedule).toHaveBeenCalledWith('1', null, 8));
+    fireEvent.click(screen.getByText('test-delegation'));
+    await waitFor(() => expect(mockedApi.updateTaskDelegation).toHaveBeenCalled());
+    fireEvent.click(screen.getByText('test-delegation-status'));
+    await waitFor(() => expect(mockedApi.transitionTaskDelegation).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delegowane do mnie' }));
+    await waitFor(() => expect(mockedApi.getDelegatedTasks).toHaveBeenCalled());
+  });
+
+  it('maps workflow failures to safe local errors', async () => {
+    mockedApi.transitionTaskLifecycle.mockRejectedValueOnce('offline');
+    mockedApi.updateTaskSchedule.mockRejectedValueOnce('offline');
+    mockedApi.updateTaskDelegation.mockRejectedValueOnce('offline');
+    mockedApi.transitionTaskDelegation.mockRejectedValueOnce('offline');
+    render(<App />);
+    await screen.findByText('Existing task');
+
+    for (const action of [
+      'test-lifecycle',
+      'test-schedule',
+      'test-delegation',
+      'test-delegation-status',
+    ]) {
+      fireEvent.click(screen.getByText(action));
+      await act(async () => Promise.resolve());
+    }
+
+    expect(mockedApi.transitionTaskLifecycle).toHaveBeenCalled();
+    expect(mockedApi.updateTaskSchedule).toHaveBeenCalled();
+    expect(mockedApi.updateTaskDelegation).toHaveBeenCalled();
+    expect(mockedApi.transitionTaskDelegation).toHaveBeenCalled();
   });
 
   it('returns understandable mutation failures while preserving server conflict semantics', async () => {

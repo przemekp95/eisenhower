@@ -9,7 +9,9 @@ import json
 import os
 from pathlib import Path
 from typing import Any, Callable, Iterator
+from uuid import uuid4
 
+from app.audit import AuditAction, AuditError, AuditEvent, AuditOutcome, SqliteAuditSink
 from app.artifacts.models import CandidateManifest
 
 
@@ -56,6 +58,8 @@ class PromotionController:
     *,
     candidate_verifier: Callable[[str], Any] | None = None,
     approval_verifier: Callable[[dict[str, Any]], bool] | None = None,
+    audit_sink: SqliteAuditSink | None = None,
+    release_sha: str | None = None,
   ):
     self.root = Path(root).resolve()
     self.history = self.root / "history"
@@ -63,6 +67,10 @@ class PromotionController:
     self.lock_path = self.root / ".lock"
     self.candidate_verifier = candidate_verifier
     self.approval_verifier = approval_verifier
+    self.audit_sink = audit_sink
+    self.release_sha = release_sha
+    if (audit_sink is None) != (release_sha is None):
+      raise ValueError("audit_sink and release_sha must be configured together")
     for directory in (self.root, self.history):
       directory.mkdir(parents=True, exist_ok=True, mode=0o700)
       directory.chmod(0o700)
@@ -96,12 +104,34 @@ class PromotionController:
     quality_report: dict[str, Any],
     approval: dict[str, Any],
     dry_run: bool,
+    request_id: str | None = None,
   ) -> dict[str, Any]:
+    audit_request_id = request_id or f"rollout-{uuid4().hex}"
+    actor_id = str(approval.get("approved_by", "")).strip() or "unverified-actor"
+    resource = f"{phase}:{target_mode}:{candidate_id}"
     with self._locked():
-      current = self.read()
-      self._validate_transition(
-        current, phase, target_mode, candidate_id, canary_percent, quality_report, approval
+      self._require_applied_audit(dry_run)
+      self._record_audit(
+        action=AuditAction.ROLLOUT_DECISION,
+        outcome=AuditOutcome.ATTEMPT,
+        actor_id=actor_id,
+        resource_id=f"{resource}:attempt",
+        request_id=audit_request_id,
       )
+      try:
+        current = self.read()
+        self._validate_transition(
+          current, phase, target_mode, candidate_id, canary_percent, quality_report, approval
+        )
+      except PromotionBlocked:
+        self._record_audit(
+          action=AuditAction.ROLLOUT_DECISION,
+          outcome=AuditOutcome.REJECTED,
+          actor_id=actor_id,
+          resource_id=f"{resource}:result",
+          request_id=audit_request_id,
+        )
+        raise
       phases = json.loads(json.dumps(current["phases"]))
       phases[phase] = {
         "mode": target_mode,
@@ -116,24 +146,92 @@ class PromotionController:
         "previous_revision": int(current["revision"]),
         "phases": phases,
       }
+      self._record_audit(
+        action=AuditAction.ROLLOUT_DECISION,
+        outcome=AuditOutcome.SUCCESS,
+        actor_id=actor_id,
+        resource_id=f"{resource}:result",
+        request_id=audit_request_id,
+      )
       if not dry_run:
         self._write_history(current)
         self._write(proposed)
       return proposed
 
-  def rollback(self) -> dict[str, Any]:
+  def rollback(
+    self,
+    *,
+    actor_id: str = "rollout-operator",
+    request_id: str | None = None,
+  ) -> dict[str, Any]:
+    audit_request_id = request_id or f"rollback-{uuid4().hex}"
     with self._locked():
-      current = self.read()
-      previous = current.get("previous_revision")
-      if previous is None:
-        raise PromotionBlocked("rollback history is empty")
-      history_path = self.history / f"{previous}.json"
       try:
-        restored = json.loads(history_path.read_text(encoding="utf-8"))
-      except (OSError, json.JSONDecodeError) as issue:
-        raise PromotionBlocked("rollback pointer is missing or invalid") from issue
+        self._require_applied_audit(False)
+        self._record_audit(
+          action=AuditAction.ROLLBACK_DECISION,
+          outcome=AuditOutcome.ATTEMPT,
+          actor_id=actor_id,
+          resource_id="rollback:attempt",
+          request_id=audit_request_id,
+        )
+        current = self.read()
+        previous = current.get("previous_revision")
+        if previous is None:
+          raise PromotionBlocked("rollback history is empty")
+        history_path = self.history / f"{previous}.json"
+        try:
+          restored = json.loads(history_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as issue:
+          raise PromotionBlocked("rollback pointer is missing or invalid") from issue
+      except PromotionBlocked:
+        self._record_audit(
+          action=AuditAction.ROLLBACK_DECISION,
+          outcome=AuditOutcome.REJECTED,
+          actor_id=actor_id,
+          resource_id="rollback:result",
+          request_id=audit_request_id,
+        )
+        raise
+      self._record_audit(
+        action=AuditAction.ROLLBACK_DECISION,
+        outcome=AuditOutcome.SUCCESS,
+        actor_id=actor_id,
+        resource_id=f"rollback:{previous}:result",
+        request_id=audit_request_id,
+      )
       self._write(restored)
       return restored
+
+  def _require_applied_audit(self, dry_run: bool) -> None:
+    if not dry_run and self.audit_sink is None:
+      raise PromotionBlocked("durable audit is required before an applied rollout decision")
+
+  def _record_audit(
+    self,
+    *,
+    action: AuditAction,
+    outcome: AuditOutcome,
+    actor_id: str,
+    resource_id: str,
+    request_id: str,
+  ) -> None:
+    if self.audit_sink is None:
+      return
+    try:
+      self.audit_sink.record(AuditEvent(
+        service="promotion-controller",
+        release_sha=str(self.release_sha),
+        event_id=f"promotion-{uuid4().hex}",
+        request_id=request_id,
+        action=action,
+        outcome=outcome,
+        tenant_id="deployment",
+        actor_id=actor_id,
+        resource_id=resource_id,
+      ))
+    except (AuditError, TypeError, ValueError) as issue:
+      raise PromotionBlocked("durable audit is unavailable") from issue
 
   def _validate_transition(
     self,

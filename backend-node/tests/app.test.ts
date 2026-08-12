@@ -2,6 +2,7 @@ import request from 'supertest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createApp } from '../src/app';
+import { AuditEvent, AuditSink } from '../src/audit';
 import { TaskModel } from '../src/models/task';
 
 describe('app middleware', () => {
@@ -22,17 +23,24 @@ describe('app middleware', () => {
     delete process.env.CORS_ALLOW_ORIGINS;
     delete process.env.MONGODB_URI;
     delete process.env.AI_SERVICE_URL;
+    delete process.env.AUDIT_LOG_PATH;
+    delete process.env.AUDIT_HMAC_KEY;
+    delete process.env.RELEASE_SHA;
   });
 
   it('rejects missing and invalid bearer credentials before protected routes', async () => {
+    const events: AuditEvent[] = [];
+    const auditSink: AuditSink = { record: (event) => { events.push(event); } };
     const app = createApp({
       aiHealthChecker: async () => 'healthy',
       databaseStatusResolver: () => 'connected',
+      auditSink,
     });
 
     const missing = await request(app).get('/tasks');
     const invalid = await request(app)
       .get('/tasks')
+      .set('X-Request-ID', 'request-from-client')
       .set('Authorization', 'Bearer wrong-token');
 
     expect(missing.status).toBe(401);
@@ -41,6 +49,65 @@ describe('app middleware', () => {
     expect(invalid.status).toBe(401);
     expect(invalid.headers['www-authenticate']).toBe('Bearer error="invalid_token"');
     expect(invalid.body).toEqual({ error: 'Invalid bearer token' });
+    expect(events.map(({ action, outcome }) => ({ action, outcome }))).toEqual([
+      { action: 'auth_rejection', outcome: 'rejected' },
+      { action: 'auth_rejection', outcome: 'rejected' },
+    ]);
+    expect(JSON.stringify(events)).not.toContain('wrong-token');
+    expect(events[1].requestId).toBe('request-from-client');
+    expect(invalid.headers['x-request-id']).toBe('request-from-client');
+  });
+
+  it('fails closed when a required auth rejection cannot be audited', async () => {
+    const auditSink: AuditSink = { record: () => { throw new Error('disk unavailable'); } };
+    const app = createApp({
+      aiHealthChecker: async () => 'healthy',
+      databaseStatusResolver: () => 'connected',
+      auditSink,
+    });
+
+    const response = await request(app).get('/tasks');
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({ error: 'Security audit is unavailable' });
+  });
+
+  it('fails closed when invalid-token or Origin rejection audit is unavailable', async () => {
+    process.env.CORS_ALLOW_ORIGINS = 'https://tasks.example.com';
+    const auditSink: AuditSink = { record: () => { throw new Error('disk unavailable'); } };
+    const app = createApp({
+      aiHealthChecker: async () => 'healthy',
+      databaseStatusResolver: () => 'connected',
+      auditSink,
+    });
+
+    const invalid = await request(app).get('/tasks').set('Authorization', 'Bearer wrong');
+    const origin = await request(app)
+      .post('/tasks')
+      .set('Authorization', 'Bearer test-api-token')
+      .set('Origin', 'https://attacker.example')
+      .send({ title: 'not persisted' });
+
+    expect(invalid.status).toBe(503);
+    expect(origin.status).toBe(503);
+  });
+
+  it('rejects incomplete production audit identity configuration', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.AUTH_MODE = 'static';
+    process.env.EISENHOWER_API_TOKEN = 'production-api-token-at-least-32-characters';
+    process.env.CORS_ALLOW_ORIGINS = 'https://tasks.example.com';
+    process.env.MONGODB_URI = 'mongodb://mongodb:27017/eisenhower';
+    process.env.AI_SERVICE_URL = 'http://ai-service:8000';
+
+    expect(() => createApp()).toThrow('AUDIT_LOG_PATH');
+
+    process.env.AUDIT_LOG_PATH = '/tmp/eisenhower-node-audit-production-test.ndjson';
+    process.env.AUDIT_HMAC_KEY = 'production-node-audit-key-at-least-32-bytes';
+    expect(() => createApp()).toThrow('exact RELEASE_SHA');
+
+    process.env.RELEASE_SHA = 'not-a-sha';
+    expect(() => createApp()).toThrow('exact RELEASE_SHA');
   });
 
   it('authenticates before returning an authorization denial for browser origin', async () => {
@@ -99,16 +166,20 @@ describe('app middleware', () => {
     expect(allowed.headers['access-control-allow-headers']).toContain('Authorization');
     expect(allowed.headers['access-control-allow-headers']).toContain('If-Match');
     expect(allowed.headers['access-control-allow-headers']).toContain('Idempotency-Key');
+    expect(allowed.headers['access-control-allow-headers']).toContain('X-Request-ID');
     expect(allowed.headers['access-control-expose-headers']).toContain('ETag');
     expect(allowed.headers['access-control-expose-headers']).toContain('X-Next-Cursor');
+    expect(allowed.headers['access-control-expose-headers']).toContain('X-Request-ID');
     expect(rejected.headers['access-control-allow-origin']).toBeUndefined();
   });
 
   it('rejects state-changing browser requests from untrusted origins', async () => {
+    const events: AuditEvent[] = [];
     process.env.CORS_ALLOW_ORIGINS = 'https://tasks.example.com';
     const app = createApp({
       aiHealthChecker: async () => 'healthy',
       databaseStatusResolver: () => 'connected',
+      auditSink: { record: (event) => { events.push(event); } },
     });
 
     const response = await request(app)
@@ -119,6 +190,7 @@ describe('app middleware', () => {
 
     expect(response.status).toBe(403);
     expect(response.body).toEqual({ error: 'Untrusted browser origin' });
+    expect(events.at(-1)?.action).toBe('acl_rejection');
   });
 
   it('rejects oversized JSON bodies', async () => {
@@ -185,6 +257,9 @@ describe('app middleware', () => {
     process.env.CORS_ALLOW_ORIGINS = 'https://tasks.example.com';
     process.env.MONGODB_URI = 'mongodb://mongodb:27017/eisenhower';
     process.env.AI_SERVICE_URL = 'http://ai-service:8000';
+    process.env.AUDIT_LOG_PATH = '/tmp/eisenhower-node-audit-production-test.ndjson';
+    process.env.AUDIT_HMAC_KEY = 'production-node-audit-key-at-least-32-bytes';
+    process.env.RELEASE_SHA = 'a'.repeat(40);
     jest.spyOn(TaskModel, 'find').mockReturnValue({
       sort: () => ({
         lean: async () => {
@@ -214,6 +289,9 @@ describe('app middleware', () => {
     process.env.CORS_ALLOW_ORIGINS = 'https://tasks.example.com';
     process.env.MONGODB_URI = 'mongodb://mongodb:27017/eisenhower';
     process.env.AI_SERVICE_URL = 'http://ai-service:8000';
+    process.env.AUDIT_LOG_PATH = '/tmp/eisenhower-node-audit-production-test.ndjson';
+    process.env.AUDIT_HMAC_KEY = 'production-node-audit-key-at-least-32-bytes';
+    process.env.RELEASE_SHA = 'a'.repeat(40);
 
     expect(() => createApp()).not.toThrow();
   });
@@ -225,6 +303,9 @@ describe('app middleware', () => {
     process.env.CORS_ALLOW_ORIGINS = 'https://tasks.example.com';
     process.env.MONGODB_URI = 'mongodb://mongodb:27017/eisenhower';
     process.env.AI_SERVICE_URL = 'http://ai-service:8000';
+    process.env.AUDIT_LOG_PATH = '/tmp/eisenhower-node-audit-production-test.ndjson';
+    process.env.AUDIT_HMAC_KEY = 'production-node-audit-key-at-least-32-bytes';
+    process.env.RELEASE_SHA = 'a'.repeat(40);
     const app = createApp({
       aiHealthChecker: async () => 'healthy',
       databaseStatusResolver: () => 'connected',

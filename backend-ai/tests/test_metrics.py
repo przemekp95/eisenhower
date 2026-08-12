@@ -13,6 +13,8 @@ def test_prometheus_metrics_are_aggregate_and_do_not_leak_tenant_or_prompt():
   metrics.observe_memory("reconcile", "success", duration_seconds=0.02)
   metrics.set_generation_status("open", failures=3)
   metrics.set_job_depth("queued", 3)
+  metrics.set_release_sha("a" * 40)
+  metrics.observe_audit("success")
 
   rendered = metrics.render()
 
@@ -31,6 +33,8 @@ def test_prometheus_metrics_are_aggregate_and_do_not_leak_tenant_or_prompt():
   assert 'eisenhower_generation_circuit_state{state="open"} 1' in rendered
   assert "eisenhower_generation_circuit_failures 3" in rendered
   assert 'eisenhower_job_queue_depth{status="queued"} 3' in rendered
+  assert f'eisenhower_release_info{{sha="{"a" * 40}"}} 1' in rendered
+  assert 'eisenhower_audit_events_total{outcome="success"} 1' in rendered
   assert "tenant" not in rendered
   assert "prompt" not in rendered
 

@@ -19,6 +19,9 @@ def parse_csv_list(value: str | None, default: tuple[str, ...]) -> tuple[str, ..
 class Settings:
   training_data_path: Path
   model_cache_dir: Path
+  audit_database_path: Path | None = None
+  audit_hmac_key: str = "development-audit-key-change-me-now"
+  release_sha: str = "0000000000000000000000000000000000000000"
   app_env: str = "development"
   auth_mode: str = "static"
   api_token: str = "test-api-token"
@@ -108,6 +111,8 @@ class Settings:
   )
 
   def __post_init__(self) -> None:
+    if self.audit_database_path is None:
+      object.__setattr__(self, "audit_database_path", self.model_cache_dir / "audit.sqlite3")
     retrieval_enabled = self.rag_enabled if self.rag_retrieval_enabled is None else self.rag_retrieval_enabled
     generation_enabled = self.rag_enabled if self.rag_generation_enabled is None else self.rag_generation_enabled
     object.__setattr__(self, "rag_retrieval_enabled", retrieval_enabled)
@@ -159,6 +164,10 @@ class Settings:
       character not in "0123456789abcdef" for character in self.local_model_revision
     ):
       raise ValueError("Local model revision must be a lowercase 40-character hexadecimal commit.")
+    if len(self.release_sha) != 40 or any(
+      character not in "0123456789abcdef" for character in self.release_sha
+    ):
+      raise ValueError("RELEASE_SHA must be a lowercase 40-character hexadecimal commit.")
     if self.chunking_version != "chars-1200-overlap-160-v1":
       raise ValueError("Unsupported CHUNKING_VERSION for the configured 1200/160 chunker.")
 
@@ -193,6 +202,20 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
       raise ValueError("Static production tokens must each contain at least 32 characters.")
     if api_token == admin_token:
       raise ValueError("EISENHOWER_ADMIN_TOKEN must differ from EISENHOWER_API_TOKEN.")
+  configured_audit_hmac_key = source.get("AUDIT_HMAC_KEY")
+  audit_hmac_key = configured_audit_hmac_key or "development-audit-key-change-me-now"
+  release_sha = source.get("RELEASE_SHA", "0" * 40)
+  if app_env == "production":
+    if (
+      configured_audit_hmac_key is None
+      or len(audit_hmac_key) < 32
+      or audit_hmac_key in {api_token, admin_token}
+    ):
+      raise ValueError("AUDIT_HMAC_KEY must be a separate secret of at least 32 characters in production.")
+    if release_sha == "0" * 40 or len(release_sha) != 40 or any(
+      character not in "0123456789abcdef" for character in release_sha
+    ):
+      raise ValueError("RELEASE_SHA must identify the exact lowercase 40-character production commit.")
   internal_api_token = source.get("EISENHOWER_INTERNAL_API_TOKEN") or None
   internal_allowed_tenants = parse_csv_list(source.get("INTERNAL_ALLOWED_TENANTS"), ())
   if app_env == "production" and internal_api_token and not internal_allowed_tenants:
@@ -207,6 +230,13 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     model_cache_dir=Path(
       source.get("MODEL_CACHE_DIR", str(base_dir / "data" / "runtime"))
     ),
+    audit_database_path=(
+      Path(source["AUDIT_DATABASE_PATH"])
+      if source.get("AUDIT_DATABASE_PATH")
+      else None
+    ),
+    audit_hmac_key=audit_hmac_key,
+    release_sha=release_sha,
     app_env=app_env,
     auth_mode=auth_mode,
     api_token=api_token,

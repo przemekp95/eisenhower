@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from hashlib import sha256
+
+from app.audit import AuditAction, AuditEvent, AuditOutcome
+
 from .commands import CreateConfirmedMemory, DeleteMemory, RevokeConsent, SupersedeMemory
 from .models import (
   ConsentReceipt,
@@ -32,12 +36,44 @@ class MemoryApplication:
     *,
     candidate_index: MemoryCandidateIndex | None = None,
     policy: MemoryPolicy | None = None,
+    audit_sink=None,
+    audit_release_sha: str = "0" * 40,
   ):
     self.repository = repository
     self.confirmation_verifier = confirmation_verifier
     self.clock = clock
     self.candidate_index = candidate_index
     self.policy = policy
+    self.audit_sink = audit_sink
+    self.audit_release_sha = audit_release_sha
+
+  def _audit(self, command, action: AuditAction, outcome: AuditOutcome) -> None:
+    if self.audit_sink is None:
+      return
+    identity = f"{command.idempotency_key}:{action.value}:{outcome.value}"
+    self.audit_sink.record(
+      AuditEvent(
+        service="backend-ai",
+        release_sha=self.audit_release_sha,
+        event_id=sha256(identity.encode()).hexdigest()[:32],
+        request_id=sha256(command.idempotency_key.encode()).hexdigest()[:32],
+        action=action,
+        outcome=outcome,
+        tenant_id=command.scope.tenant_id,
+        actor_id=command.scope.user_id,
+        resource_id=command.memory_id,
+      )
+    )
+
+  def _audited_change(self, command, action: AuditAction, operation):
+    self._audit(command, action, AuditOutcome.ATTEMPT)
+    try:
+      result = operation()
+    except Exception:
+      self._audit(command, action, AuditOutcome.ERROR)
+      raise
+    self._audit(command, action, AuditOutcome.SUCCESS)
+    return result
 
   def _confirm(
     self,
@@ -66,6 +102,13 @@ class MemoryApplication:
       self.policy.validate_confirmation_window(receipt.confirmed_at, receipt.expires_at)
 
   def create(self, command: CreateConfirmedMemory) -> MemoryRecord:
+    return self._audited_change(
+      command,
+      AuditAction.MEMORY_CHANGE,
+      lambda: self._create(command),
+    )
+
+  def _create(self, command: CreateConfirmedMemory) -> MemoryRecord:
     self._confirm(
       command.receipt,
       action="create",
@@ -137,6 +180,13 @@ class MemoryApplication:
     return all(checks)
 
   def supersede(self, command: SupersedeMemory) -> MemoryRecord:
+    return self._audited_change(
+      command,
+      AuditAction.MEMORY_CHANGE,
+      lambda: self._supersede(command),
+    )
+
+  def _supersede(self, command: SupersedeMemory) -> MemoryRecord:
     self._confirm(
       command.receipt,
       action="supersede",
@@ -175,10 +225,18 @@ class MemoryApplication:
     return self.repository.supersede(previous, replacement, command.idempotency_key)
 
   def revoke(self, command: RevokeConsent) -> MemoryRecord:
-    return self._transition(command, action="revoke", status=MemoryStatus.CONSENT_REVOKED)
+    return self._audited_change(
+      command,
+      AuditAction.CONSENT_CHANGE,
+      lambda: self._transition(command, action="revoke", status=MemoryStatus.CONSENT_REVOKED),
+    )
 
   def delete(self, command: DeleteMemory) -> MemoryRecord:
-    return self._transition(command, action="delete", status=MemoryStatus.DELETED)
+    return self._audited_change(
+      command,
+      AuditAction.MEMORY_CHANGE,
+      lambda: self._transition(command, action="delete", status=MemoryStatus.DELETED),
+    )
 
   def _transition(self, command, *, action: MemoryAction, status: MemoryStatus) -> MemoryRecord:
     self._confirm(command.receipt, action=action, scope=command.scope, memory_id=command.memory_id, content="")
