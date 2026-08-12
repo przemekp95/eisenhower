@@ -15,7 +15,9 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app.ci_impact.artifacts import CiImpactRegistry
 from app.ci_impact.classifier import MultilabelLogisticModel
-from app.ci_impact.deterministic import resolve_authoritative_plan, verify_deterministic_plan
+from app.ci_impact.deterministic import (
+  resolve_actions_context, resolve_authoritative_plan, verify_deterministic_plan,
+)
 from app.ci_impact.evaluation import EvaluationReport
 from app.ci_impact.features import FeatureExtractor, LocalDependencyGraph
 from app.ci_impact.git_changes import changes_between, planner_changes_between
@@ -36,9 +38,9 @@ def main() -> int:
   parser.add_argument("--promotion-policy", type=Path, required=True)
   parser.add_argument("--target-adapter", type=Path, required=True)
   parser.add_argument("--deterministic-plan", type=Path)
-  parser.add_argument("--event-name", default=os.environ.get("GITHUB_EVENT_NAME"))
-  parser.add_argument("--ref-name", default=os.environ.get("GITHUB_REF_NAME"))
-  parser.add_argument("--base-ref-name", default=os.environ.get("GITHUB_BASE_REF"))
+  parser.add_argument("--event-name")
+  parser.add_argument("--ref-name")
+  parser.add_argument("--base-ref-name")
   parser.add_argument("--registry", type=Path)
   parser.add_argument("--candidate-id")
   parser.add_argument("--expected-model-checksum")
@@ -46,6 +48,7 @@ def main() -> int:
   parser.add_argument("--drift-detected", action="store_true")
   parser.add_argument("--output", type=Path, required=True)
   args = parser.parse_args()
+  args.repo_root = args.repo_root.resolve()
   config = None
   try:
     config = JobConfig.model_validate_json(args.jobs_config.read_text(encoding="utf-8"))
@@ -60,16 +63,22 @@ def main() -> int:
     deterministic_plan_verified = False
     if args.deterministic_plan:
       try:
-        if not args.event_name or not args.ref_name or not args.base_ref_name:
-          raise ValueError("trusted deterministic event/ref context is missing")
+        event_name, ref_name, base_ref_name, context_trusted = resolve_actions_context(
+          os.environ,
+          requested_event_name=args.event_name,
+          requested_ref_name=args.ref_name,
+          requested_base_ref_name=args.base_ref_name,
+        )
+        if not context_trusted:
+          blocking_reasons.append("github_actions_context_untrusted")
         deterministic_plan = json.loads(args.deterministic_plan.read_text(encoding="utf-8"))
         authoritative_plan = resolve_authoritative_plan(
           args.repo_root,
           base_sha=changes.base_sha,
           head_sha=changes.head_sha,
-          event_name=args.event_name,
-          ref_name=args.ref_name,
-          base_ref_name=args.base_ref_name,
+          event_name=event_name,
+          ref_name=ref_name,
+          base_ref_name=base_ref_name,
         )
         deterministic_jobs, deterministic_full_ci = verify_deterministic_plan(
           deterministic_plan,
@@ -78,14 +87,14 @@ def main() -> int:
           expected_changes=planner_changes_between(
             args.repo_root, changes.base_sha, changes.head_sha
           ),
-          expected_event_name=args.event_name,
-          expected_ref_name=args.ref_name,
-          expected_base_ref_name=args.base_ref_name,
+          expected_event_name=event_name,
+          expected_ref_name=ref_name,
+          expected_base_ref_name=base_ref_name,
           authoritative_plan=authoritative_plan,
           adapter=target_adapter,
           config=config,
         )
-        deterministic_plan_verified = True
+        deterministic_plan_verified = context_trusted
         if deterministic_full_ci:
           blocking_reasons.append("deterministic_plan_full_ci")
       except (OSError, TypeError, ValueError):

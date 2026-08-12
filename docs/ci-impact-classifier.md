@@ -136,6 +136,12 @@ PYTHONPATH=. python scripts/run_ci_impact_shadow.py \
 ```
 
 This currently reports `model_unavailable`, `abstain=true`, `full_ci=true`, and all eleven CI jobs.
+Because this is a local invocation, its explicit event/ref arguments are untrusted and it also reports
+`github_actions_context_untrusted`; local evaluation can never become selective, even if a candidate
+is later available. In GitHub Actions, a selective result requires `GITHUB_ACTIONS=true` and the
+immutable `GITHUB_EVENT_NAME`, `GITHUB_REF_NAME` and `GITHUB_BASE_REF` context. Optional CLI values
+must match that context exactly and cannot override it, so a schedule or protected master/release run
+cannot be presented as a feature PR.
 The command resolves the two revisions, verifies ancestry and derives the changed paths, statuses,
 renames, binary state and diffstat directly from Git. With a checksum-bound candidate, add `--registry`, `--candidate-id` and optionally
 `--expected-model-checksum`. The registry loader re-verifies the candidate, model and evaluation
@@ -149,6 +155,9 @@ process and requires exact equality of `fullCi`, targets, reasons and all input 
 stale, foreign, narrowed or mismatched plans force full CI. If revision/diff evaluation fails after the canonical job config is loaded, the command still exits
 successfully with a machine-readable `shadow_evaluation_error` plan containing every job; an
 unreadable job config exits nonzero and therefore authorizes no skip decision.
+The resolver subprocess receives a minimal locale/PATH environment and never inherits Actions
+command-file variables such as `GITHUB_OUTPUT` or `GITHUB_STEP_SUMMARY`, so recomputation remains
+read-only and cannot contaminate downstream step outputs.
 
 Shadow mode always leaves full CI authoritative. A later, separately reviewed workflow task may
 pass the existing `ci-impact-plan/v1` JSON with `--deterministic-plan`. The separate
@@ -164,6 +173,17 @@ Every exception, timeout, invalid schema, checksum mismatch, job-universe/workfl
 confidence, out-of-domain path, unknown job, manifest/lockfile/workflow change or parser limit means
 abstain/full CI. Integration, threshold approval, workflow changes and promotion remain outside this
 PR.
+
+Before any future approval verifier exists, collection and lineage must also be strengthened. The
+current evidence does not prove an immutable repository ID plus the exact `ci.yml` workflow run and
+event, while initial queries and `gh --paginate --slurp` do not enforce an actual cumulative page
+budget. Dataset and registry bytes are read before semantic validation, and the collector receipt is
+not candidate lineage (only the dataset checksum is). Eligibility therefore requires a separately
+authenticated receipt covering immutable repository identity, exact workflow run/event, collector
+identity and dataset checksum, bound to candidate lineage and verified before bounded payload use.
+It must accompany an approved-reviewer allowlist and authenticated dual-review/adjudication
+attestation. Until then no candidate is eligible; recomputable hashes, `O_EXCL`, schema-valid
+reviewer IDs and receipt fields are integrity evidence, not writer authentication.
 
 ## Verification and methodology boundaries
 

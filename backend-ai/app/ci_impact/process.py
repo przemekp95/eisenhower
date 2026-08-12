@@ -5,6 +5,7 @@ from pathlib import Path
 import selectors
 import subprocess
 import time
+from typing import Mapping
 
 
 class BoundedProcessError(ValueError):
@@ -18,10 +19,12 @@ def run_bounded(
   timeout_seconds: float = 120,
   maximum_stdout_bytes: int = 64 * 1024 * 1024,
   maximum_stderr_bytes: int = 1024 * 1024,
+  env: Mapping[str, str] | None = None,
 ) -> bytes:
   """Run a trusted argv without shell expansion while bounding time and captured bytes."""
   process = subprocess.Popen(  # pylint: disable=consider-using-with
-    command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    command, cwd=cwd, env=None if env is None else dict(env),
+    stdout=subprocess.PIPE, stderr=subprocess.PIPE
   )
   selector = selectors.DefaultSelector()
   stdout = bytearray()

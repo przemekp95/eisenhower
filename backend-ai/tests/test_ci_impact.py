@@ -12,7 +12,9 @@ import pytest
 from app.ci_impact.artifacts import CiImpactCandidateManifest, CiImpactRegistry, CiImpactRuntimeLineage
 from app.ci_impact.baseline import RuleBaseline
 from app.ci_impact.classifier import MultilabelLogisticModel, TrainingExample
-from app.ci_impact.deterministic import verify_deterministic_plan
+from app.ci_impact.deterministic import (
+  resolve_actions_context, resolve_authoritative_plan, verify_deterministic_plan,
+)
 from app.ci_impact.evaluation import EvaluationCase, evaluate, temporal_holdout
 from app.ci_impact.features import FeatureExtractor, LocalDependencyGraph
 from app.ci_impact.git_changes import changes_between
@@ -631,6 +633,71 @@ def test_deterministic_plan_is_bound_to_sha_changes_and_digest():
         expected_changes=changes, expected_event_name="pull_request", expected_ref_name="feature",
         expected_base_ref_name="dev", authoritative_plan=payload, adapter=adapter, config=config,
       )
+
+
+def test_actions_context_rejects_schedule_master_spoofing():
+  environment = {
+    "GITHUB_ACTIONS": "true",
+    "GITHUB_EVENT_NAME": "schedule",
+    "GITHUB_REF_NAME": "master",
+    "GITHUB_BASE_REF": "",
+  }
+  with pytest.raises(ValueError, match="differs from trusted"):
+    resolve_actions_context(
+      environment,
+      requested_event_name="pull_request",
+      requested_ref_name="feature/spoofed",
+      requested_base_ref_name="dev",
+    )
+
+
+def test_local_explicit_context_is_untrusted_and_forces_full_ci():
+  event_name, ref_name, base_ref_name, trusted = resolve_actions_context(
+    {}, requested_event_name="pull_request", requested_ref_name="feature/local",
+    requested_base_ref_name="dev",
+  )
+  assert (event_name, ref_name, base_ref_name, trusted) == (
+    "pull_request", "feature/local", "dev", False,
+  )
+  changes = ChangeSet(
+    base_sha="a" * 40, head_sha="b" * 40,
+    files=(ChangeFile(path="backend-ai/app/service.py", status="modified"),),
+  )
+  features = FeatureExtractor(config=job_config()).extract(changes)
+  plan = ShadowPlanner(config=job_config()).plan(
+    changes=changes, features=features, model=fixed_model(tuple(features.values)),
+    deterministic_jobs=("security-lint",), deterministic_plan_verified=trusted,
+    blocking_reasons=("github_actions_context_untrusted",),
+  )
+  assert plan.full_ci is True
+  assert "github_actions_context_untrusted" in plan.reasons
+
+
+def test_authoritative_resolver_does_not_mutate_actions_command_files(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+  repo_root = Path(__file__).resolve().parents[2]
+  base_sha = subprocess.check_output(
+    ("git", "rev-parse", "HEAD^"), cwd=repo_root, text=True
+  ).strip()
+  head_sha = subprocess.check_output(
+    ("git", "rev-parse", "HEAD"), cwd=repo_root, text=True
+  ).strip()
+  output_file = tmp_path / "github-output"
+  summary_file = tmp_path / "github-summary"
+  output_file.write_bytes(b"existing-output\n")
+  summary_file.write_bytes(b"existing-summary\n")
+  monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
+  monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
+
+  plan = resolve_authoritative_plan(
+    repo_root, base_sha=base_sha, head_sha=head_sha,
+    event_name="pull_request", ref_name="feature/test", base_ref_name="dev",
+  )
+
+  assert plan["headSha"] == head_sha
+  assert output_file.read_bytes() == b"existing-output\n"
+  assert summary_file.read_bytes() == b"existing-summary\n"
 
 
 @pytest.mark.parametrize(

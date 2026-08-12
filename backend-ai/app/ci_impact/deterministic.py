@@ -2,11 +2,48 @@ from __future__ import annotations
 
 from hashlib import sha256
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Mapping
 
 from app.ci_impact.models import DeterministicTargetAdapter, JobConfig
 from app.ci_impact.process import run_bounded
+
+
+def resolve_actions_context(
+  environment: Mapping[str, str],
+  *,
+  requested_event_name: str | None,
+  requested_ref_name: str | None,
+  requested_base_ref_name: str | None,
+) -> tuple[str, str, str, bool]:
+  """Bind selective evaluation to immutable Actions context, or mark local input untrusted."""
+  actions_trusted = environment.get("GITHUB_ACTIONS") == "true"
+  if not actions_trusted:
+    if not requested_event_name or not requested_ref_name or requested_base_ref_name is None:
+      raise ValueError("explicit local event/ref/base-ref context is missing")
+    return requested_event_name, requested_ref_name, requested_base_ref_name, False
+
+  event_name = environment.get("GITHUB_EVENT_NAME")
+  ref_name = environment.get("GITHUB_REF_NAME")
+  base_ref_name = environment.get("GITHUB_BASE_REF", "")
+  if not event_name or not ref_name:
+    raise ValueError("trusted GitHub Actions event/ref context is missing")
+  requested = (requested_event_name, requested_ref_name, requested_base_ref_name)
+  expected = (event_name, ref_name, base_ref_name)
+  if any(value is not None and value != expected[index] for index, value in enumerate(requested)):
+    raise ValueError("caller context differs from trusted GitHub Actions context")
+  return event_name, ref_name, base_ref_name, True
+
+
+def _canonical_resolver_environment(environment: Mapping[str, str]) -> dict[str, str]:
+  """Keep only process-discovery/locale state; never inherit Actions command files."""
+  result = {"PATH": environment.get("PATH", os.defpath)}
+  for name in ("LANG", "LC_ALL", "LC_CTYPE"):
+    if value := environment.get(name):
+      result[name] = value
+  return result
 
 
 def resolve_authoritative_plan(
@@ -32,6 +69,7 @@ def resolve_authoritative_plan(
       cwd=repo_root,
       timeout_seconds=30,
       maximum_stdout_bytes=2 * 1024 * 1024,
+      env=_canonical_resolver_environment(os.environ),
     )
     stdout_plan = json.loads(stdout)
     file_plan = json.loads(output.read_text(encoding="utf-8"))
