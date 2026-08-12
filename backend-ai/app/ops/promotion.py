@@ -140,6 +140,8 @@ class PromotionController:
         "quality_report_checksum": quality_report["report_checksum"],
         "approval_checksum": self._checksum(approval),
       }
+      if phase == "response" and target_mode in {"canary", "enabled"}:
+        phases[phase]["approval_valid_until"] = approval["valid_until"]
       proposed = {
         **current,
         "revision": int(current["revision"]) + 1,
@@ -310,6 +312,13 @@ class PromotionController:
     approved_at_utc = approved_at.astimezone(UTC)
     if approved_at_utc > now + timedelta(minutes=5):
       raise PromotionBlocked("approval timestamp is in the future")
+    if phase == "response" and target_mode in {"canary", "enabled"}:
+      try:
+        valid_until = datetime.fromisoformat(str(approval["valid_until"]))
+      except (KeyError, ValueError) as issue:
+        raise PromotionBlocked("response approval window is invalid") from issue
+      if valid_until.tzinfo is None or valid_until.astimezone(UTC) <= now:
+        raise PromotionBlocked("response approval window is invalid or expired")
     if self.approval_verifier is None:
       raise PromotionBlocked("trusted human approval verifier is not configured")
     try:

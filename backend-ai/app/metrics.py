@@ -26,6 +26,14 @@ RAG_REASONS = {
   "user_not_enabled",
   "vllm_timeout",
 }
+RESPONSE_CANARY_OUTCOMES = {
+  "selected",
+  "not_selected",
+  "promotion_disabled",
+  "promotion_unavailable",
+  "promotion_invalid",
+  "approval_expired",
+}
 RETRIEVAL_STAGES = {"shadow", "search", "online", "evaluation"}
 VALIDATION_KINDS = {"schema", "citations", "grounding", "information_delta"}
 VALIDATION_OUTCOMES = {"accepted", "rejected"}
@@ -66,6 +74,7 @@ class MetricsRegistry:
     self._http_duration_count = Counter()
     self._http_duration_sum = Counter()
     self._rag = Counter()
+    self._response_canary = Counter()
     self._rag_retrieval = Counter()
     self._rag_retrieval_duration_count = Counter()
     self._rag_retrieval_duration_sum = Counter()
@@ -118,6 +127,10 @@ class MetricsRegistry:
     bounded_reason = _bounded(reason or "none", RAG_REASONS)
     with self._lock:
       self._rag[(bounded_mode, bounded_reason)] += 1
+
+  def observe_response_canary(self, outcome: str) -> None:
+    with self._lock:
+      self._response_canary[_bounded(outcome, RESPONSE_CANARY_OUTCOMES)] += 1
 
   def observe_rag_retrieval(
     self,
@@ -251,6 +264,14 @@ class MetricsRegistry:
       for (mode, reason), value in sorted(self._rag.items()):
         lines.append(
           f"eisenhower_rag_results_total{{{_labels(mode=mode, reason=reason)}}} {value}"
+        )
+      lines.extend([
+        "# HELP eisenhower_response_canary_decisions_total Aggregate runtime canary decisions.",
+        "# TYPE eisenhower_response_canary_decisions_total counter",
+      ])
+      for outcome, value in sorted(self._response_canary.items()):
+        lines.append(
+          f"eisenhower_response_canary_decisions_total{{{_labels(outcome=outcome)}}} {value}"
         )
       lines.extend([
         "# HELP eisenhower_rag_retrieval_total Aggregate retrieval outcomes by bounded stage.",

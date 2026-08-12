@@ -67,6 +67,8 @@ Deploy the qualified private inference matrix behind FastAPI, discard validated 
 - Rehearse answerable, unsupported, injected, provider-failure and cross-scope cases without tuning on the opened holdout.
 - Freeze a separate balanced knowledge-answer holdout and immutable policy before its first live execution; score answerability, required facts, citations, schema and injection resistance without model-as-judge labels.
 - Run that sealed packet once through the physical AMD/Qwen path, publish checksum-bound aggregate evidence and connect only the automated result to the response quality gate.
+- Bind the response endpoint to the atomic promotion pointer, stable per-user percentage assignment and an expiring owner approval receipt; fail closed on stale, malformed or mismatched state.
+- Apply the independently granted owner approval only through 2026-08-15, keep the existing tenant/user allowlists and rehearse automatic expiry plus rollback before local enablement.
 - Keep user-visible responses disabled unless every zero-tolerance gate and explicit tenant/user allowlist is satisfied.
 
 ### Progress

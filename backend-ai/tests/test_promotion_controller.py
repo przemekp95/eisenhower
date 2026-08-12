@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 import json
 from types import SimpleNamespace
@@ -79,8 +79,8 @@ def _knowledge_answer_report(candidate_id: str) -> dict:
   return {**payload, "report_checksum": sha256(encoded).hexdigest()}
 
 
-def _approval(phase: str, candidate_id: str) -> dict:
-  return {
+def _approval(phase: str, candidate_id: str, *, valid_until: datetime | None = None) -> dict:
+  approval = {
     "phase": phase,
     "candidate_id": candidate_id,
     "approved_by": "owner-out-of-band",
@@ -88,6 +88,9 @@ def _approval(phase: str, candidate_id: str) -> dict:
     "approval_source": "owner_out_of_band",
     "decision": "approved",
   }
+  if valid_until is not None:
+    approval["valid_until"] = valid_until.isoformat()
+  return approval
 
 
 def _candidate(candidate_id: str, workflow: str = "ragops") -> CandidateManifest:
@@ -261,9 +264,37 @@ def test_response_canary_requires_checksum_bound_knowledge_answer_holdout(tmp_pa
   planned = controller.transition(
     phase="response", target_mode="canary", candidate_id="answer-v1", canary_percent=5,
     quality_report=_knowledge_answer_report("answer-v1"),
-    approval=_approval("response", "answer-v1"), dry_run=True,
+    approval=_approval(
+      "response", "answer-v1", valid_until=datetime.now(UTC) + timedelta(days=3)
+    ), dry_run=True,
   )
   assert planned["phases"]["response"]["mode"] == "canary"
+  assert planned["phases"]["response"]["approval_valid_until"]
+
+
+def test_response_canary_rejects_missing_or_expired_approval_window(tmp_path):
+  controller = PromotionController(
+    tmp_path / "promotion",
+    candidate_verifier=lambda candidate_id: _candidate(candidate_id, "llmops"),
+    approval_verifier=_approval_verifier,
+  )
+  current = controller.read()
+  current["phases"]["retrieval"]["mode"] = "shadow"
+  current["phases"]["generation"]["mode"] = "shadow"
+  current["phases"]["response"] = {
+    "mode": "shadow", "candidate_id": "answer-v1", "canary_percent": 0
+  }
+  controller._write(current)
+
+  for approval in (
+    _approval("response", "answer-v1"),
+    _approval("response", "answer-v1", valid_until=datetime.now(UTC) - timedelta(seconds=1)),
+  ):
+    with pytest.raises(PromotionBlocked, match="approval window"):
+      controller.transition(
+        phase="response", target_mode="canary", candidate_id="answer-v1", canary_percent=5,
+        quality_report=_knowledge_answer_report("answer-v1"), approval=approval, dry_run=True,
+      )
 
 
 @pytest.mark.parametrize(

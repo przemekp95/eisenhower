@@ -122,6 +122,8 @@ services:
       - RAG_RETRIEVAL_STRATEGY=${RAG_RETRIEVAL_STRATEGY:-hybrid-bge-v1}
       - RAG_GENERATION_ENABLED=${RAG_GENERATION_ENABLED:-false}
       - RAG_RESPONSE_ENABLED=${RAG_RESPONSE_ENABLED:-false}
+      - RAG_RESPONSE_PROMOTION_POINTER_PATH=/app/promotion/current.json
+      - RAG_RESPONSE_CANDIDATE_ID=${RAG_RESPONSE_CANDIDATE_ID:-}
       - RAG_ALLOWED_TENANTS=${RAG_ALLOWED_TENANTS:-}
       - RAG_RESPONSE_ALLOWED_USERS=${RAG_RESPONSE_ALLOWED_USERS:-}
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
@@ -141,6 +143,7 @@ services:
       - model_cache:/home/app/.cache/huggingface
       - audit_data:/app/audit
       - ${AI_EVALUATION_FILE:?approved evaluation file is required}:/app/evaluation/production.json:ro
+      - ${AI_PROMOTION_ROOT:-./.runtime/promotion}:/app/promotion:ro
 
   rag-worker:
     <<: *common
