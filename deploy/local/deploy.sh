@@ -168,7 +168,8 @@ case "$action" in
     verify_image "$AI_ROCM_IMAGE"
     render
     record_rollback
-    compose up --no-deps -d --wait inference reranker knowledge-service access-gateway
+    compose up --no-deps -d --wait inference reranker
+    compose up --no-deps -d --wait knowledge-service access-gateway
     smoke_response
     ;;
   smoke)
