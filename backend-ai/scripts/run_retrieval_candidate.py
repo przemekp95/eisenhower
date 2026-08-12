@@ -5,6 +5,7 @@ from hashlib import sha256
 from importlib.metadata import version
 import json
 from pathlib import Path
+import subprocess
 from time import perf_counter
 from uuid import uuid4
 
@@ -57,6 +58,8 @@ def run(
   candidate_path: Path,
   snapshot_output: Path | None = None,
   repository_root: Path | None = None,
+  mongo_uri: str = "mongodb://127.0.0.1:27017/?directConnection=true",
+  qdrant_url: str = "http://127.0.0.1:6333",
 ) -> dict:
   repository_root = (repository_root or Path(__file__).resolve().parents[2]).resolve()
   manifest_path = repository_root / "docs" / "ai-rebuild" / "corpus-manifest-v1.json"
@@ -79,16 +82,28 @@ def run(
   database_name = f"eisenhower_task013_candidate_{suffix}"
   collection_name = f"task013_candidate_{suffix}"
   alias = f"task013_candidate_active_{suffix}"
-  mongo = MongoClient("mongodb://127.0.0.1:27017", serverSelectionTimeoutMS=3_000)
-  qdrant = QdrantClient(url="http://127.0.0.1:6333", timeout=20)
+  git_sha = subprocess.check_output(
+    ["git", "rev-parse", "HEAD"], cwd=repository_root, text=True,
+  ).strip()
+  git_dirty = bool(subprocess.check_output(
+    ["git", "status", "--porcelain"], cwd=repository_root, text=True,
+  ).strip())
+  if git_dirty:
+    raise ValueError("retrieval comparison requires a clean exact-SHA repository")
+  mongo = MongoClient(mongo_uri, serverSelectionTimeoutMS=3_000)
+  qdrant = QdrantClient(url=qdrant_url, timeout=20)
   manager = QdrantCollectionManager(qdrant, alias=alias, vector_size=vector_size)
   cleanup = {"mongo_database_dropped": False, "qdrant_collection_deleted": False}
+  mongo_ready = False
+  qdrant_collection_created = False
   report = None
   started = perf_counter()
   try:
     assert mongo.admin.command("ping")["ok"] == 1.0
-    server = httpx.get("http://127.0.0.1:6333/", timeout=5).raise_for_status().json()
+    mongo_ready = True
+    server = httpx.get(f"{qdrant_url.rstrip('/')}/", timeout=5).raise_for_status().json()
     manager.ensure_active(collection_name)
+    qdrant_collection_created = True
     scope = AccessScope(
       tenant_id="eisenhower-owner",
       user_id="eisenhower-owner",
@@ -137,6 +152,8 @@ def run(
       "tuning_performed": False,
       "deployment_proven": False,
       "public_evidence_proven": False,
+      "source_git_sha": git_sha,
+      "source_git_dirty": git_dirty,
       "candidate_sha256": sha256(candidate_bytes).hexdigest(),
       "manifest_sha256": sha256(manifest_path.read_bytes()).hexdigest(),
       "corpus_snapshot_sha256": manifest.initial_snapshot.sha256,
@@ -163,12 +180,14 @@ def run(
       "cleanup": cleanup,
     }
   finally:
-    mongo.drop_database(database_name)
-    cleanup["mongo_database_dropped"] = True
-    _delete_alias(qdrant, alias)
-    if qdrant.collection_exists(collection_name):
-      qdrant.delete_collection(collection_name=collection_name)
-    cleanup["qdrant_collection_deleted"] = True
+    if mongo_ready:
+      mongo.drop_database(database_name)
+      cleanup["mongo_database_dropped"] = True
+    if qdrant_collection_created:
+      _delete_alias(qdrant, alias)
+      if qdrant.collection_exists(collection_name):
+        qdrant.delete_collection(collection_name=collection_name)
+      cleanup["qdrant_collection_deleted"] = True
     qdrant.close()
     mongo.close()
   if report is None or not all(cleanup.values()):
@@ -184,8 +203,21 @@ def main() -> None:
     "--repository-root", type=Path,
     help="Read the frozen corpus from an explicit clean exact-SHA checkout.",
   )
+  parser.add_argument(
+    "--mongo-uri", default="mongodb://127.0.0.1:27017/?directConnection=true",
+    help="MongoDB URI for the isolated temporary candidate database.",
+  )
+  parser.add_argument(
+    "--qdrant-url", default="http://127.0.0.1:6333",
+    help="Qdrant URL for the isolated temporary candidate collection.",
+  )
   args = parser.parse_args()
-  report = run(args.candidate, repository_root=args.repository_root)
+  report = run(
+    args.candidate,
+    repository_root=args.repository_root,
+    mongo_uri=args.mongo_uri,
+    qdrant_url=args.qdrant_url,
+  )
   args.output.parent.mkdir(parents=True, exist_ok=True)
   args.output.write_text(
     json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
