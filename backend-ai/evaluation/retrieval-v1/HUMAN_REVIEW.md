@@ -4,6 +4,20 @@ Status: **unapproved candidate — independent human review required**
 
 ## Current refrozen packet (v2)
 
+## Current technical candidate (v3)
+
+The v3 packet adds only balanced train/dev coverage and preserves the six v2 holdout records
+semantically unchanged. `human-review-v3.json` is bound to the current candidate, thresholds and
+corpus manifest; all 42 decisions remain `PENDING`. The holdout has not been run.
+
+Train-only selection on the local AMD host chose fielded BM25/RRF plus revision-pinned
+`BAAI/bge-reranker-v2-m3` through a loopback-only ROCm/vLLM scoring service. The 192-token,
+20-candidate result passes the proposed non-holdout quality, latency and zero-tolerance gates, but
+does not substitute for independent relevance review. Dense remains the runtime default until the
+human record is complete and the untouched holdout passes.
+
+Authoritative technical report: `dense-hybrid-reranker-gpu192-v3-20260812.json`.
+
 The authoritative current inputs after the unchanged 19-file allowlist was refrozen on 2026-08-12 are:
 
 - candidate: `review-candidate-v2.jsonl`, SHA-256 `9bd58f71daadcaf46faaf05a2c4d2bec43d56d1865d69f4ce914b830cb589506`;
