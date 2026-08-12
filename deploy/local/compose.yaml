@@ -44,7 +44,13 @@ services:
     <<: *common
     image: ${VOLUME_INIT_IMAGE:-alpine:3.20}
     restart: "no"
-    command: ["sh", "-c", "chown -R 1001:1001 /audit && chmod 0770 /audit"]
+    command:
+      - sh
+      - -c
+      - >-
+        chown 1001:1001 /audit && chmod 0770 /audit &&
+        find /audit -maxdepth 1 -type f -name 'audit.sqlite3*'
+        -exec chown 1000:1001 {} + -exec chmod 0600 {} +
     volumes:
       - audit_data:/audit
 

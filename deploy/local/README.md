@@ -10,7 +10,8 @@ LAN/VPN address.
 `compose.yaml` contains only real entrypoints: Node API, a single-node MongoDB replica set required by
 the transactional outbox, FastAPI, the existing RAG worker,
 Qdrant, n8n, Keycloak with PostgreSQL, the OAuth-protected Remote MCP adapter and narrow nginx gateways. The Mongo outbox publisher is part of the Node API process; there is intentionally no
-invented `outbox-worker` container. A one-shot `audit-volume-init` applies the UID 1001 ownership required
+invented `outbox-worker` container. A one-shot `audit-volume-init` applies the shared audit directory and
+preserves the distinct UID ownership required by the Node/MCP and AI audit files
 by the non-root Node container before it starts. Production is fixed to `AUTH_MODE=oidc`; neither Node,
 FastAPI nor Remote MCP receives a static user token as a fallback.
 
@@ -65,7 +66,8 @@ the identity boundary; scopes separately authorize tasks, Calendar, knowledge an
 
 `access-gateway` is the only supported remote ingress for identity, API and MCP. It binds to loopback,
 validates the exact Host and browser Origin, rate-limits requests, bounds bodies and timeouts, disables
-access logs and publishes the RFC 9728 protected-resource metadata route. Place only this loopback port
+access logs, re-resolves Docker upstreams after container replacement and publishes the RFC 9728
+protected-resource metadata route. Place only this loopback port
 behind private Tailscale Serve (not Funnel), for example on an otherwise unused HTTPS port. Do not expose
 Keycloak, Node, FastAPI or MCP container ports directly.
 
