@@ -1,19 +1,24 @@
 import request from 'supertest';
 import { createApp } from '../src/app';
-import { GoogleOAuthPort, GoogleTokenSet, loadGoogleOAuthConfig } from '../src/application/googleOAuth';
+import {
+  GoogleOAuthHttpClient, GoogleOAuthPort, GoogleOAuthService, GoogleTokenSet,
+  loadGoogleOAuthConfig,
+} from '../src/application/googleOAuth';
 import { CalendarConnectionModel, GoogleOAuthAttemptModel, GoogleOAuthGrantModel } from '../src/models/calendar';
 import { clearMongo, startMongo, stopMongo } from './helpers/mongo';
 import { TaskModel } from '../src/models/task';
 
 class FakeGoogleOAuth implements GoogleOAuthPort {
   revoked: string[] = [];
+  scopes = ['openid', 'https://www.googleapis.com/auth/calendar.events'];
+  omitRefresh = false;
   authorizationUrl(input: { state: string; codeChallenge: string; callbackUrl: string; clientId: string }) {
     return `https://accounts.google.test/auth?state=${input.state}&code_challenge=${input.codeChallenge}`;
   }
   async exchangeCode(): Promise<GoogleTokenSet> {
     return {
-      accessToken: 'access-secret', refreshToken: 'refresh-secret', expiresAt: new Date(Date.now() + 3600_000),
-      googleSubject: 'google-user-123', scopes: ['openid', 'https://www.googleapis.com/auth/calendar.events'],
+      accessToken: 'access-secret', ...(this.omitRefresh ? {} : { refreshToken: 'refresh-secret' }), expiresAt: new Date(Date.now() + 3600_000),
+      googleSubject: 'google-user-123', scopes: this.scopes,
     };
   }
   async revoke(token: string) { this.revoked.push(token); }
@@ -34,7 +39,7 @@ describe('per-user Google Calendar OAuth', () => {
   const bearer = 'Bearer test-api-token';
 
   beforeAll(startMongo);
-  afterEach(async () => { google.revoked = []; await clearMongo(); });
+  afterEach(async () => { google.revoked = []; google.scopes = ['openid', 'https://www.googleapis.com/auth/calendar.events']; google.omitRefresh = false; await clearMongo(); });
   afterAll(stopMongo);
 
   it('starts with scoped identity and stores only hashed state plus encrypted PKCE verifier', async () => {
@@ -88,6 +93,7 @@ describe('per-user Google Calendar OAuth', () => {
   });
 
   it('loads OAuth configuration fail-closed', () => {
+    expect(loadGoogleOAuthConfig({}, 'production')).toBeNull();
     expect(() => loadGoogleOAuthConfig({ GOOGLE_CALENDAR_OAUTH_CLIENT_ID: 'partial' }, 'production'))
       .toThrow('required together');
     const base = {
@@ -100,6 +106,99 @@ describe('per-user Google Calendar OAuth', () => {
       ...base, GOOGLE_CALENDAR_OAUTH_CALLBACK_URL: 'https://app.example.com/callback',
       GOOGLE_CALENDAR_OAUTH_ENCRYPTION_KEY: 'short',
     }, 'production')).toThrow('exactly 32 bytes');
+    expect(loadGoogleOAuthConfig({
+      ...base, GOOGLE_CALENDAR_OAUTH_CALLBACK_URL: 'http://localhost/callback',
+      GOOGLE_CALENDAR_OAUTH_RETURN_ORIGIN: 'http://localhost',
+    }, 'development')).toMatchObject({ callbackUrl: 'http://localhost/callback' });
+  });
+
+  it('validates injected service configuration', () => {
+    const valid = {
+      clientId: 'id', clientSecret: 'secret', callbackUrl: 'https://app.example/callback',
+      encryptionKeys: { v1: Buffer.alloc(32) }, currentKeyVersion: 'v1', returnOrigins: ['https://app.example'],
+    };
+    expect(() => new GoogleOAuthService({ ...valid, clientId: '' }, google)).toThrow('incomplete');
+    expect(() => new GoogleOAuthService({ ...valid, callbackUrl: 'http://app.example/callback' }, google)).toThrow('HTTPS');
+    expect(() => new GoogleOAuthService({ ...valid, returnOrigins: [] }, google)).toThrow('exact origins');
+    expect(() => new GoogleOAuthService({ ...valid, returnOrigins: ['https://app.example/path'] }, google)).toThrow('exact origins');
+    expect(() => new GoogleOAuthService({ ...valid, encryptionKeys: { v1: Buffer.alloc(2) } }, google)).toThrow('32 bytes');
+  });
+
+  it('covers the real OAuth HTTP client success and failure contracts', async () => {
+    const client = new GoogleOAuthHttpClient();
+    const url = new URL(client.authorizationUrl({ state: 'state', codeChallenge: 'challenge', callbackUrl: 'https://app.example/cb', clientId: 'client' }));
+    expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+    const fetchSpy = jest.spyOn(global, 'fetch');
+    fetchSpy
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'access', refresh_token: 'refresh', expires_in: 10, scope: 'openid calendar' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ sub: 'subject' }), { status: 200 }));
+    await expect(client.exchangeCode({ code: 'code', codeVerifier: 'verifier', callbackUrl: 'https://app.example/cb', clientId: 'client', clientSecret: 'secret' }))
+      .resolves.toMatchObject({ accessToken: 'access', googleSubject: 'subject', scopes: ['openid', 'calendar'] });
+    fetchSpy.mockResolvedValueOnce(new Response('', { status: 400 }));
+    await expect(client.exchangeCode({ code: 'x', codeVerifier: 'v', callbackUrl: 'https://a/cb', clientId: 'i', clientSecret: 's' })).rejects.toThrow('exchange_failed');
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'a' }), { status: 200 }));
+    await expect(client.exchangeCode({ code: 'x', codeVerifier: 'v', callbackUrl: 'https://a/cb', clientId: 'i', clientSecret: 's' })).rejects.toThrow('incomplete');
+    fetchSpy
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'a', refresh_token: 'r' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response('', { status: 500 }));
+    await expect(client.exchangeCode({ code: 'x', codeVerifier: 'v', callbackUrl: 'https://a/cb', clientId: 'i', clientSecret: 's' })).rejects.toThrow('subject_failed');
+    fetchSpy
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'a', refresh_token: 'r' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }));
+    await expect(client.exchangeCode({ code: 'x', codeVerifier: 'v', callbackUrl: 'https://a/cb', clientId: 'i', clientSecret: 's' })).rejects.toThrow('subject_missing');
+    fetchSpy.mockResolvedValueOnce(new Response('', { status: 200 }));
+    await expect(client.revoke('token')).resolves.toBeUndefined();
+    fetchSpy
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'access', refresh_token: 'refresh' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ sub: 'subject' }), { status: 200 }));
+    await expect(client.exchangeCode({ code: 'code', codeVerifier: 'verifier', callbackUrl: 'https://app.example/cb', clientId: 'client', clientSecret: 'secret' }))
+      .resolves.toMatchObject({ scopes: [] });
+  });
+
+  it('handles missing grant and best-effort provider revoke failure', async () => {
+    expect((await request(app).post('/calendar/oauth/disconnect').set('Authorization', bearer)).status).toBe(204);
+    const start = await request(app).post('/calendar/oauth/start').set('Authorization', bearer).send({ returnPath: '/' });
+    await request(app).get('/calendar/oauth/callback').query({ state: new URL(start.body.authorizationUrl).searchParams.get('state'), code: 'code' });
+    jest.spyOn(google, 'revoke').mockRejectedValueOnce(new Error('offline'));
+    expect((await request(app).post('/calendar/oauth/disconnect').set('Authorization', bearer)).status).toBe(204);
+  });
+
+  it('routes malformed and unexpected OAuth failures safely', async () => {
+    expect((await request(app).get('/calendar/oauth/callback')).status).toBe(400);
+    expect((await request(app).post('/calendar/oauth/start').set('Authorization', bearer).send({})).status).toBe(400);
+    jest.spyOn(google, 'authorizationUrl').mockImplementationOnce(() => { throw new Error('unexpected'); });
+    expect((await request(app).post('/calendar/oauth/start').set('Authorization', bearer).send({ returnPath: '/' })).status).toBe(500);
+  });
+
+  it('rejects missing Google scopes and unavailable encryption key versions', async () => {
+    google.scopes = ['openid'];
+    let start = await request(app).post('/calendar/oauth/start').set('Authorization', bearer).send({ returnPath: '/' });
+    expect((await request(app).get('/calendar/oauth/callback').query({ state: new URL(start.body.authorizationUrl).searchParams.get('state'), code: 'code' })).status).toBe(500);
+    google.scopes = ['openid', 'https://www.googleapis.com/auth/calendar.events'];
+    start = await request(app).post('/calendar/oauth/start').set('Authorization', bearer).send({ returnPath: '/' });
+    await request(app).get('/calendar/oauth/callback').query({ state: new URL(start.body.authorizationUrl).searchParams.get('state'), code: 'code' });
+    await GoogleOAuthGrantModel.updateOne({}, { $set: { keyVersion: 'missing' } });
+    expect((await request(app).post('/calendar/oauth/disconnect').set('Authorization', bearer)).status).toBe(500);
+  });
+
+  it('fails closed when an OAuth attempt references a removed key', async () => {
+    const start = await request(app).post('/calendar/oauth/start').set('Authorization', bearer).send({ returnPath: '/?existing=1' });
+    await GoogleOAuthAttemptModel.updateOne({}, { $set: { keyVersion: 'removed' } });
+    expect((await request(app).get('/calendar/oauth/callback').query({ state: new URL(start.body.authorizationUrl).searchParams.get('state'), code: 'code' })).status).toBe(500);
+    expect(loadGoogleOAuthConfig({
+      GOOGLE_CALENDAR_OAUTH_CLIENT_ID: 'client', GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET: 'secret',
+      GOOGLE_CALENDAR_OAUTH_CALLBACK_URL: 'https://app.example/callback',
+      GOOGLE_CALENDAR_OAUTH_ENCRYPTION_KEY: Buffer.alloc(32).toString('base64'),
+    }, 'production')).toMatchObject({ returnOrigins: ['https://app.example'] });
+  });
+
+  it('appends callback status to an existing return query and revokes with access-token fallback', async () => {
+    google.omitRefresh = true;
+    const start = await request(app).post('/calendar/oauth/start').set('Authorization', bearer).send({ returnPath: '/settings?tab=calendar' });
+    const callback = await request(app).get('/calendar/oauth/callback').query({ state: new URL(start.body.authorizationUrl).searchParams.get('state'), code: 'code' });
+    expect(callback.headers.location).toBe('https://app.example.com/settings?tab=calendar&calendar=connected');
+    await request(app).post('/calendar/oauth/disconnect').set('Authorization', bearer);
+    expect(google.revoked).toEqual(['access-secret']);
   });
 
   it('rejects denied callbacks without echoing provider input', async () => {

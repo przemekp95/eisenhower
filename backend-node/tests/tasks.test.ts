@@ -6,6 +6,7 @@ import { resolveLifecycleTransition } from '../src/application/taskRepository';
 import { TaskModel } from '../src/models/task';
 import { MongooseTaskRepository } from '../src/repositories/mongooseTaskRepository';
 import { createTasksRouter } from '../src/routes/tasks';
+import { CalendarBindingModel, CalendarOutboxModel } from '../src/models/calendar';
 import { clearMongo, startMongo, stopMongo } from './helpers/mongo';
 
 describe('task routes', () => {
@@ -46,6 +47,22 @@ describe('task routes', () => {
     expect(response.body).toHaveLength(2);
     expect(response.body[0].title).toBe('second');
     expect(response.body[1].title).toBe('first');
+  });
+
+  it('returns not found for a valid unknown id and maps get failures', async () => {
+    const id = new mongoose.Types.ObjectId().toString();
+    expect((await api.get(`/tasks/${id}`)).status).toBe(404);
+    jest.spyOn(MongooseTaskRepository.prototype, 'get').mockRejectedValueOnce(new Error('get failure'));
+    const failed = await api.get(`/tasks/${id}`);
+    expect(failed.status).toBe(500);
+    expect(failed.body.error).toBe('get failure');
+  });
+
+  it('rejects an invalid task id on the get endpoint', async () => {
+    const response = await api.get('/tasks/not-an-id');
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('Validation failed');
   });
 
   it('does not list, update, or delete another tenant task', async () => {
@@ -409,6 +426,27 @@ describe('task routes', () => {
         'complete'
       )
     ).resolves.toEqual({ status: 'revision_conflict' });
+  });
+
+  it('enqueues calendar updates and deletes for bound task mutations', async () => {
+    const task = await TaskModel.create({ title: 'Bound task' });
+    await CalendarBindingModel.create({
+      tenantId: 'local', ownerId: 'local-user', connectionId: new mongoose.Types.ObjectId(),
+      taskId: task.id, providerEventId: 'event-1', providerEtag: 'etag-1',
+      lastTaskRevision: 0, lastProviderRevision: 'etag-1',
+    });
+    const repository = new MongooseTaskRepository();
+    const scope = { tenantId: 'local', ownerId: 'local-user' };
+
+    await repository.update(scope, task.id, 0, { title: 'Updated bound task' });
+    await repository.updateSchedule(scope, task.id, 1, {
+      dueAt: new Date('2026-08-20T12:00:00.000Z'), timeZone: 'Europe/Warsaw',
+    });
+    await repository.transitionLifecycle(scope, task.id, 2, 'archive');
+    await repository.transitionLifecycle(scope, task.id, 3, 'restore');
+
+    const types = (await CalendarOutboxModel.find().sort({ createdAt: 1 }).lean()).map((event) => event.type);
+    expect(types).toEqual(['event_update', 'event_update', 'event_delete', 'event_update']);
   });
 
   it('maps lifecycle repository failures through the HTTP error boundary', async () => {

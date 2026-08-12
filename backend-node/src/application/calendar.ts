@@ -45,7 +45,7 @@ function fingerprint(value: unknown) {
 
 async function withReceipt(
   command: CalendarInboundCommand,
-  execute: (session: mongoose.ClientSession) => Promise<Record<string, unknown>>,
+  execute: (session: mongoose.ClientSession) => Promise<Record<string, unknown> & { outcome: string }>,
 ) {
   const digest = fingerprint(command);
   const existing = await CalendarMutationReceiptModel.findOne({
@@ -63,12 +63,12 @@ async function withReceipt(
       await CalendarMutationReceiptModel.create([{
         tenantId: command.tenantId, ownerId: command.ownerId,
         operationId: command.operationId, fingerprint: digest,
-        outcome: String(result.outcome ?? 'accepted'), result,
+        outcome: result.outcome, result,
       }], { session });
       await CalendarDomainAuditModel.create([{
         eventId: command.operationId, tenantId: command.tenantId, ownerId: command.ownerId,
         actorId: 'n8n-calendar', action: `calendar.${command.kind}`,
-        outcome: String(result.outcome ?? 'accepted'), resourceId: command.connectionId,
+        outcome: result.outcome, resourceId: command.connectionId,
         ...(result.reason ? { reason: String(result.reason) } : {}),
       }], { session });
     });

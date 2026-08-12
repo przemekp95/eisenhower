@@ -11,6 +11,8 @@ import {
   deleteTask,
   extractTasksFromImage,
   getCapabilities,
+  getCalendarConflicts,
+  getCalendarStatus,
   getDelegatedTasks,
   getExamplesByQuadrant,
   getTasks,
@@ -18,6 +20,8 @@ import {
   learnFromAcceptedOCRTasks,
   learnFromFeedback,
   retrainModel,
+  requestCalendarSync,
+  resolveCalendarConflict,
   setProviderEnabled,
   transitionTaskLifecycle,
   transitionTaskDelegation,
@@ -240,6 +244,86 @@ describe('api service', () => {
       expect.objectContaining({
         method: 'DELETE',
         headers: expect.objectContaining({ 'If-Match': '"4"' }),
+      })
+    );
+  });
+
+  it('uses the authenticated calendar endpoints for status, sync, conflicts and resolution', async () => {
+    const calendarConflict = {
+      _id: 'conflict-1',
+      taskId: 'task-1',
+      status: 'open' as const,
+      revision: 2,
+      providerSnapshot: {
+        title: 'Google title',
+        dueAt: '2026-08-20T12:00:00.000Z',
+        timeZone: 'Europe/Warsaw',
+      },
+    };
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({
+          status: 'connected',
+          connection: { id: 'connection-1', provider: 'google', calendarId: 'primary' },
+          openConflicts: 1,
+          pendingOutbox: 0,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 202,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ eventId: 'sync-1' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => [calendarConflict],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ ...calendarConflict, status: 'resolved_provider', revision: 3 }),
+      });
+
+    await getCalendarStatus();
+    await requestCalendarSync('sync-key');
+    await getCalendarConflicts();
+    await resolveCalendarConflict('conflict/1', 'google', 2, 'resolve-key');
+
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      `${runtimeConfig.apiUrl}/calendar/status`,
+      expect.objectContaining({ credentials: 'omit' })
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      `${runtimeConfig.apiUrl}/calendar/sync-requests`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'Idempotency-Key': 'sync-key' }),
+      })
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      3,
+      `${runtimeConfig.apiUrl}/calendar/conflicts`,
+      expect.objectContaining({ credentials: 'omit' })
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      4,
+      `${runtimeConfig.apiUrl}/calendar/conflicts/conflict%2F1/resolve`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'Idempotency-Key': 'resolve-key',
+          'If-Match': '"2"',
+        }),
+        body: JSON.stringify({ strategy: 'google' }),
       })
     );
   });
