@@ -1,11 +1,18 @@
 import React from 'react';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { AppState } from 'react-native';
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import App from './App';
 import * as ai from './src/services/ai';
 import * as media from './src/services/media';
 import * as storage from './src/services/storage';
 import * as tasksApi from './src/services/tasks';
 import { getSampleTasks } from './src/utils/taskUtils';
+import { clearApiToken, setAdminToken, setApiToken } from './src/authSession';
+
+const mockAddNetworkStateListener = jest.fn();
+jest.mock('expo-network', () => ({
+  addNetworkStateListener: (...args) => mockAddNetworkStateListener(...args),
+}), { virtual: true });
 
 jest.mock('./src/services/ai', () => ({
   suggestTaskQuadrant: jest.fn(),
@@ -56,6 +63,7 @@ function remoteTask(overrides = {}) {
     locale: 'pl',
     remoteId: resolvedId,
     syncState: 'synced',
+    revision: 0,
     ...overrides,
   };
 }
@@ -86,12 +94,13 @@ function trainingStats(overrides = {}) {
 }
 
 describe('Mobile App', () => {
-  afterEach(() => {
-    cleanup();
-  });
+afterEach(() => {
+  cleanup();
+  clearApiToken();
+});
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
 
     storage.loadLanguage.mockResolvedValue('pl');
     storage.loadTasks.mockResolvedValue([remoteTask({ id: 'local-1' })]);
@@ -145,6 +154,240 @@ describe('Mobile App', () => {
     ai.clearTrainingData.mockResolvedValue({ remaining_examples: 4 });
     ai.getExamplesByQuadrant.mockResolvedValue({ examples: [{ text: 'urgent task', quadrant: 0 }] });
     media.scanTasksFromImage.mockResolvedValue([]);
+    setApiToken('runtime-only-test-token');
+    setAdminToken('runtime-only-admin-token');
+  });
+
+  it('keeps remote data locked until a runtime-only token is entered', async () => {
+    clearApiToken();
+
+    const { getByTestId, queryByText } = render(<App />);
+
+    expect(queryByText('Seed task')).toBeNull();
+    fireEvent.changeText(getByTestId('auth-token-input'), 'entered-at-runtime');
+    fireEvent.press(getByTestId('auth-submit-button'));
+
+    await waitFor(() => expect(tasksApi.fetchRemoteTasks).toHaveBeenCalled(), {
+      timeout: ASYNC_TIMEOUT,
+    });
+  });
+
+  it('requires only an access token for CRUD and supports explicit logout', async () => {
+    clearApiToken();
+    const { getByTestId, queryByTestId } = render(<App />);
+
+    expect(queryByTestId('admin-token-input')).toBeNull();
+    fireEvent.changeText(getByTestId('auth-token-input'), 'access-only');
+    fireEvent.press(getByTestId('auth-submit-button'));
+    await waitFor(() => expect(getByTestId('logout-button')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    fireEvent.press(getByTestId('logout-button'));
+    await waitFor(() => expect(getByTestId('auth-token-input')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+  });
+
+  it('offers manual retry and preserves pending work when retry still fails', async () => {
+    storage.loadTasks.mockResolvedValue([{ id: 'local-retry', title: 'Pending', urgent: true, important: false }]);
+    tasksApi.fetchRemoteTasks.mockRejectedValue(new Error('offline'));
+    const { getByTestId } = render(<App />);
+
+    await waitFor(() => expect(getByTestId('retry-sync-button')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    fireEvent.press(getByTestId('retry-sync-button'));
+    await waitFor(() => expect(tasksApi.fetchRemoteTasks).toHaveBeenCalledTimes(2), { timeout: ASYNC_TIMEOUT });
+    expect(getByTestId('sync-pending-local-retry')).toBeTruthy();
+  });
+
+  it('retries pending sync when the app returns to the foreground', async () => {
+    let onAppStateChange;
+    const appStateSpy = jest.spyOn(AppState, 'addEventListener').mockImplementation((event, listener) => {
+      onAppStateChange = listener;
+      return { remove: jest.fn() };
+    });
+    storage.loadTasks.mockResolvedValue([{ id: 'local-foreground', title: 'Pending foreground', urgent: true, important: false }]);
+    tasksApi.fetchRemoteTasks
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce([]);
+    tasksApi.createRemoteTask.mockResolvedValueOnce(remoteTask({ title: 'Pending foreground' }));
+
+    const { getByText } = render(<App />);
+    await waitFor(() => expect(onAppStateChange).toBeDefined(), { timeout: ASYNC_TIMEOUT });
+    await waitFor(() => expect(tasksApi.fetchRemoteTasks).toHaveBeenCalledTimes(1), { timeout: ASYNC_TIMEOUT });
+    await waitFor(() => expect(getByText('Pending foreground')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    await act(async () => {
+      onAppStateChange('active');
+    });
+
+    await waitFor(() => expect(tasksApi.fetchRemoteTasks).toHaveBeenCalledTimes(2), { timeout: ASYNC_TIMEOUT });
+    await waitFor(() => expect(tasksApi.createRemoteTask).toHaveBeenCalled(), { timeout: ASYNC_TIMEOUT });
+    appStateSpy.mockRestore();
+  });
+
+  it('retries pending sync when internet reachability returns while still foreground', async () => {
+    let onNetworkStateChange;
+    mockAddNetworkStateListener.mockImplementation((listener) => {
+      onNetworkStateChange = listener;
+      return { remove: jest.fn() };
+    });
+    storage.loadTasks.mockResolvedValue([{ id: 'local-network', title: 'Pending network', urgent: true, important: false }]);
+    tasksApi.fetchRemoteTasks
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce([]);
+    tasksApi.createRemoteTask.mockResolvedValueOnce(remoteTask({ title: 'Pending network' }));
+
+    const { getByText } = render(<App />);
+    await waitFor(() => expect(tasksApi.fetchRemoteTasks).toHaveBeenCalledTimes(1), { timeout: ASYNC_TIMEOUT });
+    await waitFor(() => expect(getByText('Pending network')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    expect(onNetworkStateChange).toBeDefined();
+
+    await act(async () => {
+      onNetworkStateChange({ isConnected: false, isInternetReachable: false });
+      onNetworkStateChange({ isConnected: true, isInternetReachable: true });
+    });
+
+    await waitFor(() => expect(tasksApi.fetchRemoteTasks).toHaveBeenCalledTimes(2), { timeout: ASYNC_TIMEOUT });
+    await waitFor(() => expect(tasksApi.createRemoteTask).toHaveBeenCalled(), { timeout: ASYNC_TIMEOUT });
+  });
+
+  it('coalesces bootstrap, foreground, network, and manual sync triggers', async () => {
+    let onAppStateChange;
+    let onNetworkStateChange;
+    let resolveRemoteTasks;
+    const appStateSpy = jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
+      onAppStateChange = listener;
+      return { remove: jest.fn() };
+    });
+    mockAddNetworkStateListener.mockImplementation((listener) => {
+      onNetworkStateChange = listener;
+      return { remove: jest.fn() };
+    });
+    storage.loadTasks.mockResolvedValue([{
+      id: 'local-single-flight',
+      title: 'One operation',
+      syncState: 'pending_create',
+    }]);
+    tasksApi.fetchRemoteTasks.mockReturnValue(new Promise((resolve) => {
+      resolveRemoteTasks = resolve;
+    }));
+    tasksApi.createRemoteTask.mockResolvedValue(remoteTask({ title: 'One operation' }));
+
+    const { getByTestId } = render(<App />);
+    await waitFor(() => expect(tasksApi.fetchRemoteTasks).toHaveBeenCalledTimes(1), { timeout: ASYNC_TIMEOUT });
+    await waitFor(() => expect(onAppStateChange).toBeDefined(), { timeout: ASYNC_TIMEOUT });
+    await waitFor(() => expect(onNetworkStateChange).toBeDefined(), { timeout: ASYNC_TIMEOUT });
+
+    fireEvent.press(getByTestId('retry-sync-button'));
+    await act(async () => {
+      onAppStateChange('active');
+      onNetworkStateChange({ isConnected: false, isInternetReachable: false });
+      onNetworkStateChange({ isConnected: true, isInternetReachable: true });
+    });
+    expect(tasksApi.fetchRemoteTasks).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveRemoteTasks([]);
+    });
+    await waitFor(() => expect(tasksApi.createRemoteTask).toHaveBeenCalledTimes(1), { timeout: ASYNC_TIMEOUT });
+    appStateSpy.mockRestore();
+  });
+
+  it('keeps the fresh server version when the user resolves an update conflict remotely', async () => {
+    const id = '507f1f77bcf86cd799439081';
+    storage.loadTasks.mockResolvedValue([{
+      id,
+      remoteId: id,
+      title: 'Server value',
+      description: 'fresh',
+      urgent: false,
+      important: true,
+      revision: 8,
+      syncState: 'conflict',
+      syncError: 'conflict',
+      pendingIntent: {
+        type: 'update',
+        baseRevision: 7,
+        payload: { title: 'My edit', description: 'local', urgent: true, important: false },
+      },
+    }]);
+    tasksApi.fetchRemoteTasks.mockResolvedValue([remoteTask({
+      id,
+      title: 'Server value',
+      description: 'fresh',
+      urgent: false,
+      important: true,
+      revision: 8,
+    })]);
+
+    const { getByTestId, getByText, queryByTestId } = render(<App />);
+    await waitFor(() => expect(getByText('Server value')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    fireEvent.press(getByTestId(`conflict-keep-remote-${id}`));
+
+    await waitFor(() => expect(queryByTestId(`conflict-keep-remote-${id}`)).toBeNull(), { timeout: ASYNC_TIMEOUT });
+    expect(storage.saveTasks).toHaveBeenLastCalledWith([
+      expect.objectContaining({ id, title: 'Server value', revision: 8, syncState: 'synced' }),
+    ]);
+    expect(tasksApi.updateRemoteTask).not.toHaveBeenCalled();
+  });
+
+  it('retries a local update only after explicit conflict resolution using the fresh revision', async () => {
+    const id = '507f1f77bcf86cd799439082';
+    const conflict = {
+      id,
+      remoteId: id,
+      title: 'Server value',
+      description: 'fresh',
+      urgent: false,
+      important: true,
+      revision: 8,
+      syncState: 'conflict',
+      syncError: 'conflict',
+      pendingIntent: {
+        type: 'update',
+        baseRevision: 7,
+        payload: { title: 'My explicit edit', description: 'local', urgent: true, important: false },
+      },
+    };
+    const freshRemote = remoteTask({ ...conflict, syncState: 'synced', pendingIntent: undefined, syncError: undefined });
+    storage.loadTasks.mockResolvedValue([conflict]);
+    tasksApi.fetchRemoteTasks.mockResolvedValue([freshRemote]);
+    tasksApi.updateRemoteTask.mockResolvedValue(remoteTask({
+      id,
+      title: 'My explicit edit',
+      description: 'local',
+      urgent: true,
+      important: false,
+      revision: 9,
+    }));
+
+    const { getByTestId, getByText } = render(<App />);
+    await waitFor(() => expect(getByText('Server value')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    fireEvent.press(getByTestId(`conflict-retry-local-${id}`));
+
+    await waitFor(() => expect(tasksApi.updateRemoteTask).toHaveBeenCalledWith(
+      id,
+      expect.objectContaining({ title: 'My explicit edit', urgent: true, important: false }),
+      'pl',
+      8
+    ), { timeout: ASYNC_TIMEOUT });
+    await waitFor(() => expect(getByText('My explicit edit')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+  });
+
+  it('removes a conflict locally when the user keeps an already-missing remote version', async () => {
+    const id = '507f1f77bcf86cd799439083';
+    storage.loadTasks.mockResolvedValue([{
+      id,
+      remoteId: id,
+      title: 'Gone remotely',
+      revision: 4,
+      syncState: 'conflict',
+      syncError: 'conflict',
+      remoteMissing: true,
+      pendingIntent: { type: 'delete', baseRevision: 3 },
+    }]);
+    tasksApi.fetchRemoteTasks.mockResolvedValue([]);
+
+    const { getByTestId, getByText, queryByText } = render(<App />);
+    await waitFor(() => expect(getByText('Gone remotely')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    fireEvent.press(getByTestId(`conflict-keep-remote-${id}`));
+    await waitFor(() => expect(queryByText('Gone remotely')).toBeNull(), { timeout: ASYNC_TIMEOUT });
+    expect(storage.saveTasks).toHaveBeenLastCalledWith([]);
   });
 
   it('loads cached state, matrix and AI summary from the remote runtimes', async () => {
@@ -165,7 +408,7 @@ describe('Mobile App', () => {
     expect(getByText('Zrób teraz')).toBeTruthy();
     expect(getByText('Deleguj')).toBeTruthy();
     expect(getByText('Zaplanuj')).toBeTruthy();
-    expect(getAllByText('Usuń').length).toBeGreaterThan(0);
+    expect(getAllByText('Usuń (kwadrant, nie kasowanie)').length).toBeGreaterThan(0);
   });
 
   it('reconciles pending local tasks after the API becomes available again', async () => {
@@ -201,7 +444,8 @@ describe('Mobile App', () => {
         urgent: false,
         important: true,
       }),
-      'pl'
+      'pl',
+      'mobile-local-1'
     ), {
       timeout: ASYNC_TIMEOUT,
     });
@@ -238,6 +482,7 @@ describe('Mobile App', () => {
     });
 
     fireEvent.press(getByTestId('delete-task-507f1f77bcf86cd799439012'));
+    fireEvent.press(getByTestId('confirm-delete-507f1f77bcf86cd799439012'));
 
     await waitFor(() => expect(queryByText('Nowe zadanie')).toBeNull(), {
       timeout: ASYNC_TIMEOUT,
@@ -249,9 +494,10 @@ describe('Mobile App', () => {
         urgent: true,
         important: true,
       }),
-      'pl'
+      'pl',
+      expect.stringMatching(/^mobile-/)
     );
-    expect(tasksApi.deleteRemoteTask).toHaveBeenCalledWith('507f1f77bcf86cd799439012');
+    expect(tasksApi.deleteRemoteTask).toHaveBeenCalledWith('507f1f77bcf86cd799439012', 0);
   });
 
   it('requests quick AI suggestions, toggles remote flags and changes language', async () => {
@@ -273,7 +519,8 @@ describe('Mobile App', () => {
       expect(tasksApi.updateRemoteTask).toHaveBeenCalledWith(
         '507f1f77bcf86cd799439011',
         { urgent: false },
-        'pl'
+        'pl',
+        0
       ),
       { timeout: ASYNC_TIMEOUT }
     );
@@ -325,7 +572,8 @@ describe('Mobile App', () => {
         urgent: true,
         important: true,
       }),
-      'pl'
+      'pl',
+      expect.stringMatching(/^mobile-/)
     ), {
       timeout: ASYNC_TIMEOUT,
     });
@@ -522,17 +770,21 @@ describe('Mobile App', () => {
       timeout: ASYNC_TIMEOUT,
     });
     fireEvent.press(getByTestId('scan-task-button'));
+    await waitFor(() => expect(getByTestId('ocr-title-ocr-1')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    fireEvent(getByTestId('ocr-learning-consent'), 'valueChange', true);
+    fireEvent.press(getByTestId('ocr-import-button'));
 
     await waitFor(() => expect(tasksApi.createRemoteTask).toHaveBeenCalledWith(
       expect.objectContaining({
         title: 'Scanned task',
         important: true,
       }),
-      'pl'
+      'pl',
+      expect.stringMatching(/^mobile-/)
     ), {
       timeout: ASYNC_TIMEOUT,
     });
-    await waitFor(() => expect(getByTestId('notice-banner').props.children).toBe('OCR dodał zadania do tablicy'), {
+    await waitFor(() => expect(getByTestId('notice-banner').props.children).toBe('Zsynchronizowano z API'), {
       timeout: ASYNC_TIMEOUT,
     });
     await waitFor(() => expect(ai.learnFromAcceptedOCRTasks).toHaveBeenCalledWith(
@@ -583,6 +835,7 @@ describe('Mobile App', () => {
     });
 
     fireEvent.press(getByTestId('delete-task-local-1'));
+    fireEvent.press(getByTestId('confirm-delete-local-1'));
     await waitFor(() => expect(queryByText('Local task')).toBeNull(), {
       timeout: ASYNC_TIMEOUT,
     });
@@ -602,13 +855,13 @@ describe('Mobile App', () => {
     });
 
     fireEvent.press(getByTestId('scan-task-button'));
-    await waitFor(() => expect(getByTestId('notice-banner').props.children).toBe('OCR nie wykrył żadnych zadań'), {
+    await waitFor(() => expect(getByTestId('ai-tools-message').props.children).toBe('OCR nie wykrył żadnych zadań'), {
       timeout: ASYNC_TIMEOUT,
     });
 
     media.scanTasksFromImage.mockRejectedValueOnce({ code: 'ocr_request_failed' });
     fireEvent.press(getByTestId('scan-task-button'));
-    await waitFor(() => expect(getByTestId('notice-banner').props.children).toBe('Wysyłka do OCR nie powiodła się, nic nie dodano'), {
+    await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe('Wysyłka do OCR nie powiodła się, nic nie dodano'), {
       timeout: ASYNC_TIMEOUT,
     });
   });
@@ -671,22 +924,23 @@ describe('Mobile App', () => {
     expect(getByTestId('sync-pending-507f1f77bcf86cd799439011')).toBeTruthy();
 
     fireEvent.press(getByTestId('delete-task-507f1f77bcf86cd799439011'));
+    fireEvent.press(getByTestId('confirm-delete-507f1f77bcf86cd799439011'));
     await waitFor(() => expect(queryByText('Seed task')).toBeNull(), {
       timeout: ASYNC_TIMEOUT,
     });
-    await waitFor(() => expect(getByTestId('notice-banner').props.children).toBe('Zapisano lokalnie'), {
+    await waitFor(() => expect(getByTestId('notice-banner').props.children).toBe('Niektore zmiany nadal czekaja na synchronizacje'), {
       timeout: ASYNC_TIMEOUT,
     });
   });
 
-  it('falls back through the bootstrap catch when startup throws synchronously', async () => {
+  it('keeps cached state when the initial remote fetch throws synchronously', async () => {
     tasksApi.fetchRemoteTasks.mockImplementationOnce(() => {
       throw new Error('sync bootstrap failure');
     });
 
     const { getByText } = render(<App />);
 
-    await waitFor(() => expect(getByText(getSampleTasks('pl')[0].title)).toBeTruthy(), {
+    await waitFor(() => expect(getByText('Seed task')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
   });
@@ -793,6 +1047,7 @@ describe('Mobile App', () => {
     });
 
     fireEvent.press(getByTestId('manage-clear-button'));
+    fireEvent.press(getByTestId('manage-clear-confirm-button'));
     await waitFor(() => expect(ai.clearTrainingData).toHaveBeenCalledWith(true), {
       timeout: ASYNC_TIMEOUT,
     });
@@ -847,12 +1102,11 @@ describe('Mobile App', () => {
     fireEvent.press(getByTestId('ai-tab-ocr'));
     fireEvent.press(getByTestId('ai-ocr-run-button'));
 
-    await waitFor(() => expect(getAllByText('Modal OCR task').length).toBeGreaterThan(0), {
+    await waitFor(() => expect(getByTestId('ocr-title-ocr-modal-1')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
-    await waitFor(() => expect(getByTestId('ai-tools-message').props.children).toBe('OCR zaimportował 1 zadań'), {
-      timeout: ASYNC_TIMEOUT,
-    });
+    fireEvent.press(getByTestId('ocr-import-button'));
+    await waitFor(() => expect(tasksApi.createRemoteTask).toHaveBeenCalled(), { timeout: ASYNC_TIMEOUT });
 
     fireEvent.press(getByTestId('ai-tab-manage'));
     fireEvent.changeText(getByTestId('manage-example-input'), 'Nie zapisuj');
@@ -884,10 +1138,18 @@ describe('Mobile App', () => {
       timeout: ASYNC_TIMEOUT,
     });
     fireEvent.press(getByTestId('scan-task-button'));
+    await waitFor(() => expect(getByTestId('ocr-title-ocr-1')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    fireEvent.press(getByTestId('ocr-import-button'));
 
     await waitFor(() => expect(getByText('Offline scan')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
-    expect(getByTestId('sync-pending-ocr-1')).toBeTruthy();
+    expect(storage.saveTasks).toHaveBeenLastCalledWith([
+      expect.objectContaining({
+        title: 'Offline scan',
+        syncState: 'pending_create',
+        clientOperationId: expect.stringMatching(/^mobile-/),
+      }),
+    ]);
   });
 });

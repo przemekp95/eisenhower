@@ -1,0 +1,33 @@
+{
+  "schema_version": "retrieval-candidate-assessment-v1",
+  "approval_status": "human_review_required",
+  "candidate_sha256": "5966f79ee4f9e04f9485073c3efc7c86195aeedd615ae7aeb8bf89132f1b1ba0",
+  "threshold_proposal_sha256": "e37602d4cbd9a304675382b7d32d999a977631405fc8527bfb29388779e521bb",
+  "runtime_report_sha256": "16ff06d03483b803d373bd35d2743649485436908ba9c9420114a95d7cb9d0b8",
+  "provisional_result": "fail",
+  "failed_proposed_gates": {
+    "global_recall_at_5": {"actual": 0.6667, "minimum": 0.9},
+    "global_mrr_at_5": {"actual": 0.5444, "minimum": 0.8},
+    "global_no_answer_accuracy": {"actual": 0.9444, "minimum": 1.0},
+    "language_pl_recall_at_5": {"actual": 0.4375, "minimum": 0.85},
+    "language_pl_mrr_at_5": {"actual": 0.4375, "minimum": 0.75},
+    "language_en_mrr_at_5": {"actual": 0.6667, "minimum": 0.75},
+    "holdout_recall_at_5": {"actual": 0.6667, "minimum": 0.85},
+    "holdout_mrr_at_5": {"actual": 0.5, "minimum": 0.75},
+    "holdout_no_answer_accuracy": {"actual": 0.8333, "minimum": 1.0}
+  },
+  "passed_proposed_gates": {
+    "language_en_recall_at_5": {"actual": 0.9286, "minimum": 0.85},
+    "duplicate_hit_rate": {"actual": 0.0, "maximum": 0.02},
+    "freshness_rate": {"actual": 1.0, "minimum": 1.0},
+    "stale_hit_rate": {"actual": 0.0, "maximum": 0.0},
+    "forbidden_hit_rate": {"actual": 0.0, "maximum": 0.0},
+    "isolation_violation_rate": {"actual": 0.0, "maximum": 0.0},
+    "warm_local_p95_ms": {"actual": 14.7025, "maximum": 250.0}
+  },
+  "interpretation": [
+    "This is an untuned diagnostic baseline over unapproved labels, not final acceptance evidence.",
+    "No threshold or label was changed after observing the holdout result.",
+    "TASK-014 remains blocked because TASK-013 has neither human-approved labels nor passing metrics."
+  ]
+}

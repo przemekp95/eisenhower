@@ -19,18 +19,26 @@ export default defineConfig({
     timeout: 10_000,
   },
   outputDir: './output/playwright/test-results',
-  reporter: [
-    ['list'],
-    ['html', { open: 'never', outputFolder: './output/playwright/report' }],
+  reporter: [['list'], ['html', { open: 'never', outputFolder: './output/playwright/report' }]],
+  projects: [
+    {
+      name: 'desktop-chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1440, height: 1200 },
+        contextOptions: { reducedMotion: 'reduce' },
+      },
+    },
+    {
+      name: 'mobile-chromium',
+      use: { ...devices['Pixel 7'], contextOptions: { reducedMotion: 'reduce' } },
+    },
   ],
   use: {
-    ...devices['Desktop Chrome'],
     baseURL: frontendUrl,
-    reducedMotion: 'reduce',
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
     video: 'retain-on-failure',
-    viewport: { width: 1440, height: 1200 },
   },
   webServer: [
     {
@@ -40,6 +48,9 @@ export default defineConfig({
         ...childEnv,
         HOST: '127.0.0.1',
         PORT: '3101',
+        NODE_ENV: 'test',
+        EISENHOWER_API_TOKEN: 'test-api-token',
+        CORS_ALLOW_ORIGINS: frontendUrl,
       },
       reuseExistingServer: false,
       timeout: 120_000,

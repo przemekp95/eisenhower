@@ -1,0 +1,96 @@
+{
+  "$id": "https://eisenhower.invalid/schemas/promotion-evidence-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "approval_receipt_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Approval Receipt Sha256"
+    },
+    "approval_verified": {
+      "title": "Approval Verified",
+      "type": "boolean"
+    },
+    "blockers": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Blockers",
+      "type": "array"
+    },
+    "checksum": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Checksum",
+      "type": "string"
+    },
+    "dataset_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Dataset Sha256",
+      "type": "string"
+    },
+    "deterministic_adapter_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Deterministic Adapter Sha256",
+      "type": "string"
+    },
+    "evaluation_checksum": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Evaluation Checksum",
+      "type": "string"
+    },
+    "job_config_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Job Config Sha256",
+      "type": "string"
+    },
+    "model_checksum": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Model Checksum",
+      "type": "string"
+    },
+    "passed": {
+      "title": "Passed",
+      "type": "boolean"
+    },
+    "promotion_policy_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Promotion Policy Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "ci-impact-promotion-evidence-v1",
+      "default": "ci-impact-promotion-evidence-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "workflow_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Workflow Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "dataset_sha256",
+    "model_checksum",
+    "job_config_sha256",
+    "workflow_sha256",
+    "promotion_policy_sha256",
+    "deterministic_adapter_sha256",
+    "approval_verified",
+    "evaluation_checksum",
+    "passed",
+    "blockers",
+    "checksum"
+  ],
+  "title": "CiImpactPromotionEvidence",
+  "type": "object"
+}

@@ -1,0 +1,236 @@
+{
+  "cases": [
+    {
+      "elapsed_seconds": 4.442279,
+      "element_kinds": [
+        "heading",
+        "paragraph"
+      ],
+      "elements": 2,
+      "extraction_sha256": "0212d212dac323aec2aaf5f77d6021d81e4f90e518fd435fafe11d5848620443",
+      "extractor_name": "docling",
+      "extractor_version": "2.119.0",
+      "ocr_performed": false,
+      "parser_role": "docling-primary",
+      "process_peak_rss_after_bytes": 1282908160,
+      "process_peak_rss_before_bytes": 265392128,
+      "required_phrases_present": true,
+      "source": "extraction-golden-pdf.pdf",
+      "source_sha256": "9f796cf2f08571cecb59a50e412e2d7f4a6ac81ab0aa7d47ded5733e8380a8ad"
+    },
+    {
+      "elapsed_seconds": 2.589783,
+      "element_kinds": [
+        "heading",
+        "paragraph"
+      ],
+      "elements": 2,
+      "extraction_sha256": "dbc571eda912233085be06d9cf97c7beeae160dca91089ba966e04095d8f5dc3",
+      "extractor_name": "unstructured",
+      "extractor_version": "0.25.2",
+      "ocr_performed": false,
+      "parser_role": "unstructured-controlled-fallback",
+      "process_peak_rss_after_bytes": 1485385728,
+      "process_peak_rss_before_bytes": 1282908160,
+      "required_phrases_present": true,
+      "source": "extraction-golden-pdf.pdf",
+      "source_sha256": "9f796cf2f08571cecb59a50e412e2d7f4a6ac81ab0aa7d47ded5733e8380a8ad"
+    },
+    {
+      "elapsed_seconds": 0.036464,
+      "element_kinds": [
+        "heading",
+        "list_item",
+        "paragraph",
+        "table"
+      ],
+      "elements": 4,
+      "extraction_sha256": "3fd8b783b7e30a16783726dcfc81b7e84231710e5ee4526f114da539fe38e932",
+      "extractor_name": "docling",
+      "extractor_version": "2.119.0",
+      "ocr_performed": false,
+      "parser_role": "docling-primary",
+      "process_peak_rss_after_bytes": 1495609344,
+      "process_peak_rss_before_bytes": 1495609344,
+      "required_phrases_present": true,
+      "source": "extraction-golden-docx.docx",
+      "source_sha256": "dfa9c6f493d5d7e793e01e3e49b8075b6c9f7d06eac8fe3eeefd1e118c9fcef2"
+    },
+    {
+      "elapsed_seconds": 0.017251,
+      "element_kinds": [
+        "heading",
+        "list_item",
+        "paragraph",
+        "table"
+      ],
+      "elements": 4,
+      "extraction_sha256": "fce5d319b0efa4a003416bd6efed9819935b3fd0395b72b6ddf1bb728bd25fbe",
+      "extractor_name": "unstructured",
+      "extractor_version": "0.25.2",
+      "ocr_performed": false,
+      "parser_role": "unstructured-controlled-fallback",
+      "process_peak_rss_after_bytes": 1497903104,
+      "process_peak_rss_before_bytes": 1495609344,
+      "required_phrases_present": true,
+      "source": "extraction-golden-docx.docx",
+      "source_sha256": "dfa9c6f493d5d7e793e01e3e49b8075b6c9f7d06eac8fe3eeefd1e118c9fcef2"
+    },
+    {
+      "elapsed_seconds": 0.013011,
+      "element_kinds": [
+        "heading",
+        "paragraph",
+        "table"
+      ],
+      "elements": 3,
+      "extraction_sha256": "96ab92f9f688c5b3fdb462c105b7d8353d75abdcac2247914ae43704f64844fe",
+      "extractor_name": "docling",
+      "extractor_version": "2.119.0",
+      "ocr_performed": false,
+      "parser_role": "docling-primary",
+      "process_peak_rss_after_bytes": 1498951680,
+      "process_peak_rss_before_bytes": 1498165248,
+      "required_phrases_present": true,
+      "source": "extraction-golden-pptx.pptx",
+      "source_sha256": "800e0a9a9d16c2c5355cf721b82adbfb31d25b58d0993153a2663dcbbea085b3"
+    },
+    {
+      "elapsed_seconds": 0.010726,
+      "element_kinds": [
+        "heading",
+        "paragraph",
+        "table"
+      ],
+      "elements": 3,
+      "extraction_sha256": "7442a87b1494f8567580fed38ec3c8758f06aa3b293f410f600af30292c5b2ab",
+      "extractor_name": "unstructured",
+      "extractor_version": "0.25.2",
+      "ocr_performed": false,
+      "parser_role": "unstructured-controlled-fallback",
+      "process_peak_rss_after_bytes": 1499475968,
+      "process_peak_rss_before_bytes": 1498951680,
+      "required_phrases_present": true,
+      "source": "extraction-golden-pptx.pptx",
+      "source_sha256": "800e0a9a9d16c2c5355cf721b82adbfb31d25b58d0993153a2663dcbbea085b3"
+    },
+    {
+      "elapsed_seconds": 0.017447,
+      "element_kinds": [
+        "heading",
+        "list_item",
+        "paragraph",
+        "table"
+      ],
+      "elements": 8,
+      "extraction_sha256": "6e7ebf9b3112edefa4d912917da73d49f7ee036334cb8e77bc00fed8f62a3eff",
+      "extractor_name": "docling",
+      "extractor_version": "2.119.0",
+      "ocr_performed": false,
+      "parser_role": "docling-primary",
+      "process_peak_rss_after_bytes": 1503772672,
+      "process_peak_rss_before_bytes": 1503772672,
+      "required_phrases_present": true,
+      "source": "extraction-golden-pl.html",
+      "source_sha256": "797acbd5f4d1b652791515dc21213bc35d5e9d2aec6e3815590b10d7e908591d"
+    },
+    {
+      "elapsed_seconds": 0.070704,
+      "element_kinds": [
+        "heading",
+        "list_item",
+        "paragraph",
+        "table"
+      ],
+      "elements": 8,
+      "extraction_sha256": "2872c72879589d5c4955ddf3f36432767aab69594909dc2ec03d4f7ca24b5081",
+      "extractor_name": "unstructured",
+      "extractor_version": "0.25.2",
+      "ocr_performed": false,
+      "parser_role": "unstructured-controlled-fallback",
+      "process_peak_rss_after_bytes": 1505144832,
+      "process_peak_rss_before_bytes": 1503772672,
+      "required_phrases_present": true,
+      "source": "extraction-golden-pl.html",
+      "source_sha256": "797acbd5f4d1b652791515dc21213bc35d5e9d2aec6e3815590b10d7e908591d"
+    },
+    {
+      "elapsed_seconds": 0.011354,
+      "element_kinds": [
+        "heading",
+        "list_item",
+        "paragraph",
+        "table"
+      ],
+      "elements": 8,
+      "extraction_sha256": "312d7994deacbbeee3518fef6d15e8c23eabb47439c757f2cbda158acfcc5ead",
+      "extractor_name": "docling",
+      "extractor_version": "2.119.0",
+      "ocr_performed": false,
+      "parser_role": "docling-primary",
+      "process_peak_rss_after_bytes": 1505144832,
+      "process_peak_rss_before_bytes": 1505144832,
+      "required_phrases_present": true,
+      "source": "extraction-golden-en.html",
+      "source_sha256": "6878f20c21ef61e6f86c8eb263fbbd9ebf2fdd8db195089b79771dabce04b23a"
+    },
+    {
+      "elapsed_seconds": 0.013716,
+      "element_kinds": [
+        "heading",
+        "list_item",
+        "paragraph",
+        "table"
+      ],
+      "elements": 8,
+      "extraction_sha256": "0e61b8af7be65a53135732950c897c696224d61d2d342aa483ec90c267b05e1f",
+      "extractor_name": "unstructured",
+      "extractor_version": "0.25.2",
+      "ocr_performed": false,
+      "parser_role": "unstructured-controlled-fallback",
+      "process_peak_rss_after_bytes": 1505406976,
+      "process_peak_rss_before_bytes": 1505144832,
+      "required_phrases_present": true,
+      "source": "extraction-golden-en.html",
+      "source_sha256": "6878f20c21ef61e6f86c8eb263fbbd9ebf2fdd8db195089b79771dabce04b23a"
+    },
+    {
+      "elapsed_seconds": 0.971395,
+      "element_kinds": [
+        "heading"
+      ],
+      "elements": 1,
+      "extraction_sha256": "1159f8269eb6b0ba254340c7e2fa62e9ea1f87643b7ad42347654be51bf2a7e2",
+      "extractor_name": "docling",
+      "extractor_version": "2.119.0",
+      "ocr_approval_id": "task018-synthetic-ocr-owner-approval-2026-08-10",
+      "ocr_engine": "tesseract-cli",
+      "ocr_engine_version": "5.3.4",
+      "ocr_performed": true,
+      "parser_role": "docling-primary-approved-ocr",
+      "process_peak_rss_after_bytes": 2145562624,
+      "process_peak_rss_before_bytes": 1505406976,
+      "required_phrases_present": true,
+      "source": "extraction-golden-ocr.pdf",
+      "source_sha256": "e592a5a9da2abbc47f95ec5868754f84d0c6fa584af3a289ef16763343bc9f79"
+    }
+  ],
+  "dependency_versions": {
+    "docling": "2.119.0",
+    "onnxruntime": "1.27.0",
+    "torch": "2.13.0+cpu",
+    "torchvision": "0.28.0+cpu",
+    "unstructured": "0.25.2",
+    "unstructured-inference": "1.6.13"
+  },
+  "docling_layout_model": {
+    "repository": "docling-project/docling-layout-heron-onnx",
+    "revision": "40bde044036bb181c130ddf6c51792187268748f"
+  },
+  "manifest_sha256": "b022333de73442927099881fdb4e327d7edea0feb1eba9ad809511e9ccec9f5f",
+  "manifest_version": "eisenhower-corpus-v1",
+  "ocr_without_frozen_receipt_rejection": "ocr_human_approval_required",
+  "offline": true,
+  "schema_version": "document-extraction-benchmark-v1",
+  "synthetic_fixture_notice": "Smoke benchmark only; representative human review remains a separate gate."
+}

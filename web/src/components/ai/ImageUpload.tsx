@@ -2,85 +2,205 @@ import { useRef, useState } from 'react';
 import { OCRResult, extractTasksFromImage } from '../../services/api';
 import { useLanguage } from '../../i18n/LanguageContext';
 
-interface Props {
-  onTasksExtracted: (result: OCRResult) => Promise<void> | void;
+export interface OCRImportSummary {
+  imported: number;
+  failed: number;
+  learned: boolean;
+  feedbackError?: string;
 }
+
+interface Props {
+  onTasksExtracted: (
+    result: OCRResult,
+    learnFromAccepted: boolean
+  ) => Promise<OCRImportSummary | number | void> | OCRImportSummary | number | void;
+}
+
+type ReviewTask = OCRResult['classified_tasks'][number] & { selected: boolean };
 
 export default function ImageUpload({ onTasksExtracted }: Props) {
   const [result, setResult] = useState<OCRResult | null>(null);
+  const [reviewTasks, setReviewTasks] = useState<ReviewTask[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [learnFromAccepted, setLearnFromAccepted] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { language, t } = useLanguage();
 
-  const format = (template: string, values: Record<string, string | number>) =>
-    Object.entries(values).reduce(
-      (current, [key, value]) => current.replace(`{${key}}`, String(value)),
-      template
-    );
-
-  const formatOcrResult = (count: number, filename: string) => {
-    if (language === 'pl') {
-      const remainder10 = count % 10;
-      const remainder100 = count % 100;
-
-      if (count === 1) {
-        return format(t('ai.ocr.result.one'), { filename });
-      }
-
-      if (remainder10 >= 2 && remainder10 <= 4 && !(remainder100 >= 12 && remainder100 <= 14)) {
-        return format(t('ai.ocr.result.few'), { count, filename });
-      }
-
-      return format(t('ai.ocr.result.other'), { count, filename });
-    }
-
-    return count === 1
-      ? format(t('ai.ocr.result.one'), { filename })
-      : format(t('ai.ocr.result.other'), { count, filename });
-  };
+  const copy =
+    language === 'pl'
+      ? {
+          review: 'Sprawdź zadania przed importem',
+          include: 'Uwzględnij zadanie',
+          quadrant: 'Kwadrant dla',
+          learn: 'Wyślij zapisane zadania jako świadomy feedback treningowy',
+          import: 'Importuj wybrane',
+          importing: 'Importowanie…',
+          none: 'Wybierz co najmniej jedno niepuste zadanie.',
+          summary: (imported: number, failed: number, learned: boolean) =>
+            `Zapisano: ${imported}. Nie zapisano: ${failed}. Feedback: ${learned ? 'wysłany' : 'niewysłany'}.`,
+        }
+      : {
+          review: 'Review tasks before import',
+          include: 'Include task',
+          quadrant: 'Quadrant for',
+          learn: 'Send persisted tasks as explicit training feedback',
+          import: 'Import selected',
+          importing: 'Importing…',
+          none: 'Select at least one non-empty task.',
+          summary: (imported: number, failed: number, learned: boolean) =>
+            `Persisted: ${imported}. Failed: ${failed}. Feedback: ${learned ? 'sent' : 'not sent'}.`,
+        };
 
   const handleSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
+    if (!file) return;
 
     setLoading(true);
     setError(null);
-
+    setStatus(null);
     try {
       const payload = await extractTasksFromImage(file);
       setResult(payload);
-      await onTasksExtracted(payload);
+      setReviewTasks(payload.classified_tasks.map((task) => ({ ...task, selected: true })));
+      setLearnFromAccepted(false);
     } catch (issue) {
       setError(issue instanceof Error ? issue.message : t('ai.ocr.failed'));
     } finally {
       setLoading(false);
+      event.target.value = '';
+    }
+  };
+
+  const updateReviewTask = (index: number, patch: Partial<ReviewTask>) => {
+    setReviewTasks((current) =>
+      current.map((task, taskIndex) => (taskIndex === index ? { ...task, ...patch } : task))
+    );
+  };
+
+  const handleImport = async (reviewedSource: OCRResult) => {
+    const selected = reviewTasks.filter((task) => task.selected && task.text.trim());
+    if (selected.length === 0) {
+      setError(copy.none);
+      return;
+    }
+
+    setImporting(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const reviewedResult: OCRResult = {
+        ...reviewedSource,
+        classified_tasks: selected.map(({ selected: _selected, ...task }) => ({
+          ...task,
+          text: task.text.trim(),
+          quadrant: Number(task.quadrant),
+        })),
+      };
+      const response = await onTasksExtracted(reviewedResult, learnFromAccepted);
+      const summary: OCRImportSummary =
+        typeof response === 'number'
+          ? { imported: response, failed: selected.length - response, learned: false }
+          : (response ?? { imported: 0, failed: selected.length, learned: false });
+      setStatus(copy.summary(summary.imported, summary.failed, summary.learned));
+      if (summary.feedbackError) setError(summary.feedbackError);
+    } catch (issue) {
+      setError(issue instanceof Error ? issue.message : t('ai.ocr.failed'));
+    } finally {
+      setImporting(false);
     }
   };
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-4" aria-labelledby="ocr-review-title">
       <input
         ref={inputRef}
         type="file"
         accept="image/*,.txt"
         className="hidden"
         data-testid="image-upload-input"
+        aria-label={t('ai.ocr.upload')}
         onChange={handleSelect}
       />
       <button
         type="button"
+        disabled={loading || importing}
         onClick={() => inputRef.current?.click()}
-        className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-white/15 hover:text-white"
+        className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-white/15 disabled:opacity-50"
       >
         {loading ? t('ai.ocr.extracting') : t('ai.ocr.upload')}
       </button>
-      {error ? <p className="text-sm text-red-200">{error}</p> : null}
+
       {result ? (
-        <p className="text-sm text-white">
-          {formatOcrResult(result.summary.total_tasks, result.filename)}
+        <fieldset className="space-y-3" disabled={importing}>
+          <legend id="ocr-review-title" className="font-semibold text-white">
+            {copy.review}
+          </legend>
+          {reviewTasks.map((task, index) => (
+            <div
+              key={index}
+              className="grid gap-2 rounded-2xl border border-white/10 p-3 sm:grid-cols-[auto_1fr_12rem]"
+            >
+              <input
+                type="checkbox"
+                checked={task.selected}
+                aria-label={`${copy.include}: ${task.text}`}
+                onChange={(event) => updateReviewTask(index, { selected: event.target.checked })}
+              />
+              <label className="sr-only" htmlFor={`ocr-task-${index}`}>
+                {copy.include} {index + 1}
+              </label>
+              <input
+                id={`ocr-task-${index}`}
+                value={task.text}
+                onChange={(event) => updateReviewTask(index, { text: event.target.value })}
+                className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-white"
+              />
+              <label className="sr-only" htmlFor={`ocr-quadrant-${index}`}>
+                {copy.quadrant} {task.text}
+              </label>
+              <select
+                id={`ocr-quadrant-${index}`}
+                value={task.quadrant}
+                onChange={(event) =>
+                  updateReviewTask(index, { quadrant: Number(event.target.value) })
+                }
+                className="rounded-xl border border-white/15 bg-slate-950 px-3 py-2 text-white"
+              >
+                <option value={0}>0 — {t('matrix.do')}</option>
+                <option value={1}>1 — {t('matrix.delegate')}</option>
+                <option value={2}>2 — {t('matrix.schedule')}</option>
+                <option value={3}>3 — {t('matrix.delete')}</option>
+              </select>
+            </div>
+          ))}
+          <label className="flex items-start gap-2 text-sm text-white/80">
+            <input
+              type="checkbox"
+              checked={learnFromAccepted}
+              onChange={(event) => setLearnFromAccepted(event.target.checked)}
+            />
+            <span>{copy.learn}</span>
+          </label>
+          <button
+            type="button"
+            onClick={() => void handleImport(result)}
+            className="rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
+          >
+            {importing ? copy.importing : copy.import}
+          </button>
+        </fieldset>
+      ) : null}
+      {error ? (
+        <p role="alert" className="text-sm text-red-200">
+          {error}
+        </p>
+      ) : null}
+      {status ? (
+        <p role="status" aria-live="polite" className="text-sm text-emerald-200">
+          {status}
         </p>
       ) : null}
     </section>

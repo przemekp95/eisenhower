@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { applyAdvancedAnalysisResult, runAdvancedTaskAnalysis } from '../../lib/uiState';
 import { resolveQuadrantLabel, resolveSuggestedQuadrant } from '../matrixUtils';
-import { analyzeWithLangChain, LangChainAnalysis } from '../../services/api';
+import { analyzeTask, LangChainAnalysis } from '../../services/api';
 import { useLanguage } from '../../i18n/LanguageContext';
 
 interface Props {
@@ -10,7 +10,11 @@ interface Props {
   onAddToMatrix?: (analysis: LangChainAnalysis) => Promise<void> | void;
 }
 
-export default function AdvancedAIAnalysis({ taskTitle, onAnalysisComplete, onAddToMatrix }: Props) {
+export default function AdvancedAIAnalysis({
+  taskTitle,
+  onAnalysisComplete,
+  onAddToMatrix,
+}: Props) {
   const [analysis, setAnalysis] = useState<LangChainAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -19,8 +23,8 @@ export default function AdvancedAIAnalysis({ taskTitle, onAnalysisComplete, onAd
 
   const quadrantLabels = {
     0: t('matrix.do'),
-    1: t('matrix.schedule'),
-    2: t('matrix.delegate'),
+    1: t('matrix.delegate'),
+    2: t('matrix.schedule'),
     3: t('matrix.delete'),
   };
 
@@ -34,7 +38,7 @@ export default function AdvancedAIAnalysis({ taskTitle, onAnalysisComplete, onAd
     setError(null);
 
     try {
-      const result = await runAdvancedTaskAnalysis(taskTitle, language, analyzeWithLangChain);
+      const result = await runAdvancedTaskAnalysis(taskTitle, language, analyzeTask);
       applyAdvancedAnalysisResult(result, (analysis) => {
         setAnalysis(analysis);
         onAnalysisComplete(analysis);
@@ -71,17 +75,22 @@ export default function AdvancedAIAnalysis({ taskTitle, onAnalysisComplete, onAd
       >
         {loading ? t('ai.analysis.running') : t('ai.analysis.run')}
       </button>
-      {error ? <p className="text-sm text-red-200">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="text-sm text-red-200">
+          {error}
+        </p>
+      ) : null}
       {analysis ? (
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white">
+        <div
+          aria-live="polite"
+          className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white"
+        >
           <p>{analysis.langchain_analysis.reasoning}</p>
           <p className="mt-2 text-white/70">
             {t('ai.analysis.suggestedQuadrant').replace(
               '{quadrant}',
-              resolveQuadrantLabel(
-                resolveSuggestedQuadrant(analysis),
-                quadrantLabels,
-                (quadrant) => t('ai.manage.quadrantUnknown').replace('{quadrant}', String(quadrant))
+              resolveQuadrantLabel(resolveSuggestedQuadrant(analysis), quadrantLabels, (quadrant) =>
+                t('ai.manage.quadrantUnknown').replace('{quadrant}', String(quadrant))
               )
             )}
           </p>

@@ -1,6 +1,11 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { DropResult } from '@hello-pangea/dnd';
-import { classifyTask, LangChainAnalysis, learnFromAcceptedOCRTasks, OCRResult } from '../services/api';
+import {
+  classifyTask,
+  LangChainAnalysis,
+  learnFromAcceptedOCRTasks,
+  OCRResult,
+} from '../services/api';
 import { TranslationKey } from '../i18n/translations';
 import { Task, TaskInput } from '../types';
 import { quadrantToTaskState, resolveSuggestedQuadrant } from '../components/matrixUtils';
@@ -32,10 +37,26 @@ export function useMatrixController({
 
   const quadrants = useMemo(
     () => [
-      { key: 'do', label: translate('matrix.do'), filter: (task: Task) => task.urgent && task.important },
-      { key: 'schedule', label: translate('matrix.schedule'), filter: (task: Task) => task.urgent && !task.important },
-      { key: 'delegate', label: translate('matrix.delegate'), filter: (task: Task) => !task.urgent && task.important },
-      { key: 'delete', label: translate('matrix.delete'), filter: (task: Task) => !task.urgent && !task.important },
+      {
+        key: 'do',
+        label: translate('matrix.do'),
+        filter: (task: Task) => task.urgent && task.important,
+      },
+      {
+        key: 'delegate',
+        label: translate('matrix.delegate'),
+        filter: (task: Task) => task.urgent && !task.important,
+      },
+      {
+        key: 'schedule',
+        label: translate('matrix.schedule'),
+        filter: (task: Task) => !task.urgent && task.important,
+      },
+      {
+        key: 'delete',
+        label: translate('matrix.delete'),
+        filter: (task: Task) => !task.urgent && !task.important,
+      },
     ],
     [translate]
   );
@@ -62,12 +83,16 @@ export function useMatrixController({
       return;
     }
 
-    await onAddTask({
-      ...newTask,
-      title: newTask.title.trim(),
-      description: newTask.description.trim(),
-    });
-    resetNewTask();
+    try {
+      await onAddTask({
+        ...newTask,
+        title: newTask.title.trim(),
+        description: newTask.description.trim(),
+      });
+      resetNewTask();
+    } catch {
+      // The owner surfaces the mutation error. Keeping state here preserves the complete draft.
+    }
   };
 
   const handleSuggest = async () => {
@@ -112,7 +137,7 @@ export function useMatrixController({
     closeAiTools();
   };
 
-  const handleOCRImport = async (result: OCRResult) => {
+  const handleOCRImport = async (result: OCRResult, learnFromAccepted: boolean) => {
     const importedTasks = result.classified_tasks.reduce<Array<{ text: string; quadrant: number }>>(
       (collection, detectedTask) => {
         const title = detectedTask.text.trim();
@@ -138,17 +163,34 @@ export function useMatrixController({
       []
     );
 
+    const persistedTasks: Array<{ text: string; quadrant: number }> = [];
+    let failed = 0;
+
     for (const detectedTask of importedTasks) {
-      await onAddTask({
-        title: detectedTask.text,
-        description: '',
-        ...quadrantToTaskState(detectedTask.quadrant),
-      });
+      try {
+        await onAddTask({
+          title: detectedTask.text,
+          description: '',
+          ...quadrantToTaskState(detectedTask.quadrant),
+        });
+        persistedTasks.push(detectedTask);
+      } catch {
+        failed += 1;
+      }
     }
 
-    void learnFromAcceptedOCRTasks(importedTasks).catch(() => undefined);
+    let learned = false;
+    let feedbackError: string | undefined;
+    if (learnFromAccepted && persistedTasks.length > 0) {
+      try {
+        await learnFromAcceptedOCRTasks(persistedTasks);
+        learned = true;
+      } catch (issue) {
+        feedbackError = issue instanceof Error ? issue.message : 'Feedback failed';
+      }
+    }
 
-    return importedTasks.length;
+    return { imported: persistedTasks.length, failed, learned, feedbackError };
   };
 
   const handleDragEnd = async (result: DropResult) => {
@@ -157,7 +199,7 @@ export function useMatrixController({
     }
 
     const nextState = quadrantToTaskState(
-      ['do', 'schedule', 'delegate', 'delete'].indexOf(result.destination.droppableId)
+      ['do', 'delegate', 'schedule', 'delete'].indexOf(result.destination.droppableId)
     );
     await onUpdateTask(result.draggableId, nextState);
   };

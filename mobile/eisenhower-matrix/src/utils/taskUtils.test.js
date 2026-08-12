@@ -41,6 +41,7 @@ describe('taskUtils', () => {
       locale: 'pl',
       remoteId: null,
       syncState: 'pending_create',
+      clientOperationId: 'mobile-1',
     });
   });
 

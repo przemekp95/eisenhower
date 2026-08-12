@@ -1,0 +1,146 @@
+{
+  "manifest_version": "eisenhower-corpus-v1",
+  "approved_at": "2026-08-11",
+  "review_by": "2026-11-10",
+  "approval_evidence": "Repository owner granted full-scope local approval in the Codex task; snapshot refreshed on 2026-08-11 after the reviewed security and evidence documents changed.",
+  "use_case": "Retrieve cited project constraints, decisions, procedures, runbooks and active delivery context relevant to task prioritization.",
+  "initial_snapshot": {
+    "algorithm": "sha256(sorted newline-separated sha256sum records)",
+    "sha256": "7d52fdd5f973f62a19f3c67a1afcfbe3d4990d80c75439e550b34f5d6188dd43",
+    "document_count": 19,
+    "total_bytes": 129552,
+    "documents": [
+      "README.md",
+      "docs/PRODUCTION_ACCEPTANCE.md",
+      "docs/ai-rebuild/README.md",
+      "docs/ai-rebuild/adr/0001-fastapi-owns-online-rag.md",
+      "docs/ai-rebuild/adr/0002-qdrant-vector-store.md",
+      "docs/ai-rebuild/adr/0003-vllm-generation-adapter.md",
+      "docs/ai-rebuild/adr/0004-n8n-async-only.md",
+      "docs/ai-rebuild/adr/0005-read-only-mcp.md",
+      "docs/ai-rebuild/adr/0006-light-command-query-split.md",
+      "docs/ai-rebuild/adr/0007-ai-framework-boundary.md",
+      "docs/ai-rebuild/adr/README.md",
+      "docs/ai-rebuild/corpus-contract.md",
+      "docs/ai-rebuild/delivery-roadmap.md",
+      "docs/ai-rebuild/methodology-assessment.md",
+      "docs/ai-rebuild/operations.md",
+      "docs/ai-rebuild/prompt-engineering.md",
+      "docs/ai-rebuild/recruitment-readiness.md",
+      "docs/ai-rebuild/security-review.md",
+      "docs/ai-rebuild/testing-evaluation.md"
+    ]
+  },
+  "incremental_sources": [
+    {
+      "root": ".tasks",
+      "files": [
+        "BACKLOG.md",
+        "NEXT.md",
+        "IN_PROGRESS.md",
+        "DONE.md",
+        "REJECTED.md",
+        "WORK_LOG.md"
+      ],
+      "source_type": "task",
+      "revision_rule": "per-file SHA-256 and monotonically increasing source_sequence"
+    },
+    {
+      "root": "corpus/approved-documents",
+      "extensions": [".pdf", ".docx", ".pptx", ".html"],
+      "source_type": "project_context",
+      "revision_rule": "per-file SHA-256, reviewed extraction checksum and monotonically increasing source_sequence"
+    }
+  ],
+  "identity_and_acl": {
+    "initial_tenant": "eisenhower-owner",
+    "identity_source": "verified bearer or OIDC principal; fixed identity only in synthetic tests",
+    "required_subjects": ["tenant", "user", "project"],
+    "cross_tenant_access": false,
+    "request_payload_may_expand_scope": false
+  },
+  "canonical_store": {
+    "target": "MongoDB rag_documents",
+    "write_order": "canonical store before vector projection",
+    "reconciliation_required": true,
+    "qdrant_is_source_of_truth": false
+  },
+  "document_policy": {
+    "primary_parser": "Docling",
+    "controlled_fallback": "Unstructured",
+    "parser_runtime": {
+      "docling_version": "2.119.0",
+      "unstructured_version": "0.25.2",
+      "layout_engine": "onnxruntime-cpu",
+      "layout_engine_version": "1.27.0",
+      "layout_model_repository": "docling-project/docling-layout-heron-onnx",
+      "layout_model_revision": "40bde044036bb181c130ddf6c51792187268748f",
+      "torch_version": "2.13.0+cpu",
+      "torchvision_version": "0.28.0+cpu",
+      "tesseract_cli_version": "5.3.4",
+      "remote_services": false,
+      "external_plugins": false
+    },
+    "primary_formats": ["pdf", "docx", "pptx", "html"],
+    "fallback_formats": ["pdf", "docx", "pptx", "html"],
+    "fallback_reasons": [
+      "PRIMARY_UNSUPPORTED_LAYOUT",
+      "PRIMARY_QUALITY_BELOW_APPROVED_THRESHOLD"
+    ],
+    "fallback_forbidden_on": [
+      "security rejection",
+      "encrypted input",
+      "MIME or extension mismatch",
+      "timeout",
+      "out of memory",
+      "resource budget exceeded",
+      "unapproved OCR"
+    ],
+    "ocr_enabled": true,
+    "ocr_languages": ["pl", "en"],
+    "ocr_requires_human_approval": true,
+    "ocr_approvals": [
+      {
+        "approval_id": "task018-synthetic-ocr-owner-approval-2026-08-10",
+        "approver_id": "eisenhower-repository-owner",
+        "content_sha256": "e592a5a9da2abbc47f95ec5868754f84d0c6fa584af3a289ef16763343bc9f79",
+        "languages": ["en"],
+        "policy_version": "eisenhower-corpus-v1"
+      }
+    ],
+    "maximum_document_bytes": 20971520,
+    "maximum_document_pages": 500,
+    "minimum_primary_text_characters": 20,
+    "maximum_documents": 500,
+    "resource_budget": {
+      "maximum_wall_seconds": 120.0,
+      "maximum_peak_memory_bytes": 4294967296
+    },
+    "archives": "reject",
+    "encrypted_documents": "reject",
+    "external_url_fetching": "reject"
+  },
+  "privacy": {
+    "pii": "detect and redact before canonical storage; reject when ownership or safe redaction is uncertain",
+    "secrets": "reject and alert without storing or logging the secret",
+    "data_residency": "user-controlled local environment and explicitly approved EU target only",
+    "deletion_sla_hours": 24,
+    "tombstone_retention_days": 90,
+    "backup_retention_days": 30,
+    "audit_metadata_retention_days": 365,
+    "initial_human_review_percent": 100,
+    "later_non_ocr_review_percent": 10,
+    "ocr_review_percent": 100
+  },
+  "excluded": [
+    "credentials, private keys, tokens and hidden prompts",
+    ".env files, database dumps, uploads and build artifacts",
+    "raw chat, email, calendar attendee data and browser history",
+    "git history and deleted content bodies",
+    "permission-ambiguous or third-party content without explicit approval",
+    "historic quadrant 1/2 data not migrated and reviewed",
+    "unreviewed OCR"
+  ],
+  "deployment_authorized": false,
+  "publication_authorized": false
+}

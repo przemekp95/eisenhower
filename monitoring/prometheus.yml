@@ -12,29 +12,18 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  - job_name: 'eisenhower-api'
-    scrape_interval: 10s
-    static_configs:
-      - targets: ['api-service:3001']
-
   - job_name: 'eisenhower-ai'
-    scrape_interval: 30s
+    scrape_interval: 15s
+    metrics_path: /metrics
     static_configs:
       - targets: ['ai-service:8000']
 
-  - job_name: 'eisenhower-frontend'
-    scrape_interval: 30s
+  - job_name: 'qdrant'
     static_configs:
-      - targets: ['frontend:3000']
+      - targets: ['qdrant:6333']
 
-  - job_name: 'mongodb'
+  # Present only with an explicitly enabled private inference profile.
+  - job_name: 'inference'
+    metrics_path: /metrics
     static_configs:
-      - targets: ['mongodb:27017']
-
-  - job_name: 'redis'
-    static_configs:
-      - targets: ['redis:6379']
-
-  - job_name: 'nginx'
-    static_configs:
-      - targets: ['nginx:80']
+      - targets: ['inference:8000']

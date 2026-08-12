@@ -1,0 +1,15 @@
+node_modules
+dist
+coverage
+.vite
+.venv
+venv
+backend-ai/venv
+backend-ai/.venv
+mobile/eisenhower-matrix/node_modules
+backend-node/dist
+backend-node/coverage
+web/dist
+web/coverage
+web/output
+package-lock.json

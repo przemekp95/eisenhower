@@ -1,15 +1,24 @@
 name: eisenhower
 
 services:
-  # AI Service - Python FastAPI for task classification
+  # AI service - Python FastAPI for task classification (CPU by default)
   ai-service:
     build:
       context: ./backend-ai
       dockerfile: Dockerfile
+      target: production
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+      - APP_ENV=development
+      - AUTH_MODE=${AUTH_MODE:-static}
+      - EISENHOWER_API_TOKEN=${EISENHOWER_API_TOKEN:?EISENHOWER_API_TOKEN is required}
+      - EISENHOWER_ADMIN_TOKEN=${EISENHOWER_ADMIN_TOKEN:?EISENHOWER_ADMIN_TOKEN is required}
+      - OIDC_ISSUER=${OIDC_ISSUER:-}
+      - OIDC_AUDIENCE=${OIDC_AUDIENCE:-}
+      - OIDC_JWKS_URL=${OIDC_JWKS_URL:-}
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://localhost,http://127.0.0.1,http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173}
       - LOCAL_MODEL_NAME=${LOCAL_MODEL_NAME:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
       - LOCAL_MODEL_EPOCHS=${LOCAL_MODEL_EPOCHS:-60}
       - LOCAL_MODEL_PATIENCE=${LOCAL_MODEL_PATIENCE:-8}
@@ -17,6 +26,29 @@ services:
       - LOCAL_MODEL_DROPOUT=${LOCAL_MODEL_DROPOUT:-0.1}
       - LOCAL_MODEL_LEARNING_RATE=${LOCAL_MODEL_LEARNING_RATE:-0.01}
       - HF_HOME=/home/app/.cache/huggingface
+      - RAG_ENABLED=${RAG_ENABLED:-false}
+      - RAG_RETRIEVAL_ENABLED
+      - RAG_GENERATION_ENABLED
+      - RAG_RESPONSE_ENABLED=${RAG_RESPONSE_ENABLED:-false}
+      - RAG_ALLOWED_TENANTS=${RAG_ALLOWED_TENANTS:-}
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+      - QDRANT_COLLECTION_ALIAS=${QDRANT_COLLECTION_ALIAS:-eisenhower-knowledge-active}
+      - EMBEDDING_VERSION=${EMBEDDING_VERSION:-minilm-v1}
+      - CHUNKING_VERSION=${CHUNKING_VERSION:-chars-1200-overlap-160-v1}
+      - INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}
+      - INFERENCE_API_KEY=${INFERENCE_API_KEY:-}
+      - INFERENCE_MODEL=${INFERENCE_MODEL:-}
+      - INFERENCE_ALLOWED_HOSTS=${INFERENCE_ALLOWED_HOSTS:-}
+      - INFERENCE_CONNECT_TIMEOUT_SECONDS=${INFERENCE_CONNECT_TIMEOUT_SECONDS:-2}
+      - INFERENCE_READ_TIMEOUT_SECONDS=${INFERENCE_READ_TIMEOUT_SECONDS:-15}
+      - INFERENCE_WRITE_TIMEOUT_SECONDS=${INFERENCE_WRITE_TIMEOUT_SECONDS:-5}
+      - INFERENCE_POOL_TIMEOUT_SECONDS=${INFERENCE_POOL_TIMEOUT_SECONDS:-1}
+      - INFERENCE_CIRCUIT_FAILURE_THRESHOLD=${INFERENCE_CIRCUIT_FAILURE_THRESHOLD:-3}
+      - INFERENCE_CIRCUIT_RESET_SECONDS=${INFERENCE_CIRCUIT_RESET_SECONDS:-30}
+      - EISENHOWER_INTERNAL_API_TOKEN=${EISENHOWER_INTERNAL_API_TOKEN:-}
+      - EISENHOWER_WEBHOOK_SECRET=${EISENHOWER_WEBHOOK_SECRET:-}
+      - INTERNAL_ALLOWED_TENANTS=${INTERNAL_ALLOWED_TENANTS:-}
     volumes:
       - ./backend-ai:/app
     restart: unless-stopped
@@ -26,16 +58,62 @@ services:
       timeout: 10s
       retries: 3
 
+  # Durable asynchronous consumer for validated ingestion commands.
+  rag-worker:
+    build:
+      context: ./backend-ai
+      dockerfile: Dockerfile
+      target: production
+    command: ["python", "-m", "app.worker_runtime"]
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOCAL_MODEL_NAME=${LOCAL_MODEL_NAME:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
+      - HF_HOME=/home/app/.cache/huggingface
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+      - QDRANT_COLLECTION_ALIAS=${QDRANT_COLLECTION_ALIAS:-eisenhower-knowledge-active}
+      - EMBEDDING_VERSION=${EMBEDDING_VERSION:-minilm-v1}
+      - CHUNKING_VERSION=${CHUNKING_VERSION:-chars-1200-overlap-160-v1}
+      - JOBS_DATABASE_PATH=/app/data/jobs.sqlite3
+      - MONGODB_URI=mongodb://mongodb:27017/eisenhower
+      - MONGODB_DATABASE=eisenhower
+      - CANONICAL_DOCUMENTS_COLLECTION=rag_documents
+      - CORPUS_REPOSITORY_ROOT=/corpus
+      - CORPUS_MANIFEST_PATH=/corpus/docs/ai-rebuild/corpus-manifest-v1.json
+      - CORPUS_OWNER_ID=${CORPUS_OWNER_ID:-eisenhower-owner}
+      - CORPUS_ALLOWED_PROJECTS=${CORPUS_ALLOWED_PROJECTS:-eisenhower}
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ./backend-ai:/app
+      - ./README.md:/corpus/README.md:ro
+      - ./docs:/corpus/docs:ro
+      - ./.tasks:/corpus/.tasks:ro
+      - ./corpus:/corpus/corpus:ro
+    restart: unless-stopped
+    profiles:
+      - rag
+
   # Node.js API Service with MongoDB
   api-service:
     build:
       context: .
       dockerfile: backend-node/Dockerfile
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     environment:
       - MONGODB_URI=mongodb://mongodb:27017/eisenhower
       - AI_SERVICE_URL=http://ai-service:8000
+      - NODE_ENV=${APP_ENV:-development}
+      - AUTH_MODE=${AUTH_MODE:-static}
+      - EISENHOWER_API_TOKEN=${EISENHOWER_API_TOKEN:?EISENHOWER_API_TOKEN is required}
+      - OIDC_ISSUER=${OIDC_ISSUER:-}
+      - OIDC_AUDIENCE=${OIDC_AUDIENCE:-}
+      - OIDC_JWKS_URL=${OIDC_JWKS_URL:-}
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://localhost,http://127.0.0.1,http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173}
     depends_on:
       mongodb:
         condition: service_healthy
@@ -52,8 +130,8 @@ services:
       context: .
       dockerfile: web/Dockerfile
     ports:
-      - "3000:3000"
-      - "5173:5173"  # Vite dev server
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:5173:5173"  # Vite dev server
     environment:
       - VITE_API_URL=http://localhost:3001
       - VITE_AI_API_URL=http://localhost:8000
@@ -66,7 +144,7 @@ services:
   mongodb:
     image: mongo:7-jammy
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
     environment:
       MONGO_INITDB_DATABASE: eisenhower
     volumes:
@@ -83,7 +161,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     restart: unless-stopped
@@ -94,12 +172,84 @@ services:
       timeout: 3s
       retries: 3
 
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:v1.12.0
+    ports:
+      - "127.0.0.1:6333:6333"  # Web UI & HTTP API
+      - "127.0.0.1:6334:6334"  # gRPC API
+    environment:
+      - QDRANT__LOG_LEVEL=info
+      - QDRANT__STORAGE__SNAPSHOTS_PATH=/qdrant/snapshots
+      - QDRANT__STORAGE__WAL__WAL_BUFFER_SIZE=33554432
+      - QDRANT__SERVICE__HTTP_HOST=0.0.0.0
+      - QDRANT__SERVICE__GRPC_HOST=0.0.0.0
+      - QDRANT__TELEMETRY_DISABLED=true
+      - QDRANT__STORAGE__MAX_VECTOR_SEARCH_THREADS=4
+    volumes:
+      - qdrant_data:/qdrant/storage
+      - qdrant_snapshots:/qdrant/snapshots
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/6333; printf 'GET /readyz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3; grep -q '200 OK' <&3"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    profiles:
+      - experimental
+      - rag
+
+  # MinIO object storage (S3-compatible)
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "127.0.0.1:9000:9000"   # API
+      - "127.0.0.1:9001:9001"   # Web Console
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-local-experimental-only-change-me}
+      MINIO_BROWSER_REDIRECT_URL: http://localhost:9001
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    profiles:
+      - experimental
+
+  # Private asynchronous orchestration only; never part of online analysis.
+  n8n:
+    image: n8nio/n8n:2.4.6
+    expose:
+      - "5678"
+    environment:
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-}
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=none
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=168
+      - EISENHOWER_INTERNAL_API_URL=http://ai-service:8000
+      - EISENHOWER_INTERNAL_API_TOKEN=${EISENHOWER_INTERNAL_API_TOKEN:-}
+      - INTERNAL_ALLOWED_TENANTS=${INTERNAL_ALLOWED_TENANTS:-}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/workflows:ro
+    restart: unless-stopped
+    profiles:
+      - automation
+
   # Nginx Reverse Proxy (production)
   nginx:
     image: nginx:alpine
     ports:
-      - "80:80"
-      - "443:443"
+      - "127.0.0.1:80:80"
+      - "127.0.0.1:443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./ssl:/etc/nginx/ssl:ro
@@ -115,9 +265,10 @@ services:
   prometheus:
     image: prom/prometheus:latest
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -133,9 +284,10 @@ services:
   grafana:
     image: grafana/grafana:latest
     ports:
-      - "3002:3000"
+      - "127.0.0.1:3002:3000"
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?GRAFANA_ADMIN_USER is required}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana_data:/var/lib/grafana
@@ -152,6 +304,12 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+  qdrant_data:
+    driver: local
+  qdrant_snapshots:
+    driver: local
+  minio_data:
+  n8n_data:
 
 networks:
   default:

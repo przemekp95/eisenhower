@@ -1,0 +1,15 @@
+{
+  "base_sha": "26325618e082ef17d688f52500a9c2f3976a746f",
+  "files": [
+    {
+      "additions": 3,
+      "binary": false,
+      "deletions": 1,
+      "path": "backend-ai/app/service.py",
+      "previous_path": null,
+      "status": "modified"
+    }
+  ],
+  "head_sha": "0721ca8f2edbeb4216622f315b23d62119cb5d83",
+  "schema_version": "ci-impact-change-set-v1"
+}

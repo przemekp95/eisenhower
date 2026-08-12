@@ -1,3 +1,4 @@
+import { QUADRANT_DEFINITIONS } from '@eisenhower/api-client';
 import {
   TASK_SYNC_STATE,
   createPendingTask,
@@ -42,26 +43,16 @@ export function classifyTaskFallback(title) {
 }
 
 export function quadrantToFlags(quadrant) {
-  return {
-    urgent: quadrant === 0 || quadrant === 1,
-    important: quadrant === 0 || quadrant === 2,
-  };
+  const definition = QUADRANT_DEFINITIONS.find(({ value }) => value === quadrant);
+  return definition
+    ? { urgent: definition.urgent, important: definition.important }
+    : { urgent: false, important: false };
 }
 
 export function flagsToQuadrant(task) {
-  if (task.urgent && task.important) {
-    return 0;
-  }
-
-  if (task.urgent) {
-    return 1;
-  }
-
-  if (task.important) {
-    return 2;
-  }
-
-  return 3;
+  return QUADRANT_DEFINITIONS.find(
+    ({ urgent, important }) => urgent === Boolean(task.urgent) && important === Boolean(task.important)
+  )?.value ?? 3;
 }
 
 export function groupTasksByQuadrant(tasks) {

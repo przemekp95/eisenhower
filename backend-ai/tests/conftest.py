@@ -41,7 +41,10 @@ def build_real_settings(base_dir: Path) -> Settings:
 def real_encoder():
   from sentence_transformers import SentenceTransformer
 
-  return SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+  return SentenceTransformer(
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    revision="e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+  )
 
 
 @pytest.fixture(scope="session")
@@ -60,10 +63,7 @@ def real_model_seed_dir(tmp_path_factory: pytest.TempPathFactory, real_encoder) 
 @pytest.fixture
 def real_model_bundle(tmp_path: Path, real_model_seed_dir: Path, real_encoder):
   settings = build_real_settings(tmp_path)
-  settings.model_cache_dir.mkdir(parents=True, exist_ok=True)
-
-  for artifact_name in ("local_minilm_head.pt", "local_minilm_meta.json", "local_minilm_index.json"):
-    shutil.copy2(real_model_seed_dir / "runtime" / artifact_name, settings.model_cache_dir / artifact_name)
+  shutil.copytree(real_model_seed_dir / "runtime", settings.model_cache_dir, dirs_exist_ok=True)
 
   shutil.copy2(real_model_seed_dir / "training.json", settings.training_data_path)
 

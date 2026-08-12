@@ -1,0 +1,177 @@
+{
+  "$defs": {
+    "CiImpactArtifactReference": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "revision": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "uri": {
+          "title": "Uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "revision",
+        "sha256",
+        "uri"
+      ],
+      "title": "CiImpactArtifactReference",
+      "type": "object"
+    },
+    "CiImpactRuntimeLineage": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Digest",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "digest"
+      ],
+      "title": "CiImpactRuntimeLineage",
+      "type": "object"
+    }
+  },
+  "$id": "https://eisenhower.invalid/schemas/candidate-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "blockers": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Blockers",
+      "type": "array"
+    },
+    "candidate_id": {
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "checksum": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Checksum",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "dataset_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Dataset Sha256",
+      "type": "string"
+    },
+    "deterministic_adapter_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Deterministic Adapter Sha256",
+      "type": "string"
+    },
+    "evaluation": {
+      "$ref": "#/$defs/CiImpactArtifactReference"
+    },
+    "feature_schema_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Feature Schema Sha256",
+      "type": "string"
+    },
+    "git_dirty": {
+      "title": "Git Dirty",
+      "type": "boolean"
+    },
+    "git_sha": {
+      "pattern": "^[a-f0-9]{40}$",
+      "title": "Git Sha",
+      "type": "string"
+    },
+    "implementation_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Implementation Sha256",
+      "type": "string"
+    },
+    "job_config_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Job Config Sha256",
+      "type": "string"
+    },
+    "model": {
+      "$ref": "#/$defs/CiImpactArtifactReference"
+    },
+    "promotion_eligible": {
+      "title": "Promotion Eligible",
+      "type": "boolean"
+    },
+    "promotion_policy_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Promotion Policy Sha256",
+      "type": "string"
+    },
+    "runtime": {
+      "$ref": "#/$defs/CiImpactRuntimeLineage"
+    },
+    "schema_version": {
+      "const": "ci-impact-candidate-v1",
+      "default": "ci-impact-candidate-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "workflow_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Workflow Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "candidate_id",
+    "created_at",
+    "git_sha",
+    "git_dirty",
+    "dataset_sha256",
+    "feature_schema_sha256",
+    "job_config_sha256",
+    "workflow_sha256",
+    "promotion_policy_sha256",
+    "implementation_sha256",
+    "deterministic_adapter_sha256",
+    "runtime",
+    "model",
+    "evaluation",
+    "promotion_eligible",
+    "blockers",
+    "checksum"
+  ],
+  "title": "CiImpactCandidateManifest",
+  "type": "object"
+}

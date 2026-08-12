@@ -1,6 +1,6 @@
 # Eisenhower Matrix Infrastructure
 
-Last updated: 2026-03-09
+Last updated: 2026-08-09
 
 This document describes the current infrastructure and delivery model of the Eisenhower Matrix monorepo. It favors the state that is implemented in the repository today over aspirational architecture.
 
@@ -8,12 +8,14 @@ This document describes the current infrastructure and delivery model of the Eis
 
 | Component | Stack | Purpose |
 | --- | --- | --- |
-| `web` | React 18, TypeScript, Vite, Tailwind | Browser UI for task management and AI tools |
+| `web` | React 19, TypeScript, Vite, Tailwind | Browser UI for task management and AI tools |
 | `backend-node` | Node.js, Express, TypeScript, MongoDB | Task API and health endpoints |
-| `backend-ai` | Python 3.11, FastAPI, PyTorch, MiniLM | Local task classification, OCR endpoints, training data management |
+| `backend-ai` | Python 3.11, FastAPI, PyTorch, MiniLM, Tesseract | Local task classification, deterministic explanations, OCR, and training data management |
 | `mobile/eisenhower-matrix` | Expo, React Native, Expo Image Picker | Mobile client with local cache, task API sync, and AI-assisted flows |
 | `docker-compose.yml` | Docker Compose | Local multi-service stack |
 | `.github/workflows/*.yml` | GitHub Actions | CI, branch policy, and release automation |
+| `qdrant`, `minio` | Experimental local profile | Optional research services, not initialized by the supported runtime |
+
 
 ## Repository Topology
 
@@ -70,6 +72,7 @@ The repository ships a root `docker-compose.yml` with the following services:
 - `redis`
 - `nginx` using the `production` profile
 - `prometheus` and `grafana` using the `monitoring` profile
+- `qdrant` and `minio` using the isolated `experimental` profile
 
 Example commands:
 
@@ -101,6 +104,7 @@ docker compose --profile production up --build
 - Supports local MiniLM-based task classification, deterministic advanced analysis, OCR upload handling, training-data endpoints, and persisted provider toggles for `local_model` and `tesseract`.
 - Boots from a cached local classifier artifact or trains one from the current training data on first start.
 - Keeps the local model injectable so tests can replace it with lightweight fakes.
+- Does not initialize the experimental Qdrant, LangChain, llama.cpp, or MinIO modules in the supported production path.
 
 ### Mobile
 
@@ -119,7 +123,9 @@ docker compose --profile production up --build
 | Backend Node | `PORT` | HTTP port for the API service |
 | Backend Node | `MONGODB_URI` | MongoDB connection string |
 | Backend Node | `AI_SERVICE_URL` | AI service base URL |
-| Backend Node | `JWT_SECRET` | Required outside tests |
+| Backend Node/AI | `EISENHOWER_API_TOKEN` | User Bearer token for ordinary task and AI operations; at least 32 characters in production |
+| Backend AI | `EISENHOWER_ADMIN_TOKEN` | Distinct Bearer token for training and provider administration; at least 32 characters in production |
+| Backend Node/AI | `CORS_ALLOW_ORIGINS` | Explicit trusted frontend origin allowlist; required in production, also for same-origin browser writes |
 | Backend AI | `TRAINING_DATA_PATH` | Training examples path |
 | Backend AI | `MODEL_CACHE_DIR` | Cache and model artifacts |
 | Backend AI | `LOCAL_MODEL_NAME` | Frozen sentence-transformer encoder |
@@ -137,9 +143,9 @@ The repository uses three workflows:
 - `branch-policy.yml`
   Ensures only `dev` can open pull requests into `master`.
 - `ci.yml`
-  Runs `security-lint`, `test-backend-node`, `test-frontend`, `test-backend-ai`, and `test-mobile` on `dev` and `master`. The Android native job also uploads a downloadable release APK artifact for each successful run, validates that public backend URLs were embedded into the bundle, and the workflow can be started manually with `workflow_dispatch`.
+  Runs security, production dependency, unit/coverage, integration, isolated browser E2E, AI, mobile, and native Android release checks on `dev` and `master`. The Android job uploads a downloadable release APK, validates the embedded public backend URLs, and the workflow can also be started manually with `workflow_dispatch`.
 - `release.yml`
-  Builds Docker images on pushes to `master` and performs optional deployments when required secrets are present (`deploy-mikrus` and ECS).
+  Runs only after a successful CI push run on `master`, builds immutable commit-SHA Docker images, and performs optional deployments when required secrets are present (`deploy-mikrus` and ECS).
 
 Protected branches:
 
@@ -162,11 +168,20 @@ Current repository-level controls include:
 - protected branch flow through `feature/* -> dev -> master`
 - mandatory CI checks on protected branches
 - Trivy SARIF upload in CI
-- Node API runtime config with explicit `JWT_SECRET` outside tests
+- fail-closed Python dependency auditing: `pip-audit` may leave only the exact
+  `torch==2.13.0+cpu` and `torchvision==0.28.0+cpu` blind spots, whose public
+  PyTorch CPU wheel source and SHA-256 resolution are checked separately
+- server-side Bearer authentication on all non-health Node and AI routes, with a separate administrator credential for AI management
+- exact Origin validation on browser state changes in addition to least-privilege CORS; header-based auth uses no cookies, so classical CSRF is not applicable
+- runtime-only user and administrator token entry in web/mobile clients; neither token is bundled or persisted
+- production API and AI services reachable only on the Compose network
 - service-specific coverage thresholds, with `100%` on web/backends and `95/90` gates on mobile
 
 Recommended production additions that are not fully implemented in this repository:
 
+- built-image vulnerability scanning and an image SBOM; the current Trivy gate
+  scans repository manifests and does not prove that the two PyTorch wheels are
+  free of vulnerabilities
 - centralized secret storage
 - managed TLS termination
 - external log aggregation
@@ -178,7 +193,8 @@ Recommended production additions that are not fully implemented in this reposito
 flowchart LR
     Feature["feature/* branch"] --> Dev["PR into dev"]
     Dev --> Master["PR from dev into master"]
-    Master --> Release["Docker release workflow"]
+    Master --> CI["Required CI on exact SHA"]
+    CI --> Release["Immutable Docker release"]
     Release --> DeployMikrus["Optional Mikrus deployment when secrets exist"]
     Release --> DeployEcs["Optional ECS deployment when secrets exist"]
 ```

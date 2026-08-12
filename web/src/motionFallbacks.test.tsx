@@ -31,6 +31,11 @@ describe('motion fallback paths', () => {
       updateTask: jest.fn(),
       deleteTask: jest.fn(),
     }));
+    jest.doMock('./authSession', () => ({
+      getApiToken: () => 'runtime-only-test-token',
+      setApiToken: jest.fn(),
+      subscribeToApiToken: () => () => undefined,
+    }));
     jest.doMock('./components/Matrix', () => ({
       __esModule: true,
       default: () => null,

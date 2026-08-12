@@ -70,7 +70,11 @@ class FakeLocalModel:
     self.explain_calls.append((task, language, prediction.quadrant if prediction is not None else None))
     return {
       "quadrant": 0 if "urgent" in task else 2,
-      "quadrant_name": "Zrób teraz" if language == "pl" and "urgent" in task else "Deleguj",
+      "quadrant_name": (
+        "Zrób teraz" if language == "pl" else "Do Now"
+      ) if "urgent" in task else (
+        "Zaplanuj" if language == "pl" else "Schedule"
+      ),
       "confidence": 0.81,
       "reasoning": "Lokalny model wskazuje ten kwadrant." if language == "pl" else "Local model explanation.",
       "method": "local-analysis",
@@ -99,6 +103,15 @@ def build_service(tmp_path: Path, *, local_model=None, ocr_runner=None):
     local_model=local_model or FakeLocalModel(),
     ocr_runner=ocr_runner,
   )
+
+
+def test_production_service_does_not_initialize_experimental_qdrant_or_llm(tmp_path: Path):
+  service = build_service(tmp_path)
+
+  assert not hasattr(service, "vector_store")
+  assert not hasattr(service, "langchain")
+  assert not hasattr(service, "llm_provider")
+  assert not hasattr(service, "rag_chain")
 
 
 def build_real_service(real_model_bundle, *, ocr_runner=None):
@@ -136,6 +149,29 @@ def test_service_helpers_cover_normalization_similarity_and_flags():
 
   assert lexical_similarity("", "task") == 0.0
   assert lexical_similarity("pilne zadanie", "pilne nowe zadanie") > 0
+
+
+def test_low_confidence_is_additive_and_keeps_the_direct_four_class_contract(tmp_path: Path):
+  service = build_service(tmp_path)
+  prediction = LocalPrediction(
+    quadrant=1,
+      confidence=0.42,
+    probabilities=[0.20, 0.42, 0.23, 0.15],
+    similar_examples=[],
+      requires_confirmation=True,
+      confidence_calibrated=True,
+  )
+
+  payload = service._serialize_classification("delegate today's routine calls", prediction)
+
+  assert payload["quadrant"] == 1
+  assert payload["quadrant_name"] == "Delegate"
+  assert payload["urgent"] is True
+  assert payload["important"] is False
+  assert payload["confidence"] == 0.42
+  assert payload["confidence_calibrated"] is True
+  assert payload["requires_confirmation"] is True
+  assert payload["confidence_status"] == "low"
 
 
 def test_service_initialization_capabilities_and_stats(real_model_bundle, monkeypatch):
@@ -191,7 +227,7 @@ def test_classify_analyze_and_batch_stay_local(real_model_bundle):
   assert classification["quadrant"] == 0
   assert classification["similar_examples_used"] >= 1
   assert analysis["langchain_analysis"]["method"] == "local-analysis"
-  assert analysis["rag_classification"]["quadrant_name"] == "Deleguj"
+  assert analysis["rag_classification"]["quadrant_name"] == "Zaplanuj"
   assert batch["summary"]["total_tasks"] == 2
   assert batch["summary"]["methods"]["rag"]["quadrant_distribution"]["0"] == 1
   assert batch["summary"]["methods"]["rag"]["quadrant_distribution"]["2"] == 1
@@ -335,6 +371,12 @@ def test_learn_feedback_batch_can_retrain_after_saving_records(tmp_path: Path):
 
   assert result["examples_added"] == 2
   assert result["retrained"] is True
+  assert result["pending_review"] is True
+  assert all(
+    item["training_status"] == "pending_review"
+    for item in service.store.load()
+    if item.get("source") == "ocr-feedback"
+  )
   assert result["training"]["examples_seen"] == stats["total_examples"]
   assert local_model.train_calls
   assert stats["data_sources"]["ocr-feedback"] == 2
@@ -405,6 +447,28 @@ def test_retrain_passes_records_and_marks_preserve_flag_deprecated(real_model_bu
   assert result["preserve_experience"] is False
   assert result["preserve_experience_deprecated"] is True
   assert result["examples_seen"] >= len(real_model_bundle["records"])
+
+
+def test_retrain_reports_quality_gate_rejection_without_claiming_promotion(tmp_path: Path):
+  class RejectingLocalModel(FakeLocalModel):
+    def train(self, records):
+      self.train_calls.append(records)
+      return {
+        "artifact_path": "/tmp/incumbent.pt",
+        "trained_at": "2026-03-09T00:00:00+00:00",
+        "validation_skipped": False,
+        "examples_seen": len(records),
+        "promoted": False,
+        "quality_gate": {"gate": {"passed": False, "reasons": [{"code": "below_minimum_macro_f1"}]}},
+      }
+
+  service = build_service(tmp_path, local_model=RejectingLocalModel())
+
+  result = service.retrain()
+
+  assert result["status"] == "rejected"
+  assert result["promoted"] is False
+  assert result["message"] == "Candidate rejected; incumbent local classifier preserved."
 
 
 def test_service_surfaces_model_not_ready(tmp_path: Path):

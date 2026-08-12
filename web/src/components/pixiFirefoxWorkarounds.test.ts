@@ -35,7 +35,10 @@ jest.mock('pixi.js', () => {
       label: 'WHITE',
     });
 
-    constructor(options: { source: CanvasSource | { label: string; resource: unknown }; label: string }) {
+    constructor(options: {
+      source: CanvasSource | { label: string; resource: unknown };
+      label: string;
+    }) {
       this.source = options.source;
       this.label = options.label;
     }
@@ -92,8 +95,7 @@ describe('pixiFirefoxWorkarounds', () => {
   it('detects firefox user agents', () => {
     Object.defineProperty(window.navigator, 'userAgent', {
       configurable: true,
-      value:
-        'Mozilla/5.0 (X11; Linux x86_64; rv:136.0) Gecko/20100101 Firefox/136.0',
+      value: 'Mozilla/5.0 (X11; Linux x86_64; rv:136.0) Gecko/20100101 Firefox/136.0',
     });
 
     expect(needsPixiFirefoxWorkarounds()).toBe(true);
@@ -137,16 +139,10 @@ describe('pixiFirefoxWorkarounds', () => {
     expect(Texture.EMPTY).toBe(originalEmpty);
     expect(Texture.WHITE).toBe(originalWhite);
 
-    expect(
-      installPixiFirefoxWorkarounds('Mozilla/5.0 Firefox/136.0', null)
-    ).toBe(false);
+    expect(installPixiFirefoxWorkarounds('Mozilla/5.0 Firefox/136.0', null)).toBe(false);
 
-    expect(
-      installPixiFirefoxWorkarounds('Mozilla/5.0 Firefox/136.0', document)
-    ).toBe(true);
-    expect(
-      installPixiFirefoxWorkarounds('Mozilla/5.0 Firefox/136.0', document)
-    ).toBe(false);
+    expect(installPixiFirefoxWorkarounds('Mozilla/5.0 Firefox/136.0', document)).toBe(true);
+    expect(installPixiFirefoxWorkarounds('Mozilla/5.0 Firefox/136.0', document)).toBe(false);
   });
 
   it('bails out when canvas 2d is unavailable', () => {
@@ -158,9 +154,7 @@ describe('pixiFirefoxWorkarounds', () => {
       }),
     } as unknown as Document;
 
-    expect(
-      installPixiFirefoxWorkarounds('Mozilla/5.0 Firefox/136.0', emptyContextDoc)
-    ).toBe(false);
+    expect(installPixiFirefoxWorkarounds('Mozilla/5.0 Firefox/136.0', emptyContextDoc)).toBe(false);
     expect(Texture.EMPTY).toBe(originalEmpty);
     expect(Texture.WHITE).toBe(originalWhite);
   });

@@ -20,8 +20,10 @@ interface Props {
 }
 
 const cardClass = 'rounded-3xl border border-white/10 bg-black/20 p-4';
-const fieldClass = 'w-full rounded-2xl border border-white/15 bg-white/6 px-4 py-3 text-white outline-none transition-colors placeholder:text-white/35 focus:border-cyan-400/60';
-const buttonClass = 'rounded-full px-4 py-2 text-sm font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50';
+const fieldClass =
+  'w-full rounded-2xl border border-white/15 bg-white/6 px-4 py-3 text-white outline-none transition-colors placeholder:text-white/35 focus:border-cyan-400/60';
+const buttonClass =
+  'rounded-full px-4 py-2 text-sm font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50';
 
 function fallbackProviderState(active: boolean): AIProviderControl {
   return {
@@ -48,11 +50,12 @@ export default function AIManagement({ onModelUpdated }: Props) {
   const [examplesQuadrant, setExamplesQuadrant] = useState(0);
   const [preserveExperience, setPreserveExperience] = useState(true);
   const [keepDefaults, setKeepDefaults] = useState(true);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const quadrants = [
     { value: 0, label: t('matrix.do') },
-    { value: 1, label: t('matrix.schedule') },
-    { value: 2, label: t('matrix.delegate') },
+    { value: 1, label: t('matrix.delegate') },
+    { value: 2, label: t('matrix.schedule') },
     { value: 3, label: t('matrix.delete') },
   ];
 
@@ -63,7 +66,10 @@ export default function AIManagement({ onModelUpdated }: Props) {
     );
 
   const refreshStatus = async () => {
-    const [statsResult, capabilitiesResult] = await Promise.allSettled([getTrainingStats(), getCapabilities()]);
+    const [statsResult, capabilitiesResult] = await Promise.allSettled([
+      getTrainingStats(),
+      getCapabilities(),
+    ]);
 
     let failed = false;
     if (statsResult.status === 'fulfilled') {
@@ -170,9 +176,14 @@ export default function AIManagement({ onModelUpdated }: Props) {
     await runAction(
       `provider-${provider}`,
       () => setProviderEnabled(provider, nextEnabled).then(() => undefined),
-      format(nextEnabled ? t('ai.manage.provider.enabledMessage') : t('ai.manage.provider.disabledMessage'), {
-        provider: label,
-      })
+      format(
+        nextEnabled
+          ? t('ai.manage.provider.enabledMessage')
+          : t('ai.manage.provider.disabledMessage'),
+        {
+          provider: label,
+        }
+      )
     );
   };
 
@@ -180,7 +191,9 @@ export default function AIManagement({ onModelUpdated }: Props) {
     <section className="space-y-4 text-sm text-white">
       <div className="grid gap-3 md:grid-cols-2">
         <div className={cardClass}>
-          <p className="text-xs uppercase tracking-[0.32em] text-cyan-200/70">{t('ai.manage.trainingState')}</p>
+          <p className="text-xs uppercase tracking-[0.32em] text-cyan-200/70">
+            {t('ai.manage.trainingState')}
+          </p>
           {stats ? (
             <div className="mt-3 space-y-2 text-white/80">
               <p className="text-2xl font-semibold text-white">{stats.total_examples}</p>
@@ -200,7 +213,9 @@ export default function AIManagement({ onModelUpdated }: Props) {
               ) : null}
               {stats.model_error ? <p className="text-red-200">{stats.model_error}</p> : null}
               <p className="text-white/55">
-                {format(t('ai.manage.lastUpdated'), { date: new Date(stats.last_updated).toLocaleString() })}
+                {format(t('ai.manage.lastUpdated'), {
+                  date: new Date(stats.last_updated).toLocaleString(),
+                })}
               </p>
             </div>
           ) : (
@@ -208,7 +223,9 @@ export default function AIManagement({ onModelUpdated }: Props) {
           )}
         </div>
         <div className={cardClass}>
-          <p className="text-xs uppercase tracking-[0.32em] text-emerald-200/70">{t('ai.manage.providers')}</p>
+          <p className="text-xs uppercase tracking-[0.32em] text-emerald-200/70">
+            {t('ai.manage.providers')}
+          </p>
           <div className="mt-3 space-y-3">
             {providerStates.length > 0 ? (
               providerStates.map(({ key, label, control }) => (
@@ -254,7 +271,9 @@ export default function AIManagement({ onModelUpdated }: Props) {
 
       <div className="grid gap-4 xl:grid-cols-2">
         <div className={cardClass}>
-          <p className="text-xs uppercase tracking-[0.32em] text-cyan-200/70">{t('ai.manage.addTrainingExample')}</p>
+          <p className="text-xs uppercase tracking-[0.32em] text-cyan-200/70">
+            {t('ai.manage.addTrainingExample')}
+          </p>
           <div className="mt-3 space-y-3">
             <input
               value={exampleText}
@@ -288,13 +307,17 @@ export default function AIManagement({ onModelUpdated }: Props) {
                 )
               }
             >
-              {loadingAction === 'add-example' ? t('ai.manage.addingExample') : t('ai.manage.addExample')}
+              {loadingAction === 'add-example'
+                ? t('ai.manage.addingExample')
+                : t('ai.manage.addExample')}
             </button>
           </div>
         </div>
 
         <div className={cardClass}>
-          <p className="text-xs uppercase tracking-[0.32em] text-amber-200/70">{t('ai.manage.feedbackLoop')}</p>
+          <p className="text-xs uppercase tracking-[0.32em] text-amber-200/70">
+            {t('ai.manage.feedbackLoop')}
+          </p>
           <div className="mt-3 space-y-3">
             <input
               value={feedbackTask}
@@ -309,7 +332,11 @@ export default function AIManagement({ onModelUpdated }: Props) {
                 className={fieldClass}
               >
                 {quadrants.map((quadrant) => (
-                  <option key={`predicted-${quadrant.value}`} value={quadrant.value} className="bg-slate-950">
+                  <option
+                    key={`predicted-${quadrant.value}`}
+                    value={quadrant.value}
+                    className="bg-slate-950"
+                  >
                     {t('ai.manage.predicted')}: {quadrant.label}
                   </option>
                 ))}
@@ -320,7 +347,11 @@ export default function AIManagement({ onModelUpdated }: Props) {
                 className={fieldClass}
               >
                 {quadrants.map((quadrant) => (
-                  <option key={`correct-${quadrant.value}`} value={quadrant.value} className="bg-slate-950">
+                  <option
+                    key={`correct-${quadrant.value}`}
+                    value={quadrant.value}
+                    className="bg-slate-950"
+                  >
                     {t('ai.manage.correct')}: {quadrant.label}
                   </option>
                 ))}
@@ -341,13 +372,17 @@ export default function AIManagement({ onModelUpdated }: Props) {
                 )
               }
             >
-              {loadingAction === 'feedback' ? t('ai.manage.learningFeedback') : t('ai.manage.learnFeedback')}
+              {loadingAction === 'feedback'
+                ? t('ai.manage.learningFeedback')
+                : t('ai.manage.learnFeedback')}
             </button>
           </div>
         </div>
 
         <div className={cardClass}>
-          <p className="text-xs uppercase tracking-[0.32em] text-violet-200/70">{t('ai.manage.maintenance')}</p>
+          <p className="text-xs uppercase tracking-[0.32em] text-violet-200/70">
+            {t('ai.manage.maintenance')}
+          </p>
           <div className="mt-3 space-y-3">
             <label className="flex items-center gap-3 text-white/75">
               <input
@@ -388,26 +423,50 @@ export default function AIManagement({ onModelUpdated }: Props) {
                 type="button"
                 className={`${buttonClass} bg-white/10 text-white hover:bg-white/15 hover:text-white`}
                 disabled={loadingAction !== null}
-                onClick={() =>
+                onClick={() => {
+                  if (!confirmClear) {
+                    setConfirmClear(true);
+                    return;
+                  }
+                  setConfirmClear(false);
                   void runAction(
                     'clear',
                     async () => {
                       const result = await clearTrainingData(keepDefaults);
                       setExamples([]);
-                      setMessage(format(t('ai.manage.clearedRemaining'), { count: result.remaining_examples }));
+                      setMessage(
+                        format(t('ai.manage.clearedRemaining'), {
+                          count: result.remaining_examples,
+                        })
+                      );
                     },
                     t('ai.manage.cleared')
-                  )
-                }
+                  );
+                }}
               >
-                {loadingAction === 'clear' ? t('ai.manage.clearing') : t('ai.manage.clearTrainingData')}
+                {loadingAction === 'clear'
+                  ? t('ai.manage.clearing')
+                  : confirmClear
+                    ? t('ai.manage.confirmClearTrainingData')
+                    : t('ai.manage.clearTrainingData')}
               </button>
+              {confirmClear ? (
+                <button
+                  type="button"
+                  className={`${buttonClass} bg-white/5 text-white`}
+                  onClick={() => setConfirmClear(false)}
+                >
+                  {t('task.cancelDelete')}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
 
         <div className={cardClass}>
-          <p className="text-xs uppercase tracking-[0.32em] text-white/60">{t('ai.manage.browseExamples')}</p>
+          <p className="text-xs uppercase tracking-[0.32em] text-white/60">
+            {t('ai.manage.browseExamples')}
+          </p>
           <div className="mt-3 space-y-3">
             <select
               value={examplesQuadrant}
@@ -415,7 +474,11 @@ export default function AIManagement({ onModelUpdated }: Props) {
               className={fieldClass}
             >
               {quadrants.map((quadrant) => (
-                <option key={`browse-${quadrant.value}`} value={quadrant.value} className="bg-slate-950">
+                <option
+                  key={`browse-${quadrant.value}`}
+                  value={quadrant.value}
+                  className="bg-slate-950"
+                >
                   {quadrant.label}
                 </option>
               ))}
@@ -428,13 +491,18 @@ export default function AIManagement({ onModelUpdated }: Props) {
                 void loadExamples();
               }}
             >
-              {loadingAction === 'examples' ? t('ai.manage.loadingExamples') : t('ai.manage.loadExamples')}
+              {loadingAction === 'examples'
+                ? t('ai.manage.loadingExamples')
+                : t('ai.manage.loadExamples')}
             </button>
             {examples.length > 0 ? (
               <div className="max-h-72 overflow-y-auto pr-1">
                 <ul className="space-y-2">
                   {examples.map((example) => (
-                    <li key={`${example.quadrant}-${example.text}`} className="rounded-2xl border border-white/10 bg-white/6 p-3">
+                    <li
+                      key={`${example.quadrant}-${example.text}`}
+                      className="rounded-2xl border border-white/10 bg-white/6 p-3"
+                    >
                       <p className="font-medium text-white">{example.text}</p>
                       <p className="mt-1 text-xs text-white/45">
                         {quadrants[example.quadrant]?.label ??

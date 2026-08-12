@@ -1,5 +1,6 @@
 import {
   TASK_SYNC_STATE,
+  createClientOperationId,
   createPendingTask,
   getTaskRemoteId,
   hasPendingTasks,
@@ -7,11 +8,14 @@ import {
   isTaskPendingSync,
   isTaskVisible,
   markTaskPendingDelete,
+  markTaskSyncFailed,
   markTaskPendingUpdate,
   reconcilePendingTasks,
   normalizeStoredTask,
   normalizeStoredTasks,
   removeTask,
+  resolveTaskConflict,
+  runSingleFlight,
   taskToRemotePayload,
   upsertTask,
 } from './taskSync';
@@ -38,6 +42,7 @@ describe('taskSync', () => {
       locale: 'pl',
       remoteId: '507f1f77bcf86cd799439011',
       syncState: TASK_SYNC_STATE.synced,
+      revision: 0,
     });
   });
 
@@ -66,11 +71,14 @@ describe('taskSync', () => {
     ).toMatchObject({
       remoteId: null,
       syncState: TASK_SYNC_STATE.pendingCreate,
+      clientOperationId: 'mobile-local-1',
     });
   });
 
   it('normalizes invalid sync metadata and empty inputs', () => {
+    expect(isRemoteTaskId()).toBe(false);
     expect(getTaskRemoteId(null)).toBeNull();
+    expect(getTaskRemoteId({ id: 'local-blank', remoteId: '   ' })).toBeNull();
     expect(normalizeStoredTasks(null)).toEqual([]);
 
     expect(
@@ -85,6 +93,7 @@ describe('taskSync', () => {
     ).toMatchObject({
       remoteId: null,
       syncState: TASK_SYNC_STATE.pendingCreate,
+      clientOperationId: 'mobile-local-1',
     });
 
     expect(
@@ -100,6 +109,14 @@ describe('taskSync', () => {
       remoteId: null,
       syncState: TASK_SYNC_STATE.localSeed,
     });
+
+    expect(
+      normalizeStoredTask({
+        id: 'local-update',
+        title: 'Unsaved update',
+        syncState: TASK_SYNC_STATE.pendingUpdate,
+      })
+    ).toMatchObject({ syncState: TASK_SYNC_STATE.pendingCreate });
   });
 
   it('creates, updates and deletes pending tasks', () => {
@@ -118,6 +135,7 @@ describe('taskSync', () => {
       locale: 'pl',
       remoteId: null,
       syncState: TASK_SYNC_STATE.pendingCreate,
+      clientOperationId: 'mobile-local-1',
     });
 
     expect(
@@ -155,6 +173,11 @@ describe('taskSync', () => {
       )
     ).toMatchObject({
       important: true,
+      syncState: TASK_SYNC_STATE.pendingCreate,
+    });
+
+    expect(markTaskPendingUpdate(pendingCreateTask)).toMatchObject({
+      title: 'Offline',
       syncState: TASK_SYNC_STATE.pendingCreate,
     });
 
@@ -243,6 +266,28 @@ describe('taskSync', () => {
     ]);
   });
 
+  it('keeps pending changes and distinguishes conflicts from transport failures', () => {
+    const task = normalizeStoredTask({
+      id: '507f1f77bcf86cd799439011',
+      title: 'Remote',
+      urgent: true,
+      important: false,
+      syncState: TASK_SYNC_STATE.pendingUpdate,
+    });
+
+    expect(markTaskSyncFailed(task, { status: 412 })).toMatchObject({
+      syncState: TASK_SYNC_STATE.pendingUpdate,
+      syncError: 'conflict',
+    });
+    expect(markTaskSyncFailed(task, { response: { status: 409 } })).toMatchObject({
+      syncError: 'conflict',
+    });
+    expect(markTaskSyncFailed(task, new Error('offline'))).toMatchObject({
+      syncState: TASK_SYNC_STATE.pendingUpdate,
+      syncError: 'error',
+    });
+  });
+
   it('reconciles pending tasks against the remote API when sync succeeds', async () => {
     const pendingCreateTask = createPendingTask(
       'pl',
@@ -309,14 +354,16 @@ describe('taskSync', () => {
 
     expect(createRemoteTask).toHaveBeenCalledWith(
       { title: 'Offline', description: 'draft', urgent: false, important: true },
-      'pl'
+      'pl',
+      'mobile-local-1'
     );
     expect(updateRemoteTask).toHaveBeenCalledWith(
       '507f1f77bcf86cd799439012',
       { title: 'Update me', description: 'refresh', urgent: true, important: false },
-      'pl'
+      'pl',
+      0
     );
-    expect(deleteRemoteTask).toHaveBeenCalledWith('507f1f77bcf86cd799439013');
+    expect(deleteRemoteTask).toHaveBeenCalledWith('507f1f77bcf86cd799439013', 0);
     expect(resolvedTasks).toEqual([
       normalizeStoredTask({
         id: '507f1f77bcf86cd799439012',
@@ -372,10 +419,273 @@ describe('taskSync', () => {
     });
 
     expect(resolvedTasks).toEqual([
-      pendingDeleteTask,
-      pendingUpdateTask,
-      pendingCreateTask,
+      { ...pendingDeleteTask, syncError: 'error' },
+      { ...pendingUpdateTask, syncError: 'error' },
+      { ...pendingCreateTask, syncError: 'error' },
     ]);
     expect(hasPendingTasks(resolvedTasks)).toBe(true);
+  });
+
+  it('uses revisions during default-language reconciliation and remote identity matching', async () => {
+    const remoteId = '507f1f77bcf86cd799439099';
+    const pendingUpdate = normalizeStoredTask({
+      id: 'local-alias',
+      remoteId,
+      title: 'Revision update',
+      revision: 7,
+      syncState: TASK_SYNC_STATE.pendingUpdate,
+    });
+    const pendingDelete = normalizeStoredTask({
+      id: remoteId,
+      title: 'Revision delete',
+      revision: 8,
+      syncState: TASK_SYNC_STATE.pendingDelete,
+    });
+    const updateRemoteTask = jest.fn().mockResolvedValue({
+      ...pendingUpdate,
+      id: remoteId,
+      syncState: TASK_SYNC_STATE.synced,
+      revision: 8,
+    });
+    const deleteRemoteTask = jest.fn().mockRejectedValue({ response: { status: 412 } });
+
+    const resolved = await reconcilePendingTasks({
+      cachedTasks: [pendingUpdate, pendingDelete],
+      remoteTasks: [{ ...pendingUpdate, id: remoteId, title: 'Old remote' }],
+      createRemoteTask: jest.fn(),
+      updateRemoteTask,
+      deleteRemoteTask,
+    });
+
+    expect(updateRemoteTask).toHaveBeenCalledWith(
+      remoteId,
+      expect.objectContaining({ title: 'Revision update' }),
+      'pl',
+      7
+    );
+    expect(deleteRemoteTask).toHaveBeenCalledWith(remoteId, 8);
+    expect(resolved).toEqual([
+      expect.objectContaining({
+        title: 'Revision update',
+        revision: 8,
+        syncState: TASK_SYNC_STATE.conflict,
+        syncError: 'conflict',
+        pendingIntent: { type: 'delete', baseRevision: 8 },
+      }),
+    ]);
+
+    expect(
+      upsertTask(
+        [{ id: 'old-local-id', remoteId, title: 'Old' }],
+        { id: 'new-local-id', remoteId, title: 'New' }
+      )
+    ).toEqual([{ id: 'new-local-id', remoteId, title: 'New' }]);
+  });
+
+  it('keeps the fresh remote revision visible on 412 update and preserves local intent', async () => {
+    const remoteId = '507f1f77bcf86cd799439081';
+    const cached = normalizeStoredTask({
+      id: remoteId,
+      title: 'My offline edit',
+      description: 'local intent',
+      urgent: true,
+      important: false,
+      revision: 7,
+      syncState: TASK_SYNC_STATE.pendingUpdate,
+    });
+    const freshRemote = normalizeStoredTask({
+      id: remoteId,
+      title: 'New server value',
+      description: 'changed elsewhere',
+      urgent: false,
+      important: true,
+      revision: 8,
+    });
+
+    const [conflict] = await reconcilePendingTasks({
+      cachedTasks: [cached],
+      remoteTasks: [freshRemote],
+      updateRemoteTask: jest.fn().mockRejectedValue({ status: 412 }),
+      createRemoteTask: jest.fn(),
+      deleteRemoteTask: jest.fn(),
+    });
+
+    expect(conflict).toMatchObject({
+      title: 'New server value',
+      revision: 8,
+      syncState: TASK_SYNC_STATE.conflict,
+      syncError: 'conflict',
+      pendingIntent: {
+        type: 'update',
+        baseRevision: 7,
+        payload: { title: 'My offline edit', description: 'local intent' },
+      },
+    });
+    expect(isTaskVisible(conflict)).toBe(true);
+    expect(hasPendingTasks([conflict])).toBe(true);
+
+    expect(resolveTaskConflict(conflict, 'remote')).toMatchObject({
+      title: 'New server value',
+      revision: 8,
+      syncState: TASK_SYNC_STATE.synced,
+    });
+    expect(resolveTaskConflict(conflict, 'local')).toMatchObject({
+      title: 'My offline edit',
+      revision: 8,
+      syncState: TASK_SYNC_STATE.pendingUpdate,
+    });
+
+    const updateRemoteTask = jest.fn();
+    const [rolledConflict] = await reconcilePendingTasks({
+      cachedTasks: [conflict],
+      remoteTasks: [{ ...freshRemote, title: 'Even newer server value', revision: 9 }],
+      updateRemoteTask,
+      createRemoteTask: jest.fn(),
+      deleteRemoteTask: jest.fn(),
+    });
+    expect(rolledConflict).toMatchObject({
+      title: 'Even newer server value',
+      revision: 9,
+      syncState: TASK_SYNC_STATE.conflict,
+      pendingIntent: {
+        type: 'update',
+        payload: { title: 'My offline edit' },
+      },
+    });
+    expect(updateRemoteTask).not.toHaveBeenCalled();
+  });
+
+  it('keeps a fresh remote task visible when a revision-safe delete conflicts', async () => {
+    const remoteId = '507f1f77bcf86cd799439082';
+    const cached = normalizeStoredTask({
+      id: remoteId,
+      title: 'Delete my old copy',
+      revision: 2,
+      syncState: TASK_SYNC_STATE.pendingDelete,
+    });
+    const freshRemote = normalizeStoredTask({
+      id: remoteId,
+      title: 'Server edited this task',
+      description: 'must be reviewed',
+      revision: 3,
+    });
+
+    const [conflict] = await reconcilePendingTasks({
+      cachedTasks: [cached],
+      remoteTasks: [freshRemote],
+      deleteRemoteTask: jest.fn().mockRejectedValue({ response: { status: 412 } }),
+      createRemoteTask: jest.fn(),
+      updateRemoteTask: jest.fn(),
+    });
+
+    expect(conflict).toMatchObject({
+      title: 'Server edited this task',
+      revision: 3,
+      syncState: TASK_SYNC_STATE.conflict,
+      pendingIntent: { type: 'delete', baseRevision: 2 },
+    });
+    expect(isTaskVisible(conflict)).toBe(true);
+    expect(resolveTaskConflict(conflict, 'local')).toMatchObject({
+      title: 'Server edited this task',
+      revision: 3,
+      syncState: TASK_SYNC_STATE.pendingDelete,
+    });
+  });
+
+  it('handles no-op, remote-missing and invalid conflict resolutions safely', () => {
+    expect(resolveTaskConflict(null, 'remote')).toBeNull();
+
+    const missing = normalizeStoredTask({
+      id: '507f1f77bcf86cd799439083',
+      title: 'Gone remotely',
+      revision: 4,
+      syncState: TASK_SYNC_STATE.conflict,
+      syncError: 'conflict',
+      remoteMissing: true,
+      pendingIntent: { type: 'delete', baseRevision: 3 },
+    });
+    expect(resolveTaskConflict(missing, 'remote')).toBeNull();
+    expect(resolveTaskConflict(missing, 'unsupported')).toEqual(missing);
+  });
+
+  it('preserves one stable client operation id across normalization and retries', async () => {
+    const pending = createPendingTask(
+      'pl',
+      { title: 'Stable retry', clientOperationId: 'mobile-explicit-operation' },
+      'local-stable'
+    );
+    const reloaded = normalizeStoredTask(JSON.parse(JSON.stringify(pending)));
+    const createRemoteTask = jest.fn().mockRejectedValue(new Error('response lost'));
+
+    await reconcilePendingTasks({
+      cachedTasks: [reloaded],
+      remoteTasks: [],
+      createRemoteTask,
+      updateRemoteTask: jest.fn(),
+      deleteRemoteTask: jest.fn(),
+    });
+    await reconcilePendingTasks({
+      cachedTasks: [reloaded],
+      remoteTasks: [],
+      createRemoteTask,
+      updateRemoteTask: jest.fn(),
+      deleteRemoteTask: jest.fn(),
+    });
+
+    expect(reloaded.clientOperationId).toBe('mobile-explicit-operation');
+    expect(createRemoteTask).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ title: 'Stable retry' }),
+      'pl',
+      'mobile-explicit-operation'
+    );
+    expect(createRemoteTask).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ title: 'Stable retry' }),
+      'pl',
+      'mobile-explicit-operation'
+    );
+  });
+
+  it('coalesces concurrent sync triggers into one in-flight operation', async () => {
+    const inFlightRef = { current: null };
+    let release;
+    const operation = jest.fn(() => new Promise((resolve) => {
+      release = resolve;
+    }));
+
+    const first = runSingleFlight(inFlightRef, operation);
+    const second = runSingleFlight(inFlightRef, operation);
+    const third = runSingleFlight(inFlightRef, operation);
+
+    expect(first).toBe(second);
+    expect(second).toBe(third);
+    expect(operation).toHaveBeenCalledTimes(1);
+    release(true);
+    await expect(first).resolves.toBe(true);
+    await expect(runSingleFlight(inFlightRef, async () => false)).resolves.toBe(false);
+  });
+
+  it('converts synchronous sync failures to a rejected promise and clears the flight', async () => {
+    const inFlightRef = { current: null };
+
+    await expect(runSingleFlight(inFlightRef, () => {
+      throw new Error('sync failed synchronously');
+    })).rejects.toThrow('sync failed synchronously');
+    expect(inFlightRef.current).toBeNull();
+  });
+
+  it('creates a non-empty operation id without a native UUID implementation', () => {
+    const originalCrypto = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+    Object.defineProperty(globalThis, 'crypto', { configurable: true, value: {} });
+    try {
+      expect(createClientOperationId()).toMatch(/^mobile-[a-z0-9]+-[a-z0-9]+-[a-z0-9]+$/);
+    } finally {
+      if (originalCrypto) {
+        Object.defineProperty(globalThis, 'crypto', originalCrypto);
+      } else {
+        delete globalThis.crypto;
+      }
+    }
   });
 });

@@ -1,0 +1,139 @@
+{
+  "candidate_sha256": "5966f79ee4f9e04f9485073c3efc7c86195aeedd615ae7aeb8bf89132f1b1ba0",
+  "completed_at": "PENDING",
+  "corpus_manifest_sha256": "b022333de73442927099881fdb4e327d7edea0feb1eba9ad809511e9ccec9f5f",
+  "corpus_snapshot_sha256": "7d52fdd5f973f62a19f3c67a1afcfbe3d4990d80c75439e550b34f5d6188dd43",
+  "decisions": [
+    {
+      "case_id": "train-pl-fastapi-boundary",
+      "correction": null,
+      "outcome": "PENDING"
+    },
+    {
+      "case_id": "train-en-qdrant-choice",
+      "correction": null,
+      "outcome": "PENDING"
+    },
+    {
+      "case_id": "train-pl-n8n-boundary",
+      "correction": null,
+      "outcome": "PENDING"
+    },
+    {
+      "case_id": "train-en-mcp-tools",
+      "correction": null,
+      "outcome": "PENDING"
+    },
+    {
+      "case_id": "train-pl-light-cqrs",
+      "correction": null,
+      "outcome": "PENDING"
+    },
+    {
+      "case_id": "train-en-vllm-hardware-gate",
+      "correction": null,
+      "outcome": "PENDING"
+    },
+    {
+      "case_id": "dev-pl-framework-boundary",
+      "correction": null,
+      "outcome": "PENDING"
+    },
+    {
+      "case_id": "dev-en-corpus-acl",
+      "correction": null,
+      "outcome": "PENDING"
+    },
+    {
+      "case_id": "dev-pl-qdrant-rollback",
+      "correction": null,
+      "outcome": "PENDING"
+    },
+    {
+      "case_id": "dev-en-pii-logging",
+      "correction": null,
+      "outcome": "PENDING"
+    },
+    {
+      "case_id": "dev-pl-retrieval-metrics",
+      "correction": null,
+      "outcome": "PENDING"
+    },
+    {
+      "case_id": "dev-en-production-acceptance",
+      "correction": null,
+      "outcome": "PENDING"
+    },
+    {
+      "case_id": "holdout-pl-recruiter-scope",
+      "correction": null,
+      "outcome": "PENDING"
+    },
+    {
+      "case_id": "holdout-en-no-customer-phone",
+      "correction": null,
+      "outcome": "PENDING"
+    },
+    {
+      "case_id": "holdout-pl-cross-tenant",
+      "correction": null,
+      "outcome": "PENDING"
+    },
+    {
+      "case_id": "holdout-en-wrong-project",
+      "correction": null,
+      "outcome": "PENDING"
+    },
+    {
+      "case_id": "holdout-pl-fresh-operations",
+      "correction": null,
+      "outcome": "PENDING"
+    },
+    {
+      "case_id": "holdout-en-multi-document",
+      "correction": null,
+      "outcome": "PENDING"
+    }
+  ],
+  "final_thresholds": {
+    "global": {
+      "duplicate_hit_rate_max": 0.02,
+      "forbidden_hit_rate_max": 0.0,
+      "freshness_rate_min": 1.0,
+      "isolation_violation_rate_max": 0.0,
+      "mrr_at_k_min": 0.8,
+      "no_hit_accuracy_min": 1.0,
+      "recall_at_k_min": 0.9,
+      "stale_hit_rate_max": 0.0
+    },
+    "k": 5,
+    "latency_observation": {
+      "acceptance_scope": "local_reference_hardware_only",
+      "metric": "warm_local_p95_ms",
+      "proposed_max": 250
+    },
+    "required_slices": {
+      "language_en": {
+        "mrr_at_k_min": 0.75,
+        "recall_at_k_min": 0.85
+      },
+      "language_pl": {
+        "mrr_at_k_min": 0.75,
+        "recall_at_k_min": 0.85
+      },
+      "split_holdout": {
+        "mrr_at_k_min": 0.75,
+        "no_hit_accuracy_min": 1.0,
+        "recall_at_k_min": 0.85
+      }
+    }
+  },
+  "independent_human_review": false,
+  "labels_decision": "PENDING",
+  "no_private_data_exposed": false,
+  "reviewer_attestation": "PENDING",
+  "reviewer_id": "PENDING",
+  "schema_version": "retrieval-human-review-v1",
+  "threshold_proposal_sha256": "e37602d4cbd9a304675382b7d32d999a977631405fc8527bfb29388779e521bb",
+  "thresholds_decision": "PENDING"
+}

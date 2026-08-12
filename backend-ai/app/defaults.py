@@ -11,8 +11,8 @@ DEFAULT_TRAINING_DATA = [
 
 QUADRANT_NAMES = {
   0: "Do Now",
-  1: "Schedule",
-  2: "Delegate",
+  1: "Delegate",
+  2: "Schedule",
   3: "Delete",
 }
 
@@ -20,8 +20,8 @@ LOCALIZED_QUADRANT_NAMES = {
   "en": QUADRANT_NAMES,
   "pl": {
     0: "Zrób teraz",
-    1: "Zaplanuj",
-    2: "Deleguj",
+    1: "Deleguj",
+    2: "Zaplanuj",
     3: "Usuń",
   },
 }

@@ -1,0 +1,110 @@
+# Corpus, ACL, versioning and reindex contract
+
+This is the target corpus contract. The generic `SourceDocument`, deterministic chunker and Qdrant payload model exist locally; source connectors, a complete canonical document store and production reindex orchestration do not.
+
+No real content may enter this contract until the accountable owners complete and approve the
+[first RAG corpus owner decision packet](corpus-owner-decision-packet.md).
+
+## What is indexed
+
+Index only content that helps prioritize a task or answer project-context questions and has an explicit owner and retention basis:
+
+| Source type | Content | Default scope | Notes |
+| --- | --- | --- | --- |
+| `task` | title, description, accepted outcome, current status | owner/project | Prefer current state; do not index every audit revision |
+| `project` / `project_context` | goals, constraints, deadlines, stakeholders | project | One canonical current document plus meaningful version history |
+| `decision` | accepted decisions and rationale | project/role | Exclude drafts unless explicitly marked searchable |
+| `procedure` / `runbook` | operational steps, escalation and SLAs | project/role | Preserve heading path and source revision |
+| `knowledge` / `note` | curated reference notes | explicit ACL | Opt in; reject content without provenance |
+| `calendar_event` | minimal relevant summary and time constraints | user/project | Index only when privacy policy permits; exclude attendee PII by default |
+
+Do not blindly index complete chat history, raw email archives, binary attachments, secrets, access tokens, hidden prompts, deleted items, unreviewed OCR, duplicate exports, or data whose tenant/ACL cannot be proven. Training examples with the historic quadrant 1/2 ambiguity are quarantined until migrated and reviewed.
+
+## Canonical document envelope
+
+```json
+{
+  "schema_version": "2",
+  "document_id": "stable-source-id",
+  "tenant_id": "tenant-42",
+  "project_id": "project-17",
+  "owner_id": "user-8",
+  "source_type": "runbook",
+  "source_uri": "eisenhower://projects/17/runbooks/incident",
+  "title": "Incident procedure",
+  "text": "Normalized source text",
+  "source_version": "source-etag-or-revision",
+  "source_sequence": 42,
+  "content_version": "2026-08-09T12:00:00Z",
+  "content_checksum": "sha256-hex",
+  "acl_subjects": ["tenant:tenant-42", "project:project-17", "role:on-call"],
+  "embedding_version": "minilm-v1",
+  "chunking_version": "chars-1200-overlap-160-v1",
+  "deleted": false
+}
+```
+
+Identity and ACL values are derived from an authenticated connector/service account and canonical source mapping; they are never trusted merely because a webhook body contains them. `source_uri` is an identifier, not permission for the worker to fetch an arbitrary URL.
+
+## Deterministic normalization and chunking
+
+1. Decode the source with a fixed format and size limit; reject archives or unsupported content rather than guessing.
+2. Normalize Unicode to NFC, line endings to LF, trim trailing whitespace, preserve meaningful heading/list boundaries, and remove connector-only boilerplate deterministically.
+3. Split structured documents by heading/section first. Within a section, use the named chunker version. The current local character chunker targets 1,200 characters with 160-character overlap and prefers paragraph, sentence, then whitespace boundaries.
+4. Retain heading path, ordinal and source span in production metadata. Never split or merge based on a non-deterministic LLM.
+5. Compute `checksum = SHA-256(normalized_chunk_text)`.
+6. Compute a stable chunk identity from tenant, document ID, content version, embedding version, ordinal and checksum. Identical input and versions must produce identical IDs.
+
+A later token-aware chunker is a new `chunking_version`; it must not silently alter existing IDs.
+
+## Vector payload and ACL
+
+Required fields are `chunk_id`, `document_id`, `tenant_id`, `project_id`, `owner_id`, `source_type`, `source_uri`, `title`, `text`, `position`, `checksum`, `content_version`, `embedding_version`, `acl_subjects`, and `deleted`.
+
+Every query includes all of:
+
+- exact `tenant_id`;
+- active `embedding_version`;
+- `deleted=false`;
+- intersection between authenticated principal subjects and `acl_subjects`;
+- optional project filter already validated against the principal.
+
+An administrator role is not an implicit cross-tenant wildcard. Cross-tenant support requires a separate support scope, reason, expiry and audit event. Defense in depth must test that malicious payload metadata cannot widen access.
+
+## Versioning
+
+- `schema_version`: envelope compatibility.
+- `source_version`: source-system revision/ETag.
+- `source_sequence`: connector-provided monotonic integer for one canonical document; stale or replayed lower sequences are ignored.
+- `content_version`: immutable logical document revision or tombstone.
+- `chunking_version`: normalization/chunk algorithm and parameters.
+- `embedding_version`: model name, revision, preprocessing and vector dimension as one immutable identifier.
+- `collection_version`: physical Qdrant collection generated by one complete reindex.
+- `dataset_version`: immutable golden/evaluation dataset.
+
+Changing the embedding model/revision, dimension, normalization or chunker creates a new physical collection. Do not mix incompatible vector versions behind one alias.
+
+## Ingestion commands and idempotency
+
+Allowed commands are `rag.upsert`, `rag.tombstone`, `rag.reindex_project`, and `rag.evaluate`. Schema v2 requires a monotonic `source_sequence`; connectors must advance it for every document revision or tombstone. The single-consumer worker persists the highest accepted sequence per tenant/document and ignores equal or lower updates, so a delayed upsert cannot resurrect newer content or a tombstone. An idempotency key should bind tenant, source, operation, source version and checksum. The command endpoint returns the existing job for an exact duplicate; a reused key with a different body is a conflict.
+
+The application stores the normalized document in the canonical document store, builds chunks, embeds, then writes Qdrant. Production needs an outbox or equivalent atomic reconciliation because a canonical-store commit and vector upsert cannot be one database transaction. Reconciliation compares expected document/version/chunk counts with Qdrant.
+
+## Tombstones and deletion
+
+A source deletion creates a versioned tombstone with a higher `source_sequence`. Retrieval excludes tombstoned payloads immediately. Reindex omits them from the new collection. Physical purge follows the applicable retention/privacy policy and is audited. A delete retry is idempotent; an older upsert cannot resurrect a newer tombstone.
+
+## Zero-downtime reindex
+
+1. Freeze the corpus manifest and version identifiers.
+2. Create `eisenhower-knowledge-<collection_version>` with the expected dimension/distance and payload indexes.
+3. Stream canonical documents, applying deterministic normalization, ACL validation and tombstones.
+4. Compare manifest counts, checksum coverage, tenant distributions and rejected records.
+5. Run golden retrieval, isolation, no-answer, latency and citation prechecks against the new collection name.
+6. Atomically switch `eisenhower-knowledge-active` to the new collection using a Qdrant alias operation.
+7. Monitor canary traffic; retain the prior collection read-only through the rollback window.
+8. Roll back by moving the alias to the prior collection. Purge only after the window and a verified snapshot.
+
+## Corpus acceptance gate
+
+No-go unless all documents have a known tenant, ACL, provenance, source/version/checksum; invalid quadrant history is quarantined; deterministic reruns produce identical IDs; tombstone ordering is tested; and an alias rollback rehearsal succeeds.

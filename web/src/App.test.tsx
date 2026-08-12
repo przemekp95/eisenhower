@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
 import * as api from './services/api';
+import { clearApiToken, setAdminToken, setApiToken } from './authSession';
 
 jest.mock('./services/api');
 
@@ -77,13 +78,16 @@ describe('App', () => {
       urgent: true,
       important: false,
       quadrant: 1,
-      quadrant_name: 'Schedule',
+      quadrant_name: 'Delegate',
       timestamp: new Date().toISOString(),
       method: 'local-minilm',
     });
+    setApiToken('runtime-only-test-token');
+    setAdminToken('runtime-only-admin-token');
   });
 
   afterEach(() => {
+    act(() => clearApiToken());
     window.requestAnimationFrame = originalRequestAnimationFrame;
     window.cancelAnimationFrame = originalCancelAnimationFrame;
     Object.defineProperty(window, 'scrollY', {
@@ -92,11 +96,42 @@ describe('App', () => {
     });
   });
 
+  it('keeps the app locked until a runtime-only bearer token is entered', async () => {
+    clearApiToken();
+
+    render(<App />);
+
+    const tokenInput = screen.getByLabelText('Token dostępu');
+    expect(tokenInput).toHaveAttribute('type', 'password');
+    expect(screen.queryByLabelText('Token administratora AI')).not.toBeInTheDocument();
+    expect(mockedApi.getTasks).not.toHaveBeenCalled();
+
+    fireEvent.change(tokenInput, { target: { value: 'entered-at-runtime' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Odblokuj' }));
+
+    await waitFor(() => expect(mockedApi.getTasks).toHaveBeenCalled());
+  });
+
   it('loads tasks and renders the header', async () => {
     render(<App />);
 
     expect(screen.getByText(/Ładowanie zadań/i)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('Existing task')).toBeInTheDocument());
+  });
+
+  it('labels the important non-urgent hero metric as Schedule', async () => {
+    mockedApi.getTasks.mockResolvedValueOnce([
+      { _id: '2', title: 'Plan roadmap', description: '', urgent: false, important: true },
+    ]);
+
+    const { container } = render(<App />);
+
+    await waitFor(() => expect(screen.getByText('Plan roadmap')).toBeInTheDocument());
+    const metricLabels = Array.from(container.querySelectorAll('[data-app-stat]')).map(
+      (element) => element.textContent
+    );
+    expect(metricLabels).toContain('01Zaplanuj');
+    expect(metricLabels).not.toContain('01Deleguj');
   });
 
   it('surfaces fetch errors', async () => {
@@ -112,7 +147,9 @@ describe('App', () => {
 
     render(<App />);
 
-    await waitFor(() => expect(screen.getByText('Nie udało się pobrać zadań.')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText('Nie udało się pobrać zadań.')).toBeInTheDocument()
+    );
   });
 
   it('creates and removes tasks through the API layer', async () => {
@@ -129,6 +166,7 @@ describe('App', () => {
 
     const deleteButtons = screen.getAllByText(/Usuń/i);
     fireEvent.click(deleteButtons[0]);
+    fireEvent.click(screen.getByText('Potwierdź trwałe usunięcie'));
 
     await waitFor(() => expect(mockedApi.deleteTask).toHaveBeenCalledWith('1'));
   });
@@ -137,11 +175,43 @@ describe('App', () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText('Existing task')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByLabelText('toggle urgent Existing task'));
+    fireEvent.click(screen.getByLabelText('Przełącz pilność zadania Existing task'));
     await waitFor(() => expect(mockedApi.updateTask).toHaveBeenCalledWith('1', { urgent: false }));
 
     fireEvent.click(screen.getByText(/Odśwież/i));
     await waitFor(() => expect(mockedApi.getTasks.mock.calls.length).toBeGreaterThanOrEqual(2));
+  });
+
+  it('sends loaded task revisions for conflict-safe update and delete', async () => {
+    mockedApi.getTasks.mockResolvedValueOnce([
+      {
+        _id: '1',
+        title: 'Existing task',
+        description: 'desc',
+        urgent: true,
+        important: false,
+        revision: 7,
+      },
+    ]);
+    mockedApi.updateTask.mockResolvedValueOnce({
+      _id: '1',
+      title: 'Existing task',
+      description: 'desc',
+      urgent: false,
+      important: false,
+      revision: 8,
+    });
+
+    render(<App />);
+    await screen.findByText('Existing task');
+    fireEvent.click(screen.getByLabelText('Przełącz pilność zadania Existing task'));
+    await waitFor(() =>
+      expect(mockedApi.updateTask).toHaveBeenCalledWith('1', { urgent: false }, 7)
+    );
+
+    fireEvent.click(screen.getByLabelText('Usuń Existing task'));
+    fireEvent.click(screen.getByText('Potwierdź trwałe usunięcie'));
+    await waitFor(() => expect(mockedApi.deleteTask).toHaveBeenCalledWith('1', 8));
   });
 
   it('shows save errors from task mutations', async () => {
@@ -156,6 +226,23 @@ describe('App', () => {
     fireEvent.click(screen.getByText(/Dodaj zadanie/i));
 
     await waitFor(() => expect(screen.getByText('Save failed')).toBeInTheDocument());
+    expect(screen.getByPlaceholderText(/Tytuł zadania/i)).toHaveValue('Broken task');
+  });
+
+  it('requires only the access token to unlock ordinary CRUD and offers logout', async () => {
+    clearApiToken();
+
+    render(<App />);
+
+    expect(screen.queryByLabelText('Token administratora AI')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Token dostępu'), {
+      target: { value: 'access-only' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Odblokuj' }));
+
+    await waitFor(() => expect(mockedApi.getTasks).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Wyloguj' }));
+    expect(screen.getByLabelText('Token dostępu')).toBeInTheDocument();
   });
 
   it('falls back to translated save errors for non-error mutations', async () => {
@@ -169,7 +256,9 @@ describe('App', () => {
     });
     fireEvent.click(screen.getByText(/Dodaj zadanie/i));
 
-    await waitFor(() => expect(screen.getByText('Nie udało się zapisać zmian.')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText('Nie udało się zapisać zmian.')).toBeInTheDocument()
+    );
   });
 
   it('falls back to translated save errors for update and delete failures', async () => {
@@ -183,10 +272,13 @@ describe('App', () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText('Secondary task')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByLabelText('toggle urgent Existing task'));
-    await waitFor(() => expect(screen.getByText('Nie udało się zapisać zmian.')).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText('Przełącz pilność zadania Existing task'));
+    await waitFor(() =>
+      expect(screen.getByText('Nie udało się zapisać zmian.')).toBeInTheDocument()
+    );
 
     fireEvent.click(screen.getAllByText(/Usuń/i)[0]);
+    fireEvent.click(screen.getByText('Potwierdź trwałe usunięcie'));
     await waitFor(() => expect(mockedApi.deleteTask).toHaveBeenCalledWith('1'));
     expect(screen.getByText('Nie udało się zapisać zmian.')).toBeInTheDocument();
   });
@@ -207,7 +299,7 @@ describe('App', () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText('Secondary task')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByLabelText('toggle urgent Existing task'));
+    fireEvent.click(screen.getByLabelText('Przełącz pilność zadania Existing task'));
 
     await waitFor(() => expect(mockedApi.updateTask).toHaveBeenCalledWith('1', { urgent: false }));
     expect(screen.getByText('Secondary task')).toBeInTheDocument();
@@ -229,7 +321,7 @@ describe('App', () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText('Secondary task')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByLabelText('toggle urgent Secondary task'));
+    fireEvent.click(screen.getByLabelText('Przełącz pilność zadania Secondary task'));
 
     await waitFor(() => expect(mockedApi.updateTask).toHaveBeenCalledWith('2', { urgent: true }));
     expect(screen.getByText('Existing task')).toBeInTheDocument();
@@ -246,6 +338,9 @@ describe('App', () => {
 
     const existingTaskCard = screen.getByText('Existing task').closest('article');
     fireEvent.click(within(existingTaskCard as HTMLElement).getByText(/Usuń/i));
+    fireEvent.click(
+      within(existingTaskCard as HTMLElement).getByText('Potwierdź trwałe usunięcie')
+    );
 
     await waitFor(() => expect(mockedApi.deleteTask).toHaveBeenCalledWith('1'));
     await waitFor(() => expect(screen.queryByText('Existing task')).not.toBeInTheDocument());
@@ -259,10 +354,11 @@ describe('App', () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText('Existing task')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByLabelText('toggle urgent Existing task'));
+    fireEvent.click(screen.getByLabelText('Przełącz pilność zadania Existing task'));
     await waitFor(() => expect(screen.getByText('Update failed')).toBeInTheDocument());
 
     fireEvent.click(screen.getAllByText(/Usuń/i)[0]);
+    fireEvent.click(screen.getByText('Potwierdź trwałe usunięcie'));
     await waitFor(() => expect(screen.getByText('Delete failed')).toBeInTheDocument());
   });
 
@@ -291,6 +387,17 @@ describe('App', () => {
     await waitFor(() =>
       expect(document.querySelector('main')).toHaveAttribute('data-app-intro', 'ready')
     );
+  });
+
+  it('marks a pending intro as ready when reduced motion becomes active before setup', async () => {
+    mockShouldDisableMotion.mockReturnValueOnce(false).mockReturnValue(true);
+
+    render(<App />);
+
+    await waitFor(() =>
+      expect(document.querySelector('main')).toHaveAttribute('data-app-intro', 'ready')
+    );
+    expect(mockGsapContext).not.toHaveBeenCalled();
   });
 
   it('skips hero motion setup when unmounted before gsap resolves', async () => {

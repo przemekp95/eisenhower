@@ -1,89 +1,71 @@
 groups:
-  - name: eisenhower-alerts
+  - name: eisenhower-rag
     rules:
-      # API Service Alerts
-      - alert: APIServiceDown
-        expr: up{job="eisenhower-api"} == 0
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "API Service is down"
-          description: "Eisenhower API service has been down for more than 5 minutes."
-
-      - alert: APIServiceHighErrorRate
-        expr: rate(http_requests_total{job="eisenhower-api", status=~"5.."}[5m]) / rate(http_requests_total{job="eisenhower-api"}[5m]) > 0.05
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High error rate on API service"
-          description: "API service error rate is above 5% for the last 5 minutes."
-
-      # AI Service Alerts
-      - alert: AIServiceDown
+      - alert: EisenhowerAIServiceDown
         expr: up{job="eisenhower-ai"} == 0
-        for: 10m
-        labels:
-          severity: critical
-        annotations:
-          summary: "AI Service is down"
-          description: "Eisenhower AI service has been down for more than 10 minutes."
-
-      # Database Alerts
-      - alert: MongoDBDown
-        expr: up{job="mongodb"} == 0
         for: 5m
         labels:
           severity: critical
         annotations:
-          summary: "MongoDB is down"
-          description: "MongoDB database has been down for more than 5 minutes."
-
-      # Frontend Alerts
-      - alert: FrontendServiceDown
-        expr: up{job="eisenhower-frontend"} == 0
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Frontend Service is down"
-          description: "Frontend application has been down for more than 5 minutes."
-
-      # Resource Usage Alerts
-      - alert: HighCPUUsage
-        expr: rate(cpu_usage_seconds_total[5m]) > 0.8
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High CPU usage detected"
-          description: "CPU usage is above 80% for more than 10 minutes."
-
-      - alert: HighMemoryUsage
-        expr: (1 - memory_available_bytes / memory_total_bytes) > 0.9
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High memory usage detected"
-          description: "Memory usage is above 90% for more than 10 minutes."
-
-      # Business Logic Alerts
-      - alert: AILowAccuracy
-        expr: ai_classification_accuracy < 0.8
+          summary: "AI service is unavailable"
+      - alert: EisenhowerRagFallbackRateHigh
+        expr: sum(rate(eisenhower_rag_results_total{mode="fallback"}[10m])) / clamp_min(sum(rate(eisenhower_rag_results_total[10m])), 0.001) > 0.25
         for: 15m
         labels:
-          severity: info
+          severity: warning
         annotations:
-          summary: "AI classification accuracy below threshold"
-          description: "AI service classification accuracy dropped below 80%."
-
-      - alert: HighTaskVolume
-        expr: increase(tasks_created_total[1h]) > 1000
+          summary: "RAG fallback rate exceeds 25 percent"
+      - alert: EisenhowerRagDeadLetters
+        expr: eisenhower_job_queue_depth{status="dead_letter"} > 0
         for: 5m
         labels:
-          severity: info
+          severity: warning
         annotations:
-          summary: "High task creation rate"
-          description: "Over 1000 tasks created in the last hour."
+          summary: "RAG ingestion dead-letter queue is not empty"
+      - alert: EisenhowerRagStructuredOutputRejected
+        expr: increase(eisenhower_rag_validation_total{outcome="rejected"}[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Private generation failed schema or citation validation"
+      - alert: EisenhowerRagRetrievalLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le) (rate(eisenhower_rag_retrieval_duration_seconds_bucket[10m]))) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RAG retrieval p95 exceeds 500 milliseconds"
+      - alert: EisenhowerMemoryOperationErrors
+        expr: increase(eisenhower_memory_operations_total{outcome="error"}[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consent-governed memory operation failed"
+      - alert: QdrantUnavailable
+        expr: up{job="qdrant"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Qdrant is unavailable"
+      - alert: PrivateInferenceUnavailable
+        expr: >-
+          (absent(up{job="inference"}) or up{job="inference"} == 0)
+          and on() eisenhower_generation_circuit_state{state!="disabled"} == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Private inference is unavailable; classifier fallback should be active"
+      - alert: EisenhowerRagWorkerStale
+        expr: >-
+          (absent(eisenhower_job_worker_heartbeat_age_seconds)
+          or eisenhower_job_worker_heartbeat_age_seconds > 90)
+          and on() eisenhower_job_queue_enabled == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RAG worker heartbeat is missing or stale"

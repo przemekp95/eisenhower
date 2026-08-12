@@ -1,7 +1,20 @@
 const SYNC_BRANCH = 'sync/master-into-dev';
 
 const REQUIRED_CONTEXTS = Object.freeze({
-  CI: ['security-lint', 'test-backend-node', 'test-frontend', 'test-backend-ai', 'test-mobile'],
+  CI: [
+    'resolve-run-mode',
+    'security-lint',
+    'test-backend-node',
+    'test-api-client',
+    'test-mcp-adapter',
+    'test-n8n-workflows',
+    'test-frontend',
+    'test-frontend-integration',
+    'test-frontend-e2e',
+    'test-backend-ai',
+    'test-mobile',
+    'test-mobile-native-android',
+  ],
   'Branch Policy': ['branch-policy'],
 });
 

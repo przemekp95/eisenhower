@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 
 function quadrant(page: Page, name: string): Locator {
@@ -21,8 +22,14 @@ test.beforeEach(async ({ page }) => {
   });
 
   await page.goto('/');
+  await page.getByLabel('Token dostępu').fill('test-api-token');
+  await page.getByRole('button', { name: 'Odblokuj' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Eisenhower Matrix' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Dodaj zadanie' })).toBeVisible();
+  expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(
+    true
+  );
+  await expect(page.locator('main')).toHaveAttribute('data-app-intro', 'ready');
 });
 
 test('renders the live board shell', async ({ page }) => {
@@ -31,14 +38,21 @@ test('renders the live board shell', async ({ page }) => {
   await expect(quadrant(page, 'Deleguj')).toBeVisible();
   await expect(quadrant(page, 'Usuń')).toBeVisible();
   await expect(page.getByText('System priorytetów')).toBeVisible();
+
+  const accessibility = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(accessibility.violations).toEqual([]);
 });
 
 test('creates, reclassifies and deletes a task through the live API', async ({ page }) => {
+  test.setTimeout(45_000);
+
   const title = `E2E smoke ${Date.now()}`;
   const description = 'flow through quadrants';
 
   const doNow = quadrant(page, 'Zrób teraz');
-  const schedule = quadrant(page, 'Zaplanuj');
+  const delegate = quadrant(page, 'Deleguj');
   const remove = quadrant(page, 'Usuń');
 
   await page.getByPlaceholder('Tytuł zadania').fill(title);
@@ -51,19 +65,27 @@ test('creates, reclassifies and deletes a task through the live API', async ({ p
   await expect(createdCard).toBeVisible();
   await expect(createdCard.getByText(description)).toBeVisible();
 
-  await createdCard.getByLabel(`toggle important ${title}`).click({ force: true });
+  const populatedBoardAccessibility = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(populatedBoardAccessibility.violations).toEqual([]);
 
-  const scheduledCard = taskCard(schedule, title);
-  await expect(scheduledCard).toBeVisible();
+  await createdCard.getByLabel(`Przełącz ważność zadania ${title}`).click({ force: true });
+
+  const delegatedCard = taskCard(delegate, title);
+  await expect(delegatedCard).toBeVisible();
   await expect(taskHeading(doNow, title)).toHaveCount(0);
 
-  await scheduledCard.getByLabel(`toggle urgent ${title}`).click({ force: true });
+  await delegatedCard.getByLabel(`Przełącz pilność zadania ${title}`).click({ force: true });
 
   const removableCard = taskCard(remove, title);
   await expect(removableCard).toBeVisible();
-  await expect(taskHeading(schedule, title)).toHaveCount(0);
+  await expect(taskHeading(delegate, title)).toHaveCount(0);
 
-  await removableCard.getByRole('button', { name: 'Usuń', exact: true }).click();
+  await removableCard.getByRole('button', { name: `Usuń ${title}`, exact: true }).click();
+  await removableCard
+    .getByRole('button', { name: 'Potwierdź trwałe usunięcie', exact: true })
+    .click();
 
   await expect(page.getByRole('heading', { name: title, exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Odśwież' }).click();

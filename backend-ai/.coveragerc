@@ -1,0 +1,12 @@
+[run]
+omit =
+    */app/classification/retrieval_chain.py
+    */app/domain/events.py
+    */app/llm_provider.py
+    */app/migrate_to_qdrant.py
+    */app/object_storage.py
+    */app/store_qdrant_adapter.py
+    */app/vector/*
+
+[report]
+show_missing = true

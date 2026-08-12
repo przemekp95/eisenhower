@@ -1,48 +1,47 @@
 [
-  {
-    "text": "urgent deadline today",
-    "quadrant": 0,
-    "source": "default"
-  },
-  {
-    "text": "critical production incident",
-    "quadrant": 0,
-    "source": "default"
-  },
-  {
-    "text": "reply to inbox",
-    "quadrant": 1,
-    "source": "default"
-  },
-  {
-    "text": "book meeting room",
-    "quadrant": 1,
-    "source": "default"
-  },
-  {
-    "text": "prepare strategic roadmap",
-    "quadrant": 2,
-    "source": "default"
-  },
-  {
-    "text": "exercise twice a week",
-    "quadrant": 2,
-    "source": "default"
-  },
-  {
-    "text": "scroll social media",
-    "quadrant": 3,
-    "source": "default"
-  },
-  {
-    "text": "clean random screenshots",
-    "quadrant": 3,
-    "source": "default"
-  },
-  {
-    "text": "Dokończyć projekt",
-    "quadrant": 1,
-    "source": "user",
-    "timestamp": "2026-03-08T21:26:52.316772+00:00"
-  }
+  {"text": "urgent deadline today", "quadrant": 0, "source": "curated", "language": "en"},
+  {"text": "restore the production service now", "quadrant": 0, "source": "curated", "language": "en"},
+  {"text": "submit the tax payment due today", "quadrant": 0, "source": "curated", "language": "en"},
+  {"text": "take the child to emergency care", "quadrant": 0, "source": "curated", "language": "en"},
+  {"text": "call the key client about today's outage", "quadrant": 0, "source": "curated", "language": "en"},
+  {"text": "pilnie napraw awarię produkcji", "quadrant": 0, "source": "curated", "language": "pl"},
+  {"text": "opłać podatek z terminem na dziś", "quadrant": 0, "source": "curated", "language": "pl"},
+  {"text": "jedź teraz z dzieckiem na ostry dyżur", "quadrant": 0, "source": "curated", "language": "pl"},
+  {"text": "wyślij dziś ofertę dla kluczowego klienta", "quadrant": 0, "source": "curated", "language": "pl"},
+  {"text": "zadzwoń natychmiast w sprawie wycieku danych", "quadrant": 0, "source": "curated", "language": "pl"},
+
+  {"text": "ask the assistant to book today's meeting room", "quadrant": 1, "source": "curated", "language": "en"},
+  {"text": "delegate the routine inbox replies due today", "quadrant": 1, "source": "curated", "language": "en"},
+  {"text": "have support confirm today's appointments", "quadrant": 1, "source": "curated", "language": "en"},
+  {"text": "send today's data entry to the operations team", "quadrant": 1, "source": "curated", "language": "en"},
+  {"text": "ask a teammate to collect signatures by noon", "quadrant": 1, "source": "curated", "language": "en"},
+  {"text": "poproś asystenta o rezerwację sali na dziś", "quadrant": 1, "source": "curated", "language": "pl"},
+  {"text": "deleguj rutynowe odpowiedzi na dzisiejsze maile", "quadrant": 1, "source": "curated", "language": "pl"},
+  {"text": "zleć zespołowi potwierdzenie dzisiejszych wizyt", "quadrant": 1, "source": "curated", "language": "pl"},
+  {"text": "przekaż wprowadzanie danych stażyście na dziś", "quadrant": 1, "source": "curated", "language": "pl"},
+  {"text": "poproś współpracownika o zebranie podpisów do południa", "quadrant": 1, "source": "curated", "language": "pl"},
+
+  {"text": "prepare the strategic roadmap next week", "quadrant": 2, "source": "curated", "language": "en"},
+  {"text": "schedule three workouts for next month", "quadrant": 2, "source": "curated", "language": "en"},
+  {"text": "plan professional training for this quarter", "quadrant": 2, "source": "curated", "language": "en"},
+  {"text": "review retirement savings this weekend", "quadrant": 2, "source": "curated", "language": "en"},
+  {"text": "write the long-term product strategy", "quadrant": 2, "source": "curated", "language": "en"},
+  {"text": "przygotuj strategię produktu na przyszły kwartał", "quadrant": 2, "source": "curated", "language": "pl"},
+  {"text": "zaplanuj regularne ćwiczenia od przyszłego tygodnia", "quadrant": 2, "source": "curated", "language": "pl"},
+  {"text": "umów badania profilaktyczne na przyszły miesiąc", "quadrant": 2, "source": "curated", "language": "pl"},
+  {"text": "opracuj plan rozwoju zawodowego", "quadrant": 2, "source": "curated", "language": "pl"},
+  {"text": "przeanalizuj długoterminowe oszczędności w weekend", "quadrant": 2, "source": "curated", "language": "pl"},
+
+  {"text": "unsubscribe from promotional spam", "quadrant": 3, "source": "curated", "language": "en"},
+  {"text": "stop checking celebrity gossip", "quadrant": 3, "source": "curated", "language": "en"},
+  {"text": "delete duplicate screenshots", "quadrant": 3, "source": "curated", "language": "en"},
+  {"text": "skip the meeting with no agenda or purpose", "quadrant": 3, "source": "curated", "language": "en"},
+  {"text": "remove the unused newsletter draft", "quadrant": 3, "source": "curated", "language": "en"},
+  {"text": "wypisz się z reklamowego spamu", "quadrant": 3, "source": "curated", "language": "pl"},
+  {"text": "przestań bez celu przewijać media społecznościowe", "quadrant": 3, "source": "curated", "language": "pl"},
+  {"text": "usuń zduplikowane zrzuty ekranu", "quadrant": 3, "source": "curated", "language": "pl"},
+  {"text": "odwołaj spotkanie bez agendy i celu", "quadrant": 3, "source": "curated", "language": "pl"},
+  {"text": "porzuć nieużywany szkic newslettera", "quadrant": 3, "source": "curated", "language": "pl"},
+
+  {"text": "Dokończyć projekt", "quadrant": 1, "source": "user", "timestamp": "2026-03-08T21:26:52.316772+00:00", "training_status": "pending_review"}
 ]

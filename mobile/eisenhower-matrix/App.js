@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { AppState, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import * as Network from 'expo-network';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AIStatusPanel from './src/components/AIStatusPanel';
 import LanguageSwitcher from './src/components/LanguageSwitcher';
@@ -21,9 +22,19 @@ import {
 } from './src/services/ai';
 import { scanTasksFromImage } from './src/services/media';
 import { getSuggestedQuadrant, resolveOCRNotice } from './src/utils/aiUi';
+import { flagsToQuadrant, quadrantToFlags } from './src/utils/taskUtils';
 import styles from './src/styles/appStyles';
+import {
+  clearAdminToken,
+  clearApiToken,
+  getAdminToken,
+  getApiToken,
+  setAdminToken,
+  setApiToken,
+  subscribeToApiToken,
+} from './src/authSession';
 
-export default function App() {
+function AuthenticatedApp() {
   const {
     addAnalysisTaskToMatrix,
     aiCapabilities,
@@ -33,6 +44,7 @@ export default function App() {
     handleAddTask,
     handleDelete,
     handleLanguageChange,
+    handleResolveConflict,
     handleScan,
     handleSuggest,
     handleToggle,
@@ -44,6 +56,7 @@ export default function App() {
     providerControls,
     quadrantOptions,
     refreshCapabilities,
+    retrySync,
     scanDisabled,
     suggestDisabled,
     t,
@@ -78,6 +91,44 @@ export default function App() {
   const [examples, setExamples] = useState([]);
   const [preserveExperience, setPreserveExperience] = useState(true);
   const [keepDefaults, setKeepDefaults] = useState(true);
+  const [adminAuthenticated, setAdminAuthenticated] = useState(Boolean(getAdminToken()));
+  const [adminTokenInput, setAdminTokenInput] = useState('');
+  const [ocrLearningConsent, setOcrLearningConsent] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [clearConfirmationOpen, setClearConfirmationOpen] = useState(false);
+  const retrySyncRef = useRef(retrySync);
+  const networkReachableRef = useRef(null);
+
+  useEffect(() => {
+    retrySyncRef.current = retrySync;
+  }, [retrySync]);
+
+  useEffect(
+    () => subscribeToApiToken(() => setAdminAuthenticated(Boolean(getAdminToken()))),
+    []
+  );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        void retrySyncRef.current();
+      }
+    });
+    return () => subscription?.remove?.();
+  }, []);
+
+  useEffect(() => {
+    const subscription = Network.addNetworkStateListener((state) => {
+      const reachable = state.isConnected === true && state.isInternetReachable !== false;
+      const recovered = networkReachableRef.current === false && reachable;
+      networkReachableRef.current = reachable;
+
+      if (recovered) {
+        void retrySyncRef.current();
+      }
+    });
+    return () => subscription?.remove?.();
+  }, []);
 
   useEffect(() => {
     if (!aiToolsOpen) {
@@ -88,10 +139,10 @@ export default function App() {
   }, [aiToolsOpen, newTask.title]);
 
   useEffect(() => {
-    if (aiToolsOpen && activeAITab === 'manage') {
+    if (aiToolsOpen && activeAITab === 'manage' && adminAuthenticated) {
       void refreshAIManagement();
     }
-  }, [aiToolsOpen, activeAITab]);
+  }, [aiToolsOpen, activeAITab, adminAuthenticated]);
 
   const refreshAIManagement = async () => {
     setManageLoading(true);
@@ -171,13 +222,62 @@ export default function App() {
         return;
       }
 
-      const importedCount = await importScannedTasks(scanned);
-      setOcrResult({ count: importedCount, items: scanned });
-      setAiToolsMessage(t.aiOcrImported.replace('{count}', String(importedCount)));
+      setOcrResult({
+        items: scanned.map((item, index) => ({
+          ...item,
+          id: item.id || `ocr-review-${index}`,
+          selected: true,
+          quadrant: flagsToQuadrant(item),
+        })),
+      });
+      setOcrLearningConsent(false);
+      setAiToolsMessage(t.aiOcrReviewReady.replace('{count}', String(scanned.length)));
     } catch (error) {
       setAiToolsError(resolveOCRNotice(error, t));
     } finally {
       setOcrLoading(false);
+    }
+  };
+
+  const handleChangeOcrItem = (id, patch) => {
+    setOcrResult((current) => current ? {
+      ...current,
+      items: current.items.map((item) => item.id === id ? { ...item, ...patch } : item),
+    } : current);
+  };
+
+  const handleImportReviewedOcr = async () => {
+    const selected = (ocrResult?.items || [])
+      .filter((item) => item.selected && item.title.trim())
+      .map((item) => ({ ...item, ...quadrantToFlags(item.quadrant) }));
+    if (selected.length === 0) return;
+
+    setOcrLoading(true);
+    resetAIToolFeedback();
+    try {
+      const result = await importScannedTasks(selected, { learn: ocrLearningConsent });
+      setAiToolsMessage(
+        t.aiOcrImportResult
+          .replace('{imported}', String(result.imported))
+          .replace('{saved}', String(result.savedRemotely))
+          .replace('{pending}', String(result.pending))
+          .replace('{feedback}', ocrLearningConsent ? (result.feedbackSaved ? t.yes : t.no) : t.notRequested)
+      );
+      setOcrResult(null);
+      setOcrLearningConsent(false);
+    } catch (error) {
+      setAiToolsError(error instanceof Error ? error.message : t.ocrFailed);
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await retrySync();
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -276,7 +376,10 @@ export default function App() {
       'clear',
       () => clearTrainingData(keepDefaults),
       t.aiManageCleared,
-      () => setExamples([])
+      () => {
+        setExamples([]);
+        setClearConfirmationOpen(false);
+      }
     );
 
   const handleLoadExamples = () =>
@@ -301,13 +404,24 @@ export default function App() {
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar style="light" />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+      >
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>{t.title}</Text>
             <Text style={styles.subtitle}>{t.subtitle}</Text>
           </View>
           <LanguageSwitcher language={language} onChange={handleLanguageChange} />
+          <View style={styles.actions}>
+            <Pressable testID="retry-sync-button" accessibilityRole="button" onPress={handleRefresh} style={styles.secondaryButton}>
+              <Text style={styles.secondaryButtonText}>{t.retrySync}</Text>
+            </Pressable>
+            <Pressable testID="logout-button" accessibilityRole="button" onPress={clearApiToken} style={styles.secondaryButton}>
+              <Text style={styles.secondaryButtonText}>{t.logout}</Text>
+            </Pressable>
+          </View>
         </View>
 
         {notice ? (
@@ -321,7 +435,10 @@ export default function App() {
           onChangeTask={updateTaskDraftField}
           onAddTask={handleAddTask}
           onSuggest={handleSuggest}
-          onScan={handleScan}
+          onScan={() => {
+            openAITools('ocr');
+            void handleOcrFromTools();
+          }}
           onOpenAITools={() => openAITools('analysis')}
           suggestDisabled={suggestDisabled}
           scanDisabled={scanDisabled}
@@ -339,6 +456,7 @@ export default function App() {
           quadrantOptions={quadrantOptions}
           groupedTasks={groupedTasks}
           onDelete={handleDelete}
+          onResolveConflict={handleResolveConflict}
           onToggle={handleToggle}
           t={t}
         />
@@ -362,6 +480,10 @@ export default function App() {
         onRunOcr={handleOcrFromTools}
         ocrLoading={ocrLoading}
         ocrResult={ocrResult}
+        onChangeOcrItem={handleChangeOcrItem}
+        onImportOcr={handleImportReviewedOcr}
+        ocrLearningConsent={ocrLearningConsent}
+        onChangeOcrLearningConsent={setOcrLearningConsent}
         batchInput={batchInput}
         onChangeBatchInput={setBatchInput}
         onRunBatchAnalyze={handleBatchAnalyze}
@@ -397,7 +519,67 @@ export default function App() {
         aiToolsError={aiToolsError}
         aiToolsMessage={aiToolsMessage}
         manageAction={manageAction}
+        adminAuthenticated={adminAuthenticated}
+        adminTokenInput={adminTokenInput}
+        onChangeAdminTokenInput={setAdminTokenInput}
+        onSubmitAdminToken={() => {
+          setAdminToken(adminTokenInput);
+          setAdminTokenInput('');
+          setAdminAuthenticated(true);
+        }}
+        onClearAdminToken={() => {
+          clearAdminToken();
+          setAdminAuthenticated(false);
+        }}
+        clearConfirmationOpen={clearConfirmationOpen}
+        onRequestClear={() => setClearConfirmationOpen(true)}
+        onCancelClear={() => setClearConfirmationOpen(false)}
       />
     </SafeAreaView>
   );
+}
+
+function CredentialGate() {
+  const [token, setToken] = useState('');
+
+  return (
+    <SafeAreaView style={{ flex: 1, justifyContent: 'center', padding: 24, backgroundColor: '#030816' }}>
+      <View style={{ padding: 24, borderRadius: 24, backgroundColor: '#0f172a' }}>
+        <Text style={{ color: '#fff', fontSize: 24, fontWeight: '700' }}>Eisenhower Matrix</Text>
+        <Text style={{ color: '#cbd5e1', marginTop: 12, lineHeight: 20 }}>
+          Wpisz token dostępu. Token administratora podasz osobno tylko przy wejściu do panelu zarządzania AI.
+        </Text>
+        <TextInput
+          testID="auth-token-input"
+          accessibilityLabel="Token dostępu"
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+          value={token}
+          onChangeText={setToken}
+          style={{ marginTop: 20, borderRadius: 12, padding: 14, color: '#fff', backgroundColor: '#1e293b' }}
+        />
+        <Pressable
+          testID="auth-submit-button"
+          accessibilityRole="button"
+          disabled={!token.trim()}
+          onPress={() => {
+            setApiToken(token);
+            setToken('');
+          }}
+          style={{ marginTop: 16, borderRadius: 12, padding: 14, backgroundColor: '#67e8f9', opacity: token.trim() ? 1 : 0.4 }}
+        >
+          <Text style={{ textAlign: 'center', color: '#0f172a', fontWeight: '700' }}>Odblokuj</Text>
+        </Pressable>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+export default function App() {
+  const [apiToken, setTokenState] = useState(getApiToken());
+
+  useEffect(() => subscribeToApiToken(() => setTokenState(getApiToken())), []);
+
+  return apiToken ? <AuthenticatedApp /> : <CredentialGate />;
 }

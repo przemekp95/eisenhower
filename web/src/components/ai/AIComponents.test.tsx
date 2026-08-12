@@ -15,6 +15,26 @@ function renderWithLanguage(ui: React.ReactElement) {
   return render(<LanguageProvider>{ui}</LanguageProvider>);
 }
 
+function reviewedOcrPayload() {
+  return {
+    filename: 'tasks.txt',
+    image_info: { size_bytes: 12, shape: 'unknown' },
+    ocr: { extracted_text: 'first\nsecond', raw_tasks_detected: 2, method: 'lazy-ocr' },
+    classified_tasks: [
+      { text: 'first', quadrant: 0 as const, quadrant_name: 'Do Now', confidence: 0.8 },
+      { text: 'second', quadrant: 2 as const, quadrant_name: 'Schedule', confidence: 0.7 },
+    ],
+    summary: {
+      total_tasks: 2,
+      quadrant_distribution: {
+        counts: { 0: 1, 1: 0, 2: 1, 3: 0 },
+        percentages: { 0: 50, 1: 0, 2: 50, 3: 0 },
+        quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
+      },
+    },
+  };
+}
+
 describe('AI component error paths', () => {
   beforeEach(() => {
     jest.resetAllMocks();
@@ -22,12 +42,12 @@ describe('AI component error paths', () => {
   });
 
   it('renders analysis errors', async () => {
-    mockedApi.analyzeWithLangChain.mockRejectedValueOnce(new Error('LangChain offline'));
+    mockedApi.analyzeTask.mockRejectedValueOnce(new Error('Local analysis offline'));
 
     renderWithLanguage(<AdvancedAIAnalysis taskTitle="task" onAnalysisComplete={jest.fn()} />);
     fireEvent.click(screen.getByText(/Run advanced analysis/i));
 
-    await waitFor(() => expect(screen.getByText('LangChain offline')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Local analysis offline')).toBeInTheDocument());
   });
 
   it('ignores empty advanced-analysis titles and falls back on unknown failures', async () => {
@@ -38,9 +58,9 @@ describe('AI component error paths', () => {
     disabledButton.disabled = false;
     fireEvent.click(disabledButton);
 
-    expect(mockedApi.analyzeWithLangChain).not.toHaveBeenCalled();
+    expect(mockedApi.analyzeTask).not.toHaveBeenCalled();
 
-    mockedApi.analyzeWithLangChain.mockRejectedValueOnce('offline');
+    mockedApi.analyzeTask.mockRejectedValueOnce('offline');
 
     renderWithLanguage(<AdvancedAIAnalysis taskTitle="task" onAnalysisComplete={jest.fn()} />);
     fireEvent.click(screen.getAllByText(/Run advanced analysis/i)[1]);
@@ -50,7 +70,7 @@ describe('AI component error paths', () => {
 
   it('renders the fallback suggested quadrant when langchain does not return one', async () => {
     localStorage.setItem('eisenhower-language', 'pl');
-    mockedApi.analyzeWithLangChain.mockResolvedValueOnce({
+    mockedApi.analyzeTask.mockResolvedValueOnce({
       task: 'task',
       langchain_analysis: {
         quadrant: null,
@@ -60,7 +80,7 @@ describe('AI component error paths', () => {
       },
       rag_classification: {
         quadrant: 1,
-        quadrant_name: 'Schedule',
+        quadrant_name: 'Delegate',
         confidence: 0.7,
       },
       comparison: {
@@ -73,22 +93,24 @@ describe('AI component error paths', () => {
     renderWithLanguage(<AdvancedAIAnalysis taskTitle="task" onAnalysisComplete={jest.fn()} />);
     fireEvent.click(screen.getByText(/Uruchom analizę zaawansowaną/i));
 
-    await waitFor(() => expect(screen.getByText(/Sugerowany kwadrant: Zaplanuj/i)).toBeInTheDocument());
-    expect(mockedApi.analyzeWithLangChain).toHaveBeenCalledWith('task', 'pl');
+    await waitFor(() =>
+      expect(screen.getByText(/Sugerowany kwadrant: Deleguj/i)).toBeInTheDocument()
+    );
+    expect(mockedApi.analyzeTask).toHaveBeenCalledWith('task', 'pl');
   });
 
   it('falls back to an unknown quadrant label in advanced analysis', async () => {
-    mockedApi.analyzeWithLangChain.mockResolvedValueOnce({
+    mockedApi.analyzeTask.mockResolvedValueOnce({
       task: 'task',
       langchain_analysis: {
-        quadrant: 9,
+        quadrant: 9 as unknown as 0,
         reasoning: 'Unexpected quadrant.',
         confidence: 0.8,
         method: 'langchain',
       },
       rag_classification: {
         quadrant: 1,
-        quadrant_name: 'Schedule',
+        quadrant_name: 'Delegate',
         confidence: 0.7,
       },
       comparison: {
@@ -101,21 +123,23 @@ describe('AI component error paths', () => {
     renderWithLanguage(<AdvancedAIAnalysis taskTitle="task" onAnalysisComplete={jest.fn()} />);
     fireEvent.click(screen.getByText(/Run advanced analysis/i));
 
-    await waitFor(() => expect(screen.getByText(/Suggested quadrant: Quadrant 9/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Suggested quadrant: Quadrant 9/i)).toBeInTheDocument()
+    );
   });
 
   it('clears stale advanced analysis when the language changes', async () => {
-    mockedApi.analyzeWithLangChain.mockResolvedValueOnce({
+    mockedApi.analyzeTask.mockResolvedValueOnce({
       task: 'task',
       langchain_analysis: {
         quadrant: 1,
-        reasoning: 'Needs scheduling.',
+        reasoning: 'Needs delegation.',
         confidence: 0.8,
         method: 'langchain',
       },
       rag_classification: {
         quadrant: 1,
-        quadrant_name: 'Schedule',
+        quadrant_name: 'Delegate',
         confidence: 0.7,
       },
       comparison: {
@@ -141,7 +165,9 @@ describe('AI component error paths', () => {
     renderWithLanguage(<Harness />);
     fireEvent.click(screen.getByText(/Run advanced analysis/i));
 
-    await waitFor(() => expect(screen.getByText(/Suggested quadrant: Schedule/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Suggested quadrant: Delegate/i)).toBeInTheDocument()
+    );
 
     await act(async () => {
       fireEvent.click(screen.getByText('switch'));
@@ -153,17 +179,17 @@ describe('AI component error paths', () => {
   it('adds the advanced-analysis result to the matrix when requested', async () => {
     const onAddToMatrix = jest.fn().mockResolvedValue(undefined);
 
-    mockedApi.analyzeWithLangChain.mockResolvedValueOnce({
+    mockedApi.analyzeTask.mockResolvedValueOnce({
       task: 'task',
       langchain_analysis: {
         quadrant: 1,
-        reasoning: 'Needs scheduling.',
+        reasoning: 'Needs delegation.',
         confidence: 0.8,
         method: 'langchain',
       },
       rag_classification: {
         quadrant: 1,
-        quadrant_name: 'Schedule',
+        quadrant_name: 'Delegate',
         confidence: 0.7,
       },
       comparison: {
@@ -192,17 +218,17 @@ describe('AI component error paths', () => {
   it('surfaces failures when adding the advanced-analysis result to the matrix', async () => {
     const onAddToMatrix = jest.fn().mockRejectedValue('offline');
 
-    mockedApi.analyzeWithLangChain.mockResolvedValueOnce({
+    mockedApi.analyzeTask.mockResolvedValueOnce({
       task: 'task',
       langchain_analysis: {
         quadrant: 1,
-        reasoning: 'Needs scheduling.',
+        reasoning: 'Needs delegation.',
         confidence: 0.8,
         method: 'langchain',
       },
       rag_classification: {
         quadrant: 1,
-        quadrant_name: 'Schedule',
+        quadrant_name: 'Delegate',
         confidence: 0.7,
       },
       comparison: {
@@ -231,17 +257,17 @@ describe('AI component error paths', () => {
   it('surfaces Error instances when adding the advanced-analysis result to the matrix', async () => {
     const onAddToMatrix = jest.fn().mockRejectedValue(new Error('Matrix unavailable'));
 
-    mockedApi.analyzeWithLangChain.mockResolvedValueOnce({
+    mockedApi.analyzeTask.mockResolvedValueOnce({
       task: 'task',
       langchain_analysis: {
         quadrant: 1,
-        reasoning: 'Needs scheduling.',
+        reasoning: 'Needs delegation.',
         confidence: 0.8,
         method: 'langchain',
       },
       rag_classification: {
         quadrant: 1,
-        quadrant_name: 'Schedule',
+        quadrant_name: 'Delegate',
         confidence: 0.7,
       },
       comparison: {
@@ -330,8 +356,135 @@ describe('AI component error paths', () => {
     await waitFor(() => expect(screen.getByText('OCR unavailable')).toBeInTheDocument());
   });
 
+  it('requires OCR review and explicit import before persisting selected edited tasks', async () => {
+    const onTasksExtracted = jest
+      .fn()
+      .mockResolvedValue({ imported: 1, failed: 0, learned: false });
+    mockedApi.extractTasksFromImage.mockResolvedValueOnce({
+      filename: 'tasks.txt',
+      image_info: { size_bytes: 12, shape: 'unknown' },
+      ocr: { extracted_text: 'draft', raw_tasks_detected: 1, method: 'lazy-ocr' },
+      classified_tasks: [{ text: 'draft', quadrant: 3, quadrant_name: 'Delete', confidence: 0.8 }],
+      summary: {
+        total_tasks: 1,
+        quadrant_distribution: {
+          counts: { 0: 0, 1: 0, 2: 0, 3: 1 },
+          percentages: { 0: 0, 1: 0, 2: 0, 3: 100 },
+          quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
+        },
+      },
+      timestamp: new Date().toISOString(),
+    });
+
+    render(
+      <LanguageProvider>
+        <ImageUpload onTasksExtracted={onTasksExtracted} />
+      </LanguageProvider>
+    );
+    fireEvent.change(screen.getByTestId('image-upload-input'), {
+      target: { files: [new File(['draft'], 'tasks.txt', { type: 'text/plain' })] },
+    });
+
+    await screen.findByDisplayValue('draft');
+    expect(onTasksExtracted).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByDisplayValue('draft'), { target: { value: 'edited task' } });
+    fireEvent.change(screen.getByLabelText(/Quadrant for edited task/i), {
+      target: { value: '2' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Import selected/i }));
+
+    await waitFor(() =>
+      expect(onTasksExtracted).toHaveBeenCalledWith(
+        expect.objectContaining({
+          classified_tasks: [expect.objectContaining({ text: 'edited task', quadrant: 2 })],
+        }),
+        false
+      )
+    );
+  });
+
+  it('reports empty review, import failures, feedback failures, and explicit learning state', async () => {
+    const onTasksExtracted = jest
+      .fn()
+      .mockRejectedValueOnce('offline')
+      .mockRejectedValueOnce(new Error('Import unavailable'))
+      .mockResolvedValueOnce({
+        imported: 1,
+        failed: 0,
+        learned: false,
+        feedbackError: 'Feedback unavailable',
+      });
+    mockedApi.extractTasksFromImage.mockResolvedValueOnce({
+      filename: 'tasks.txt',
+      image_info: { size_bytes: 12, shape: 'unknown' },
+      ocr: { extracted_text: 'draft', raw_tasks_detected: 1, method: 'lazy-ocr' },
+      classified_tasks: [{ text: 'draft', quadrant: 0, quadrant_name: 'Do Now', confidence: 0.8 }],
+      summary: {
+        total_tasks: 1,
+        quadrant_distribution: {
+          counts: { 0: 1, 1: 0, 2: 0, 3: 0 },
+          percentages: { 0: 100, 1: 0, 2: 0, 3: 0 },
+          quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
+        },
+      },
+    });
+
+    renderWithLanguage(<ImageUpload onTasksExtracted={onTasksExtracted} />);
+    fireEvent.change(screen.getByTestId('image-upload-input'), {
+      target: { files: [new File(['draft'], 'tasks.txt', { type: 'text/plain' })] },
+    });
+    const include = await screen.findByLabelText(/Include task: draft/i);
+    fireEvent.click(include);
+    fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
+    expect(screen.getByText('Select at least one non-empty task.')).toBeInTheDocument();
+
+    fireEvent.click(include);
+    fireEvent.click(screen.getByText(/Send persisted tasks as explicit training feedback/i));
+    fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
+    await waitFor(() => expect(screen.getByText('OCR failed')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
+    await waitFor(() => expect(screen.getByText('Import unavailable')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
+    await waitFor(() => expect(screen.getByText('Feedback unavailable')).toBeInTheDocument());
+    expect(onTasksExtracted).toHaveBeenLastCalledWith(expect.any(Object), true);
+  });
+
+  it.each([
+    ['en', 'Feedback: sent.'],
+    ['pl', 'Feedback: wysłany.'],
+  ] as const)('reports explicit learned feedback in %s', async (language, expected) => {
+    localStorage.setItem('eisenhower-language', language);
+    mockedApi.extractTasksFromImage.mockResolvedValueOnce(reviewedOcrPayload());
+    const onTasksExtracted = jest.fn().mockResolvedValue({ imported: 1, failed: 1, learned: true });
+
+    renderWithLanguage(<ImageUpload onTasksExtracted={onTasksExtracted} />);
+    fireEvent.change(screen.getByTestId('image-upload-input'), {
+      target: { files: [new File(['tasks'], 'tasks.txt', { type: 'text/plain' })] },
+    });
+    const second = await screen.findByLabelText(
+      language === 'pl' ? /Uwzględnij zadanie: second/i : /Include task: second/i
+    );
+    fireEvent.click(second);
+    fireEvent.click(
+      screen.getByText(
+        language === 'pl'
+          ? /Wyślij zapisane zadania jako świadomy feedback/i
+          : /Send persisted tasks as explicit training feedback/i
+      )
+    );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: language === 'pl' ? 'Importuj wybrane' : 'Import selected',
+      })
+    );
+
+    await waitFor(() => expect(screen.getByText(new RegExp(expected))).toBeInTheDocument());
+  });
+
   it('ignores empty OCR selections, opens the file picker, and falls back on unknown OCR failures', async () => {
-    const inputClickSpy = jest.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined);
+    const inputClickSpy = jest
+      .spyOn(HTMLInputElement.prototype, 'click')
+      .mockImplementation(() => undefined);
     mockedApi.extractTasksFromImage.mockRejectedValueOnce('offline');
 
     renderWithLanguage(<ImageUpload onTasksExtracted={jest.fn()} />);
@@ -407,12 +560,19 @@ describe('AI component error paths', () => {
     mockedApi.addTrainingExample.mockResolvedValue(undefined);
     mockedApi.learnFromFeedback.mockResolvedValue(undefined);
     mockedApi.retrainModel.mockResolvedValue({ preserve_experience: false });
-    mockedApi.clearTrainingData.mockResolvedValue({ message: 'Training data cleared.', remaining_examples: 4 });
-    mockedApi.getExamplesByQuadrant.mockResolvedValue({ examples: [{ text: 'Inbox cleanup', quadrant: 3 }] });
+    mockedApi.clearTrainingData.mockResolvedValue({
+      message: 'Training data cleared.',
+      remaining_examples: 4,
+    });
+    mockedApi.getExamplesByQuadrant.mockResolvedValue({
+      examples: [{ text: 'Inbox cleanup', quadrant: 3 }],
+    });
 
     renderWithLanguage(<AIManagement onModelUpdated={onModelUpdated} />);
 
-    await waitFor(() => expect(screen.getByText(/Model: local-minilm-mlp \(on\)/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Model: local-minilm-mlp \(on\)/i)).toBeInTheDocument()
+    );
 
     fireEvent.change(screen.getByPlaceholderText(/Task text/i), {
       target: { value: 'Escalate outage' },
@@ -421,7 +581,9 @@ describe('AI component error paths', () => {
       target: { value: '0' },
     });
     fireEvent.click(screen.getByText(/Add example/i));
-    await waitFor(() => expect(mockedApi.addTrainingExample).toHaveBeenCalledWith('Escalate outage', 0));
+    await waitFor(() =>
+      expect(mockedApi.addTrainingExample).toHaveBeenCalledWith('Escalate outage', 0)
+    );
 
     fireEvent.change(screen.getByPlaceholderText(/Task corrected by the user/i), {
       target: { value: 'Prepare QBR' },
@@ -433,7 +595,9 @@ describe('AI component error paths', () => {
       target: { value: '2' },
     });
     fireEvent.click(screen.getByText(/Learn feedback/i));
-    await waitFor(() => expect(mockedApi.learnFromFeedback).toHaveBeenCalledWith('Prepare QBR', 3, 2));
+    await waitFor(() =>
+      expect(mockedApi.learnFromFeedback).toHaveBeenCalledWith('Prepare QBR', 3, 2)
+    );
 
     fireEvent.click(screen.getByLabelText(/Keep deprecated compatibility flag on retrain/i));
     fireEvent.click(screen.getByLabelText(/Keep seed examples when clearing training data/i));
@@ -441,6 +605,10 @@ describe('AI component error paths', () => {
     await waitFor(() => expect(mockedApi.retrainModel).toHaveBeenCalledWith(false));
 
     fireEvent.click(screen.getByText(/Clear training data/i));
+    fireEvent.click(screen.getByText(/^Cancel$/i));
+    expect(mockedApi.clearTrainingData).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText(/Clear training data/i));
+    fireEvent.click(screen.getByText(/Confirm clearing training data/i));
     await waitFor(() => expect(mockedApi.clearTrainingData).toHaveBeenCalledWith(false));
 
     fireEvent.change(screen.getAllByRole('combobox')[3], {
@@ -448,7 +616,9 @@ describe('AI component error paths', () => {
     });
     fireEvent.click(screen.getByText(/Load examples/i));
     await waitFor(() => expect(screen.getByText('Inbox cleanup')).toBeInTheDocument());
-    expect(within(screen.getByText('Inbox cleanup').closest('li') as HTMLElement).getByText('Delete')).toBeInTheDocument();
+    expect(
+      within(screen.getByText('Inbox cleanup').closest('li') as HTMLElement).getByText('Delete')
+    ).toBeInTheDocument();
     expect(onModelUpdated).toHaveBeenCalledTimes(4);
   });
 
@@ -491,7 +661,9 @@ describe('AI component error paths', () => {
 
     renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
 
-    await waitFor(() => expect(screen.getByText(/Model: local-minilm-mlp \(off\)/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Model: local-minilm-mlp \(off\)/i)).toBeInTheDocument()
+    );
     expect(
       screen.getByText(/Encoder: sentence-transformers\/paraphrase-multilingual-MiniLM-L12-v2/i)
     ).toBeInTheDocument();
@@ -537,7 +709,12 @@ describe('AI component error paths', () => {
         ocr: true,
       },
       provider_controls: {
-        local_model: { enabled: false, available: true, active: false, reason: 'Disabled in AI management.' },
+        local_model: {
+          enabled: false,
+          available: true,
+          active: false,
+          reason: 'Disabled in AI management.',
+        },
         tesseract: { enabled: true, available: true, active: true, reason: null },
       },
     });
@@ -546,7 +723,9 @@ describe('AI component error paths', () => {
 
     renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
 
-    await waitFor(() => expect(screen.getByText(/Total examples in the experience store/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Total examples in the experience store/i)).toBeInTheDocument()
+    );
 
     fireEvent.change(screen.getByPlaceholderText(/Task text/i), {
       target: { value: 'Review docs' },
@@ -641,7 +820,12 @@ describe('AI component error paths', () => {
           ocr: true,
         },
         provider_controls: {
-          local_model: { enabled: false, available: true, active: false, reason: 'Disabled in AI management.' },
+          local_model: {
+            enabled: false,
+            available: true,
+            active: false,
+            reason: 'Disabled in AI management.',
+          },
           tesseract: { enabled: true, available: true, active: true, reason: null },
         },
       })
@@ -657,8 +841,18 @@ describe('AI component error paths', () => {
           ocr: false,
         },
         provider_controls: {
-          local_model: { enabled: false, available: true, active: false, reason: 'Disabled in AI management.' },
-          tesseract: { enabled: false, available: true, active: false, reason: 'Disabled in AI management.' },
+          local_model: {
+            enabled: false,
+            available: true,
+            active: false,
+            reason: 'Disabled in AI management.',
+          },
+          tesseract: {
+            enabled: false,
+            available: true,
+            active: false,
+            reason: 'Disabled in AI management.',
+          },
         },
       });
     mockedApi.setProviderEnabled
@@ -682,12 +876,16 @@ describe('AI component error paths', () => {
     await waitFor(() => expect(screen.getByText(/Local model/i)).toBeInTheDocument());
 
     fireEvent.click(screen.getByLabelText(/Toggle Local model/i));
-    await waitFor(() => expect(mockedApi.setProviderEnabled).toHaveBeenCalledWith('local_model', false));
+    await waitFor(() =>
+      expect(mockedApi.setProviderEnabled).toHaveBeenCalledWith('local_model', false)
+    );
     await waitFor(() => expect(screen.getByText(/Local model disabled\./i)).toBeInTheDocument());
     expect(screen.getAllByText(/Disabled in AI management/i).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByLabelText(/Toggle Tesseract/i));
-    await waitFor(() => expect(mockedApi.setProviderEnabled).toHaveBeenCalledWith('tesseract', false));
+    await waitFor(() =>
+      expect(mockedApi.setProviderEnabled).toHaveBeenCalledWith('tesseract', false)
+    );
     await waitFor(() => expect(screen.getByText(/Tesseract disabled\./i)).toBeInTheDocument());
   });
 
@@ -713,7 +911,12 @@ describe('AI component error paths', () => {
           ocr: true,
         },
         provider_controls: {
-          local_model: { enabled: false, available: true, active: false, reason: 'Disabled in AI management.' },
+          local_model: {
+            enabled: false,
+            available: true,
+            active: false,
+            reason: 'Disabled in AI management.',
+          },
           tesseract: { enabled: true, available: true, active: true, reason: null },
         },
       })
@@ -743,10 +946,14 @@ describe('AI component error paths', () => {
 
     renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
 
-    await waitFor(() => expect(screen.getAllByText(/Disabled in AI management/i).length).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(screen.getAllByText(/Disabled in AI management/i).length).toBeGreaterThan(0)
+    );
 
     fireEvent.click(screen.getByLabelText(/Toggle Local model/i));
-    await waitFor(() => expect(mockedApi.setProviderEnabled).toHaveBeenCalledWith('local_model', true));
+    await waitFor(() =>
+      expect(mockedApi.setProviderEnabled).toHaveBeenCalledWith('local_model', true)
+    );
     await waitFor(() => expect(screen.getByText(/Local model enabled\./i)).toBeInTheDocument());
   });
 
@@ -771,15 +978,27 @@ describe('AI component error paths', () => {
         ocr: false,
       },
       provider_controls: {
-        local_model: { enabled: true, available: false, active: false, reason: 'Model bootstrap failed.' },
-        tesseract: { enabled: true, available: false, active: false, reason: 'Tesseract binary is not available.' },
+        local_model: {
+          enabled: true,
+          available: false,
+          active: false,
+          reason: 'Model bootstrap failed.',
+        },
+        tesseract: {
+          enabled: true,
+          available: false,
+          active: false,
+          reason: 'Tesseract binary is not available.',
+        },
       },
     });
     mockedApi.setProviderEnabled.mockRejectedValueOnce(new Error('Provider switch failed'));
 
     renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
 
-    await waitFor(() => expect(screen.getAllByText(/Unavailable in this runtime/i)).toHaveLength(2));
+    await waitFor(() =>
+      expect(screen.getAllByText(/Unavailable in this runtime/i)).toHaveLength(2)
+    );
     expect(screen.getByText('Model bootstrap failed.')).toBeInTheDocument();
     expect(screen.getByText('Tesseract binary is not available.')).toBeInTheDocument();
 

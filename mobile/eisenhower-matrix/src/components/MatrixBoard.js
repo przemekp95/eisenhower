@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import styles from '../styles/appStyles';
 
@@ -6,9 +6,12 @@ export default function MatrixBoard({
   quadrantOptions,
   groupedTasks,
   onDelete,
+  onResolveConflict,
   onToggle,
   t,
 }) {
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
   return (
     <>
       <View style={styles.matrixHeader}>
@@ -29,7 +32,7 @@ export default function MatrixBoard({
               <View style={styles.quadrantHeader}>
                 <View style={[styles.quadrantMarker, { backgroundColor: quadrant.accent }]} />
                 <View style={styles.quadrantCopy}>
-                  <Text style={styles.quadrantTitle}>{quadrant.title}</Text>
+                  <Text accessibilityRole="header" style={styles.quadrantTitle}>{quadrant.title}</Text>
                   <Text style={styles.quadrantHint}>{quadrant.hint}</Text>
                 </View>
                 <Text style={styles.quadrantCount}>{quadrantTasks.length}</Text>
@@ -50,22 +53,82 @@ export default function MatrixBoard({
                         ) : null}
                         {item.syncState && item.syncState !== 'synced' && item.syncState !== 'local_seed' ? (
                           <Text testID={`sync-pending-${item.id}`} style={styles.pendingSyncBadge}>
-                            {t.pendingSync}
+                            {item.syncError === 'conflict'
+                              ? t.syncConflict
+                              : item.syncError === 'error'
+                                ? t.syncError
+                                : t.pendingSync}
                           </Text>
                         ) : null}
+                        {item.syncState === 'conflict' ? (
+                          <View style={styles.actions}>
+                            <Pressable
+                              testID={`conflict-keep-remote-${item.id}`}
+                              accessibilityRole="button"
+                              onPress={() => onResolveConflict(item.id, 'remote')}
+                              style={styles.secondaryButton}
+                            >
+                              <Text style={styles.secondaryButtonText}>{t.conflictKeepRemote}</Text>
+                            </Pressable>
+                            <Pressable
+                              testID={`conflict-retry-local-${item.id}`}
+                              accessibilityRole="button"
+                              onPress={() => onResolveConflict(item.id, 'local')}
+                              style={styles.toolsButton}
+                            >
+                              <Text style={styles.toolsButtonText}>{t.conflictRetryLocal}</Text>
+                            </Pressable>
+                          </View>
+                        ) : null}
                       </View>
-                      <Pressable
-                        testID={`delete-task-${item.id}`}
-                        onPress={() => onDelete(item.id)}
-                        style={styles.deleteButton}
-                      >
-                        <Text style={styles.deleteButtonText}>{t.delete}</Text>
-                      </Pressable>
+                      {confirmDeleteId === item.id ? (
+                        <View accessibilityRole="alert" style={styles.deleteConfirmation}>
+                          <Text style={styles.deleteConfirmationText}>
+                            {t.confirmPermanentDelete.replace('{title}', item.title)}
+                          </Text>
+                          <View style={styles.actions}>
+                            <Pressable
+                              testID={`confirm-delete-${item.id}`}
+                              accessibilityRole="button"
+                              accessibilityLabel={t.confirmDeleteAction}
+                              onPress={() => {
+                                setConfirmDeleteId(null);
+                                onDelete(item.id);
+                              }}
+                              style={styles.deleteButton}
+                            >
+                              <Text style={styles.deleteButtonText}>{t.confirmDeleteAction}</Text>
+                            </Pressable>
+                            <Pressable
+                              testID={`cancel-delete-${item.id}`}
+                              accessibilityRole="button"
+                              onPress={() => setConfirmDeleteId(null)}
+                              style={styles.secondaryButton}
+                            >
+                              <Text style={styles.secondaryButtonText}>{t.cancel}</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      ) : (
+                        <Pressable
+                          testID={`delete-task-${item.id}`}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${t.permanentDelete}: ${item.title}`}
+                          onPress={() => setConfirmDeleteId(item.id)}
+                          style={styles.deleteButton}
+                        >
+                          <Text style={styles.deleteButtonText}>{t.permanentDelete}</Text>
+                        </Pressable>
+                      )}
                     </View>
                     <View style={styles.badges}>
                       <Pressable
                         testID={`toggle-urgent-${item.id}`}
                         onPress={() => onToggle(item.id, 'urgent')}
+                        disabled={item.syncState === 'conflict'}
+                        accessibilityRole="switch"
+                        accessibilityLabel={`${t.urgent}: ${item.title}`}
+                        accessibilityState={{ checked: item.urgent, disabled: item.syncState === 'conflict' }}
                         style={styles.badge}
                       >
                         <Text style={styles.badgeText}>{t.urgent}: {item.urgent ? t.on : t.off}</Text>
@@ -73,6 +136,10 @@ export default function MatrixBoard({
                       <Pressable
                         testID={`toggle-important-${item.id}`}
                         onPress={() => onToggle(item.id, 'important')}
+                        disabled={item.syncState === 'conflict'}
+                        accessibilityRole="switch"
+                        accessibilityLabel={`${t.important}: ${item.title}`}
+                        accessibilityState={{ checked: item.important, disabled: item.syncState === 'conflict' }}
                         style={styles.badge}
                       >
                         <Text style={styles.badgeText}>{t.important}: {item.important ? t.on : t.off}</Text>

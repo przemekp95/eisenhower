@@ -90,11 +90,18 @@ jobs:
           run_id="${{ steps.master-ci-run.outputs.run_id }}"
           repo="${{ github.repository }}"
           required_jobs=(
+            resolve-run-mode
             security-lint
             test-backend-node
+            test-api-client
+            test-mcp-adapter
+            test-n8n-workflows
             test-frontend
+            test-frontend-integration
+            test-frontend-e2e
             test-backend-ai
             test-mobile
+            test-mobile-native-android
           )
 
           for _ in $(seq 1 120); do
@@ -184,7 +191,6 @@ jobs:
         shell: bash
         run: |
           target_sha="${{ steps.sync-strategy.outputs.target_sha }}"
-          dev_sha="${{ steps.sync-strategy.outputs.dev_sha }}"
 
           if git push origin "$target_sha:refs/heads/dev"; then
             echo "result=success" >> "$GITHUB_OUTPUT"
@@ -234,9 +240,9 @@ jobs:
 
           if [ -z "$pr_number" ]; then
             printf '%s\n' \
-              '## Summary' \
-              '- sync the latest master merge history back into dev' \
-              '- keep the promotion flow `feature/* -> dev -> master` working without manual sync pull requests' \
+              "## Summary" \
+              "- sync the latest master merge history back into dev" \
+              "- keep the promotion flow \`feature/* -> dev -> master\` working without manual sync pull requests" \
               > /tmp/sync-pr-body.md
 
             pr_url="$(gh pr create \

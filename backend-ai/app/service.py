@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any
+import logging
 import mimetypes
 import re
 import shutil
@@ -16,12 +16,13 @@ from .local_model import (
   LocalMiniLMClassifier,
   LocalPrediction,
   ModelNotReadyError,
-  SimilarExample,
   cosine_similarity,
   utc_now,
 )
 from .provider_state import ProviderStateStore
 from .store import TrainingStore
+
+logger = logging.getLogger(__name__)
 
 
 def quadrant_to_flags(quadrant: int) -> tuple[bool, bool]:
@@ -93,10 +94,14 @@ class QuadrantAIService:
 
     return {
       "classification": model_ready,
-      "langchain_analysis": model_ready,
+      "reasoned_local_analysis": model_ready,
+      "knowledge_retrieval": bool(self.settings.rag_retrieval_enabled and model_ready),
+      "retrieval_augmented_generation": bool(self.settings.rag_generation_enabled and model_ready),
+      "local_similar_examples": model_ready,
+      "langchain_analysis": False,
       "ocr": tesseract_active,
       "batch_analysis": model_ready,
-      "training_management": True,
+      "training_management": self.settings.ai_management_enabled,
       "providers": {
         "local_model": model_ready,
         "tesseract": tesseract_active,
@@ -104,6 +109,11 @@ class QuadrantAIService:
       },
       "provider_controls": provider_controls,
       "model": model_status,
+      "legacy": {
+        "langchain_analysis": False,
+        "analyze_langchain_route": "deprecated_alias",
+        "use_rag_parameter": "deprecated_alias_for_similar_examples",
+      },
     }
 
   def classify_task(self, task: str, use_rag: bool = True) -> dict[str, Any]:
@@ -194,6 +204,9 @@ class QuadrantAIService:
           "quadrant": classification["quadrant"],
           "quadrant_name": classification["quadrant_name"],
           "confidence": classification["confidence"],
+          "confidence_calibrated": classification["confidence_calibrated"],
+          "requires_confirmation": classification["requires_confirmation"],
+          "confidence_status": classification["confidence_status"],
           "similar_examples_used": classification["similar_examples_used"],
           "top_similar_examples": classification["top_similar_examples"],
         }
@@ -256,6 +269,7 @@ class QuadrantAIService:
         "quadrant": int(item["correct_quadrant"]),
         "source": source,
         "timestamp": utc_now(),
+        **({"training_status": "pending_review"} if source == "ocr-feedback" else {}),
       }
       for item in items
       if str(item["task"]).strip()
@@ -266,6 +280,7 @@ class QuadrantAIService:
       "examples_added": len(saved_records),
       "retrained": False,
       "source": source,
+      "pending_review": source == "ocr-feedback",
     }
     if retrain and saved_records:
       response["training"] = self.retrain()
@@ -275,11 +290,16 @@ class QuadrantAIService:
   def retrain(self, preserve_experience: bool = True) -> dict[str, Any]:
     training_result = self.local_model.train(self.store.load())
     self._startup_error = None
+    promoted = bool(training_result.get("promoted", True))
     return {
-      "message": "Local MiniLM classifier retrained.",
+      "message": (
+        "Local MiniLM classifier retrained and promoted."
+        if promoted
+        else "Candidate rejected; incumbent local classifier preserved."
+      ),
       "preserve_experience": preserve_experience,
       "preserve_experience_deprecated": True,
-      "status": "completed",
+      "status": "completed" if promoted else "rejected",
       **training_result,
     }
 
@@ -350,6 +370,9 @@ class QuadrantAIService:
         "quadrant": rag["quadrant"],
         "quadrant_name": get_quadrant_name(rag["quadrant"], resolved_language),
         "confidence": rag["confidence"],
+        "confidence_calibrated": rag["confidence_calibrated"],
+        "requires_confirmation": rag["requires_confirmation"],
+        "confidence_status": rag["confidence_status"],
       },
       "comparison": {
         "methods_agree": True,
@@ -370,6 +393,9 @@ class QuadrantAIService:
       "timestamp": utc_now(),
       "method": "local-minilm",
       "confidence": prediction.confidence,
+      "confidence_calibrated": prediction.confidence_calibrated,
+      "requires_confirmation": prediction.requires_confirmation,
+      "confidence_status": "low" if prediction.requires_confirmation else "accepted",
       "local_scores": {
         str(index): round(score, 4) for index, score in enumerate(prediction.probabilities)
       },

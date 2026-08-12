@@ -2,9 +2,13 @@ import { createAiApi } from '@eisenhower/api-client';
 import * as ImagePicker from 'expo-image-picker';
 import { createTaskRecord, quadrantToFlags } from '../utils/taskUtils';
 import { mobileConfig } from '../config';
+import { clearApiToken, getApiToken } from '../authSession';
 
 function getAiApi() {
-  return createAiApi(mobileConfig.aiApiUrl);
+  return createAiApi(mobileConfig.aiApiUrl, {
+    accessToken: getApiToken,
+    onUnauthorized: clearApiToken,
+  });
 }
 
 async function pickImageWithExpo() {

@@ -1,0 +1,215 @@
+{
+  "browser": {
+    "api_route_mocked": false,
+    "desktop_and_mobile": true,
+    "project_count": 2,
+    "projects": [
+      {
+        "dom": {
+          "citation_source_uri": "eisenhower://projects/p1/deadlines",
+          "citation_title": "Terminy projektu",
+          "dialog_inside_viewport": true,
+          "explicit_mode": "RAG"
+        },
+        "network": {
+          "request": {
+            "authorization_present": true,
+            "body": {
+              "task": "Raport musi zostać wysłany przed spotkaniem o 14:00; jest pilny i ważny."
+            },
+            "method": "POST",
+            "origin": "http://127.0.0.1:51251",
+            "url": "http://127.0.0.1:49723/v2/ai/analyze"
+          },
+          "response": {
+            "citations": [
+              {
+                "chunk_id": "2fdf9d4a61a2a245e514b57716304ebd98a32e5aaa242f8e4789e144857ef017",
+                "content_version": "synthetic-v1",
+                "document_id": "p1-deadline",
+                "excerpt": "Raport musi zostać wysłany przed spotkaniem o 14:00; jest pilny i ważny.",
+                "score": 1.0000001,
+                "source_uri": "eisenhower://projects/p1/deadlines",
+                "title": "Terminy projektu"
+              }
+            ],
+            "confidence": 0.91,
+            "explanation": "The frozen synthetic deadline evidence makes this task urgent and important.",
+            "fallback_reason": null,
+            "generation": {
+              "execution_id": "50e2f13ea269b18d53e50c5ce6ce57e1d661ebe2d2251c6a9b8879e051d1b69d",
+              "input_tokens": 0,
+              "language": "en",
+              "model_id": "deterministic-test-generator",
+              "model_revision": "18ffeacbc627eb55a3654039a5eae84ed0a0f691e852bee42a82cdbba8a15154",
+              "prompt_id": "task020-runtime-proof",
+              "prompt_version": "1.0.0",
+              "schema_version": "1.0.0"
+            },
+            "mode": "rag",
+            "quadrant": 0,
+            "quadrant_name": "Do Now",
+            "retrieval": {
+              "embedding_version": "minilm-v1",
+              "hit_count": 4,
+              "top_score": 1.0000001
+            }
+          },
+          "server": "uvicorn",
+          "status": 200
+        },
+        "project": "desktop-chromium",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.7922.34 Safari/537.36",
+        "viewport": {
+          "height": 1200,
+          "width": 1440
+        }
+      },
+      {
+        "dom": {
+          "citation_source_uri": "eisenhower://projects/p1/deadlines",
+          "citation_title": "Terminy projektu",
+          "dialog_inside_viewport": true,
+          "explicit_mode": "RAG"
+        },
+        "network": {
+          "request": {
+            "authorization_present": true,
+            "body": {
+              "task": "Raport musi zostać wysłany przed spotkaniem o 14:00; jest pilny i ważny."
+            },
+            "method": "POST",
+            "origin": "http://127.0.0.1:51251",
+            "url": "http://127.0.0.1:49723/v2/ai/analyze"
+          },
+          "response": {
+            "citations": [
+              {
+                "chunk_id": "2fdf9d4a61a2a245e514b57716304ebd98a32e5aaa242f8e4789e144857ef017",
+                "content_version": "synthetic-v1",
+                "document_id": "p1-deadline",
+                "excerpt": "Raport musi zostać wysłany przed spotkaniem o 14:00; jest pilny i ważny.",
+                "score": 1.0000001,
+                "source_uri": "eisenhower://projects/p1/deadlines",
+                "title": "Terminy projektu"
+              }
+            ],
+            "confidence": 0.91,
+            "explanation": "The frozen synthetic deadline evidence makes this task urgent and important.",
+            "fallback_reason": null,
+            "generation": {
+              "execution_id": "50e2f13ea269b18d53e50c5ce6ce57e1d661ebe2d2251c6a9b8879e051d1b69d",
+              "input_tokens": 0,
+              "language": "en",
+              "model_id": "deterministic-test-generator",
+              "model_revision": "18ffeacbc627eb55a3654039a5eae84ed0a0f691e852bee42a82cdbba8a15154",
+              "prompt_id": "task020-runtime-proof",
+              "prompt_version": "1.0.0",
+              "schema_version": "1.0.0"
+            },
+            "mode": "rag",
+            "quadrant": 0,
+            "quadrant_name": "Do Now",
+            "retrieval": {
+              "embedding_version": "minilm-v1",
+              "hit_count": 4,
+              "top_score": 1.0000001
+            }
+          },
+          "server": "uvicorn",
+          "status": 200
+        },
+        "project": "mobile-chromium",
+        "user_agent": "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.7922.34 Mobile Safari/537.36",
+        "viewport": {
+          "height": 839,
+          "width": 412
+        }
+      }
+    ]
+  },
+  "cleanup": {
+    "fastapi_stopped": true,
+    "mongo_database_dropped": true,
+    "node_stopped": true,
+    "ports_closed": true,
+    "qdrant_alias_deleted": true,
+    "qdrant_collection_deleted": true,
+    "temporary_browser_artifacts_removed": true,
+    "vite_stopped": true
+  },
+  "evidence_boundaries": [
+    "The existing frozen synthetic-corpus-v1 JSONL supplies the local corpus; no user or production data is ingested.",
+    "A test-only token verifier binds bearer tokens to the corpus-owned synthetic-a/u1/p1 identity; request fields cannot expand scope.",
+    "Chromium called the real Vite client and current FastAPI /v2/ai/analyze route over HTTP with no Playwright route interception.",
+    "Mongo is the canonical store and Qdrant is the isolated projection; ingestion and reconciliation completed before browser execution.",
+    "The deterministic test-only generation boundary proves citation plumbing but does not prove vLLM, model quality, prompt approval or TASK-015.",
+    "TASK-013 human retrieval labels and thresholds are not evaluated by this proof.",
+    "No deployment, public HTTPS, production traffic or publication is claimed.",
+    "The dirty worktree is bound by source hashes and is not represented as the base HEAD alone."
+  ],
+  "ingestion": {
+    "accepted": 7,
+    "conflict": 0,
+    "duplicate": 0,
+    "embedding_version": "minilm-v1",
+    "pending": 0,
+    "projected": 7,
+    "stale": 0
+  },
+  "preflight": {
+    "hit_count": 4,
+    "query": "Raport musi zostać wysłany przed spotkaniem o 14:00; jest pilny i ważny.",
+    "top_chunk_id": "2fdf9d4a61a2a245e514b57716304ebd98a32e5aaa242f8e4789e144857ef017",
+    "top_source_uri": "eisenhower://projects/p1/deadlines",
+    "wrong_user_hit_count": 0
+  },
+  "reconciliation": {
+    "synthetic-a/p1": {
+      "drifted": 0,
+      "pending": 0,
+      "projected": 0
+    },
+    "synthetic-b/p2": {
+      "drifted": 0,
+      "pending": 0,
+      "projected": 0
+    }
+  },
+  "runtime": {
+    "browser_driver": "Playwright Chromium over real browser network",
+    "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "embedding_revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+    "embedding_version": "minilm-v1",
+    "fastapi": "current create_app and /v2/ai/analyze via one Uvicorn worker",
+    "generation_boundary": "deterministic test-only provider over retrieved chunk IDs",
+    "mongo": "real local isolated canonical database",
+    "node": "current TypeScript source via tsx",
+    "node_version": "v24.18.0",
+    "playwright": "1.62.1",
+    "pymongo": "4.17.0",
+    "python": "3.12.3",
+    "qdrant_client": "1.12.0",
+    "qdrant_commit": "a0d2eccac0c179116214e7cb3583359c80d41998",
+    "qdrant_version": "1.12.0",
+    "sentence_transformers": "5.7.0",
+    "vector_size": 384,
+    "vite": "current TypeScript/React source"
+  },
+  "schema_version": "web-rag-browser-runtime-local-v1",
+  "source_identity": {
+    "api_client_source_sha256": "c9199962df728322384e326168ac9f6368bd1465df6b56e5c34f1f0362463035",
+    "base_head": "1c8e8068cc7c91fc45cbff13a02c3e1e71ab710b",
+    "fastapi_source_sha256": "6ccb82182ab73747c3735e096630e73b579cb33c65fbaaa31a32d5c254c47d17",
+    "live_config_sha256": "a9158e2a56cf9226d078b96825a6bb18d5c9f93993f71becaa0be4d0fc4a4183",
+    "live_spec_sha256": "d7381b4354a483a4b15b0e98241240ac8428a939a315832d516827470c8f4c51",
+    "node_source_sha256": "ee8a218b4716b597452c00b7d8069a4d54cde4b7635a60281ec12ca5ce0383a6",
+    "python_requirements_sha256": "826ab0f3658a48c9412f3208fb0affd074988fc83f817f5bc97816574dcaf73f",
+    "script_sha256": "513d317ce470f879c91fcf236f29be408c605cf4e92f89adf32daad203a97388",
+    "synthetic_corpus_sha256": "683adb67375623254cb32e12ce5f6b9bc9e579d234158c5d47956273632dd0d8",
+    "web_lock_sha256": "9e465e71fd73119bf9490e403b31bffdf8d83b3e23fe61b1932e46c2537a1ce7",
+    "web_source_sha256": "fecd1720dcf7745045ce355a39fcbf04be5e20c4312cc9c6b435e6954003a448",
+    "worktree_dirty": true
+  },
+  "status": "local_runtime_verified_not_deployed"
+}

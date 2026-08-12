@@ -1,0 +1,32 @@
+name: eisenhower
+
+services:
+  inference:
+    image: vllm/vllm-openai-rocm:v0.20.0
+    expose:
+      - "8000"
+    command:
+      - --model
+      - ${INFERENCE_MODEL:?INFERENCE_MODEL is required}
+      - --api-key
+      - ${INFERENCE_API_KEY:?INFERENCE_API_KEY is required}
+      - --disable-log-requests
+    ipc: host
+    group_add:
+      - video
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    profiles:
+      - inference-amd

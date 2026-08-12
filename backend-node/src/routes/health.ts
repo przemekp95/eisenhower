@@ -7,7 +7,10 @@ export interface HealthDependencies {
 }
 
 function resolveReadiness(database: DatabaseState, ai: HealthState) {
-  return database === 'connected' && ai === 'healthy';
+  return {
+    ready: database === 'connected',
+    degraded: database !== 'connected' || ai !== 'healthy',
+  };
 }
 
 export function createHealthRouter({
@@ -16,37 +19,25 @@ export function createHealthRouter({
 }: HealthDependencies) {
   const router = Router();
 
-  router.get('/', async (_req, res, next) => {
-    try {
-      const database = databaseStatusResolver();
-      const ai = await aiHealthChecker();
-
-      res.status(200).json({
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        services: {
-          database,
-          ai,
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
+  router.get('/', (_req, res) => {
+    res.status(200).json({ status: 'ok' });
   });
 
   router.get('/ready', async (_req, res, next) => {
     try {
       const database = databaseStatusResolver();
-      const ai = await aiHealthChecker();
-      const ready = resolveReadiness(database, ai);
+      let ai: HealthState;
+      try {
+        ai = await aiHealthChecker();
+      } catch {
+        ai = 'unreachable';
+      }
+      const { ready, degraded } = resolveReadiness(database, ai);
 
       res.status(ready ? 200 : 503).json({
         status: ready ? 'ready' : 'not_ready',
-        timestamp: new Date().toISOString(),
-        services: {
-          database,
-          ai,
-        },
+        degraded,
+        dependencies: { database, ai },
       });
     } catch (error) {
       next(error);

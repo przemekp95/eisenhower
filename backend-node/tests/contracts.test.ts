@@ -22,7 +22,7 @@ describe('shared API contracts', () => {
   });
 
   it('returns task payloads that match the shared task dto', async () => {
-    const created = await request(app).post('/tasks').send({
+    const created = await request(app).post('/tasks').set('Authorization', 'Bearer test-api-token').send({
       title: 'Plan release',
       description: 'contract coverage',
       urgent: true,
@@ -32,7 +32,7 @@ describe('shared API contracts', () => {
     expect(created.status).toBe(201);
     expect(isTaskDto(created.body)).toBe(true);
 
-    const list = await request(app).get('/tasks');
+    const list = await request(app).get('/tasks').set('Authorization', 'Bearer test-api-token');
 
     expect(list.status).toBe(200);
     expect(Array.isArray(list.body)).toBe(true);

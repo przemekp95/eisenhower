@@ -1,0 +1,364 @@
+{
+  "name": "Eisenhower - async RAG ingestion",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eisenhower-rag-ingestion",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "receive-event",
+      "name": "Receive Signed Ingestion Event",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-900, 0],
+      "webhookId": "replace-with-random-production-id",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "replace-after-import",
+          "name": "Eisenhower Ingestion Webhook Header Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EISENHOWER_INTERNAL_API_URL + '/internal/webhooks/n8n/verify' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $env.EISENHOWER_INTERNAL_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Eisenhower-Timestamp",
+              "value": "={{ $json.headers['x-eisenhower-timestamp'] }}"
+            },
+            {
+              "name": "X-Eisenhower-Signature",
+              "value": "={{ $json.headers['x-eisenhower-signature'] }}"
+            },
+            {
+              "name": "X-Eisenhower-Signature-Version",
+              "value": "={{ $json.headers['x-eisenhower-signature-version'] }}"
+            },
+            {
+              "name": "X-Eisenhower-Signed-Method",
+              "value": "POST"
+            },
+            {
+              "name": "X-Eisenhower-Signed-Path",
+              "value": "/webhook/eisenhower-rag-ingestion"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {
+          "timeout": 5000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "verify-event",
+      "name": "Verify Signature And Replay Window",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-660, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "accepted",
+              "leftValue": "={{ $json.accepted }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "verification-result",
+      "name": "Signature And Replay Check Passed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-420, 0]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.envelope.operation }}",
+                    "rightValue": "upsert",
+                    "operator": {"type": "string", "operation": "equals"}
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "upsert"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.envelope.operation }}",
+                    "rightValue": "tombstone",
+                    "operator": {"type": "string", "operation": "equals"}
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "tombstone"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.envelope.operation }}",
+                    "rightValue": "reindex_project",
+                    "operator": {"type": "string", "operation": "equals"}
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "reindex_project"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.envelope.operation }}",
+                    "rightValue": "start_rag_evaluation",
+                    "operator": {"type": "string", "operation": "equals"}
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "start_rag_evaluation"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "route-operation",
+      "name": "Route Named Operation",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [-170, -100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EISENHOWER_INTERNAL_API_URL + '/internal/rag/ingestion/upsert' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "={{ 'Bearer ' + $env.EISENHOWER_INTERNAL_API_TOKEN }}"},
+            {"name": "Idempotency-Key", "value": "={{ $json.envelope.event_id }}"},
+            {"name": "X-Eisenhower-Signature", "value": "={{ $json.internal_signature }}"}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ event_id: $json.envelope.event_id, tenant_id: $json.envelope.tenant_id, project_id: $json.envelope.project_id, documents: $json.envelope.documents, source_version: $json.envelope.source_version, source_sequence: $json.envelope.source_sequence, content_checksum: $json.envelope.content_checksum, embedding_version: $json.envelope.embedding_version, chunking_version: $json.envelope.chunking_version }) }}",
+        "options": {"timeout": 15000}
+      },
+      "id": "dispatch-upsert",
+      "name": "Dispatch Upsert Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [160, -360],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EISENHOWER_INTERNAL_API_URL + '/internal/rag/ingestion/tombstone' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "={{ 'Bearer ' + $env.EISENHOWER_INTERNAL_API_TOKEN }}"},
+            {"name": "Idempotency-Key", "value": "={{ $json.envelope.event_id }}"},
+            {"name": "X-Eisenhower-Signature", "value": "={{ $json.internal_signature }}"}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ event_id: $json.envelope.event_id, tenant_id: $json.envelope.tenant_id, project_id: $json.envelope.project_id, document_ids: $json.envelope.document_ids, source_version: $json.envelope.source_version, source_sequence: $json.envelope.source_sequence, content_checksum: $json.envelope.content_checksum, embedding_version: $json.envelope.embedding_version, chunking_version: $json.envelope.chunking_version }) }}",
+        "options": {"timeout": 15000}
+      },
+      "id": "dispatch-tombstone",
+      "name": "Dispatch Tombstone Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [160, -120],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EISENHOWER_INTERNAL_API_URL + '/internal/rag/reindex' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "={{ 'Bearer ' + $env.EISENHOWER_INTERNAL_API_TOKEN }}"},
+            {"name": "Idempotency-Key", "value": "={{ $json.envelope.event_id }}"},
+            {"name": "X-Eisenhower-Signature", "value": "={{ $json.internal_signature }}"}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ event_id: $json.envelope.event_id, tenant_id: $json.envelope.tenant_id, project_id: $json.envelope.project_id, source_version: $json.envelope.source_version, source_sequence: $json.envelope.source_sequence, content_checksum: $json.envelope.content_checksum, embedding_version: $json.envelope.embedding_version, chunking_version: $json.envelope.chunking_version }) }}",
+        "options": {"timeout": 15000}
+      },
+      "id": "dispatch-reindex",
+      "name": "Dispatch Reindex Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [160, 120],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EISENHOWER_INTERNAL_API_URL + '/internal/rag/evaluations' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "={{ 'Bearer ' + $env.EISENHOWER_INTERNAL_API_TOKEN }}"},
+            {"name": "Idempotency-Key", "value": "={{ $json.envelope.event_id }}"},
+            {"name": "X-Eisenhower-Signature", "value": "={{ $json.internal_signature }}"}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ event_id: $json.envelope.event_id, tenant_id: $json.envelope.tenant_id, project_id: $json.envelope.project_id, dataset_version: $json.envelope.dataset_version, source_version: $json.envelope.source_version, source_sequence: $json.envelope.source_sequence, content_checksum: $json.envelope.content_checksum, embedding_version: $json.envelope.embedding_version, chunking_version: $json.envelope.chunking_version }) }}",
+        "options": {"timeout": 15000}
+      },
+      "id": "dispatch-evaluation",
+      "name": "Dispatch Evaluation Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [160, 360],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { accepted: true, job_id: $json.job_id, status: 'queued' } }}",
+        "options": {"responseCode": 202}
+      },
+      "id": "respond-accepted",
+      "name": "Respond 202 Accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [520, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"error\":\"invalid_signature_or_replayed_event\"}",
+        "options": {"responseCode": 401}
+      },
+      "id": "respond-unauthorized",
+      "name": "Reject Invalid Or Replayed Event",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [-160, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"error\":\"unsupported_operation\"}",
+        "options": {"responseCode": 400}
+      },
+      "id": "respond-unsupported",
+      "name": "Reject Unsupported Operation",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [160, 580]
+    }
+  ],
+  "connections": {
+    "Receive Signed Ingestion Event": {"main": [[{"node": "Verify Signature And Replay Window", "type": "main", "index": 0}]]},
+    "Verify Signature And Replay Window": {"main": [[{"node": "Signature And Replay Check Passed", "type": "main", "index": 0}]]},
+    "Signature And Replay Check Passed": {
+      "main": [
+        [{"node": "Route Named Operation", "type": "main", "index": 0}],
+        [{"node": "Reject Invalid Or Replayed Event", "type": "main", "index": 0}]
+      ]
+    },
+    "Route Named Operation": {
+      "main": [
+        [{"node": "Dispatch Upsert Job", "type": "main", "index": 0}],
+        [{"node": "Dispatch Tombstone Job", "type": "main", "index": 0}],
+        [{"node": "Dispatch Reindex Job", "type": "main", "index": 0}],
+        [{"node": "Dispatch Evaluation Job", "type": "main", "index": 0}],
+        [{"node": "Reject Unsupported Operation", "type": "main", "index": 0}]
+      ]
+    },
+    "Dispatch Upsert Job": {"main": [[{"node": "Respond 202 Accepted", "type": "main", "index": 0}]]},
+    "Dispatch Tombstone Job": {"main": [[{"node": "Respond 202 Accepted", "type": "main", "index": 0}]]},
+    "Dispatch Reindex Job": {"main": [[{"node": "Respond 202 Accepted", "type": "main", "index": 0}]]},
+    "Dispatch Evaluation Job": {"main": [[{"node": "Respond 202 Accepted", "type": "main", "index": 0}]]}
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "replace-with-error-workflow-id"
+  },
+  "active": false,
+  "versionId": "replace-after-import",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

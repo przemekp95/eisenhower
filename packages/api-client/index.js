@@ -4,11 +4,23 @@ const TASK_API_PATHS = Object.freeze({
   readiness: '/health/ready',
 });
 
+const MAX_TASK_LIST_PAGES = 100;
+
+const QUADRANT_DEFINITIONS = Object.freeze([
+  Object.freeze({ value: 0, key: 'do', name: 'Do Now', urgent: true, important: true }),
+  Object.freeze({ value: 1, key: 'delegate', name: 'Delegate', urgent: true, important: false }),
+  Object.freeze({ value: 2, key: 'schedule', name: 'Schedule', urgent: false, important: true }),
+  Object.freeze({ value: 3, key: 'delete', name: 'Delete', urgent: false, important: false }),
+]);
+
 const AI_API_PATHS = Object.freeze({
   capabilities: '/capabilities',
   trainingStats: '/training-stats',
   classify: '/classify',
+  analyzeTask: '/analyze',
   analyzeWithLangChain: '/analyze-langchain',
+  analyzeTaskWithRag: '/v2/ai/analyze',
+  knowledgeSearch: '/v2/knowledge/search',
   extractTasksFromImage: '/extract-tasks-from-image',
   batchAnalyzeTasks: '/batch-analyze',
   addTrainingExample: '/add-example',
@@ -18,6 +30,10 @@ const AI_API_PATHS = Object.freeze({
   clearTrainingData: '/training-data',
 });
 
+// The server path is retained for backwards compatibility. It is a local task
+// analysis endpoint, not proof that LangChain or generative RAG handled a request.
+const ANALYZE_TASK_PATH = AI_API_PATHS.analyzeTask;
+
 function getProviderPath(provider) {
   return `/providers/${encodeURIComponent(provider)}`;
 }
@@ -26,12 +42,22 @@ function getExamplesByQuadrantPath(quadrant, limit = 10) {
   return `/examples/${encodeURIComponent(String(quadrant))}?limit=${encodeURIComponent(String(limit))}`;
 }
 
-function getClassifyPath(title, useRag = true) {
-  return `${AI_API_PATHS.classify}?title=${encodeURIComponent(title)}&use_rag=${useRag}`;
+function getClassifyPath(title, includeSimilarExamples = true) {
+  void title;
+  void includeSimilarExamples;
+  return AI_API_PATHS.classify;
+}
+
+function getAnalyzeTaskPath(task, language = 'en') {
+  void task;
+  void language;
+  return ANALYZE_TASK_PATH;
 }
 
 function getAnalyzeWithLangChainPath(task, language = 'en') {
-  return `${AI_API_PATHS.analyzeWithLangChain}?task=${encodeURIComponent(task)}&language=${encodeURIComponent(language)}`;
+  void task;
+  void language;
+  return AI_API_PATHS.analyzeWithLangChain;
 }
 
 function getClearTrainingDataPath(keepDefaults = true) {
@@ -46,6 +72,45 @@ function resolveFetch(fetchImpl) {
   }
 
   return implementation;
+}
+
+function resolveClientOptions(optionsOrFetch) {
+  if (typeof optionsOrFetch === 'function' || optionsOrFetch === undefined) {
+    return { fetchImpl: optionsOrFetch };
+  }
+  return {
+    fetchImpl: optionsOrFetch.fetch,
+    accessToken: optionsOrFetch.accessToken,
+    adminToken: optionsOrFetch.adminToken,
+    onUnauthorized: optionsOrFetch.onUnauthorized,
+    onAdminUnauthorized: optionsOrFetch.onAdminUnauthorized,
+  };
+}
+
+function createAuthorizedRequest(optionsOrFetch, credential = 'access') {
+  const options = resolveClientOptions(optionsOrFetch);
+  const request = resolveFetch(options.fetchImpl);
+  return async (url, init = {}) => {
+    const configured = credential === 'admin' ? options.adminToken : options.accessToken;
+    const token = typeof configured === 'function' ? configured() : configured;
+    const headers = { ...(init.headers || {}) };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    const requestInit = { ...init, headers };
+    const response =
+      !token && Object.keys(init).length === 0 && Object.keys(headers).length === 0
+        ? await request(url)
+        : await request(url, requestInit);
+    if (response.status === 401 || response.status === 403) {
+      if (credential === 'admin') {
+        options.onAdminUnauthorized?.();
+      } else {
+        options.onUnauthorized?.();
+      }
+    }
+    return response;
+  };
 }
 
 function createRequestError(message, details = {}) {
@@ -80,6 +145,8 @@ async function readJson(response, options = {}) {
   const {
     defaultError = 'Request failed',
     errorCode = 'request_failed',
+    validate,
+    invalidResponse = 'The API returned an invalid response',
   } = options;
 
   const canReadJson =
@@ -88,20 +155,25 @@ async function readJson(response, options = {}) {
   const payload = canReadJson ? await response.json().catch(() => null) : null;
 
   if (!response.ok) {
+    const errorPayload = isErrorResponseDto(payload) ? payload : null;
     throw createRequestError(
-      payload?.error || defaultError,
+      errorPayload?.error || defaultError,
       {
-        code: payload?.code || errorCode,
+        code: errorPayload?.code || errorCode,
         status: response.status,
       }
     );
   }
 
-  if (response.status === 204) {
-    return null;
+  const result = response.status === 204 ? null : payload;
+  if (typeof validate === 'function' && !validate(result)) {
+    throw createRequestError(invalidResponse, {
+      code: 'invalid_response',
+      status: response.status,
+    });
   }
 
-  return payload;
+  return result;
 }
 
 function toTaskInputDto(task) {
@@ -127,19 +199,9 @@ function resolveTaskQuadrant(task) {
     return task.quadrant;
   }
 
-  if (task?.urgent && task?.important) {
-    return 0;
-  }
-
-  if (task?.urgent) {
-    return 1;
-  }
-
-  if (task?.important) {
-    return 2;
-  }
-
-  return 3;
+  return QUADRANT_DEFINITIONS.find(
+    (quadrant) => quadrant.urgent === Boolean(task?.urgent) && quadrant.important === Boolean(task?.important)
+  ).value;
 }
 
 function toAcceptedOcrLearningPayload(tasks) {
@@ -149,16 +211,45 @@ function toAcceptedOcrLearningPayload(tasks) {
   }));
 }
 
-function createTaskApi(baseUrl, fetchImpl) {
-  const request = resolveFetch(fetchImpl);
+function createTaskApi(baseUrl, optionsOrFetch) {
+  const request = createAuthorizedRequest(optionsOrFetch);
 
   return {
     paths: TASK_API_PATHS,
     async listTasks() {
-      const response = await request(buildUrl(baseUrl, TASK_API_PATHS.tasks));
-      return readJson(response, {
-        defaultError: 'Task request failed',
-        errorCode: 'task_request_failed',
+      const tasks = [];
+      const seenCursors = new Set();
+      let cursor;
+
+      for (let page = 0; page < MAX_TASK_LIST_PAGES; page += 1) {
+        const path = cursor === undefined
+          ? TASK_API_PATHS.tasks
+          : `${TASK_API_PATHS.tasks}?cursor=${encodeURIComponent(cursor)}`;
+        const response = await request(buildUrl(baseUrl, path));
+        const pageTasks = await readJson(response, {
+          defaultError: 'Task request failed',
+          errorCode: 'task_request_failed',
+          validate: isTaskListDto,
+          invalidResponse: 'Task API returned an invalid response',
+        });
+        tasks.push(...pageTasks);
+
+        const nextCursor = response?.headers?.get?.('X-Next-Cursor');
+        if (!nextCursor) {
+          return tasks;
+        }
+        if (seenCursors.has(nextCursor)) {
+          throw createRequestError('Task API returned a repeated pagination cursor', {
+            code: 'invalid_response',
+            status: response.status,
+          });
+        }
+        seenCursors.add(nextCursor);
+        cursor = nextCursor;
+      }
+
+      throw createRequestError('Task API pagination exceeded the page limit', {
+        code: 'invalid_response',
       });
     },
     async createTask(task) {
@@ -170,26 +261,39 @@ function createTaskApi(baseUrl, fetchImpl) {
       return readJson(response, {
         defaultError: 'Task request failed',
         errorCode: 'task_request_failed',
+        validate: isTaskDto,
+        invalidResponse: 'Task API returned an invalid response',
       });
     },
-    async updateTask(id, patch) {
+    async updateTask(id, patch, revision) {
+      const revisionHeaders = Number.isInteger(revision) && revision >= 0
+        ? { 'If-Match': `"${revision}"` }
+        : {};
       const response = await request(buildUrl(baseUrl, `${TASK_API_PATHS.tasks}/${encodeURIComponent(id)}`), {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...revisionHeaders },
         body: JSON.stringify(toTaskPatchDto(patch)),
       });
       return readJson(response, {
         defaultError: 'Task request failed',
         errorCode: 'task_request_failed',
+        validate: isTaskDto,
+        invalidResponse: 'Task API returned an invalid response',
       });
     },
-    async deleteTask(id) {
+    async deleteTask(id, revision) {
+      const revisionHeaders = Number.isInteger(revision) && revision >= 0
+        ? { 'If-Match': `"${revision}"` }
+        : {};
       const response = await request(buildUrl(baseUrl, `${TASK_API_PATHS.tasks}/${encodeURIComponent(id)}`), {
         method: 'DELETE',
+        headers: revisionHeaders,
       });
       return readJson(response, {
         defaultError: 'Task request failed',
         errorCode: 'task_request_failed',
+        validate: isNullDto,
+        invalidResponse: 'Task API returned an invalid response',
       });
     },
     async getHealth() {
@@ -197,6 +301,8 @@ function createTaskApi(baseUrl, fetchImpl) {
       return readJson(response, {
         defaultError: 'Task request failed',
         errorCode: 'task_request_failed',
+        validate: isHealthResponseDto,
+        invalidResponse: 'Task API returned an invalid response',
       });
     },
     async getReadiness() {
@@ -204,30 +310,72 @@ function createTaskApi(baseUrl, fetchImpl) {
       return readJson(response, {
         defaultError: 'Task request failed',
         errorCode: 'task_request_failed',
+        validate: isHealthResponseDto,
+        invalidResponse: 'Task API returned an invalid response',
       });
     },
   };
 }
 
-function createAiApi(baseUrl, fetchImpl) {
-  const request = resolveFetch(fetchImpl);
+function createAiApi(baseUrl, optionsOrFetch) {
+  const request = createAuthorizedRequest(optionsOrFetch);
+  const adminRequest = createAuthorizedRequest(optionsOrFetch, 'admin');
+
+  const analyzeTask = async (task, language = 'en') => {
+    const response = await request(buildUrl(baseUrl, getAnalyzeTaskPath(task, language)), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task, language }),
+    });
+    return readJson(response, {
+      defaultError: 'AI request failed',
+      errorCode: 'ai_request_failed',
+      validate: isTaskAnalysisDto,
+      invalidResponse: 'AI API returned an invalid response',
+    });
+  };
 
   return {
     paths: AI_API_PATHS,
-    async classifyTask(title, useRag = true) {
-      const response = await request(buildUrl(baseUrl, getClassifyPath(title, useRag)));
+    async classifyTask(title, includeSimilarExamples = true) {
+      const response = await request(buildUrl(baseUrl, getClassifyPath(title, includeSimilarExamples)), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, use_rag: includeSimilarExamples }),
+      });
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',
+        validate: isClassificationResultDto,
+        invalidResponse: 'AI API returned an invalid response',
       });
     },
-    async analyzeWithLangChain(task, language = 'en') {
-      const response = await request(buildUrl(baseUrl, getAnalyzeWithLangChainPath(task, language)), {
+    analyzeTask,
+    analyzeWithLangChain: analyzeTask,
+    async analyzeTaskWithRag(task) {
+      const response = await request(buildUrl(baseUrl, AI_API_PATHS.analyzeTaskWithRag), {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task }),
       });
       return readJson(response, {
-        defaultError: 'AI request failed',
-        errorCode: 'ai_request_failed',
+        defaultError: 'Grounded AI request failed',
+        errorCode: 'rag_request_failed',
+        validate: isGroundedAnalysisDto,
+        invalidResponse: 'AI API returned an invalid response',
+      });
+    },
+    async searchKnowledge(query, projectId = null, limit = 5) {
+      const response = await request(buildUrl(baseUrl, AI_API_PATHS.knowledgeSearch), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, project_id: projectId, limit }),
+      });
+      return readJson(response, {
+        defaultError: 'Knowledge search failed',
+        errorCode: 'knowledge_search_failed',
+        validate: isKnowledgeSearchDto,
+        invalidResponse: 'AI API returned an invalid response',
       });
     },
     async extractTasksFromImage(file) {
@@ -241,6 +389,8 @@ function createAiApi(baseUrl, fetchImpl) {
       return readJson(response, {
         defaultError: 'OCR request failed',
         errorCode: 'ocr_request_failed',
+        validate: isOcrResultDto,
+        invalidResponse: 'AI API returned an invalid response',
       });
     },
     async batchAnalyzeTasks(tasks) {
@@ -252,6 +402,8 @@ function createAiApi(baseUrl, fetchImpl) {
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',
+        validate: isBatchAnalysisResultDto,
+        invalidResponse: 'AI API returned an invalid response',
       });
     },
     async fetchCapabilities() {
@@ -259,17 +411,21 @@ function createAiApi(baseUrl, fetchImpl) {
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',
+        validate: isCapabilitiesDto,
+        invalidResponse: 'AI API returned an invalid response',
       });
     },
     async fetchTrainingStats() {
-      const response = await request(buildUrl(baseUrl, AI_API_PATHS.trainingStats));
+      const response = await adminRequest(buildUrl(baseUrl, AI_API_PATHS.trainingStats));
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',
+        validate: isTrainingStatsDto,
+        invalidResponse: 'AI API returned an invalid response',
       });
     },
     async setProviderEnabled(provider, enabled) {
-      const response = await request(buildUrl(baseUrl, getProviderPath(provider)), {
+      const response = await adminRequest(buildUrl(baseUrl, getProviderPath(provider)), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: Boolean(enabled) }),
@@ -277,10 +433,12 @@ function createAiApi(baseUrl, fetchImpl) {
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',
+        validate: isProviderControlDto,
+        invalidResponse: 'AI API returned an invalid response',
       });
     },
     async addTrainingExample(text, quadrant) {
-      const response = await request(buildUrl(baseUrl, AI_API_PATHS.addTrainingExample), {
+      const response = await adminRequest(buildUrl(baseUrl, AI_API_PATHS.addTrainingExample), {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -291,10 +449,12 @@ function createAiApi(baseUrl, fetchImpl) {
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',
+        validate: isTrainingExampleAddedDto,
+        invalidResponse: 'AI API returned an invalid response',
       });
     },
     async learnFromFeedback(task, predictedQuadrant, correctQuadrant) {
-      const response = await request(buildUrl(baseUrl, AI_API_PATHS.learnFromFeedback), {
+      const response = await adminRequest(buildUrl(baseUrl, AI_API_PATHS.learnFromFeedback), {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -306,6 +466,8 @@ function createAiApi(baseUrl, fetchImpl) {
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',
+        validate: isFeedbackResultDto,
+        invalidResponse: 'AI API returned an invalid response',
       });
     },
     async learnFromAcceptedOcrTasks(tasks, retrain = true) {
@@ -313,7 +475,7 @@ function createAiApi(baseUrl, fetchImpl) {
         return { examples_added: 0, retrained: false };
       }
 
-      const response = await request(buildUrl(baseUrl, AI_API_PATHS.learnFromAcceptedOcrTasks), {
+      const response = await adminRequest(buildUrl(baseUrl, AI_API_PATHS.learnFromAcceptedOcrTasks), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -324,10 +486,12 @@ function createAiApi(baseUrl, fetchImpl) {
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',
+        validate: isOcrFeedbackResultDto,
+        invalidResponse: 'AI API returned an invalid response',
       });
     },
     async retrainModel(preserveExperience = true) {
-      const response = await request(buildUrl(baseUrl, AI_API_PATHS.retrainModel), {
+      const response = await adminRequest(buildUrl(baseUrl, AI_API_PATHS.retrainModel), {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -337,106 +501,517 @@ function createAiApi(baseUrl, fetchImpl) {
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',
+        validate: isRetrainResultDto,
+        invalidResponse: 'AI API returned an invalid response',
       });
     },
     async clearTrainingData(keepDefaults = true) {
-      const response = await request(buildUrl(baseUrl, getClearTrainingDataPath(keepDefaults)), {
+      const response = await adminRequest(buildUrl(baseUrl, getClearTrainingDataPath(keepDefaults)), {
         method: 'DELETE',
       });
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',
+        validate: isTrainingDataClearResultDto,
+        invalidResponse: 'AI API returned an invalid response',
       });
     },
     async getExamplesByQuadrant(quadrant, limit = 10) {
-      const response = await request(buildUrl(baseUrl, getExamplesByQuadrantPath(quadrant, limit)));
+      const response = await adminRequest(buildUrl(baseUrl, getExamplesByQuadrantPath(quadrant, limit)));
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',
+        validate: isExamplesByQuadrantDto,
+        invalidResponse: 'AI API returned an invalid response',
       });
     },
   };
 }
 
+function isRecord(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function isFiniteNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function isNonNegativeInteger(value) {
+  return Number.isInteger(value) && value >= 0;
+}
+
+function isConfidence(value) {
+  return isFiniteNumber(value) && value >= 0 && value <= 1;
+}
+
+function isOptional(value, validate) {
+  return value === undefined || validate(value);
+}
+
+function isNullable(value, validate) {
+  return value === null || validate(value);
+}
+
+function isRecordOf(value, validate) {
+  return isRecord(value) && Object.values(value).every(validate);
+}
+
+function quadrantDefinition(value) {
+  return QUADRANT_DEFINITIONS.find((definition) => definition.value === value);
+}
+
+function isQuadrant(value) {
+  return Boolean(quadrantDefinition(value));
+}
+
+function isNullDto(value) {
+  return value === null;
+}
+
+function isErrorResponseDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    isOptional(value.error, (item) => typeof item === 'string') &&
+    isOptional(value.code, (item) => typeof item === 'string')
+  );
+}
+
 function isTaskDto(value) {
   return Boolean(
-    value &&
-    typeof value === 'object' &&
+    isRecord(value) &&
     typeof value._id === 'string' &&
     typeof value.title === 'string' &&
     typeof value.description === 'string' &&
     typeof value.urgent === 'boolean' &&
-    typeof value.important === 'boolean'
+    typeof value.important === 'boolean' &&
+    isOptional(value.revision, isNonNegativeInteger) &&
+    isOptional(value.createdAt, (item) => typeof item === 'string') &&
+    isOptional(value.updatedAt, (item) => typeof item === 'string')
   );
+}
+
+function isTaskListDto(value) {
+  return Array.isArray(value) && value.every(isTaskDto);
 }
 
 function isHealthResponseDto(value) {
-  return Boolean(
-    value &&
-    typeof value === 'object' &&
-    typeof value.status === 'string' &&
-    typeof value.timestamp === 'string' &&
-    value.services &&
-    typeof value.services === 'object' &&
-    typeof value.services.database === 'string' &&
-    typeof value.services.ai === 'string'
-  );
+  return Boolean(isRecord(value) && ['ok', 'ready', 'not_ready'].includes(value.status));
 }
 
 function isClassificationResultDto(value) {
+  const expected = quadrantDefinition(value?.quadrant);
   return Boolean(
-    value &&
-    typeof value === 'object' &&
+    isRecord(value) &&
+    expected &&
     typeof value.task === 'string' &&
-    typeof value.urgent === 'boolean' &&
-    typeof value.important === 'boolean' &&
-    typeof value.quadrant === 'number' &&
-    typeof value.quadrant_name === 'string' &&
+    value.urgent === expected.urgent &&
+    value.important === expected.important &&
+    value.quadrant_name === expected.name &&
+    typeof value.timestamp === 'string' &&
+    typeof value.method === 'string' &&
+    isOptional(value.confidence, isConfidence) &&
+    isOptional(value.confidence_calibrated, (item) => typeof item === 'boolean') &&
+    isOptional(value.requires_confirmation, (item) => typeof item === 'boolean') &&
+    isOptional(value.confidence_status, (item) => ['accepted', 'low'].includes(item)) &&
+    isRecordOf(value.local_scores, isFiniteNumber) &&
+    isNonNegativeInteger(value.similar_examples_used) &&
+    Array.isArray(value.top_similar_examples) &&
+    value.top_similar_examples.every(isSimilarExampleResultDto)
+  );
+}
+
+function isAnalysisMethodDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    isNullable(value.quadrant, isQuadrant) &&
+    typeof value.reasoning === 'string' &&
+    isConfidence(value.confidence) &&
     typeof value.method === 'string'
   );
 }
 
-function isLangChainAnalysisDto(value) {
+function isRagClassificationDto(value) {
   return Boolean(
-    value &&
-    typeof value === 'object' &&
+    isRecord(value) &&
+    isQuadrant(value.quadrant) &&
+    typeof value.quadrant_name === 'string' &&
+    isConfidence(value.confidence) &&
+    isOptional(value.confidence_calibrated, (item) => typeof item === 'boolean') &&
+    isOptional(value.requires_confirmation, (item) => typeof item === 'boolean') &&
+    isOptional(value.confidence_status, (item) => ['accepted', 'low'].includes(item))
+  );
+}
+
+function isTaskAnalysisDto(value) {
+  return Boolean(
+    isRecord(value) &&
     typeof value.task === 'string' &&
-    value.langchain_analysis &&
-    typeof value.langchain_analysis.reasoning === 'string' &&
-    value.rag_classification &&
-    typeof value.rag_classification.quadrant === 'number' &&
-    typeof value.rag_classification.quadrant_name === 'string'
+    isAnalysisMethodDto(value.langchain_analysis) &&
+    isRagClassificationDto(value.rag_classification) &&
+    isRecord(value.comparison) &&
+    typeof value.comparison.methods_agree === 'boolean' &&
+    isFiniteNumber(value.comparison.confidence_difference) &&
+    isOptional(value.timestamp, (item) => typeof item === 'string')
+  );
+}
+
+const isLangChainAnalysisDto = isTaskAnalysisDto;
+
+function isCitationDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    typeof value.chunk_id === 'string' &&
+    typeof value.document_id === 'string' &&
+    typeof value.source_uri === 'string' &&
+    typeof value.title === 'string' &&
+    typeof value.excerpt === 'string' &&
+    isFiniteNumber(value.score) &&
+    typeof value.content_version === 'string'
+  );
+}
+
+function isRetrievalSummaryDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    isNonNegativeInteger(value.hit_count) &&
+    isNullable(value.top_score, isFiniteNumber) &&
+    isNullable(value.embedding_version, (item) => typeof item === 'string')
+  );
+}
+
+function isGenerationMetadataDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    typeof value.execution_id === 'string' &&
+    typeof value.prompt_id === 'string' &&
+    typeof value.prompt_version === 'string' &&
+    typeof value.model_id === 'string' &&
+    typeof value.model_revision === 'string' &&
+    typeof value.schema_version === 'string' &&
+    ['pl', 'en'].includes(value.language) &&
+    isNonNegativeInteger(value.input_tokens)
+  );
+}
+
+function isInformationDeltaClaimDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    typeof value.claim_id === 'string' &&
+    typeof value.statement === 'string' &&
+    ['new_information', 'confirmation', 'contradiction', 'update', 'necessary_reminder'].includes(
+      value.relation
+    ) &&
+    Array.isArray(value.compared_to_statement_ids) &&
+    value.compared_to_statement_ids.every((item) => typeof item === 'string') &&
+    Array.isArray(value.citation_ids) &&
+    value.citation_ids.every((item) => typeof item === 'string') &&
+    isOptional(
+      value.reminder_reason,
+      (item) =>
+        item === null || ['direct_answer', 'decision_constraint', 'safety_constraint'].includes(item)
+    )
+  );
+}
+
+function isInformationDeltaDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    ['new_information', 'mixed', 'confirmation_only', 'no_new_information', 'freshness_unverified'].includes(
+      value.status
+    ) &&
+    Array.isArray(value.claims) &&
+    value.claims.every(isInformationDeltaClaimDto) &&
+    [
+      'grounded_delta_available',
+      'known_information_only',
+      'no_new_information',
+      'current_world_freshness_unverified',
+    ].includes(value.summary_code) &&
+    value.world_freshness === 'frozen_corpus_snapshot_not_current_world'
+  );
+}
+
+function isGroundedAnalysisDto(value) {
+  const expected = quadrantDefinition(value?.quadrant);
+  return Boolean(
+    isRecord(value) &&
+    ['rag', 'fallback', 'no_answer'].includes(value.mode) &&
+    isNullable(value.quadrant, isQuadrant) &&
+    ((value.quadrant === null && value.quadrant_name === null) ||
+      (expected && value.quadrant_name === expected.name)) &&
+    isNullable(value.confidence, isConfidence) &&
+    typeof value.explanation === 'string' &&
+    Array.isArray(value.citations) &&
+    value.citations.every(isCitationDto) &&
+    isRetrievalSummaryDto(value.retrieval) &&
+    isOptional(value.fallback_reason, (item) => isNullable(item, (entry) => typeof entry === 'string')) &&
+    isOptional(value.generation, (item) => isNullable(item, isGenerationMetadataDto)) &&
+    isOptional(value.information_delta, (item) => isNullable(item, isInformationDeltaDto))
+  );
+}
+
+function isKnowledgeSearchDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    typeof value.query === 'string' &&
+    isNullable(value.answer, (item) => typeof item === 'string') &&
+    Array.isArray(value.citations) &&
+    value.citations.every(isCitationDto) &&
+    isRetrievalSummaryDto(value.retrieval) &&
+    isOptional(value.no_answer_reason, (item) => isNullable(item, (entry) => typeof entry === 'string'))
+  );
+}
+
+function isSimilarExampleResultDto(value) {
+  const expected = quadrantDefinition(value?.quadrant);
+  return Boolean(
+    isRecord(value) &&
+    expected &&
+    typeof value.text === 'string' &&
+    value.quadrant_name === expected.name &&
+    typeof value.source === 'string' &&
+    isFiniteNumber(value.score)
+  );
+}
+
+function isOcrClassifiedTaskDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    typeof value.text === 'string' &&
+    isQuadrant(value.quadrant) &&
+    typeof value.quadrant_name === 'string' &&
+    isConfidence(value.confidence) &&
+    isOptional(value.confidence_calibrated, (item) => typeof item === 'boolean') &&
+    isOptional(value.requires_confirmation, (item) => typeof item === 'boolean') &&
+    isOptional(value.confidence_status, (item) => ['accepted', 'low'].includes(item)) &&
+    isOptional(value.similar_examples_used, isNonNegativeInteger) &&
+    isOptional(
+      value.top_similar_examples,
+      (items) => Array.isArray(items) && items.every(isSimilarExampleResultDto)
+    )
+  );
+}
+
+function isOcrResultDto(value) {
+  const distribution = value?.summary?.quadrant_distribution;
+  return Boolean(
+    isRecord(value) &&
+    typeof value.filename === 'string' &&
+    isRecord(value.image_info) &&
+    isNonNegativeInteger(value.image_info.size_bytes) &&
+    typeof value.image_info.shape === 'string' &&
+    isRecord(value.ocr) &&
+    typeof value.ocr.extracted_text === 'string' &&
+    isNonNegativeInteger(value.ocr.raw_tasks_detected) &&
+    typeof value.ocr.method === 'string' &&
+    Array.isArray(value.classified_tasks) &&
+    value.classified_tasks.every(isOcrClassifiedTaskDto) &&
+    isRecord(value.summary) &&
+    isNonNegativeInteger(value.summary.total_tasks) &&
+    isRecord(distribution) &&
+    isRecordOf(distribution.counts, isNonNegativeInteger) &&
+    isRecordOf(distribution.percentages, isFiniteNumber) &&
+    isRecordOf(distribution.quadrant_names, (item) => typeof item === 'string') &&
+    isOptional(value.timestamp, (item) => typeof item === 'string')
   );
 }
 
 function isBatchAnalysisResultDto(value) {
   return Boolean(
-    value &&
-    typeof value === 'object' &&
+    isRecord(value) &&
     Array.isArray(value.batch_results) &&
-    value.summary &&
-    typeof value.summary.total_tasks === 'number'
+    value.batch_results.every(
+      (item) =>
+        isRecord(item) &&
+        typeof item.task === 'string' &&
+        isRecord(item.analyses) &&
+        isRagClassificationDto(item.analyses.rag) &&
+        isAnalysisMethodDto(item.analyses.langchain)
+    ) &&
+    isRecord(value.summary) &&
+    isRecordOf(
+      value.summary.methods,
+      (item) => isRecord(item) && isRecordOf(item.quadrant_distribution, isNonNegativeInteger)
+    ) &&
+    isNonNegativeInteger(value.summary.total_tasks) &&
+    isOptional(value.timestamp, (item) => typeof item === 'string')
   );
 }
 
-function isOcrResultDto(value) {
+function isProviderStateDto(value) {
   return Boolean(
-    value &&
-    typeof value === 'object' &&
-    Array.isArray(value.classified_tasks) &&
-    value.summary &&
-    typeof value.summary.total_tasks === 'number'
+    isRecord(value) &&
+    typeof value.enabled === 'boolean' &&
+    typeof value.available === 'boolean' &&
+    typeof value.active === 'boolean' &&
+    isOptional(value.reason, (item) => isNullable(item, (entry) => typeof entry === 'string'))
+  );
+}
+
+function isCapabilitiesDto(value) {
+  const device = value?.device;
+  return Boolean(
+    isRecord(value) &&
+    typeof value.classification === 'boolean' &&
+    typeof value.langchain_analysis === 'boolean' &&
+    typeof value.ocr === 'boolean' &&
+    typeof value.batch_analysis === 'boolean' &&
+    typeof value.training_management === 'boolean' &&
+    isOptional(value.reasoned_local_analysis, (item) => typeof item === 'boolean') &&
+    isOptional(value.retrieval_augmented_generation, (item) => typeof item === 'boolean') &&
+    isOptional(value.knowledge_retrieval, (item) => typeof item === 'boolean') &&
+    isOptional(value.local_similar_examples, (item) => typeof item === 'boolean') &&
+    isRecord(value.providers) &&
+    typeof value.providers.local_model === 'boolean' &&
+    typeof value.providers.ocr === 'boolean' &&
+    isOptional(value.providers.tesseract, (item) => typeof item === 'boolean') &&
+    isOptional(
+      value.provider_controls,
+      (item) =>
+        isRecord(item) &&
+        isProviderStateDto(item.local_model) &&
+        isProviderStateDto(item.tesseract)
+    ) &&
+    isOptional(
+      value.legacy,
+      (item) =>
+        isRecord(item) &&
+        item.langchain_analysis === false &&
+        item.analyze_langchain_route === 'deprecated_alias' &&
+        item.use_rag_parameter === 'deprecated_alias_for_similar_examples'
+    ) &&
+    isOptional(
+      value.model,
+      (item) =>
+        isRecord(item) &&
+        typeof item.ready === 'boolean' &&
+        typeof item.name === 'string' &&
+        typeof item.encoder_name === 'string' &&
+        typeof item.artifact_path === 'string' &&
+        typeof item.index_path === 'string' &&
+        isOptional(item.trained_at, (entry) => isNullable(entry, (nested) => typeof nested === 'string')) &&
+        isOptional(item.validation_skipped, (entry) => typeof entry === 'boolean') &&
+        isOptional(item.last_error, (entry) => isNullable(entry, (nested) => typeof nested === 'string')) &&
+        isOptional(item.examples_seen, isNonNegativeInteger)
+    ) &&
+    isRecord(device) &&
+    typeof device.type === 'string' &&
+    typeof device.name === 'string' &&
+    typeof device.vendor === 'string' &&
+    typeof device.runtime === 'string' &&
+    isNullable(device.runtime_version, (item) => typeof item === 'string') &&
+    typeof device.torch_device === 'string' &&
+    isNonNegativeInteger(device.count) &&
+    isNullable(device.cuda_version, (item) => typeof item === 'string') &&
+    typeof device.accelerated === 'boolean'
+  );
+}
+
+function isTrainingStatsDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    isNonNegativeInteger(value.total_examples) &&
+    isRecordOf(value.quadrant_distribution, isNonNegativeInteger) &&
+    isRecordOf(value.data_sources, isNonNegativeInteger) &&
+    typeof value.data_file === 'string' &&
+    typeof value.model_file === 'string' &&
+    typeof value.last_updated === 'string' &&
+    isRecordOf(value.quadrant_names, (item) => typeof item === 'string') &&
+    isOptional(value.model_name, (item) => typeof item === 'string') &&
+    isOptional(value.model_ready, (item) => typeof item === 'boolean') &&
+    isOptional(value.model_encoder, (item) => typeof item === 'string') &&
+    isOptional(value.model_trained_at, (item) => isNullable(item, (entry) => typeof entry === 'string')) &&
+    isOptional(value.model_validation_skipped, (item) => typeof item === 'boolean') &&
+    isOptional(value.model_error, (item) => isNullable(item, (entry) => typeof entry === 'string'))
+  );
+}
+
+function isProviderControlDto(value) {
+  return Boolean(
+    isProviderStateDto(value) &&
+    ['local_model', 'tesseract'].includes(value.provider)
+  );
+}
+
+function isTrainingExampleDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    typeof value.text === 'string' &&
+    isQuadrant(value.quadrant) &&
+    typeof value.source === 'string' &&
+    isOptional(value.timestamp, (item) => typeof item === 'string')
+  );
+}
+
+function isTrainingExampleAddedDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    typeof value.message === 'string' &&
+    isTrainingExampleDto(value.example)
+  );
+}
+
+function isFeedbackResultDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    typeof value.message === 'string' &&
+    isQuadrant(value.predicted_quadrant) &&
+    isQuadrant(value.correct_quadrant) &&
+    isTrainingExampleDto(value.example)
+  );
+}
+
+function isOcrFeedbackResultDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    isNonNegativeInteger(value.examples_added) &&
+    typeof value.retrained === 'boolean' &&
+    isOptional(value.message, (item) => typeof item === 'string') &&
+    isOptional(value.source, (item) => typeof item === 'string') &&
+    isOptional(value.pending_review, (item) => typeof item === 'boolean') &&
+    isOptional(value.training, isRetrainResultDto)
+  );
+}
+
+function isRetrainResultDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    typeof value.message === 'string' &&
+    typeof value.preserve_experience === 'boolean' &&
+    isOptional(value.preserve_experience_deprecated, (item) => typeof item === 'boolean') &&
+    ['completed', 'rejected'].includes(value.status)
+  );
+}
+
+function isTrainingDataClearResultDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    typeof value.message === 'string' &&
+    isNonNegativeInteger(value.remaining_examples)
+  );
+}
+
+function isExamplesByQuadrantDto(value) {
+  const expected = quadrantDefinition(value?.quadrant);
+  return Boolean(
+    isRecord(value) &&
+    expected &&
+    value.quadrant_name === expected.name &&
+    Array.isArray(value.examples) &&
+    value.examples.every(isTrainingExampleDto)
   );
 }
 
 module.exports = {
   AI_API_PATHS,
+  QUADRANT_DEFINITIONS,
   TASK_API_PATHS,
   buildUrl,
   createAiApi,
   createRequestError,
   createTaskApi,
   getAnalyzeWithLangChainPath,
+  getAnalyzeTaskPath,
   getClassifyPath,
   getClearTrainingDataPath,
   getExamplesByQuadrantPath,
@@ -445,6 +1020,7 @@ module.exports = {
   isClassificationResultDto,
   isHealthResponseDto,
   isLangChainAnalysisDto,
+  isTaskAnalysisDto,
   isOcrResultDto,
   isTaskDto,
   readJson,
