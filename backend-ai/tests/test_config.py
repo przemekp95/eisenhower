@@ -213,10 +213,18 @@ def test_production_response_canary_requires_explicit_tenant_and_user_cohorts(tm
   }
   with pytest.raises(ValueError, match="tenant and user allowlists"):
     Settings(**common)
+  with pytest.raises(ValueError, match="promotion pointer"):
+    Settings(
+      **common,
+      rag_allowed_tenants=("owner-tenant",),
+      rag_response_allowed_users=("owner-sub",),
+    )
   settings = Settings(
     **common,
     rag_allowed_tenants=("owner-tenant",),
     rag_response_allowed_users=("owner-sub",),
+    rag_response_promotion_pointer_path=tmp_path / "promotion" / "current.json",
+    rag_response_candidate_id="answer-v1",
   )
   assert settings.rag_response_allowed_users == ("owner-sub",)
 

@@ -1,5 +1,5 @@
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import hmac
 import json
@@ -506,6 +506,22 @@ def test_v2_knowledge_search_forwards_the_authorized_project_filter(tmp_path: Pa
 
 
 def test_v2_knowledge_answer_uses_authenticated_scope_and_response_canary(tmp_path: Path):
+  pointer = tmp_path / "promotion.json"
+  pointer.write_text(json.dumps({
+    "schema_version": "ai-promotion-pointer-v1",
+    "revision": 3,
+    "previous_revision": 2,
+    "phases": {
+      "retrieval": {"mode": "canary", "candidate_id": "rag-v1", "canary_percent": 5},
+      "generation": {"mode": "canary", "candidate_id": "llm-v1", "canary_percent": 5},
+      "response": {
+        "mode": "canary", "candidate_id": "answer-v12", "canary_percent": 5,
+        "quality_report_checksum": "a" * 64, "approval_checksum": "b" * 64,
+        "approval_valid_until": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+      },
+      "mag": {"mode": "disabled", "candidate_id": None, "canary_percent": 0},
+    },
+  }), encoding="utf-8")
   settings = Settings(
     training_data_path=tmp_path / "training.json",
     model_cache_dir=tmp_path / "runtime",
@@ -514,6 +530,8 @@ def test_v2_knowledge_answer_uses_authenticated_scope_and_response_canary(tmp_pa
     rag_response_enabled=True,
     rag_allowed_tenants=("local",),
     rag_response_allowed_users=("local-user",),
+    rag_response_promotion_pointer_path=pointer,
+    rag_response_candidate_id="answer-v12",
   )
   store = TrainingStore(settings.training_data_path)
   service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
@@ -534,6 +552,52 @@ def test_v2_knowledge_answer_uses_authenticated_scope_and_response_canary(tmp_pa
   assert rag.answer_calls[0][1].tenant_id == "local"
   assert rag.answer_calls[0][1].user_id == "local-user"
   assert rag.answer_calls[0][2:] == ("pl", 3, None)
+
+
+def test_v2_analysis_response_canary_reloads_pointer_and_expires_without_restart(tmp_path: Path):
+  pointer = tmp_path / "promotion.json"
+
+  def write_pointer(valid_until: datetime) -> None:
+    pointer.write_text(json.dumps({
+      "schema_version": "ai-promotion-pointer-v1", "revision": 3, "previous_revision": 2,
+      "phases": {
+        "retrieval": {"mode": "canary", "candidate_id": "rag-v1", "canary_percent": 5},
+        "generation": {"mode": "canary", "candidate_id": "llm-v1", "canary_percent": 5},
+        "response": {
+          "mode": "canary", "candidate_id": "answer-v12", "canary_percent": 5,
+          "quality_report_checksum": "a" * 64, "approval_checksum": "b" * 64,
+          "approval_valid_until": valid_until.isoformat(),
+        },
+        "mag": {"mode": "disabled", "candidate_id": None, "canary_percent": 0},
+      },
+    }), encoding="utf-8")
+
+  write_pointer(datetime.now(timezone.utc) + timedelta(minutes=5))
+  settings = Settings(
+    training_data_path=tmp_path / "training.json", model_cache_dir=tmp_path / "runtime",
+    rag_retrieval_enabled=True, rag_generation_enabled=True, rag_response_enabled=True,
+    rag_allowed_tenants=("local",), rag_response_allowed_users=("local-user",),
+    rag_response_promotion_pointer_path=pointer, rag_response_candidate_id="answer-v12",
+  )
+  store = TrainingStore(settings.training_data_path)
+  rag = FakeRagService()
+  client = TestClient(create_app(
+    settings=settings,
+    store=store,
+    ai_service=QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel()),
+    rag_service=rag,
+  ), headers={"Authorization": "Bearer test-api-token"})
+
+  selected = client.post("/v2/ai/analyze", json={"task": "Prepare roadmap"})
+  write_pointer(datetime.now(timezone.utc) - timedelta(seconds=1))
+  expired = client.post("/v2/ai/analyze", json={"task": "Prepare roadmap"})
+  metrics = client.get("/metrics").text
+
+  assert selected.json()["mode"] == "rag"
+  assert expired.json()["mode"] == "fallback"
+  assert expired.json()["fallback_reason"] == "response_approval_expired"
+  assert 'eisenhower_response_canary_decisions_total{outcome="selected"} 1' in metrics
+  assert 'eisenhower_response_canary_decisions_total{outcome="approval_expired"} 1' in metrics
 
 
 def test_v2_knowledge_answer_abstains_without_retrieval_when_canary_is_disabled(tmp_path: Path):
