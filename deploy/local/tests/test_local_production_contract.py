@@ -102,6 +102,11 @@ class LocalProductionContractTest(unittest.TestCase):
       self.assertIn(f"${{{variable}", image, name)
     self.assertNotIn(":latest", image, name)
 
+  def test_reranker_shares_the_gpu_with_generation(self):
+    command = self.amd_services["reranker"]["command"]
+    option_index = command.index("--gpu-memory-utilization")
+    self.assertEqual(command[option_index + 1], "0.10")
+
   def test_web_is_deployed_behind_the_private_access_gateway(self):
     web = self.services["web"]
     self.assertNotIn("ports", web)
@@ -129,6 +134,11 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn("location = /ai/v2/knowledge/answer", config)
     self.assertIn("proxy_pass http://$knowledge_upstream/v2/knowledge/answer;", config)
 
+  def test_knowledge_runtime_uses_the_immutable_candidate_prompt(self):
+    environment = self.services["knowledge-service"]["environment"]
+    self.assertIn("PROMPT_VERSION=${PROMPT_VERSION:-1.2.0}", environment)
+    self.assertIn("KNOWLEDGE_PROMPT_VERSION=${KNOWLEDGE_PROMPT_VERSION:-1.0.0}", environment)
+
   def test_local_deploy_script_enforces_clean_exact_sha_and_records_rollback(self):
     script = DEPLOY_SCRIPT_PATH.read_text()
     self.assertIn('git diff --quiet', script)
@@ -142,7 +152,7 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn('docker image inspect', script)
     self.assertIn('deploy-response)', script)
     self.assertIn(
-        'compose up -d --wait inference reranker knowledge-service access-gateway',
+        'compose up --no-deps -d --wait inference reranker knowledge-service access-gateway',
         script,
     )
     self.assertIn('validate_response_inputs', script)
