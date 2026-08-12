@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-12 — TASK-041: Removed historical trailing whitespace from the object-storage implementation with identical Python AST/tokens, 21/21 focused tests, and a clean full master promotion diff; no behavior or release gate was weakened.
+
 2026-08-12 — TASK-040: Restored the required E2E accessibility gate with durable active-language contrast, a reduced-motion ready-state fallback and a semantic intro-ready Axe boundary, without sleeps or disabled rules.
 
 2026-08-12 — TASK-039: Added a separate fail-safe multilabel CI-impact shadow pipeline with conservative unknown-only history, authenticated-lineage future gates and trusted canonical planner rebinding; focused 47/47 and full local verification passed, with no eligible model, workflow/ruleset change, merge or deployment.
