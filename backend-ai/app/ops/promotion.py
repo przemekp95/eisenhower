@@ -279,6 +279,8 @@ class PromotionController:
     report_payload = {key: value for key, value in report.items() if key != "report_checksum"}
     if report.get("report_checksum") != self._checksum(report_payload):
       raise PromotionBlocked("quality report checksum mismatch")
+    if phase == "response" and target_mode == "canary":
+      self._validate_response_holdout_report(report, verified)
     try:
       generated_at = datetime.fromisoformat(str(report["generated_at"]))
     except (KeyError, ValueError) as issue:
@@ -316,6 +318,46 @@ class PromotionController:
       raise PromotionBlocked("trusted human approval verification failed") from issue
     if approval_verified is not True:
       raise PromotionBlocked("trusted human approval verification failed")
+
+  @staticmethod
+  def _validate_response_holdout_report(
+    report: dict[str, Any], candidate: CandidateManifest
+  ) -> None:
+    if report.get("schema_version") != "knowledge-answer-holdout-report-v1":
+      raise PromotionBlocked("response canary requires the knowledge-answer holdout report")
+    if (
+      report.get("dataset_version") != "knowledge-answer-holdout-v1"
+      or report.get("policy_version") != "knowledge-answer-holdout-policy-v1"
+    ):
+      raise PromotionBlocked("response canary knowledge-answer holdout version mismatch")
+    for field in ("dataset_checksum", "policy_checksum"):
+      value = report.get(field)
+      if not isinstance(value, str) or len(value) != 64:
+        raise PromotionBlocked("response canary knowledge-answer holdout checksum is invalid")
+      try:
+        int(value, 16)
+      except ValueError as issue:
+        raise PromotionBlocked(
+          "response canary knowledge-answer holdout checksum is invalid"
+        ) from issue
+    if report.get("git_sha") != candidate.git.commit_sha:
+      raise PromotionBlocked("response canary knowledge-answer holdout Git lineage mismatch")
+    if report.get("evidence_level") != "physical_local_amd_runtime_holdout":
+      raise PromotionBlocked("response canary requires physical AMD holdout evidence")
+    if report.get("failed_gates") != []:
+      raise PromotionBlocked("response canary knowledge-answer holdout gates are not green")
+    metrics = report.get("metrics")
+    if not isinstance(metrics, dict) or metrics.get("cases", 0) < 24:
+      raise PromotionBlocked("response canary knowledge-answer holdout is undersized")
+    lineage = report.get("lineage")
+    if not isinstance(lineage, dict) or set(lineage) != {
+      "prompt_id", "prompt_version", "model_id", "model_revision", "schema_version",
+    }:
+      raise PromotionBlocked("response canary knowledge-answer holdout lineage is incomplete")
+    if report.get("human_review", {}).get("satisfied") is not False:
+      raise PromotionBlocked("response canary holdout must preserve the human review boundary")
+    if report.get("production_quality_proven") is not False:
+      raise PromotionBlocked("response canary holdout must not claim production quality")
 
   def _write_history(self, state: dict[str, Any]) -> None:
     target = self.history / f"{state['revision']}.json"

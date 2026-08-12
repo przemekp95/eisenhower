@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-12 — TASK-023 milestone: Froze a 24-case PL/EN knowledge-answer holdout before its first physical AMD/Qwen run; the predeclared automated gate passed with 1.0 answerable recall, 1.0/1.0 no-answer precision/recall, zero successful injection, 1.0 citation/schema binding, 0.9167 supported-answer rate and 2.85 s p95, while human review and runtime canary routing remain explicitly open.
+
 2026-08-12 — TASK-023 CI follow-up: Replaced the stale classifier fixture in grounded-answer Playwright coverage with the separate knowledge-answer contract and added desktop/mobile fail-closed no-answer coverage; focused E2E passed 6/6 before the exact-head PR rerun.
 
 2026-08-12 — TASK-023 milestone: Added a separate claim-cited knowledge-answer API and web surface with two-phase fail-closed Qwen decoding; physical AMD PL/EN answer and unsupported/injection abstention passed 4/4, and full `make verify` passed while the independent human/holdout response gate remains open.
