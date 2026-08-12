@@ -303,6 +303,17 @@ class OpenAICompatibleGenerationProvider:
     )
     if not delta_requested:
       output_schema["properties"]["information_delta"] = {"type": "null"}
+    allowed_chunk_ids = list(rendered.allowed_chunk_ids)
+    if allowed_chunk_ids:
+      output_schema["properties"]["citations"].update({
+        "minItems": 1,
+        "items": {"enum": allowed_chunk_ids, "type": "string"},
+      })
+      output_schema["properties"]["evidence"]["minItems"] = 1
+      output_schema["$defs"]["Evidence"]["properties"]["chunk_id"] = {
+        "enum": allowed_chunk_ids,
+        "type": "string",
+      }
     payload = {
       "model": spec.model_id,
       "temperature": generation.temperature,

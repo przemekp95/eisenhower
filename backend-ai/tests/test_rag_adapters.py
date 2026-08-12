@@ -168,6 +168,9 @@ def test_vllm_adapter_uses_private_fixed_base_url_api_key_timeout_and_json_schem
   assert payload["response_format"]["type"] == "json_schema"
   output_schema = payload["response_format"]["json_schema"]["schema"]
   assert output_schema["properties"]["information_delta"] == {"type": "null"}
+  assert output_schema["properties"]["citations"]["minItems"] == 1
+  assert output_schema["properties"]["citations"]["items"]["enum"] == ["chunk-1"]
+  assert output_schema["$defs"]["Evidence"]["properties"]["chunk_id"]["enum"] == ["chunk-1"]
   assert payload["temperature"] == 0
   assert payload["top_p"] == 1
   assert payload["n"] == 1
