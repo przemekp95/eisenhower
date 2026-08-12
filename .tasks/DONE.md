@@ -1,5 +1,22 @@
 # Done
 
+## TASK-040: Stabilize the language switcher accessibility gate
+**Priority:** P1 | **Tags:** accessibility, e2e, web, release-gate
+
+Restore the exact-head E2E accessibility gate by giving the active language control durable WCAG contrast and ensuring automated scans observe the settled intro state rather than an in-flight opacity transition.
+
+### Plan
+
+- Replace the threshold-level active language color with a token that has a safe contrast margin on the rendered light background.
+- Synchronize Axe scans with the semantic `data-app-intro=ready` application state without sleeps or disabled rules.
+- Verify focused web tests and Playwright, then promote the isolated fix through a green PR to `dev` before rebasing the shadow-classifier candidate.
+
+### Outcome
+
+Replaced the threshold-level active language token with `text-blue-800`, made the reduced-motion path always settle a pending intro, and bound reduced-motion explicitly in both Playwright projects before waiting on the semantic intro-ready state for Axe. PR #161 reproduced a 3.47:1 contrast violation across all retries, while the first PR #162 run proved the project-level device settings had overridden the top-level reduced-motion option; both root causes are covered without disabling accessibility rules or adding sleeps.
+
+---
+
 ## TASK-038: Add deterministic change-impact CI planning
 **Priority:** P1 | **Tags:** ci, reliability, performance, security
 

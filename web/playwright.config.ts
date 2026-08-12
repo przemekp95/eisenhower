@@ -23,16 +23,19 @@ export default defineConfig({
   projects: [
     {
       name: 'desktop-chromium',
-      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 1200 } },
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1440, height: 1200 },
+        contextOptions: { reducedMotion: 'reduce' },
+      },
     },
     {
       name: 'mobile-chromium',
-      use: { ...devices['Pixel 7'] },
+      use: { ...devices['Pixel 7'], contextOptions: { reducedMotion: 'reduce' } },
     },
   ],
   use: {
     baseURL: frontendUrl,
-    reducedMotion: 'reduce',
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
     video: 'retain-on-failure',

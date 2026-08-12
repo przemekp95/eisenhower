@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-12 — TASK-040: Restored the required E2E accessibility gate with durable active-language contrast, a reduced-motion ready-state fallback and a semantic intro-ready Axe boundary, without sleeps or disabled rules.
+
 2026-08-12 — TASK-038: Added deterministic fail-closed CI impact planning with stable required contexts, continuous security gates and expanded module coverage; local verification and full PR CI run 31544533146 passed on 872ea746, with PR #159 left unmerged for final review.
 
 2026-08-11 — TASK-037: Hardened repository architecture, canonical data and delivery contracts, cleared historical Python/workflow lint debt, and merged green PR #157 to `dev` as `73c984066cfd65ffce0a4fc31f041ba7c24eded2`; full post-merge CI passed on the exact SHA without modifying `master` or production.

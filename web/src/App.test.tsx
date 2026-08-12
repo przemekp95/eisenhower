@@ -389,6 +389,17 @@ describe('App', () => {
     );
   });
 
+  it('marks a pending intro as ready when reduced motion becomes active before setup', async () => {
+    mockShouldDisableMotion.mockReturnValueOnce(false).mockReturnValue(true);
+
+    render(<App />);
+
+    await waitFor(() =>
+      expect(document.querySelector('main')).toHaveAttribute('data-app-intro', 'ready')
+    );
+    expect(mockGsapContext).not.toHaveBeenCalled();
+  });
+
   it('skips hero motion setup when unmounted before gsap resolves', async () => {
     mockShouldDisableMotion.mockReturnValue(false);
 

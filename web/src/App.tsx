@@ -130,9 +130,10 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    const root = mainRef.current;
+    const root = mainRef.current!;
 
-    if (!root || shouldDisableMotion()) {
+    if (shouldDisableMotion()) {
+      setAppIntroState('ready');
       return;
     }
 
