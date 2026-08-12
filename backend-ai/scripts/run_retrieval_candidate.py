@@ -84,6 +84,9 @@ class VllmScoreReranker:
     models = response.json()["data"]
     if len(models) != 1 or not models[0]["id"].endswith(self.revision):
       raise ValueError("reranker endpoint does not expose the pinned model revision")
+    self.max_model_len = int(models[0]["max_model_len"])
+    if not 128 <= self.max_model_len <= 512:
+      raise ValueError("reranker endpoint model length is outside the evaluated bounds")
 
   def score(self, query_text, ranked_candidates):
     response = httpx.post(
@@ -93,6 +96,7 @@ class VllmScoreReranker:
         "text_2": [
           f"{candidate.title}\n{candidate.text}" for candidate in ranked_candidates
         ],
+        "truncate_prompt_tokens": self.max_model_len,
       },
       timeout=30,
     ).raise_for_status().json()
@@ -262,6 +266,7 @@ def run(
           "reranker_weight": reranker_weight,
           "reranker_model": reranker.model_name,
           "reranker_revision": reranker.revision,
+          "reranker_max_tokens": getattr(reranker, "max_model_len", 512),
         }
         lexical_retriever = CanonicalBm25Retriever(
           store,
