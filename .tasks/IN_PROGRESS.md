@@ -27,10 +27,10 @@ Implement a disabled-by-default comparison path for the existing dense retriever
 
 ### Plan
 
-- Retrieve lexical candidates from the canonical authorized corpus, then add deterministic BM25 and equal-contribution RRF contracts without choosing parameters from the untouched holdout.
-- Add strategy-neutral dense/hybrid/optional-reranked evaluation for PL/EN Recall@k, MRR, no-hit, duplicate, freshness, isolation and latency slices.
-- Keep dense as the runtime default, pin and bound any optional reranker, and fail closed rather than silently changing strategy when it is unavailable.
-- Produce immutable comparison evidence before any reversible promotion flag is changed.
+- Add document-diverse fielded BM25/RRF candidates so repeated chunks cannot crowd out distinct relevant documents, while preserving canonical ACL/version/tombstone checks.
+- Expand only train/dev with PL/EN, multi-document, exact-identifier and negative no-hit cases; keep the existing holdout byte-for-byte untouched.
+- Select bounded parameters on train, validate once on dev, and keep dense as the runtime default unless every approved quality and zero-tolerance gate passes.
+- Produce a new immutable exact-SHA comparison, run full regression and CI, then promote only evidence that remains truthful about the independent-human gate.
 
 ### Conditional checkpoint
 

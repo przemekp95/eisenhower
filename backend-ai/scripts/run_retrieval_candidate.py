@@ -21,7 +21,11 @@ from app.rag.canonical import CanonicalIngestionApplication, CanonicalRetriever
 from app.rag.collections import QdrantCollectionManager
 from app.rag.corpus_manifest import CorpusManifest, RepositoryCorpusConnector
 from app.rag.golden import load_golden_dataset
-from app.rag.golden_runner import RetrievalStrategyComparisonRunner
+from app.rag.golden_runner import (
+  RetrievalGoldenRunner,
+  RetrievalStrategyComparisonRunner,
+  select_train_strategy,
+)
 from app.rag.hybrid import CanonicalBm25Retriever, HybridRetriever
 from app.rag.ingestion import DeterministicChunker
 from app.rag.models import AccessScope
@@ -136,12 +140,48 @@ def run(
       embedding_version=embedding.version,
       chunker=DeterministicChunker(max_chars=1200, overlap_chars=160),
     )
-    lexical_retriever = CanonicalBm25Retriever(
-      store,
-      embedding_version=embedding.version,
-      chunker=DeterministicChunker(max_chars=1200, overlap_chars=160),
-    )
-    hybrid_retriever = HybridRetriever(dense_retriever, lexical_retriever)
+    chunker = DeterministicChunker(max_chars=1200, overlap_chars=160)
+    configurations = {
+      f"rrf{rrf_k}-title{title_weight:g}-lexical{lexical_weight:g}": {
+        "rrf_k": rrf_k,
+        "title_weight": title_weight,
+        "text_weight": 1.0,
+        "dense_rrf_weight": 1.0,
+        "lexical_rrf_weight": lexical_weight,
+        "candidate_multiplier": 4,
+      }
+      for rrf_k in (20, 60)
+      for title_weight in (1.0, 2.0)
+      for lexical_weight in (1.0, 1.5, 2.0)
+    }
+    candidate_retrievers = {}
+    for name, configuration in configurations.items():
+      lexical_retriever = CanonicalBm25Retriever(
+        store,
+        embedding_version=embedding.version,
+        chunker=chunker,
+        title_weight=configuration["title_weight"],
+        text_weight=configuration["text_weight"],
+      )
+      candidate_retrievers[name] = HybridRetriever(
+        dense_retriever,
+        lexical_retriever,
+        rrf_k=configuration["rrf_k"],
+        dense_rrf_weight=configuration["dense_rrf_weight"],
+        lexical_rrf_weight=configuration["lexical_rrf_weight"],
+        candidate_multiplier=configuration["candidate_multiplier"],
+      )
+    train_cases = [case for case in cases if case.split == "train"]
+    train_reports = {
+      name: RetrievalGoldenRunner(retriever).run(train_cases, k=5)
+      for name, retriever in candidate_retrievers.items()
+    }
+    selected_name = select_train_strategy(train_reports)
+    hybrid_retriever = candidate_retrievers[selected_name]
+    dev_validation = RetrievalStrategyComparisonRunner({
+      "dense": dense_retriever,
+      "hybrid": hybrid_retriever,
+    }).run(cases, k=5, split="dev")
     strategy_comparison = RetrievalStrategyComparisonRunner({
       "dense": dense_retriever,
       "hybrid": hybrid_retriever,
@@ -154,7 +194,7 @@ def run(
       "schema_version": "retrieval-candidate-runtime-v1",
       "evidence_level": "local-container-runtime",
       "approval_status": "human_review_required",
-      "tuning_performed": False,
+      "tuning_performed": True,
       "deployment_proven": False,
       "public_evidence_proven": False,
       "source_git_sha": git_sha,
@@ -178,6 +218,16 @@ def run(
       "ingestion": ingestion_result,
       "reconciliation": reconciliation,
       "evaluation": strategy_comparison["strategies"]["dense"],
+      "train_selection": {
+        "selection_rule": "zero tolerance, then worst-language recall/MRR, global recall/MRR, document diversity",
+        "selected": selected_name,
+        "selected_configuration": configurations[selected_name],
+        "candidates": {
+          name: {"configuration": configurations[name], "metrics": candidate["metrics"]}
+          for name, candidate in train_reports.items()
+        },
+      },
+      "dev_validation": dev_validation,
       "strategy_comparison": strategy_comparison,
       "collection": {"name": collection_name, "revision": embedding.version},
       "snapshot_restore": recovery,
