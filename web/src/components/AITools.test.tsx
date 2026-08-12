@@ -134,6 +134,24 @@ describe('AITools', () => {
       retrieval: { hit_count: 0, top_score: null, embedding_version: null },
       fallback_reason: 'rag_response_disabled',
     });
+    mockedApi.answerKnowledge.mockResolvedValue({
+      status: 'answered',
+      answer: 'Approved incident guidance.',
+      claims: [{ statement: 'Approved incident guidance.', citation_ids: ['chunk-1'] }],
+      citations: [
+        {
+          chunk_id: 'chunk-1',
+          document_id: 'document-1',
+          source_uri: 'eisenhower://repository/incident-policy',
+          title: 'Incident policy',
+          excerpt: 'Follow the approved incident process.',
+          score: 0.9,
+          content_version: 'v1',
+        },
+      ],
+      retrieval: { hit_count: 1, top_score: 0.9, embedding_version: 'minilm-v1' },
+      no_answer_reason: null,
+    });
   });
 
   afterEach(() => {
@@ -178,7 +196,7 @@ describe('AITools', () => {
     expect(groundedTab).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'ai-tab-grounded');
     fireEvent.click(screen.getByRole('button', { name: 'Check sources' }));
-    await waitFor(() => expect(screen.getByText('Suggestion without sources')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Answer with sources')).toBeInTheDocument());
   });
 
   it('supports arrow-key tab navigation in both directions', () => {

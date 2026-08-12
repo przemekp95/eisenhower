@@ -1,9 +1,12 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 import { clearApiToken, setApiToken } from './authSession';
+import { runtimeConfig } from './config';
 import * as api from './services/api';
+import * as oidcSession from './oidcSession';
 
 jest.mock('./services/api');
+jest.mock('./oidcSession');
 jest.mock('./components/Matrix', () => ({
   __esModule: true,
   default: ({
@@ -102,6 +105,7 @@ jest.mock('./components/matrixLazyComponents', () => ({
 }));
 
 const mockedApi = jest.mocked(api);
+const mockedOidcSession = jest.mocked(oidcSession);
 const initialTask = {
   _id: '1',
   title: 'Existing task',
@@ -116,6 +120,10 @@ describe('App', () => {
     jest.clearAllMocks();
     localStorage.clear();
     localStorage.setItem('eisenhower-language', 'pl');
+    runtimeConfig.oidcIssuer = undefined;
+    runtimeConfig.oidcClientId = undefined;
+    runtimeConfig.oidcRedirectUri = undefined;
+    mockedOidcSession.completeOidcLogin.mockResolvedValue(false);
     setApiToken('runtime-only-code');
     mockedApi.getTasks.mockResolvedValue([initialTask]);
     mockedApi.getDelegatedTasks.mockResolvedValue([]);
@@ -171,6 +179,7 @@ describe('App', () => {
 
   afterEach(() => {
     act(() => clearApiToken());
+    window.history.replaceState({}, document.title, '/');
   });
 
   it('guides access in plain language and unlocks with an in-memory code', async () => {
@@ -200,6 +209,65 @@ describe('App', () => {
     render(<App />);
     expect(screen.getByRole('alert')).toHaveTextContent(/nieprawidłowy lub wygasł/i);
     expect(screen.getByLabelText('Kod dostępu')).toHaveFocus();
+  });
+
+  it.each([
+    ['issuer only', 'https://identity.example/realms/eisenhower', undefined, undefined],
+    [
+      'issuer and client only',
+      'https://identity.example/realms/eisenhower',
+      'eisenhower-web',
+      undefined,
+    ],
+  ])(
+    'keeps the manual gate for incomplete OIDC config: %s',
+    (_name, issuer, clientId, redirectUri) => {
+      clearApiToken();
+      runtimeConfig.oidcIssuer = issuer;
+      runtimeConfig.oidcClientId = clientId;
+      runtimeConfig.oidcRedirectUri = redirectUri;
+      const view = render(<App />);
+      expect(screen.getByLabelText('Kod dostępu')).toBeInTheDocument();
+      view.unmount();
+    }
+  );
+
+  it('starts OIDC Authorization Code with PKCE when the complete config is present', () => {
+    clearApiToken();
+    runtimeConfig.oidcIssuer = 'https://identity.example/realms/eisenhower';
+    runtimeConfig.oidcClientId = 'eisenhower-web';
+    runtimeConfig.oidcRedirectUri = 'https://app.example/';
+    render(<App />);
+
+    expect(screen.queryByLabelText('Kod dostępu')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Wejdź do systemu' }));
+    expect(mockedOidcSession.beginOidcLogin).toHaveBeenCalledWith({
+      issuer: runtimeConfig.oidcIssuer,
+      clientId: runtimeConfig.oidcClientId,
+      redirectUri: runtimeConfig.oidcRedirectUri,
+      scopes: runtimeConfig.oidcScopes,
+    });
+  });
+
+  it('completes a valid OIDC callback and exposes a safe error for a rejected callback', async () => {
+    clearApiToken();
+    runtimeConfig.oidcIssuer = 'https://identity.example/realms/eisenhower';
+    runtimeConfig.oidcClientId = 'eisenhower-web';
+    runtimeConfig.oidcRedirectUri = 'https://app.example/';
+    window.history.replaceState({}, document.title, '/?code=valid&state=bound');
+    mockedOidcSession.completeOidcLogin.mockImplementationOnce(async () => {
+      setApiToken('oidc-token');
+      return true;
+    });
+    const successful = render(<App />);
+    expect(await screen.findByText('Existing task')).toBeInTheDocument();
+    successful.unmount();
+
+    act(() => clearApiToken());
+    window.history.replaceState({}, document.title, '/?code=rejected&state=wrong');
+    mockedOidcSession.completeOidcLogin.mockRejectedValueOnce(new Error('invalid state'));
+    render(<App />);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/nieprawidłowy lub wygasł/i);
   });
 
   it('loads tasks, reports a confirmed fresh state and opens administration independently', async () => {

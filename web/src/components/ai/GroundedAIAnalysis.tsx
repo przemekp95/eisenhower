@@ -1,19 +1,18 @@
 import { useEffect, useState } from 'react';
-import { analyzeTaskWithRag, GroundedAnalysis } from '../../services/api';
+import { answerKnowledge, KnowledgeAnswer } from '../../services/api';
 import { useLanguage } from '../../i18n/LanguageContext';
 
 interface Props {
   taskTitle: string;
 }
 
-const MODE_STYLES: Record<GroundedAnalysis['mode'], string> = {
-  rag: 'border-emerald-300/25 bg-emerald-300/10 text-emerald-100',
-  fallback: 'border-amber-300/25 bg-amber-300/10 text-amber-100',
-  no_answer: 'border-slate-300/20 bg-slate-300/10 text-slate-100',
+const MODE_STYLES: Record<KnowledgeAnswer['status'], string> = {
+  answered: 'border-emerald-300/25 bg-emerald-300/10 text-emerald-100',
+  insufficient_evidence: 'border-slate-300/20 bg-slate-300/10 text-slate-100',
 };
 
 export default function GroundedAIAnalysis({ taskTitle }: Props) {
-  const [result, setResult] = useState<GroundedAnalysis | null>(null);
+  const [result, setResult] = useState<KnowledgeAnswer | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { language, t } = useLanguage();
@@ -28,7 +27,7 @@ export default function GroundedAIAnalysis({ taskTitle }: Props) {
     setError(null);
 
     try {
-      setResult(await analyzeTaskWithRag(taskTitle));
+      setResult(await answerKnowledge(taskTitle, language));
     } catch {
       setResult(null);
       setError(t('ai.grounded.failed'));
@@ -67,25 +66,20 @@ export default function GroundedAIAnalysis({ taskTitle }: Props) {
         <div aria-live="polite" className="space-y-4" data-testid="grounded-result">
           <div className="flex flex-wrap items-center gap-2 border-y border-white/10 py-3">
             <span
-              className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${MODE_STYLES[result.mode]}`}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${MODE_STYLES[result.status]}`}
             >
-              {t(`ai.grounded.mode.${result.mode}`)}
+              {t(`ai.grounded.mode.${result.status}`)}
             </span>
           </div>
 
-          {result.mode === 'no_answer' ? (
+          {result.status === 'insufficient_evidence' ? (
             <div className="border-l-2 border-slate-300/40 pl-4">
               <p className="font-medium text-white">{t('ai.grounded.noAnswer')}</p>
               <p className="mt-1 text-sm text-white/55">{t('ai.grounded.nextStep')}</p>
             </div>
           ) : (
             <div className="space-y-2">
-              <p className="text-sm leading-6 text-white">{result.explanation}</p>
-              {result.quadrant_name ? (
-                <p className="text-xs uppercase tracking-[0.16em] text-white/50">
-                  {t('ai.grounded.quadrant').replace('{quadrant}', result.quadrant_name)}
-                </p>
-              ) : null}
+              <p className="text-sm leading-6 text-white">{result.answer}</p>
             </div>
           )}
 

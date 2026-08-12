@@ -365,6 +365,37 @@ test('sends bearer auth and the grounded v2 contract without tenant headers', as
   assert.deepEqual(JSON.parse(calls[0][1].body), { task: 'roadmap' });
 });
 
+test('uses the governed claim-cited knowledge answer contract', async () => {
+  const calls = [];
+  const api = createAiApi('https://api.example.com', {
+    accessToken: () => 'access-token',
+    fetch: async (...args) => {
+      calls.push(args);
+      return jsonResponse({
+        status: 'answered',
+        answer: 'MongoDB is canonical.',
+        claims: [{ statement: 'MongoDB is canonical.', citation_ids: ['chunk-1'] }],
+        citations: [{
+          chunk_id: 'chunk-1', document_id: 'doc-1', source_uri: 'knowledge://architecture',
+          title: 'Architecture', excerpt: 'MongoDB is canonical.', score: 0.9,
+          content_version: 'v1',
+        }],
+        retrieval: { hit_count: 1, top_score: 0.9, embedding_version: 'bge-m3-v1' },
+        generation: null,
+        no_answer_reason: null,
+      });
+    },
+  });
+
+  const result = await api.answerKnowledge('Co jest kanoniczne?', 'pl', 'project-1', 3);
+
+  assert.equal(result.status, 'answered');
+  assert.equal(calls[0][0], 'https://api.example.com/v2/knowledge/answer');
+  assert.deepEqual(JSON.parse(calls[0][1].body), {
+    query: 'Co jest kanoniczne?', language: 'pl', project_id: 'project-1', limit: 3,
+  });
+});
+
 test('rejects malformed task payloads at the public API boundary', async () => {
   const api = createTaskApi('https://api.example.com', async () =>
     jsonResponse([taskFixture({ important: 'yes' })])

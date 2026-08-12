@@ -207,6 +207,21 @@ export interface KnowledgeSearchDto {
   no_answer_reason?: string | null;
 }
 
+export interface KnowledgeAnswerClaimDto {
+  statement: string;
+  citation_ids: string[];
+}
+
+export interface KnowledgeAnswerDto {
+  status: 'answered' | 'insufficient_evidence';
+  answer: string | null;
+  claims: KnowledgeAnswerClaimDto[];
+  citations: CitationDto[];
+  retrieval: GroundedAnalysisDto['retrieval'];
+  generation?: GenerationMetadataDto | null;
+  no_answer_reason?: string | null;
+}
+
 export interface OcrResultDto {
   filename: string;
   image_info: {
@@ -417,6 +432,7 @@ export const AI_API_PATHS: {
   readonly analyzeWithLangChain: '/analyze-langchain';
   readonly analyzeTaskWithRag: '/v2/ai/analyze';
   readonly knowledgeSearch: '/v2/knowledge/search';
+  readonly knowledgeAnswer: '/v2/knowledge/answer';
   readonly extractTasksFromImage: '/extract-tasks-from-image';
   readonly batchAnalyzeTasks: '/batch-analyze';
   readonly addTrainingExample: '/add-example';
@@ -484,6 +500,12 @@ export interface AiApiClient {
     projectId?: string | null,
     limit?: number
   ): Promise<KnowledgeSearchDto>;
+  answerKnowledge(
+    query: string,
+    language?: 'pl' | 'en',
+    projectId?: string | null,
+    limit?: number
+  ): Promise<KnowledgeAnswerDto>;
   extractTasksFromImage(file: unknown): Promise<OcrResultDto>;
   batchAnalyzeTasks(tasks: string[]): Promise<BatchAnalysisResultDto>;
   fetchCapabilities(): Promise<AICapabilitiesDto>;

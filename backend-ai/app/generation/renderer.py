@@ -71,14 +71,20 @@ class PromptRenderer:
     self.token_counter = token_counter
     self.max_chunks_per_document = max_chunks_per_document
 
-  def render(self, spec: PromptSpec, request) -> RenderedPrompt:
+  def render(
+    self,
+    spec: PromptSpec,
+    request,
+    *,
+    output_model=ClassificationOutput,
+  ) -> RenderedPrompt:
     if request.language != spec.language:
       raise ValueError("Generation request language does not match PromptSpec")
     task_tokens = self.token_counter.count_text(request.task)
     if task_tokens > spec.task_budget:
       raise TaskTokenBudgetExceeded("Task exceeds the PromptSpec token budget")
     schema_text = json.dumps(
-      ClassificationOutput.model_json_schema(),
+      output_model.model_json_schema(),
       ensure_ascii=False,
       sort_keys=True,
       separators=(",", ":"),

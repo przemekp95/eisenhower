@@ -15,6 +15,7 @@ server {
     set $mcp_upstream ${MCP_UPSTREAM};
     set $api_upstream ${API_UPSTREAM};
     set $ai_upstream ${AI_UPSTREAM};
+    set $web_upstream ${WEB_UPSTREAM};
     access_log off;
     server_tokens off;
     client_max_body_size 1m;
@@ -58,5 +59,7 @@ server {
         proxy_pass http://$ai_upstream;
     }
 
-    location / { return 404; }
+    location / {
+        proxy_pass http://$web_upstream;
+    }
 }

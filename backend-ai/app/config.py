@@ -60,6 +60,8 @@ class Settings:
   prompt_artifact_dir: Path = DEFAULT_PROMPT_ARTIFACT_DIR
   prompt_id: str = "eisenhower-classifier"
   prompt_version: str = "1.1.0"
+  knowledge_prompt_id: str = "knowledge-answer"
+  knowledge_prompt_version: str = "1.0.0"
   retrieval_version: str = "retrieval-v1"
   index_version: str = "index-v1"
   internal_api_token: str | None = None
@@ -310,6 +312,8 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     ),
     prompt_id=source.get("PROMPT_ID", "eisenhower-classifier"),
     prompt_version=source.get("PROMPT_VERSION", "1.1.0"),
+    knowledge_prompt_id=source.get("KNOWLEDGE_PROMPT_ID", "knowledge-answer"),
+    knowledge_prompt_version=source.get("KNOWLEDGE_PROMPT_VERSION", "1.0.0"),
     retrieval_version=source.get("RETRIEVAL_VERSION", "retrieval-v1"),
     index_version=source.get("INDEX_VERSION", "index-v1"),
     internal_api_token=internal_api_token,

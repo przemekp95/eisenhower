@@ -10,7 +10,15 @@ from uuid import NAMESPACE_URL, uuid5
 import httpx
 from qdrant_client import models as qmodels
 
-from ..generation.models import ClassificationOutput, GenerationResult
+from ..generation.models import (
+  ClassificationOutput,
+  GenerationResult,
+  KnowledgeAnswerDecision,
+  KnowledgeAnswerClaim,
+  KnowledgeAnswerOutput,
+  KnowledgeAnswerResult,
+  KnowledgeGroundedAnswer,
+)
 from ..generation.registry import PromptRegistry
 from ..generation.renderer import PromptRenderer
 from .errors import (
@@ -19,7 +27,14 @@ from .errors import (
   InvalidGenerationOutput,
   ProjectionUnavailable,
 )
-from .models import ChunkRecord, GenerationRequest, RetrievalHit, RetrievalQuery, SourceDocument
+from .models import (
+  ChunkRecord,
+  GenerationRequest,
+  KnowledgeAnswerRequest,
+  RetrievalHit,
+  RetrievalQuery,
+  SourceDocument,
+)
 from .ports import EmbeddingProvider
 
 
@@ -254,6 +269,68 @@ def is_private_service_url(base_url: str, *, allowed_hosts: tuple[str, ...] = ()
     return "." not in hostname or hostname.endswith((".internal", ".local"))
 
 
+def _classification_contract_schema(base_schema: dict, *, require_grounding: bool) -> dict:
+  definitions = base_schema.pop("$defs", {})
+  classified = []
+  for urgent, important, quadrant in (
+    (True, True, 0),
+    (True, False, 1),
+    (False, True, 2),
+    (False, False, 3),
+  ):
+    branch = deepcopy(base_schema)
+    branch["properties"]["status"] = {"const": "classified"}
+    branch["properties"]["urgent"] = {"const": urgent}
+    branch["properties"]["important"] = {"const": important}
+    branch["properties"]["quadrant"] = {"const": quadrant}
+    branch["properties"]["confidence"] = {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "type": "number",
+    }
+    branch["properties"]["no_answer_reason"] = {"type": "null"}
+    if require_grounding:
+      branch["properties"]["citations"]["minItems"] = 1
+      branch["properties"]["evidence"]["minItems"] = 1
+    classified.append(branch)
+
+  abstention = deepcopy(base_schema)
+  abstention["properties"]["status"] = {"const": "insufficient_evidence"}
+  for field in ("urgent", "important", "quadrant", "confidence"):
+    abstention["properties"][field] = {"type": "null"}
+  abstention["properties"]["no_answer_reason"] = {"minLength": 1, "type": "string"}
+  abstention["properties"]["citations"]["maxItems"] = 0
+  abstention["properties"]["evidence"]["maxItems"] = 0
+  return {"$defs": definitions, "oneOf": [*classified, abstention]}
+
+
+def _knowledge_answer_contract_schema(base_schema: dict, *, require_grounding: bool) -> dict:
+  definitions = base_schema.pop("$defs", {})
+  answered = deepcopy(base_schema)
+  answered["properties"]["status"] = {"const": "answered"}
+  answered["properties"]["answer"] = {"minLength": 1, "type": "string"}
+  answered["properties"]["no_answer_reason"] = {"const": "none"}
+  if require_grounding:
+    answered["properties"]["claims"]["minItems"] = 1
+    answered["properties"]["citations"]["minItems"] = 1
+
+  abstention = deepcopy(base_schema)
+  abstention["properties"]["status"] = {"const": "insufficient_evidence"}
+  abstention["properties"]["answer"] = {"type": "null"}
+  abstention["properties"]["claims"]["maxItems"] = 0
+  abstention["properties"]["citations"]["maxItems"] = 0
+  abstention["properties"]["no_answer_reason"] = {
+    "enum": [
+      "insufficient_context",
+      "conflicting_context",
+      "unsupported_query",
+      "prompt_injection_detected",
+    ],
+    "type": "string",
+  }
+  return {"$defs": definitions, "oneOf": [answered, abstention]}
+
+
 class OpenAICompatibleGenerationProvider:
   def __init__(
     self,
@@ -264,6 +341,8 @@ class OpenAICompatibleGenerationProvider:
     prompt_renderer: PromptRenderer,
     prompt_id: str,
     prompt_version: str,
+    knowledge_prompt_id: str = "knowledge-answer",
+    knowledge_prompt_version: str = "1.0.0",
     allowed_hosts: tuple[str, ...] = (),
     connect_timeout_seconds: float = 2.0,
     read_timeout_seconds: float = 15.0,
@@ -281,6 +360,8 @@ class OpenAICompatibleGenerationProvider:
     self.prompt_renderer = prompt_renderer
     self.prompt_id = prompt_id
     self.prompt_version = prompt_version
+    self.knowledge_prompt_id = knowledge_prompt_id
+    self.knowledge_prompt_version = knowledge_prompt_version
     self.client = client or httpx.Client(
       timeout=httpx.Timeout(
         connect=connect_timeout_seconds,
@@ -293,27 +374,107 @@ class OpenAICompatibleGenerationProvider:
 
   def generate(self, request: GenerationRequest) -> GenerationResult:
     spec = self.prompt_registry.get(self.prompt_id, self.prompt_version, request.language)
-    rendered = self.prompt_renderer.render(spec, request)
+    output, rendered = self._complete(request, spec, ClassificationOutput)
+    return GenerationResult(
+      output=output,
+      execution_id=rendered.execution_id,
+      prompt_id=spec.prompt_id,
+      prompt_version=spec.prompt_version,
+      language=spec.language,
+      model_id=spec.model_id,
+      model_revision=spec.model_revision,
+      schema_version=spec.output_schema_version,
+      input_tokens=rendered.input_tokens,
+      context_chunk_ids=list(rendered.allowed_chunk_ids),
+    )
+
+  def answer(self, request: KnowledgeAnswerRequest) -> KnowledgeAnswerResult:
+    spec = self.prompt_registry.get(
+      self.knowledge_prompt_id,
+      self.knowledge_prompt_version,
+      request.language,
+    )
+    decision, rendered = self._complete(request, spec, KnowledgeAnswerDecision)
+    if decision.status == "insufficient_evidence":
+      output = KnowledgeAnswerOutput(
+        status="insufficient_evidence",
+        answer=None,
+        claims=[],
+        citations=[],
+        no_answer_reason="insufficient_context",
+      )
+    else:
+      grounded, rendered = self._complete(
+        request, spec, KnowledgeGroundedAnswer
+      )
+      output = KnowledgeAnswerOutput(
+        status="answered",
+        answer=grounded.answer,
+        claims=[KnowledgeAnswerClaim(
+          statement=grounded.answer,
+          citation_ids=[grounded.citation_id],
+        )],
+        citations=[grounded.citation_id],
+        no_answer_reason="none",
+      )
+    return KnowledgeAnswerResult(
+      output=output,
+      execution_id=rendered.execution_id,
+      prompt_id=spec.prompt_id,
+      prompt_version=spec.prompt_version,
+      language=spec.language,
+      model_id=spec.model_id,
+      model_revision=spec.model_revision,
+      schema_version=spec.output_schema_version,
+      input_tokens=rendered.input_tokens,
+      context_chunk_ids=list(rendered.allowed_chunk_ids),
+    )
+
+  def _complete(self, request, spec, output_model):
+    rendered = self.prompt_renderer.render(spec, request, output_model=output_model)
     generation = spec.generation_config
-    output_schema = deepcopy(ClassificationOutput.model_json_schema())
+    output_schema = deepcopy(output_model.model_json_schema())
     delta_requested = (
       request.known_state is not None
       or request.previous_output_statements is not None
       or request.freshness_requirement == "current_world_required"
     )
-    if not delta_requested:
+    if output_model is ClassificationOutput and not delta_requested:
       output_schema["properties"]["information_delta"] = {"type": "null"}
     allowed_chunk_ids = list(rendered.allowed_chunk_ids)
-    if allowed_chunk_ids:
-      output_schema["properties"]["citations"].update({
-        "minItems": 1,
-        "items": {"enum": allowed_chunk_ids, "type": "string"},
-      })
-      output_schema["properties"]["evidence"]["minItems"] = 1
-      output_schema["$defs"]["Evidence"]["properties"]["chunk_id"] = {
-        "enum": allowed_chunk_ids,
-        "type": "string",
-      }
+    if allowed_chunk_ids and output_model in {
+      ClassificationOutput,
+      KnowledgeAnswerOutput,
+      KnowledgeGroundedAnswer,
+    }:
+      if output_model is KnowledgeGroundedAnswer:
+        output_schema["properties"]["citation_id"] = {
+          "enum": allowed_chunk_ids,
+          "type": "string",
+        }
+      else:
+        output_schema["properties"]["citations"].update({
+          "items": {"enum": allowed_chunk_ids, "type": "string"},
+        })
+      if output_model is ClassificationOutput:
+        output_schema["$defs"]["Evidence"]["properties"]["chunk_id"] = {
+          "enum": allowed_chunk_ids,
+          "type": "string",
+        }
+      elif output_model is KnowledgeAnswerOutput:
+        output_schema["$defs"]["KnowledgeAnswerClaim"]["properties"][
+          "citation_ids"
+        ]["items"] = {"enum": allowed_chunk_ids, "type": "string"}
+    if output_model is ClassificationOutput:
+      output_schema = _classification_contract_schema(
+        output_schema,
+        require_grounding=bool(allowed_chunk_ids),
+      )
+    elif output_model is KnowledgeAnswerOutput:
+      output_schema = _knowledge_answer_contract_schema(
+        output_schema,
+        require_grounding=bool(allowed_chunk_ids),
+      )
     payload = {
       "model": spec.model_id,
       "temperature": generation.temperature,
@@ -364,27 +525,30 @@ class OpenAICompatibleGenerationProvider:
     try:
       body = response.json()
       content = body["choices"][0]["message"]["content"]
-      output = ClassificationOutput.model_validate_json(content)
+      output = output_model.model_validate_json(content)
       allowed = set(rendered.allowed_chunk_ids)
-      if any(chunk_id not in allowed for chunk_id in output.citations):
+      if output_model in {ClassificationOutput, KnowledgeAnswerOutput} and any(
+        chunk_id not in allowed for chunk_id in output.citations
+      ):
         raise ValueError("Generated citation is outside the rendered context")
-      if any(item.chunk_id not in allowed for item in output.evidence):
+      if output_model is ClassificationOutput and any(
+        item.chunk_id not in allowed for item in output.evidence
+      ):
         raise ValueError("Generated evidence is outside the rendered context")
-      return GenerationResult(
-        output=output,
-        execution_id=rendered.execution_id,
-        prompt_id=spec.prompt_id,
-        prompt_version=spec.prompt_version,
-        language=spec.language,
-        model_id=spec.model_id,
-        model_revision=spec.model_revision,
-        schema_version=spec.output_schema_version,
-        input_tokens=rendered.input_tokens,
-        context_chunk_ids=list(rendered.allowed_chunk_ids),
-      )
+      if output_model is KnowledgeAnswerOutput and any(
+        citation_id not in allowed
+        for claim in output.claims
+        for citation_id in claim.citation_ids
+      ):
+        raise ValueError("Generated claim citation is outside the rendered context")
+      if (
+        output_model is KnowledgeGroundedAnswer
+        and output.citation_id not in allowed
+      ):
+        raise ValueError("Generated answer citation is outside the rendered context")
+      return output, rendered
     except (KeyError, IndexError, TypeError, ValueError) as error:
       raise InvalidGenerationOutput("invalid inference provider output") from error
-
 
 # Compatibility import for existing opt-in live-vLLM checks. Application code uses
 # the vendor-neutral name above; vLLM remains one OpenAI-compatible implementation.
@@ -409,6 +573,12 @@ class CircuitBreakerGenerationProvider:
       return {"state": state, "failures": self.failures}
 
   def generate(self, request: GenerationRequest) -> GenerationResult:
+    return self._call("generate", request)
+
+  def answer(self, request: KnowledgeAnswerRequest) -> KnowledgeAnswerResult:
+    return self._call("answer", request)
+
+  def _call(self, method: str, request):
     with self._lock:
       if self.opened_at is not None:
         if monotonic() - self.opened_at < self.reset_seconds or self._half_open_probe:
@@ -418,7 +588,7 @@ class CircuitBreakerGenerationProvider:
           )
         self._half_open_probe = True
     try:
-      result = self.provider.generate(request)
+      result = getattr(self.provider, method)(request)
       with self._lock:
         self.failures = 0
         self.opened_at = None

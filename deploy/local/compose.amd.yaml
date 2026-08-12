@@ -113,6 +113,7 @@ services:
       - "${RERANKER_BIND_ADDRESS:-127.0.0.1}:${RERANKER_BIND_PORT:-8011}:8000"
     environment:
       - TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
+      - VLLM_API_KEY=${RERANKER_API_KEY:?RERANKER_API_KEY is required}
     command:
       - --model
       - BAAI/bge-reranker-v2-m3
@@ -126,8 +127,6 @@ services:
       - "192"
       - --dtype
       - float16
-      - --api-key
-      - ${RERANKER_API_KEY:?RERANKER_API_KEY is required}
       - --no-enable-log-requests
     ipc: host
     group_add:
@@ -141,6 +140,16 @@ services:
       - seccomp=unconfined
     volumes:
       - ${RERANKER_MODEL_CACHE:-../../.runtime-cache/reranker-huggingface}:/root/.cache/huggingface
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl -fsS -H "Authorization: Bearer $$VLLM_API_KEY"
+          http://127.0.0.1:8000/v1/models >/dev/null
+      interval: 30s
+      timeout: 10s
+      start_period: 600s
+      retries: 5
     restart: unless-stopped
     networks:
       - private

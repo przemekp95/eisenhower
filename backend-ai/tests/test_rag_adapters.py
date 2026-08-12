@@ -21,6 +21,7 @@ from app.rag.models import (
   AccessScope,
   ChunkRecord,
   GenerationRequest,
+  KnowledgeAnswerRequest,
   RetrievalHit,
   RetrievalQuery,
   SourceDocument,
@@ -167,9 +168,30 @@ def test_vllm_adapter_uses_private_fixed_base_url_api_key_timeout_and_json_schem
   payload = json.loads(seen["request"].content)
   assert payload["response_format"]["type"] == "json_schema"
   output_schema = payload["response_format"]["json_schema"]["schema"]
-  assert output_schema["properties"]["information_delta"] == {"type": "null"}
-  assert output_schema["properties"]["citations"]["minItems"] == 1
-  assert output_schema["properties"]["citations"]["items"]["enum"] == ["chunk-1"]
+  *classified_schemas, abstention_schema = output_schema["oneOf"]
+  assert len(classified_schemas) == 4
+  assert {
+    (
+      schema["properties"]["urgent"]["const"],
+      schema["properties"]["important"]["const"],
+      schema["properties"]["quadrant"]["const"],
+    )
+    for schema in classified_schemas
+  } == {(True, True, 0), (True, False, 1), (False, True, 2), (False, False, 3)}
+  for classified_schema in classified_schemas:
+    assert classified_schema["properties"]["information_delta"] == {"type": "null"}
+    assert classified_schema["properties"]["status"] == {"const": "classified"}
+    assert classified_schema["properties"]["confidence"]["type"] == "number"
+    assert classified_schema["properties"]["citations"]["items"]["enum"] == ["chunk-1"]
+    assert classified_schema["properties"]["citations"]["minItems"] == 1
+    assert classified_schema["properties"]["evidence"]["minItems"] == 1
+  assert abstention_schema["properties"]["status"] == {"const": "insufficient_evidence"}
+  assert abstention_schema["properties"]["urgent"] == {"type": "null"}
+  assert abstention_schema["properties"]["important"] == {"type": "null"}
+  assert abstention_schema["properties"]["quadrant"] == {"type": "null"}
+  assert abstention_schema["properties"]["confidence"] == {"type": "null"}
+  assert abstention_schema["properties"]["citations"]["maxItems"] == 0
+  assert abstention_schema["properties"]["evidence"]["maxItems"] == 0
   assert output_schema["$defs"]["Evidence"]["properties"]["chunk_id"]["enum"] == ["chunk-1"]
   assert payload["temperature"] == 0
   assert payload["top_p"] == 1
@@ -178,6 +200,66 @@ def test_vllm_adapter_uses_private_fixed_base_url_api_key_timeout_and_json_schem
   assert payload["max_tokens"] == 512
   assert payload["model"] == "approved-model"
   assert "ignore previous instructions" in payload["messages"][0]["content"]
+
+
+def test_vllm_adapter_uses_separate_strict_knowledge_answer_schema():
+  seen = {"payloads": []}
+
+  def handler(request):
+    seen["payloads"].append(json.loads(request.content))
+    content = (
+      {"status": "answered"}
+      if len(seen["payloads"]) == 1
+      else {
+        "status": "answered",
+        "answer": "MongoDB is canonical.",
+        "citation_id": "chunk-1",
+        "no_answer_reason": "none",
+      }
+    )
+    return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(content)}}]})
+
+  answer_spec = _prompt_spec(
+    prompt_id="knowledge-answer",
+    output_schema_id="knowledge-answer",
+    domain_rules_version="grounded-answer-v1",
+  )
+  provider = VLLMGenerationProvider(
+    base_url="http://vllm.internal:8000/v1",
+    api_key="test-token",
+    prompt_registry=PromptRegistry([answer_spec]),
+    prompt_renderer=PromptRenderer(WordCounter()),
+    prompt_id="eisenhower-classifier",
+    prompt_version="1.0.0",
+    knowledge_prompt_id="knowledge-answer",
+    knowledge_prompt_version="1.0.0",
+    client=httpx.Client(transport=httpx.MockTransport(handler), timeout=3.0),
+  )
+  hit = RetrievalHit(
+    chunk_id="chunk-1",
+    document_id="doc",
+    text="MongoDB is canonical.",
+    score=0.9,
+    source_uri="knowledge://architecture",
+    title="Architecture",
+    tenant_id="tenant-a",
+    embedding_version="bge-m3-v1",
+    content_version="v1",
+  )
+
+  result = provider.answer(KnowledgeAnswerRequest(
+    task="Co jest kanoniczne?", context=[hit], language="pl"
+  ))
+
+  assert result.output.answer == "MongoDB is canonical."
+  decision_schema = seen["payloads"][0]["response_format"]["json_schema"]["schema"]
+  answer_schema = seen["payloads"][1]["response_format"]["json_schema"]["schema"]
+  assert set(decision_schema["properties"]) == {"status"}
+  assert "quadrant" not in answer_schema["properties"]
+  assert set(answer_schema["properties"]) == {
+    "status", "answer", "citation_id", "no_answer_reason"
+  }
+  assert answer_schema["properties"]["citation_id"]["enum"] == ["chunk-1"]
 
 
 def test_vllm_adapter_rejects_public_or_mutable_endpoints():

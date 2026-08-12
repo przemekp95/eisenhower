@@ -7,7 +7,7 @@ LAN/VPN address.
 
 ## What is deployable now
 
-`compose.yaml` contains only real entrypoints: Node API, a single-node MongoDB replica set required by
+`compose.yaml` contains only real entrypoints: the web UI, Node API, a single-node MongoDB replica set required by
 the transactional outbox, FastAPI, the existing RAG worker,
 Qdrant, n8n, Keycloak with PostgreSQL, the OAuth-protected Remote MCP adapter and narrow nginx gateways. The Mongo outbox publisher is part of the Node API process; there is intentionally no
 invented `outbox-worker` container. A one-shot `audit-volume-init` applies the shared audit directory and
@@ -15,14 +15,15 @@ preserves the distinct UID ownership required by the Node/MCP and AI audit files
 by the non-root Node container before it starts. Production is fixed to `AUTH_MODE=oidc`; neither Node,
 FastAPI nor Remote MCP receives a static user token as a fallback.
 
-`compose.amd.yaml` is an opt-in vLLM/ROCm overlay. It is a deployment contract, not evidence that vLLM
-or a model works on this AMD host. It has no readiness check because no live model was loaded or tested.
-FastAPI remains usable with generation disabled and its MiniLM fallback.
+`compose.amd.yaml` is an opt-in vLLM/ROCm overlay with independently movable BGE-M3 retrieval,
+Qwen generation and BGE reranking services. The exact local matrix and its readiness checks have physical
+qualification evidence under `backend-ai/evaluation/`; response exposure still remains independently
+fail-closed. FastAPI keeps its deterministic classifier fallback when private generation is unavailable.
 
 ## First same-host deployment
 
-1. Build and tag the Node, AI and MCP images locally for one exact Git SHA (or publish them to the registry).
-   Set `API_IMAGE`, `AI_IMAGE` and `MCP_IMAGE` to those versioned tags or, preferably after publication, registry
+1. Build and tag the Node, CPU/ROCm AI, MCP and web images locally for one exact Git SHA (or publish them to the registry).
+   Set `API_IMAGE`, `AI_IMAGE`, `AI_ROCM_IMAGE`, `MCP_IMAGE` and `WEB_IMAGE` to those versioned tags or, preferably after publication, registry
    digests. Do not use mutable `latest` tags.
 
    ```bash
@@ -33,6 +34,8 @@ FastAPI remains usable with generation disabled and its MiniLM fallback.
      -t "local/eisenhower-ai:${release_sha}" backend-ai
    docker build -f mcp/eisenhower_adapter/Dockerfile \
      -t "local/eisenhower-mcp:${release_sha}" .
+   docker build --target production -f web/Dockerfile \
+     -t "local/eisenhower-web:${release_sha}" .
    ```
 2. Copy `.env.example` to `.env`, replace the placeholder image tags and populate secrets. Keep `.env`
    outside version control and readable only by its owner. `AI_EVALUATION_FILE` must be the absolute host
@@ -57,6 +60,20 @@ FastAPI remains usable with generation disabled and its MiniLM fallback.
 This binds host ports to `127.0.0.1` by default. Compose DNS names provide same-host service-to-service
 URLs. A reverse proxy or private client may reach only the endpoints explicitly selected by the owner.
 
+For a repeatable exact-SHA AMD preparation and rollout, keep `deploy/local/.env` mode `0600` and use:
+
+```bash
+deploy/local/deploy.sh render
+deploy/local/deploy.sh build
+deploy/local/deploy.sh deploy
+deploy/local/deploy.sh smoke
+```
+
+The script refuses a dirty index/worktree, derives every first-party image tag from `HEAD`, verifies the
+OCI revision label and records the pre-deploy container image IDs in the owner-only
+`.runtime-cache/local-deploy/rollback.env`. It renders all three AMD profiles before mutation. A missing
+production evaluation artifact, model revision or service key remains a hard preflight failure.
+
 ## Multi-user OIDC and Remote MCP
 
 `identity-service` imports the production-shaped `eisenhower` realm from
@@ -70,6 +87,11 @@ access logs, re-resolves Docker upstreams after container replacement and publis
 protected-resource metadata route. Place only this loopback port
 behind private Tailscale Serve (not Funnel), for example on an otherwise unused HTTPS port. Do not expose
 Keycloak, Node, FastAPI or MCP container ports directly.
+
+The same gateway serves the web UI at `/`. The UI uses the pre-registered `eisenhower-web` public client
+with Authorization Code and S256 PKCE, validates callback state, keeps the verifier only in
+`sessionStorage`, and keeps the resulting access token only in process memory. API and AI requests stay
+same-origin under `/api` and `/ai`; the browser never receives service credentials.
 
 An MCP access token must target the exact public MCP resource URL and include `mcp:tools` plus the
 least-privilege tool scope. The MCP service verifies that token locally and performs RFC 8693 token

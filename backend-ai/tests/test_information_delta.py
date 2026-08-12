@@ -383,7 +383,11 @@ def test_vllm_http_path_carries_untrusted_state_and_strict_delta_schema():
   assert '<known_state untrusted="true" current_world_verified="false">' in user_message
   assert known().statement in user_message
   assert schema["strict"] is True
-  assert "information_delta" in schema["schema"]["properties"]
+  assert len(schema["schema"]["oneOf"]) == 5
+  assert all(
+    "information_delta" in branch["properties"]
+    for branch in schema["schema"]["oneOf"]
+  )
 
 
 class StubRetriever:

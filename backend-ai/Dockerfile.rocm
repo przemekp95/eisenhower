@@ -1,5 +1,8 @@
 FROM vllm/vllm-openai-rocm@sha256:3be0d8f3ec3ebcc99203e08d895392a8d749ed8a132f41574a8018cdaf525a22
 
+ARG RELEASE_SHA
+LABEL org.opencontainers.image.revision=$RELEASE_SHA
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=on \

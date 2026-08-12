@@ -126,7 +126,11 @@ def _build_generation_provider(settings: Settings):
     raise ValueError("INFERENCE_API_KEY and INFERENCE_MODEL are required when RAG generation is enabled")
   prompt_registry = PromptRegistry.load_directory(settings.prompt_artifact_dir)
   prompt_specs = [
-    prompt_registry.get(settings.prompt_id, settings.prompt_version, language)
+    prompt_registry.get(prompt_id, prompt_version, language)
+    for prompt_id, prompt_version in (
+      (settings.prompt_id, settings.prompt_version),
+      (settings.knowledge_prompt_id, settings.knowledge_prompt_version),
+    )
     for language in ("pl", "en")
   ]
   if any(
@@ -161,6 +165,8 @@ def _build_generation_provider(settings: Settings):
       prompt_renderer=prompt_renderer,
       prompt_id=settings.prompt_id,
       prompt_version=settings.prompt_version,
+      knowledge_prompt_id=settings.knowledge_prompt_id,
+      knowledge_prompt_version=settings.knowledge_prompt_version,
       connect_timeout_seconds=settings.inference_connect_timeout_seconds,
       read_timeout_seconds=settings.inference_read_timeout_seconds,
       write_timeout_seconds=settings.inference_write_timeout_seconds,
