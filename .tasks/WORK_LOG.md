@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-13 — TASK-023 deploy follow-up: Made response-only startup dependency-ordered after a clean exact-master redeploy exposed the knowledge bootstrap racing the reranker health gate; inference and reranker now become healthy before knowledge-service and gateway start.
+
 2026-08-13 — TASK-023 runtime follow-up: Deployed the owner-approved response canary on the local AMD GPU at exact master `4bd9448a`; corrected isolated Compose startup, pinned the evaluated PromptSpec, and bounded the reranker to 10% VRAM so Qwen generation, BGE-M3 embeddings, and reranking remain healthy together.
 
 2026-08-12 — TASK-023 milestone: Connected stable allowlisted response routing to an expiring atomic promotion pointer, promoted green PRs #179/#180 through `dev` to master `c8072ad7`, and added a separate AMD knowledge-only runtime so the approved answer canary can deploy without bypassing the still-empty 240×2 classifier evaluation gate.
