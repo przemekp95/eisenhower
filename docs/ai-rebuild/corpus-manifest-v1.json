@@ -6,7 +6,7 @@
   "use_case": "Retrieve cited project constraints, decisions, procedures, runbooks and active delivery context relevant to task prioritization.",
   "initial_snapshot": {
     "algorithm": "sha256(sorted newline-separated sha256sum records)",
-    "sha256": "c532c4c969c4e0eef4b09a90a519205046ce9c3bdb4a457379619c9ab6b21981",
+    "sha256": "2994f809649d3dd155faf09419557de7af70c7a77dae9aa4d3cf67f717ac70a8",
     "document_count": 19,
     "total_bytes": 142721,
     "documents": [

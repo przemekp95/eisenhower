@@ -1,8 +1,8 @@
 {
   "candidate_sha256": "3d15da58a87ce5653f6c67a696532cbeec4d14de0c88851e0bec45a4d8097100",
   "completed_at": "PENDING",
-  "corpus_manifest_sha256": "d84dc756d94044707f1679035bdced2416b0584826b11c7bf1015c635c5dffdb",
-  "corpus_snapshot_sha256": "c532c4c969c4e0eef4b09a90a519205046ce9c3bdb4a457379619c9ab6b21981",
+  "corpus_manifest_sha256": "a5fa40a4a6ffadb784533eb4b5bff63035b51672c83bb86757d9c098535d1111",
+  "corpus_snapshot_sha256": "2994f809649d3dd155faf09419557de7af70c7a77dae9aa4d3cf67f717ac70a8",
   "decisions": [
     {
       "case_id": "train-pl-fastapi-boundary",
