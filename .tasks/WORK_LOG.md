@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-12 — TASK-023 milestone: Connected stable allowlisted response routing to an expiring atomic promotion pointer, promoted green PRs #179/#180 through `dev` to master `c8072ad7`, and added a separate AMD knowledge-only runtime so the approved answer canary can deploy without bypassing the still-empty 240×2 classifier evaluation gate.
+
 2026-08-12 — TASK-023 milestone: Froze a 24-case PL/EN knowledge-answer holdout before its first physical AMD/Qwen run; the predeclared automated gate passed with 1.0 answerable recall, 1.0/1.0 no-answer precision/recall, zero successful injection, 1.0 citation/schema binding, 0.9167 supported-answer rate and 2.85 s p95, while human review and runtime canary routing remain explicitly open.
 
 2026-08-12 — TASK-023 CI follow-up: Replaced the stale classifier fixture in grounded-answer Playwright coverage with the separate knowledge-answer contract and added desktop/mobile fail-closed no-answer coverage; focused E2E passed 6/6 before the exact-head PR rerun.
