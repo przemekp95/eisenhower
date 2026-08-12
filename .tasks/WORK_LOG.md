@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-12 — TASK-023 CI follow-up: Replaced the stale classifier fixture in grounded-answer Playwright coverage with the separate knowledge-answer contract and added desktop/mobile fail-closed no-answer coverage; focused E2E passed 6/6 before the exact-head PR rerun.
+
 2026-08-12 — TASK-023 milestone: Added a separate claim-cited knowledge-answer API and web surface with two-phase fail-closed Qwen decoding; physical AMD PL/EN answer and unsupported/injection abstention passed 4/4, and full `make verify` passed while the independent human/holdout response gate remains open.
 
 2026-08-12 — TASK-047 milestone: Integrated current `dev`, added the web UI to local Compose with state-bound OIDC S256 PKCE, created exact-SHA OCI-labelled build/render/deploy/smoke/rollback tooling, and closed bounded Qwen injection/capacity/oversize/disconnect recovery gates while preserving the missing human production evaluation as a hard deployment blocker.
