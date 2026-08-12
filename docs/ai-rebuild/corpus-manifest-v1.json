@@ -6,9 +6,9 @@
   "use_case": "Retrieve cited project constraints, decisions, procedures, runbooks and active delivery context relevant to task prioritization.",
   "initial_snapshot": {
     "algorithm": "sha256(sorted newline-separated sha256sum records)",
-    "sha256": "e851ef8725cf22ee858f706b1f7b1becbec051ba30f85a6dc531c5b24a407f37",
+    "sha256": "c532c4c969c4e0eef4b09a90a519205046ce9c3bdb4a457379619c9ab6b21981",
     "document_count": 19,
-    "total_bytes": 142469,
+    "total_bytes": 142721,
     "documents": [
       "README.md",
       "docs/PRODUCTION_ACCEPTANCE.md",
