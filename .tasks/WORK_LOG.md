@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-12 — TASK-014/TASK-015/TASK-023 milestone: Proved the exact-source BGE-M3-to-Qwen chain on physical `gfx1151` with strict PL/EN output, grounded citations, aggregate-only generation shadow and a real inference rollback; full `make verify` passed, while user-visible answers remain disabled because the classifier lacks genuine dual-human production labels and retrieval no-answer accuracy remains 0.8333.
+
 2026-08-12 — TASK-043: Selected pinned BGE-M3 dense retrieval on the physical AMD ROCm GPU after rejecting hybrid on untouched holdout and the reranker for quality/latency; focused tests passed 21/21 and all retrieval isolation/freshness/duplicate safety rates were zero.
 
 2026-08-12 — TASK-013: Finalized the owner-approved 18-case PL/EN retrieval dataset and hash-bound attestation; preserved the holdout no-answer failure at 0.8333 as a response blocker while BGE-M3 passed Recall/MRR and zero-tolerance safety gates.

@@ -16,7 +16,7 @@ Deliver the approved platform end to end on the local AMD computer while keeping
 
 ### Progress
 
-The portable local topology, transactional Calendar domain/outbox, HMAC-bound n8n workflows, bounded MCP write tools, API client and accessible Calendar status/conflict UI are implemented on the feature branch. Point 1 is live on the local AMD host with per-user encrypted Google OAuth and an active Watch channel. Point 2 now has a fail-closed multi-user Keycloak boundary, pre-registered PKCE clients, exact resource audiences, scoped Node task authorization, a private Host/Origin/rate-limited gateway and Remote MCP token exchange that never passes the MCP bearer upstream. A real Keycloak 26.7 + Node + MCP SDK v2 rehearsal proved two stable subjects in one tenant, API owner isolation and the same 1-versus-0 result through 15 network MCP tools; the production realm contains no users or password grant. Final promotion remains fail-closed: the exact source SHA still needs the full repository/CI run and deployment update; no production-approved AI evaluation artifact exists; the `gfx1151` ROCm image/model has not been downloaded or qualified; and ordinary task update/lifecycle/delegation APIs still need durable mutation receipts beyond `If-Match`.
+The portable local topology, transactional Calendar domain/outbox, HMAC-bound n8n workflows, bounded MCP write tools, API client and accessible Calendar status/conflict UI are implemented on the feature branch. Point 1 is live on the local AMD host with per-user encrypted Google OAuth and an active Watch channel. Point 2 now has a fail-closed multi-user Keycloak boundary, pre-registered PKCE clients, exact resource audiences, scoped Node task authorization, a private Host/Origin/rate-limited gateway and Remote MCP token exchange that never passes the MCP bearer upstream. A real Keycloak 26.7 + Node + MCP SDK v2 rehearsal proved two stable subjects in one tenant, API owner isolation and the same 1-versus-0 result through 15 network MCP tools; the production realm contains no users or password grant. Point 4 now has exact-source AMD ROCm BGE-M3 retrieval and Qwen generation-shadow evidence on `gfx1151`, including strict PL/EN schema, citations and physical rollback. Final promotion remains fail-closed: the exact final source still needs the full repository/CI run and deployment update; the classifier's frozen 240-case production set lacks required dual-human labels/adjudication; response no-answer quality remains below its zero-tolerance gate; and ordinary task update/lifecycle/delegation APIs still need durable mutation receipts beyond `If-Match`.
 
 ---
 
@@ -34,7 +34,7 @@ Deploy retrieval-only to an allowlisted internal cohort with `RAG_GENERATION_ENA
 
 ### Progress
 
-The physical `gfx1151` GPU passed PyTorch ROCm execution. Pinned BGE-M3 dense retrieval passed the untouched holdout for Recall@5 `1.0`, MRR@5 `0.7778`, p95 `100.6431 ms`, isolation, forbidden, stale and duplicate rates `0`; hybrid and the cross-encoder reranker were rejected. Runtime deployment, aggregate traffic and rollback evidence remain in progress. The retrieval-only no-answer score `0.8333` is recorded as a user-response blocker, not hidden or tuned away.
+The physical `gfx1151` GPU passed PyTorch ROCm execution. Pinned BGE-M3 dense retrieval passed the untouched holdout for Recall@5 `1.0`, MRR@5 `0.7778`, p95 `100.6431 ms`, isolation, forbidden, stale and duplicate rates `0`; hybrid and the cross-encoder reranker were rejected. The exact-source ROCm application image then loaded 25 canonical documents into a green 235-point local Qdrant projection and completed a real authorized retrieval-to-Qwen shadow request without exposing generated content. The physical inference stop/restart drill also passed. The retrieval-only no-answer score `0.8333` remains a user-response blocker, not hidden or tuned away; a bounded aggregate-traffic pilot and production-approved classifier artifact are still required before completion.
 
 ---
 
@@ -52,7 +52,7 @@ After retrieval proves useful, qualify a licensed model on the exact physical NV
 
 ### Progress
 
-The official vLLM ROCm image is locally present by digest, and the same container proved PyTorch/HIP execution on `gfx1151`. Model download, live vLLM serving, exact PromptSpec binding and the generation contract matrix remain in progress.
+Digest-pinned vLLM ROCm 0.20.0 now serves revision-pinned Qwen3-4B-Instruct-2507 in BF16 on physical `gfx1151`. Exact PL/EN PromptSpecs, chat-template hash, authenticated model identity, strict structured output and grounded citation validation passed live 4/4; the end-to-end shadow executed BGE-M3 and Qwen on AMD, and a real stop/restart rollback recovered healthy. Observed post-load use was about 2.98 GiB visible VRAM plus 45.09 GiB GTT, and pre-restart traffic placed p95 end-to-end latency in the 10-second bucket. Qualification remains open for explicit injection/no-answer adversarial coverage, bounded concurrency/capacity and OOM/disconnect fallback evidence; these gates are not inferred from the successful happy path.
 
 ---
 
@@ -70,7 +70,7 @@ Deploy the qualified private inference matrix behind FastAPI, discard validated 
 
 ### Progress
 
-User-visible response enablement is explicitly in scope. It remains fail-closed until TASK-015 proves the live GPU/model matrix and the no-answer defect is corrected without tuning against the already opened holdout.
+Private generation shadow is now real: the application invokes Qwen, validates the strict PL/EN schema and grounded citations, discards the generated explanation, and records aggregate-only evidence. A full BGE-M3 -> authorized Mongo/Qdrant -> Qwen request passed on the local AMD GPU, and response exposure is additionally constrained by tenant and stable-user allowlists. User-visible responses remain fail-closed because the frozen 240-case classifier production set has no genuine dual-human labels/adjudication and retrieval no-answer accuracy is `0.8333` against a required `1.0`. The opened holdout will not be tuned against; a new balanced calibration-dev set and separately sealed v2 holdout are required. The implemented answer is a grounded quadrant explanation, not generic knowledge Q&A.
 
 ---
 
