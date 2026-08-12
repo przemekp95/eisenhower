@@ -59,6 +59,7 @@ class HybridRetrievalCore:
     text_weight: float = _DEFAULT_TEXT_WEIGHT,
     reranker: Reranker | None = None,
     reranker_candidate_limit: int = 20,
+    reranker_weight: float = 1.0,
   ):
     if rrf_k < 1:
       raise ValueError("rrf_k must be positive")
@@ -68,6 +69,8 @@ class HybridRetrievalCore:
     self._validate_weight("text_weight", text_weight)
     if not 1 <= reranker_candidate_limit <= _MAX_RERANKER_CANDIDATES:
       raise ValueError("reranker_candidate_limit must be between 1 and 20")
+    if not 0 < reranker_weight <= 1:
+      raise ValueError("reranker_weight must be between 0 and 1")
     self.rrf_k = rrf_k
     self.dense_rrf_weight = float(dense_rrf_weight)
     self.lexical_rrf_weight = float(lexical_rrf_weight)
@@ -75,6 +78,7 @@ class HybridRetrievalCore:
     self.text_weight = float(text_weight)
     self.reranker = reranker
     self.reranker_candidate_limit = reranker_candidate_limit
+    self.reranker_weight = float(reranker_weight)
 
   def rank(
     self,
@@ -155,14 +159,24 @@ class HybridRetrievalCore:
     ):
       raise RerankerUnavailable("reranker returned a non-finite score")
 
-    reranked = [
-      item.model_copy(update={"score": float(raw_scores[index])})
-      for index, item in enumerate(prefix)
-    ]
+    fused_scores = self._normalize_scores([item.score for item in prefix])
+    cross_scores = self._normalize_scores([float(score) for score in raw_scores])
+    reranked = [item.model_copy(update={"score": (
+      (1 - self.reranker_weight) * fused_scores[index]
+      + self.reranker_weight * cross_scores[index]
+    )}) for index, item in enumerate(prefix)]
     reranked.sort(
       key=lambda item: (-item.score, self._rank_of(item.chunk_id, prefix), item.chunk_id),
     )
     return reranked + fused[prefix_size:]
+
+  @staticmethod
+  def _normalize_scores(scores: Sequence[float]) -> list[float]:
+    minimum = min(scores)
+    span = max(scores) - minimum
+    if span == 0:
+      return [0.0 for _ in scores]
+    return [(score - minimum) / span for score in scores]
 
   @staticmethod
   def _diversify_documents(ranked: Sequence[RetrievalHit]) -> list[RetrievalHit]:
@@ -373,6 +387,7 @@ class HybridRetriever:
     candidate_multiplier: int = 4,
     reranker: Reranker | None = None,
     reranker_candidate_limit: int = 20,
+    reranker_weight: float = 1.0,
   ):
     if candidate_multiplier < 1:
       raise ValueError("candidate_multiplier must be positive")
@@ -385,6 +400,7 @@ class HybridRetriever:
       lexical_rrf_weight=lexical_rrf_weight,
       reranker=reranker,
       reranker_candidate_limit=reranker_candidate_limit,
+      reranker_weight=reranker_weight,
     )
 
   def retrieve(self, query: RetrievalQuery) -> list[RetrievalHit]:

@@ -59,9 +59,9 @@ class PinnedMultilingualReranker:
     revision = {"revision": self.revision}
     self.encoder = CrossEncoder(
       self.model_name,
-      automodel_args=revision,
-      tokenizer_args=revision,
-      config_args=revision,
+      model_kwargs=revision,
+      processor_kwargs=revision,
+      config_kwargs=revision,
     )
 
   def score(self, query_text, ranked_candidates):
@@ -200,11 +200,13 @@ def run(
     selected_base = select_train_strategy(train_reports)
     base_configuration = configurations[selected_base]
     reranker = PinnedMultilingualReranker()
-    for candidate_limit in (10, 20):
-      name = f"{selected_base}-reranked{candidate_limit}"
+    for reranker_weight in (0.25, 0.5, 0.75, 1.0):
+      candidate_limit = 20
+      name = f"{selected_base}-reranked{candidate_limit}-weight{reranker_weight:g}"
       configurations[name] = {
         **base_configuration,
         "reranker_candidate_limit": candidate_limit,
+        "reranker_weight": reranker_weight,
         "reranker_model": reranker.model_name,
         "reranker_revision": reranker.revision,
       }
@@ -224,6 +226,7 @@ def run(
         candidate_multiplier=base_configuration["candidate_multiplier"],
         reranker=reranker,
         reranker_candidate_limit=candidate_limit,
+        reranker_weight=reranker_weight,
       )
       train_reports[name] = RetrievalGoldenRunner(
         candidate_retrievers[name]

@@ -288,6 +288,18 @@ class RecordingReranker:
     return self.scores
 
 
+def test_bounded_reranker_weight_blends_cross_encoder_with_fused_order():
+  reranker = RecordingReranker(scores=[0.0, 1.0, 0.5])
+
+  ranked = HybridRetrievalCore(
+    rrf_k=60,
+    reranker=reranker,
+    reranker_weight=0.5,
+  ).rank(query(), candidates())
+
+  assert [item.chunk_id for item in ranked] == ["exact", "semantic", "noise"]
+
+
 def test_optional_reranker_receives_only_the_bounded_fused_prefix():
   reranker = RecordingReranker(scores=[0.1, 0.9])
   core = HybridRetrievalCore(reranker=reranker, reranker_candidate_limit=2)
