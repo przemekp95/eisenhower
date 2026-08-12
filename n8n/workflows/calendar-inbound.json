@@ -5,6 +5,7 @@
   "nodes": [
     {
       "id": "inbound-webhook",
+      "webhookId": "4e3a92f1-d81b-4af2-b414-529017013cc0",
       "name": "Receive Google Calendar Signal",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -54,27 +55,37 @@
       }
     },
     {
+      "id": "inbound-sign-provider-changes",
+      "name": "Sign Provider Changes Pull",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-430, 40],
+      "parameters": {
+        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/provider/changes';\nconst checkpoint = $json.pageToken || $json.syncToken || 'full-resync';\nconst body = { connectionId: $json.connectionId, checkpoint };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+      }
+    },
+    {
       "id": "inbound-fetch",
-      "name": "Pull Google Calendar Changes",
+      "name": "Pull Provider Changes Through Node",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-420, 40],
+      "position": [-200, 40],
       "retryOnFail": true,
       "maxTries": 5,
       "waitBetweenTries": 2000,
-      "credentials": { "googleOAuth2Api": { "id": "REPLACE_GOOGLE_CALENDAR_CREDENTIAL_ID", "name": "Eisenhower Google Calendar" } },
       "parameters": {
-        "url": "={{ 'https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent($json.calendarId) + '/events' }}",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googleOAuth2Api",
-        "sendQuery": true,
-        "queryParameters": { "parameters": [
-          { "name": "syncToken", "value": "={{ $json.syncToken || '' }}" },
-          { "name": "pageToken", "value": "={{ $json.pageToken || '' }}" },
-          { "name": "showDeleted", "value": "true" },
-          { "name": "maxResults", "value": "250" }
+        "method": "POST",
+        "url": "={{ $env.EISENHOWER_NODE_INTERNAL_API_URL + '/internal/calendar/provider/changes' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
         ] },
-        "options": { "timeout": 15000, "response": { "response": { "fullResponse": true, "neverError": true, "responseFormat": "json" } } }
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.signedBody }}",
+        "options": { "timeout": 15000, "response": { "response": { "responseFormat": "json" } } }
       }
     },
     {
@@ -123,7 +134,7 @@
       "typeVersion": 2,
       "position": [40, 160],
       "parameters": {
-        "jsCode": "const signal = $('Validate Channel And Claim Signal').item.json;\nconst page = $json.body || {};\nconst commands = [];\nfor (const event of (page.items || [])) {\n  const base = { operationId: `${signal.signalId}:event:${event.id}:${event.etag}`, tenantId: signal.tenantId, ownerId: signal.ownerId, connectionId: signal.connectionId, providerEventId: event.id, providerEtag: event.etag };\n  if (event.status === 'cancelled') commands.push({ ...base, kind: 'event_deleted' });\n  else if (event.start && event.start.dateTime) commands.push({ ...base, kind: 'event_changed', title: event.summary || '', dueAt: event.start.dateTime, timeZone: event.start.timeZone || 'UTC' });\n}\nconst token = page.nextPageToken || page.nextSyncToken;\nif (token) commands.push({ operationId: `${signal.signalId}:checkpoint:${token}`, tenantId: signal.tenantId, ownerId: signal.ownerId, connectionId: signal.connectionId, kind: 'sync_checkpoint', ...(page.nextPageToken ? { nextPageToken: page.nextPageToken } : {}), ...(page.nextSyncToken ? { nextSyncToken: page.nextSyncToken } : {}) });\nreturn commands.map(command => ({ json: { command } }));"
+        "jsCode": "const signal = $('Validate Channel And Claim Signal').item.json;\nconst payload = $json.body ?? {};\nconst page = typeof payload === 'string' ? JSON.parse(payload) : payload;\nconst commands = [];\nif (page.resetRequired) commands.push({ operationId: `${signal.signalId}:reset`, tenantId: signal.tenantId, ownerId: signal.ownerId, connectionId: signal.connectionId, kind: 'sync_token_gone' });\nfor (const event of (page.events || [])) {\n  const base = { operationId: `${signal.signalId}:event:${event.id}:${event.etag}`, tenantId: signal.tenantId, ownerId: signal.ownerId, connectionId: signal.connectionId, providerEventId: event.id, providerEtag: event.etag };\n  if (event.status === 'cancelled') commands.push({ ...base, kind: 'event_deleted' });\n  else if (event.start && event.start.dateTime) commands.push({ ...base, kind: 'event_changed', title: event.summary || '', dueAt: event.start.dateTime, timeZone: event.start.timeZone || 'UTC' });\n}\nconst token = page.nextPageToken || page.nextSyncToken;\nif (token) commands.push({ operationId: `${signal.signalId}:checkpoint:${token}`, tenantId: signal.tenantId, ownerId: signal.ownerId, connectionId: signal.connectionId, kind: 'sync_checkpoint', ...(page.nextPageToken ? { nextPageToken: page.nextPageToken } : {}), ...(page.nextSyncToken ? { nextSyncToken: page.nextSyncToken } : {}) });\nreturn commands.map(command => ({ json: { command } }));"
       }
     },
     {
@@ -164,8 +175,9 @@
   "connections": {
     "Receive Google Calendar Signal": { "main": [[{ "node": "Acknowledge Signal Immediately", "type": "main", "index": 0 }, { "node": "Sign Notification Validation", "type": "main", "index": 0 }]] },
     "Sign Notification Validation": { "main": [[{ "node": "Validate Channel And Claim Signal", "type": "main", "index": 0 }]] },
-    "Validate Channel And Claim Signal": { "main": [[{ "node": "Pull Google Calendar Changes", "type": "main", "index": 0 }]] },
-    "Pull Google Calendar Changes": { "main": [[{ "node": "Sync Token Is Gone", "type": "main", "index": 0 }]] },
+    "Validate Channel And Claim Signal": { "main": [[{ "node": "Sign Provider Changes Pull", "type": "main", "index": 0 }]] },
+    "Sign Provider Changes Pull": { "main": [[{ "node": "Pull Provider Changes Through Node", "type": "main", "index": 0 }]] },
+    "Pull Provider Changes Through Node": { "main": [[{ "node": "Sync Token Is Gone", "type": "main", "index": 0 }]] },
     "Sync Token Is Gone": { "main": [[{ "node": "Sign Controlled Sync Reset", "type": "main", "index": 0 }], [{ "node": "Expand Provider Changes", "type": "main", "index": 0 }]] },
     "Sign Controlled Sync Reset": { "main": [[{ "node": "Request Controlled Full Resync", "type": "main", "index": 0 }]] },
     "Expand Provider Changes": { "main": [[{ "node": "Sign Incremental Sync Apply", "type": "main", "index": 0 }]] },

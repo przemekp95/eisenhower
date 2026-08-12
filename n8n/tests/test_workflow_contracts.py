@@ -122,9 +122,17 @@ class CalendarWorkflowContractTest(unittest.TestCase):
                     continue
                 internal_requests.append(node)
                 parameters = node["parameters"]
-                self.assertEqual(parameters["contentType"], "raw", node["name"])
-                self.assertEqual(parameters["rawContentType"], "application/json", node["name"])
-                self.assertEqual(parameters["body"], "={{ $json.signedBody }}", node["name"])
+                if node["name"] in {
+                    "Pull Provider Changes Through Node",
+                    "Pull Reconciliation Changes Through Node",
+                }:
+                    self.assertEqual(parameters["contentType"], "json", node["name"])
+                    self.assertEqual(parameters["specifyBody"], "json", node["name"])
+                    self.assertEqual(parameters["jsonBody"], "={{ $json.signedBody }}", node["name"])
+                else:
+                    self.assertEqual(parameters["contentType"], "raw", node["name"])
+                    self.assertEqual(parameters["rawContentType"], "application/json", node["name"])
+                    self.assertEqual(parameters["body"], "={{ $json.signedBody }}", node["name"])
                 headers = {
                     header["name"]: header["value"]
                     for header in parameters["headerParameters"]["parameters"]
@@ -155,18 +163,79 @@ class CalendarWorkflowContractTest(unittest.TestCase):
             "credential_ref", "event_id", "provider_event_id", "provider_etag",
             "channel_id", "resource_id", "expires_at", "sync_token", "page_token",
         ):
-            self.assertNotIn(forbidden, serialized)
+            self.assertNotIn(f'"{forbidden}"', serialized)
         for path in (
-            "/internal/calendar/connections/activate",
             "/internal/calendar/outbox/claim",
             "/internal/calendar/outbox/acknowledge",
             "/internal/calendar/notifications/validate",
+            "/internal/calendar/provider/outbound",
+            "/internal/calendar/provider/changes",
+            "/internal/calendar/provider/watch",
             "/internal/calendar/sync/apply",
             "/internal/calendar/sync/reset",
             "/internal/calendar/reconciliation/claim",
             "/internal/calendar/watch/renew",
         ):
             self.assertIn(path, serialized)
+
+    def test_provider_access_is_tokenless_and_bounded_to_node_adapter(self) -> None:
+        serialized = "\n".join(json.dumps(load_workflow(name)) for name in self.WORKFLOWS)
+        for forbidden in (
+            "googleOAuth2Api",
+            "n8n-nodes-base.googleCalendar",
+            "REPLACE_GOOGLE_CALENDAR_CREDENTIAL_ID",
+            "client_secret",
+            "refresh_token",
+            "access_token",
+            "https://www.googleapis.com",
+            "credentialRef",
+        ):
+            self.assertNotIn(forbidden.lower(), serialized.lower())
+
+        provider_paths = {
+            "/internal/calendar/provider/outbound",
+            "/internal/calendar/provider/changes",
+            "/internal/calendar/provider/watch",
+        }
+        observed = set()
+        for workflow_name in self.WORKFLOWS:
+            workflow = load_workflow(workflow_name)
+            for node in workflow["nodes"]:
+                if node["type"] != "n8n-nodes-base.httpRequest":
+                    continue
+                url = str(node["parameters"].get("url", ""))
+                for path in provider_paths:
+                    if path in url:
+                        observed.add(path)
+                        self.assertTrue(node["retryOnFail"], node["name"])
+                        self.assertGreaterEqual(node["maxTries"], 3, node["name"])
+        self.assertEqual(observed, provider_paths)
+
+        outbound = load_workflow("calendar-outbound.json")
+        inbound = load_workflow("calendar-inbound.json")
+        reconciliation = load_workflow("calendar-reconciliation.json")
+        nodes = {
+            node["name"]: node
+            for workflow in (outbound, inbound, reconciliation)
+            for node in workflow["nodes"]
+        }
+        expected_provider_bodies = {
+            "Sign Outbound Provider Dispatch": "const body = { eventId: $json.eventId };",
+            "Sign Provider Changes Pull": "const body = { connectionId: $json.connectionId, checkpoint };",
+            "Sign Reconciliation Provider Changes": "const body = { connectionId: $json.connectionId, checkpoint };",
+            "Sign Provider Watch Request": "const body = { connectionId: job.connectionId, address:",
+        }
+        for node_name, expected in expected_provider_bodies.items():
+            code = nodes[node_name]["parameters"]["jsCode"]
+            self.assertIn(expected, code)
+            body_line = next(line for line in code.splitlines() if line.startswith("const body ="))
+            self.assertNotIn("tenantId", body_line)
+            self.assertNotIn("ownerId", body_line)
+        for workflow in (inbound, reconciliation):
+            serialized_workflow = json.dumps(workflow)
+            self.assertIn("page.events", serialized_workflow)
+            self.assertIn("resetRequired", serialized_workflow)
+            self.assertIn("sync_token_gone", serialized_workflow)
 
     def test_outbound_calendar_sync_is_private_bounded_and_acknowledged(self) -> None:
         workflow = load_workflow("calendar-outbound.json")
@@ -177,15 +246,14 @@ class CalendarWorkflowContractTest(unittest.TestCase):
         self.assertEqual(nodes["Poll Calendar Outbox"]["type"], "n8n-nodes-base.scheduleTrigger")
         self.assertIn("/internal/calendar/outbox/claim", serialized)
         self.assertIn("/internal/calendar/outbox/acknowledge", serialized)
-        for operation in ("event_create", "event_update", "event_delete"):
-            self.assertIn(operation, serialized)
+        self.assertIn("/internal/calendar/provider/outbound", serialized)
+        self.assertIn("Continue Only With Claimed Event", nodes)
+        self.assertIn("typeof $json.eventId", nodes["Continue Only With Claimed Event"]["parameters"]["jsCode"])
         for binding_field in ("eventId", "delivered", "providerEventId", "providerEtag", "connectionId"):
             self.assertIn(binding_field, serialized)
-        for node_name in ("Create Google Event", "Update Google Event", "Delete Google Event"):
-            node = nodes[node_name]
-            self.assertTrue(node["retryOnFail"])
-            self.assertGreaterEqual(node["maxTries"], 3)
-            self.assertIn("googleOAuth2Api", json.dumps(node))
+        provider = nodes["Dispatch Outbound Through Node"]
+        self.assertTrue(provider["retryOnFail"])
+        self.assertGreaterEqual(provider["maxTries"], 3)
         self.assertNotIn("client_secret", serialized.lower())
         self.assertNotIn("refresh_token", serialized.lower())
 
@@ -195,11 +263,13 @@ class CalendarWorkflowContractTest(unittest.TestCase):
         serialized = json.dumps(workflow)
 
         webhook = nodes["Receive Google Calendar Signal"]
+        self.assertRegex(webhook["webhookId"], r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
         self.assertEqual(webhook["parameters"]["httpMethod"], "POST")
         self.assertEqual(webhook["parameters"]["responseMode"], "responseNode")
         self.assertIn("x-goog-channel-id", serialized.lower())
         self.assertIn("x-goog-resource-id", serialized.lower())
         self.assertIn("/internal/calendar/notifications/validate", serialized)
+        self.assertIn("/internal/calendar/provider/changes", serialized)
         self.assertIn("/internal/calendar/sync/apply", serialized)
         self.assertIn("syncToken", serialized)
         self.assertIn("nextPageToken", serialized)
@@ -216,10 +286,11 @@ class CalendarWorkflowContractTest(unittest.TestCase):
 
         self.assertEqual(nodes["Nightly Reconciliation"]["type"], "n8n-nodes-base.scheduleTrigger")
         self.assertIn("/internal/calendar/reconciliation/claim", serialized)
-        self.assertIn("/internal/calendar/connections/activate", serialized)
+        self.assertIn("/internal/calendar/provider/changes", serialized)
+        self.assertIn("/internal/calendar/provider/watch", serialized)
         self.assertIn("/internal/calendar/watch/renew", serialized)
         self.assertIn("/internal/calendar/sync/apply", serialized)
-        self.assertIn("googleOAuth2Api", serialized)
+        self.assertNotIn("googleOAuth2Api", serialized)
         self.assertNotIn("attendees", serialized)
         self.assertNotIn("conferenceData", serialized)
 

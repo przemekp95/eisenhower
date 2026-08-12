@@ -12,6 +12,15 @@ import { createHealthRouter } from './routes/health';
 import { createTasksRouter } from './routes/tasks';
 import { createCalendarInternalRouter } from './routes/calendarInternal';
 import { createCalendarRouter } from './routes/calendar';
+import { createGoogleOAuthCallbackRouter, createGoogleOAuthUserRouter } from './routes/googleOAuth';
+import {
+  GoogleOAuthConfig, GoogleOAuthHttpClient, GoogleOAuthPort, GoogleOAuthService, loadGoogleOAuthConfig,
+} from './application/googleOAuth';
+import {
+  GoogleCalendarConfig, GoogleCalendarHttpAdapter, GoogleCalendarPort, GoogleCalendarService,
+  loadGoogleCalendarConfig,
+} from './application/googleCalendar';
+import { createGoogleCalendarProviderRouter } from './routes/googleCalendarProvider';
 import { HealthState } from './types';
 import {
   createOidcTokenVerifier,
@@ -26,6 +35,10 @@ export interface CreateAppOptions {
   rateLimitLimit?: number;
   auditSink?: AuditSink;
   calendarInternalHmacKey?: string;
+  googleOAuthConfig?: GoogleOAuthConfig;
+  googleOAuthPort?: GoogleOAuthPort;
+  googleCalendarPort?: GoogleCalendarPort;
+  googleCalendarConfig?: GoogleCalendarConfig;
 }
 
 const DEFAULT_AI_READINESS_TIMEOUT_MS = 3_000;
@@ -162,6 +175,24 @@ export function createApp(options: CreateAppOptions = {}) {
     app.use('/internal/calendar', createCalendarInternalRouter(calendarInternalHmacKey));
   }
 
+  const googleOAuthConfig = options.googleOAuthConfig
+    ?? loadGoogleOAuthConfig(process.env, config.nodeEnv);
+  const googleOAuthService = googleOAuthConfig
+    ? new GoogleOAuthService(googleOAuthConfig, options.googleOAuthPort ?? new GoogleOAuthHttpClient())
+    : null;
+  if (googleOAuthService) {
+    app.use('/calendar/oauth', createGoogleOAuthCallbackRouter(googleOAuthService));
+  }
+  const googleCalendarConfig = options.googleCalendarConfig ?? loadGoogleCalendarConfig(process.env);
+  if (calendarInternalHmacKey && googleOAuthConfig && googleCalendarConfig) {
+    app.use('/internal/calendar/provider', createGoogleCalendarProviderRouter(
+      calendarInternalHmacKey,
+      new GoogleCalendarService(
+        googleOAuthConfig, googleCalendarConfig, options.googleCalendarPort ?? new GoogleCalendarHttpAdapter(),
+      ),
+    ));
+  }
+
   if (config.authMode === 'oidc') {
     app.use(requireOidcToken(createOidcTokenVerifier({
       issuer: config.oidcIssuer!,
@@ -175,6 +206,9 @@ export function createApp(options: CreateAppOptions = {}) {
   app.use(requireTrustedBrowserOrigin(config.corsAllowOrigins, auditRejection));
   app.use('/tasks', createTasksRouter());
   app.use('/calendar', createCalendarRouter(auditRejection));
+  if (googleOAuthService) {
+    app.use('/calendar/oauth', createGoogleOAuthUserRouter(googleOAuthService, auditRejection));
+  }
 
   app.use((_req, res) => {
     res.status(404).json({ error: 'Route not found' });

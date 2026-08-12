@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-12 — TASK-047 milestone: Deployed point 1 on the local AMD host with user-separated encrypted Google OAuth, narrow Tailscale HTTPS callback/webhook routing, published tokenless n8n workflows, a real incremental baseline and active Google Watch channel; full Node 190/190, build, n8n 12/12 and deploy 10/10 passed while the broader task remains in progress.
+
 2026-08-12 — TASK-045: Patched the five Python dependency advisories, preserved the tested Metro parser mitigation for two unpatched image-size advisories, added fail-closed experimental dependency resolution, and merged green PR #167 to `dev` as `cdae711f`; exact-SHA post-merge CI passed without changing `master`, deployment or production.
 
 2026-08-12 — TASK-046: Delivered a task-first accessible PL/EN web UX for nontechnical users and administrators with honest sync states, revision-safe editing, guarded AI administration, clean mobile dependency audit, full local `make verify`, 18/18 desktop/mobile Playwright and no CI/deployment/production claim.

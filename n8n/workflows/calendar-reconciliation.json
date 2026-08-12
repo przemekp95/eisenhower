@@ -8,46 +8,15 @@
       "name": "Nightly Reconciliation",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-1300, 0],
+      "position": [-1320, 0],
       "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "17 2 * * *" }] } }
-    },
-    {
-      "id": "activate-sign",
-      "name": "Sign Connection Activation",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [-1100, 0],
-      "parameters": {
-        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/connections/activate';\nconst body = { operationId: `activate:${$execution.id}`, tenantId: $env.CALENDAR_TENANT_ID, ownerId: $env.CALENDAR_OWNER_ID, provider: 'google', calendarId: $env.GOOGLE_CALENDAR_ID, credentialRef: 'n8n:REPLACE_GOOGLE_CALENDAR_CREDENTIAL_ID' };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
-      }
-    },
-    {
-      "id": "activate-http",
-      "name": "Activate Google Calendar Connection",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [-880, 0],
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $env.EISENHOWER_NODE_INTERNAL_API_URL + '/internal/calendar/connections/activate' }}",
-        "sendHeaders": true,
-        "headerParameters": { "parameters": [
-          { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
-          { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
-        ] },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ $json.signedBody }}",
-        "options": { "timeout": 5000 }
-      }
     },
     {
       "id": "reconcile-sign-claim",
       "name": "Sign Reconciliation Claim",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-660, 0],
+      "position": [-1080, 0],
       "parameters": {
         "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/reconciliation/claim';\nconst body = {};\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
       }
@@ -57,7 +26,7 @@
       "name": "Claim Reconciliation Connections",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-440, 0],
+      "position": [-840, 0],
       "retryOnFail": true,
       "maxTries": 5,
       "waitBetweenTries": 2000,
@@ -81,31 +50,41 @@
       "name": "Split Reconciliation Jobs",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
-      "position": [-220, 0],
+      "position": [-600, 0],
       "parameters": { "fieldToSplitOut": "jobs", "options": {} }
     },
     {
+      "id": "reconcile-sign-changes",
+      "name": "Sign Reconciliation Provider Changes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-340, -180],
+      "parameters": {
+        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/provider/changes';\nconst checkpoint = $json.pageToken || $json.syncToken || 'full-resync';\nconst body = { connectionId: $json.connectionId, checkpoint };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+      }
+    },
+    {
       "id": "reconcile-pull",
-      "name": "Pull Full Reconciliation Window",
+      "name": "Pull Reconciliation Changes Through Node",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [0, 0],
+      "position": [-80, -180],
       "retryOnFail": true,
       "maxTries": 5,
       "waitBetweenTries": 2000,
-      "credentials": { "googleOAuth2Api": { "id": "REPLACE_GOOGLE_CALENDAR_CREDENTIAL_ID", "name": "Eisenhower Google Calendar" } },
       "parameters": {
-        "url": "={{ 'https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent($json.calendarId) + '/events' }}",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googleOAuth2Api",
-        "sendQuery": true,
-        "queryParameters": { "parameters": [
-          { "name": "syncToken", "value": "={{ $json.fullResyncRequired ? '' : ($json.syncToken || '') }}" },
-          { "name": "pageToken", "value": "={{ $json.pageToken || '' }}" },
-          { "name": "showDeleted", "value": "true" },
-          { "name": "maxResults", "value": "250" }
+        "method": "POST",
+        "url": "={{ $env.EISENHOWER_NODE_INTERNAL_API_URL + '/internal/calendar/provider/changes' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
         ] },
-        "options": { "timeout": 15000, "response": { "response": { "fullResponse": true, "neverError": true, "responseFormat": "json" } } }
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.signedBody }}",
+        "options": { "timeout": 15000, "response": { "response": { "responseFormat": "json" } } }
       }
     },
     {
@@ -113,9 +92,9 @@
       "name": "Build Reconciliation Commands",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [230, -100],
+      "position": [180, -180],
       "parameters": {
-        "jsCode": "const job = $('Split Reconciliation Jobs').item.json;\nconst page = $json.body || $json;\nconst commands = [];\nfor (const event of (page.items || [])) {\n  const base = { operationId: `${job.operationId}:event:${event.id}:${event.etag}`, tenantId: job.tenantId, ownerId: job.ownerId, connectionId: job.connectionId, providerEventId: event.id, providerEtag: event.etag };\n  if (event.status === 'cancelled') commands.push({ ...base, kind: 'event_deleted' });\n  else if (event.start && event.start.dateTime) commands.push({ ...base, kind: 'event_changed', title: event.summary || '', dueAt: event.start.dateTime, timeZone: event.start.timeZone || 'UTC' });\n}\nconst token = page.nextPageToken || page.nextSyncToken;\nif (token) commands.push({ operationId: `${job.operationId}:checkpoint:${token}`, tenantId: job.tenantId, ownerId: job.ownerId, connectionId: job.connectionId, kind: 'sync_checkpoint', ...(page.nextPageToken ? { nextPageToken: page.nextPageToken } : {}), ...(page.nextSyncToken ? { nextSyncToken: page.nextSyncToken } : {}) });\nreturn commands.map(command => ({ json: { command } }));"
+        "jsCode": "const job = $('Split Reconciliation Jobs').item.json;\nconst payload = $json.body ?? $json;\nconst page = typeof payload === 'string' ? JSON.parse(payload) : payload;\nconst commands = [];\nif (page.resetRequired) commands.push({ operationId: `${job.operationId}:reset`, tenantId: job.tenantId, ownerId: job.ownerId, connectionId: job.connectionId, kind: 'sync_token_gone' });\nfor (const event of (page.events || [])) {\n  const base = { operationId: `${job.operationId}:event:${event.id}:${event.etag}`, tenantId: job.tenantId, ownerId: job.ownerId, connectionId: job.connectionId, providerEventId: event.id, providerEtag: event.etag };\n  if (event.status === 'cancelled') commands.push({ ...base, kind: 'event_deleted' });\n  else if (event.start && event.start.dateTime) commands.push({ ...base, kind: 'event_changed', title: event.summary || '', dueAt: event.start.dateTime, timeZone: event.start.timeZone || 'UTC' });\n}\nconst token = page.nextPageToken || page.nextSyncToken;\nif (token) commands.push({ operationId: `${job.operationId}:checkpoint:${token}`, tenantId: job.tenantId, ownerId: job.ownerId, connectionId: job.connectionId, kind: 'sync_checkpoint', ...(page.nextPageToken ? { nextPageToken: page.nextPageToken } : {}), ...(page.nextSyncToken ? { nextSyncToken: page.nextSyncToken } : {}) });\nreturn commands.map(command => ({ json: { command } }));"
       }
     },
     {
@@ -123,7 +102,7 @@
       "name": "Sign Reconciliation Sync Apply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [460, -100],
+      "position": [440, -180],
       "parameters": {
         "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/sync/apply';\nconst body = $json.command;\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
       }
@@ -133,7 +112,7 @@
       "name": "Apply Reconciliation Snapshot",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [700, -100],
+      "position": [700, -180],
       "retryOnFail": true,
       "maxTries": 5,
       "waitBetweenTries": 2000,
@@ -153,23 +132,36 @@
       }
     },
     {
-      "id": "watch-renew",
-      "name": "Renew Google Watch Channel",
+      "id": "watch-sign-provider",
+      "name": "Sign Provider Watch Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-340, 180],
+      "parameters": {
+        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/provider/watch';\nconst job = $('Split Reconciliation Jobs').item.json;\nconst body = { connectionId: job.connectionId, address: $env.GOOGLE_CALENDAR_WEBHOOK_URL };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+      }
+    },
+    {
+      "id": "watch-provider",
+      "name": "Renew Provider Watch Through Node",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [230, 120],
+      "position": [-80, 180],
       "retryOnFail": true,
       "maxTries": 5,
       "waitBetweenTries": 2000,
-      "credentials": { "googleOAuth2Api": { "id": "REPLACE_GOOGLE_CALENDAR_CREDENTIAL_ID", "name": "Eisenhower Google Calendar" } },
       "parameters": {
         "method": "POST",
-        "url": "={{ 'https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent($('Split Reconciliation Jobs').item.json.calendarId) + '/events/watch' }}",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googleOAuth2Api",
+        "url": "={{ $env.EISENHOWER_NODE_INTERNAL_API_URL + '/internal/calendar/provider/watch' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
+        ] },
         "sendBody": true,
-        "contentType": "json",
-        "jsonBody": "={{ { id: $('Split Reconciliation Jobs').item.json.operationId + '-watch', type: 'web_hook', address: $env.GOOGLE_CALENDAR_WEBHOOK_URL } }}",
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.signedBody }}",
         "options": { "timeout": 15000 }
       }
     },
@@ -178,9 +170,9 @@
       "name": "Sign Watch Renewal",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [460, 120],
+      "position": [180, 180],
       "parameters": {
-        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/watch/renew';\nconst job = $('Split Reconciliation Jobs').item.json;\nconst body = { tenantId: job.tenantId, ownerId: job.ownerId, connectionId: job.connectionId, channelId: $json.id, resourceId: $json.resourceId, expiresAt: new Date(Number($json.expiration)).toISOString() };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/watch/renew';\nconst job = $('Split Reconciliation Jobs').item.json;\nconst body = { tenantId: job.tenantId, ownerId: job.ownerId, connectionId: job.connectionId, channelId: $json.channelId, resourceId: $json.resourceId, expiresAt: $json.expiresAt };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
       }
     },
     {
@@ -188,7 +180,7 @@
       "name": "Persist Renewed Watch Channel",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [700, 120],
+      "position": [440, 180],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.EISENHOWER_NODE_INTERNAL_API_URL + '/internal/calendar/watch/renew' }}",
@@ -206,16 +198,16 @@
     }
   ],
   "connections": {
-    "Nightly Reconciliation": { "main": [[{ "node": "Sign Connection Activation", "type": "main", "index": 0 }]] },
-    "Sign Connection Activation": { "main": [[{ "node": "Activate Google Calendar Connection", "type": "main", "index": 0 }]] },
-    "Activate Google Calendar Connection": { "main": [[{ "node": "Sign Reconciliation Claim", "type": "main", "index": 0 }]] },
+    "Nightly Reconciliation": { "main": [[{ "node": "Sign Reconciliation Claim", "type": "main", "index": 0 }]] },
     "Sign Reconciliation Claim": { "main": [[{ "node": "Claim Reconciliation Connections", "type": "main", "index": 0 }]] },
     "Claim Reconciliation Connections": { "main": [[{ "node": "Split Reconciliation Jobs", "type": "main", "index": 0 }]] },
-    "Split Reconciliation Jobs": { "main": [[{ "node": "Pull Full Reconciliation Window", "type": "main", "index": 0 }]] },
-    "Pull Full Reconciliation Window": { "main": [[{ "node": "Build Reconciliation Commands", "type": "main", "index": 0 }, { "node": "Renew Google Watch Channel", "type": "main", "index": 0 }]] },
+    "Split Reconciliation Jobs": { "main": [[{ "node": "Sign Reconciliation Provider Changes", "type": "main", "index": 0 }, { "node": "Sign Provider Watch Request", "type": "main", "index": 0 }]] },
+    "Sign Reconciliation Provider Changes": { "main": [[{ "node": "Pull Reconciliation Changes Through Node", "type": "main", "index": 0 }]] },
+    "Pull Reconciliation Changes Through Node": { "main": [[{ "node": "Build Reconciliation Commands", "type": "main", "index": 0 }]] },
     "Build Reconciliation Commands": { "main": [[{ "node": "Sign Reconciliation Sync Apply", "type": "main", "index": 0 }]] },
     "Sign Reconciliation Sync Apply": { "main": [[{ "node": "Apply Reconciliation Snapshot", "type": "main", "index": 0 }]] },
-    "Renew Google Watch Channel": { "main": [[{ "node": "Sign Watch Renewal", "type": "main", "index": 0 }]] },
+    "Sign Provider Watch Request": { "main": [[{ "node": "Renew Provider Watch Through Node", "type": "main", "index": 0 }]] },
+    "Renew Provider Watch Through Node": { "main": [[{ "node": "Sign Watch Renewal", "type": "main", "index": 0 }]] },
     "Sign Watch Renewal": { "main": [[{ "node": "Persist Renewed Watch Channel", "type": "main", "index": 0 }]] }
   },
   "pinData": {},

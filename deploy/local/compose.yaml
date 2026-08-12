@@ -11,6 +11,11 @@ services:
   api-service:
     <<: *common
     image: ${API_IMAGE:?API_IMAGE must be a versioned tag or digest}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      audit-volume-init:
+        condition: service_completed_successfully
     ports:
       - "${NODE_BIND_ADDRESS:-127.0.0.1}:${NODE_BIND_PORT:-3001}:3001"
     environment:
@@ -25,10 +30,24 @@ services:
       - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://127.0.0.1}
       - AUDIT_HMAC_KEY=${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY is required}
       - CALENDAR_INTERNAL_HMAC_KEY=${CALENDAR_INTERNAL_HMAC_KEY:?CALENDAR_INTERNAL_HMAC_KEY is required}
+      - GOOGLE_CALENDAR_OAUTH_CLIENT_ID=${GOOGLE_CALENDAR_OAUTH_CLIENT_ID:?GOOGLE_CALENDAR_OAUTH_CLIENT_ID is required}
+      - GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET=${GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET:?GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET is required}
+      - GOOGLE_CALENDAR_OAUTH_CALLBACK_URL=${GOOGLE_CALENDAR_OAUTH_CALLBACK_URL:?GOOGLE_CALENDAR_OAUTH_CALLBACK_URL is required}
+      - GOOGLE_CALENDAR_OAUTH_ENCRYPTION_KEY=${GOOGLE_CALENDAR_OAUTH_ENCRYPTION_KEY:?GOOGLE_CALENDAR_OAUTH_ENCRYPTION_KEY is required}
+      - GOOGLE_CALENDAR_OAUTH_RETURN_ORIGIN=${GOOGLE_CALENDAR_OAUTH_RETURN_ORIGIN:-}
+      - GOOGLE_CALENDAR_WATCH_CALLBACK_URLS=${GOOGLE_CALENDAR_WATCH_CALLBACK_URLS:?GOOGLE_CALENDAR_WATCH_CALLBACK_URLS is required}
       - AUDIT_LOG_PATH=/app/audit/node-audit.ndjson
       - RELEASE_SHA=${RELEASE_SHA:?RELEASE_SHA is required}
     volumes:
       - audit_data:/app/audit
+
+  audit-volume-init:
+    <<: *common
+    image: ${VOLUME_INIT_IMAGE:-alpine:3.20}
+    restart: "no"
+    command: ["chown", "-R", "1001:1001", "/audit"]
+    volumes:
+      - audit_data:/audit
 
   mongodb:
     <<: *common
@@ -141,14 +160,30 @@ services:
       - EISENHOWER_INTERNAL_API_TOKEN=${EISENHOWER_INTERNAL_API_TOKEN:?EISENHOWER_INTERNAL_API_TOKEN is required}
       - EISENHOWER_NODE_INTERNAL_API_URL=${EISENHOWER_NODE_INTERNAL_API_URL:-http://api-service:3001}
       - CALENDAR_INTERNAL_HMAC_KEY=${CALENDAR_INTERNAL_HMAC_KEY:?CALENDAR_INTERNAL_HMAC_KEY is required}
+      - GOOGLE_CALENDAR_WEBHOOK_URL=${GOOGLE_CALENDAR_WEBHOOK_URL:?GOOGLE_CALENDAR_WEBHOOK_URL is required}
+      # Repository-owned Code nodes need these scoped values for HMAC-signed calls.
+      # Keep this n8n instance loopback/private and operator-only.
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       - NODE_FUNCTION_ALLOW_BUILTIN=crypto
-      - CALENDAR_TENANT_ID=${CALENDAR_TENANT_ID:-local}
-      - CALENDAR_OWNER_ID=${CALENDAR_OWNER_ID:-local-user}
-      - GOOGLE_CALENDAR_ID=${GOOGLE_CALENDAR_ID:-primary}
-      - GOOGLE_CALENDAR_WEBHOOK_URL=${GOOGLE_CALENDAR_WEBHOOK_URL:-}
     volumes:
       - n8n_data:/home/node/.n8n
       - ../../n8n/workflows:/workflows:ro
+
+  calendar-gateway:
+    <<: *common
+    image: ${CALENDAR_GATEWAY_IMAGE:-nginx:1.27.5-alpine}
+    depends_on:
+      api-service:
+        condition: service_started
+      n8n:
+        condition: service_started
+    ports:
+      - "127.0.0.1:${CALENDAR_GATEWAY_BIND_PORT:-8787}:8080"
+    environment:
+      - N8N_UPSTREAM=${CALENDAR_GATEWAY_N8N_UPSTREAM:-n8n:5678}
+      - API_UPSTREAM=${CALENDAR_GATEWAY_API_UPSTREAM:-api-service:3001}
+    volumes:
+      - ./calendar-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
 
 volumes:
   mongodb_data:

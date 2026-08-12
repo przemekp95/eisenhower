@@ -8,6 +8,8 @@ import {
   CalendarMutationReceiptModel,
   CalendarOutboxModel,
   CalendarSyncStateModel,
+  GoogleOAuthAttemptModel,
+  GoogleOAuthGrantModel,
 } from './models/calendar';
 
 let activeUri: string | null = null;
@@ -31,6 +33,8 @@ export async function connectToDatabase(uri: string) {
     CalendarOutboxModel.init(),
     CalendarMutationReceiptModel.init(),
     CalendarDomainAuditModel.init(),
+    GoogleOAuthAttemptModel.init(),
+    GoogleOAuthGrantModel.init(),
   ]);
   activeUri = uri;
   return mongoose.connection;

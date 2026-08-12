@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[3]
 COMPOSE_PATH = ROOT / "deploy" / "local" / "compose.yaml"
 AMD_COMPOSE_PATH = ROOT / "deploy" / "local" / "compose.amd.yaml"
 ENV_PATH = ROOT / "deploy" / "local" / ".env.example"
+GATEWAY_CONFIG_PATH = ROOT / "deploy" / "local" / "calendar-gateway.conf.template"
 
 
 class LocalProductionContractTest(unittest.TestCase):
@@ -24,7 +25,10 @@ class LocalProductionContractTest(unittest.TestCase):
   def test_declares_only_real_independently_placeable_processes(self):
     self.assertEqual(
       set(self.services) | set(self.amd_services),
-      {"api-service", "mongodb", "ai-service", "rag-worker", "qdrant", "n8n", "inference"},
+      {
+        "api-service", "mongodb", "ai-service", "rag-worker", "qdrant", "n8n",
+        "calendar-gateway", "audit-volume-init", "inference",
+      },
     )
     self.assertNotIn("mcp", self.services)
     self.assertNotIn("outbox-worker", self.services)
@@ -53,6 +57,10 @@ class LocalProductionContractTest(unittest.TestCase):
   def test_every_host_port_defaults_to_loopback_and_can_bind_a_private_address(self):
     for name, service in (self.services | self.amd_services).items():
       for published_port in service.get("ports", []):
+        if name == "calendar-gateway":
+          self.assertTrue(published_port.startswith("127.0.0.1:"), name)
+          self.assertNotIn("BIND_ADDRESS", published_port, name)
+          continue
         self.assertIn("_BIND_ADDRESS:-127.0.0.1", published_port, name)
         self.assertNotIn("0.0.0.0", published_port, name)
 
@@ -64,6 +72,8 @@ class LocalProductionContractTest(unittest.TestCase):
       "rag-worker": "AI_IMAGE",
       "qdrant": "QDRANT_IMAGE",
       "n8n": "N8N_IMAGE",
+      "calendar-gateway": "CALENDAR_GATEWAY_IMAGE",
+      "audit-volume-init": "VOLUME_INIT_IMAGE",
       "inference": "AMD_INFERENCE_IMAGE",
     }
     for name, variable in expected_image_inputs.items():
@@ -100,7 +110,54 @@ class LocalProductionContractTest(unittest.TestCase):
       "CALENDAR_INTERNAL_HMAC_KEY=${CALENDAR_INTERNAL_HMAC_KEY:?CALENDAR_INTERNAL_HMAC_KEY is required}",
       self.services["n8n"]["environment"],
     )
+    self.assertIn("N8N_BLOCK_ENV_ACCESS_IN_NODE=false", self.services["n8n"]["environment"])
     self.assertIn("NODE_FUNCTION_ALLOW_BUILTIN=crypto", self.services["n8n"]["environment"])
+
+  def test_calendar_gateway_is_loopback_only_and_routes_exactly_two_public_requests(self):
+    gateway = self.services["calendar-gateway"]
+    self.assertEqual(
+      gateway["ports"],
+      ["127.0.0.1:${CALENDAR_GATEWAY_BIND_PORT:-8787}:8080"],
+    )
+    self.assertIn(
+      "./calendar-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro",
+      gateway["volumes"],
+    )
+    config = GATEWAY_CONFIG_PATH.read_text()
+    self.assertIn("location = /eisenhower/google-calendar/webhook", config)
+    self.assertIn("proxy_pass http://${N8N_UPSTREAM}/webhook/eisenhower-google-calendar;", config)
+    self.assertIn("location = /eisenhower/google-calendar/oauth/callback", config)
+    self.assertIn("proxy_pass http://${API_UPSTREAM}/calendar/oauth/callback;", config)
+    self.assertIn("if ($request_method != POST) { return 404; }", config)
+    self.assertIn("if ($request_method != GET) { return 404; }", config)
+    self.assertIn("location /", config)
+    self.assertIn("return 404;", config)
+    self.assertIn("client_max_body_size", config)
+    self.assertIn("proxy_connect_timeout", config)
+    self.assertIn("proxy_read_timeout", config)
+    self.assertIn("access_log off;", config)
+    self.assertNotIn("$request_uri", config)
+    self.assertNotIn("$http_authorization", config)
+
+  def test_google_oauth_secrets_live_only_in_node_and_n8n_has_no_user_google_identity(self):
+    api_environment = self.services["api-service"]["environment"]
+    n8n_environment = self.services["n8n"]["environment"]
+    for name in (
+      "GOOGLE_CALENDAR_OAUTH_CLIENT_ID",
+      "GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET",
+      "GOOGLE_CALENDAR_OAUTH_CALLBACK_URL",
+      "GOOGLE_CALENDAR_OAUTH_ENCRYPTION_KEY",
+      "GOOGLE_CALENDAR_WATCH_CALLBACK_URLS",
+    ):
+      self.assertTrue(any(entry.startswith(f"{name}=") for entry in api_environment), name)
+      self.assertFalse(any(entry.startswith(f"{name}=") for entry in n8n_environment), name)
+    for name in (
+      "CALENDAR_TENANT_ID",
+      "CALENDAR_OWNER_ID",
+      "GOOGLE_CALENDAR_ID",
+    ):
+      self.assertFalse(any(entry.startswith(f"{name}=") for entry in n8n_environment), name)
+    self.assertTrue(any(entry.startswith("GOOGLE_CALENDAR_WEBHOOK_URL=") for entry in n8n_environment))
 
   def test_mongodb_supports_transactional_outbox_without_missing_host_mounts(self):
     mongodb = self.services["mongodb"]

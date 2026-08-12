@@ -99,6 +99,31 @@ const auditSchema = new Schema({
   reason: { type: String },
 }, { timestamps: true });
 
+const oauthAttemptSchema = new Schema({
+  ...scope,
+  stateHash: { type: String, required: true, unique: true },
+  pkceCiphertext: { type: String, required: true, select: false },
+  pkceIv: { type: String, required: true, select: false },
+  pkceTag: { type: String, required: true, select: false },
+  keyVersion: { type: String, required: true },
+  returnUrl: { type: String, required: true },
+  expiresAt: { type: Date, required: true, index: { expires: 0 } },
+  consumedAt: { type: Date },
+}, { timestamps: true });
+
+const oauthGrantSchema = new Schema({
+  ...scope,
+  googleSubject: { type: String, required: true },
+  scopes: { type: [String], required: true },
+  tokenCiphertext: { type: String, required: true, select: false },
+  tokenIv: { type: String, required: true, select: false },
+  tokenTag: { type: String, required: true, select: false },
+  keyVersion: { type: String, required: true },
+  status: { type: String, required: true, enum: ['active', 'revoked', 'error'] },
+  revokedAt: { type: Date },
+}, { timestamps: true });
+oauthGrantSchema.index({ tenantId: 1, ownerId: 1, status: 1 });
+
 export const CalendarConnectionModel = models.CalendarConnection ?? model('CalendarConnection', connectionSchema);
 export const CalendarBindingModel = models.CalendarBinding ?? model('CalendarBinding', bindingSchema);
 export const CalendarConflictModel = models.CalendarConflict ?? model('CalendarConflict', conflictSchema);
@@ -106,3 +131,5 @@ export const CalendarSyncStateModel = models.CalendarSyncState ?? model('Calenda
 export const CalendarOutboxModel = models.CalendarOutbox ?? model('CalendarOutbox', outboxSchema);
 export const CalendarMutationReceiptModel = models.CalendarMutationReceipt ?? model('CalendarMutationReceipt', receiptSchema);
 export const CalendarDomainAuditModel = models.CalendarDomainAudit ?? model('CalendarDomainAudit', auditSchema);
+export const GoogleOAuthAttemptModel = models.GoogleOAuthAttempt ?? model('GoogleOAuthAttempt', oauthAttemptSchema);
+export const GoogleOAuthGrantModel = models.GoogleOAuthGrant ?? model('GoogleOAuthGrant', oauthGrantSchema);

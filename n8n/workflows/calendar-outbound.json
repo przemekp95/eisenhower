@@ -46,78 +46,47 @@
       }
     },
     {
-      "id": "outbound-route",
-      "name": "Route Bounded Calendar Operation",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 3.2,
+      "id": "outbound-require-event",
+      "name": "Continue Only With Claimed Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [-380, 0],
       "parameters": {
-        "rules": { "values": [
-          { "conditions": { "conditions": [{ "leftValue": "={{ $json.type }}", "rightValue": "event_create", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "event_create" },
-          { "conditions": { "conditions": [{ "leftValue": "={{ $json.type }}", "rightValue": "event_update", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "event_update" },
-          { "conditions": { "conditions": [{ "leftValue": "={{ $json.type }}", "rightValue": "event_delete", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "event_delete" }
+        "jsCode": "if (typeof $json.eventId !== 'string' || !$json.eventId) return [];\nreturn [{ json: $json }];"
+      }
+    },
+    {
+      "id": "outbound-sign-provider",
+      "name": "Sign Outbound Provider Dispatch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-160, 0],
+      "parameters": {
+        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/provider/outbound';\nconst body = { eventId: $json.eventId };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+      }
+    },
+    {
+      "id": "outbound-provider",
+      "name": "Dispatch Outbound Through Node",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [80, 0],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EISENHOWER_NODE_INTERNAL_API_URL + '/internal/calendar/provider/outbound' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
         ] },
-        "options": { "fallbackOutput": "extra" }
-      }
-    },
-    {
-      "id": "outbound-create",
-      "name": "Create Google Event",
-      "type": "n8n-nodes-base.googleCalendar",
-      "typeVersion": 1.3,
-      "position": [-100, -180],
-      "retryOnFail": true,
-      "maxTries": 5,
-      "waitBetweenTries": 2000,
-      "alwaysOutputData": true,
-      "credentials": { "googleOAuth2Api": { "id": "REPLACE_GOOGLE_CALENDAR_CREDENTIAL_ID", "name": "Eisenhower Google Calendar" } },
-      "parameters": {
-        "calendar": { "__rl": true, "mode": "id", "value": "={{ $json.provider.calendarId }}" },
-        "start": "={{ $json.payload.schedule.dueAt }}",
-        "end": "={{ new Date(new Date($json.payload.schedule.dueAt).getTime() + 30 * 60000).toISOString() }}",
-        "additionalFields": { "summary": "={{ $json.payload.title }}", "visibility": "private", "sendUpdates": "none" }
-      }
-    },
-    {
-      "id": "outbound-update",
-      "name": "Update Google Event",
-      "type": "n8n-nodes-base.googleCalendar",
-      "typeVersion": 1.3,
-      "position": [-100, 0],
-      "retryOnFail": true,
-      "maxTries": 5,
-      "waitBetweenTries": 2000,
-      "alwaysOutputData": true,
-      "credentials": { "googleOAuth2Api": { "id": "REPLACE_GOOGLE_CALENDAR_CREDENTIAL_ID", "name": "Eisenhower Google Calendar" } },
-      "parameters": {
-        "operation": "update",
-        "calendar": { "__rl": true, "mode": "id", "value": "={{ $json.provider.calendarId }}" },
-        "eventId": "={{ $json.provider.providerEventId }}",
-        "updateFields": {
-          "start": "={{ $json.payload.schedule.dueAt }}",
-          "end": "={{ new Date(new Date($json.payload.schedule.dueAt).getTime() + 30 * 60000).toISOString() }}",
-          "summary": "={{ $json.payload.title }}",
-          "sendUpdates": "none"
-        },
-        "options": { "headers": { "If-Match": "={{ $json.provider.providerEtag }}" } }
-      }
-    },
-    {
-      "id": "outbound-delete",
-      "name": "Delete Google Event",
-      "type": "n8n-nodes-base.googleCalendar",
-      "typeVersion": 1.3,
-      "position": [-100, 180],
-      "retryOnFail": true,
-      "maxTries": 5,
-      "waitBetweenTries": 2000,
-      "alwaysOutputData": true,
-      "credentials": { "googleOAuth2Api": { "id": "REPLACE_GOOGLE_CALENDAR_CREDENTIAL_ID", "name": "Eisenhower Google Calendar" } },
-      "parameters": {
-        "operation": "delete",
-        "calendar": { "__rl": true, "mode": "id", "value": "={{ $json.provider.calendarId }}" },
-        "eventId": "={{ $json.provider.providerEventId }}",
-        "options": { "sendUpdates": "none", "headers": { "If-Match": "={{ $json.provider.providerEtag }}" } }
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.signedBody }}",
+        "options": { "timeout": 15000 }
       }
     },
     {
@@ -125,9 +94,9 @@
       "name": "Sign Outbox Acknowledgement",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [160, 0],
+      "position": [320, 0],
       "parameters": {
-        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/outbox/acknowledge';\nconst claimed = $('Claim Calendar Outbox Batch').item.json;\nconst body = { eventId: claimed.eventId, delivered: true, providerEventId: $json.id || claimed.provider.providerEventId, providerEtag: $json.etag || claimed.provider.providerEtag, connectionId: claimed.provider.connectionId };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/outbox/acknowledge';\nconst claimed = $('Claim Calendar Outbox Batch').item.json;\nconst body = { eventId: claimed.eventId, delivered: true, providerEventId: $json.providerEventId, providerEtag: $json.providerEtag, connectionId: $json.connectionId };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
       }
     },
     {
@@ -135,7 +104,7 @@
       "name": "Acknowledge Calendar Outbox Result",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [400, 0],
+      "position": [560, 0],
       "retryOnFail": true,
       "maxTries": 5,
       "waitBetweenTries": 2000,
@@ -158,11 +127,10 @@
   "connections": {
     "Poll Calendar Outbox": { "main": [[{ "node": "Sign Outbox Claim", "type": "main", "index": 0 }]] },
     "Sign Outbox Claim": { "main": [[{ "node": "Claim Calendar Outbox Batch", "type": "main", "index": 0 }]] },
-    "Claim Calendar Outbox Batch": { "main": [[{ "node": "Route Bounded Calendar Operation", "type": "main", "index": 0 }]] },
-    "Route Bounded Calendar Operation": { "main": [[{ "node": "Create Google Event", "type": "main", "index": 0 }], [{ "node": "Update Google Event", "type": "main", "index": 0 }], [{ "node": "Delete Google Event", "type": "main", "index": 0 }]] },
-    "Create Google Event": { "main": [[{ "node": "Sign Outbox Acknowledgement", "type": "main", "index": 0 }]] },
-    "Update Google Event": { "main": [[{ "node": "Sign Outbox Acknowledgement", "type": "main", "index": 0 }]] },
-    "Delete Google Event": { "main": [[{ "node": "Sign Outbox Acknowledgement", "type": "main", "index": 0 }]] },
+    "Claim Calendar Outbox Batch": { "main": [[{ "node": "Continue Only With Claimed Event", "type": "main", "index": 0 }]] },
+    "Continue Only With Claimed Event": { "main": [[{ "node": "Sign Outbound Provider Dispatch", "type": "main", "index": 0 }]] },
+    "Sign Outbound Provider Dispatch": { "main": [[{ "node": "Dispatch Outbound Through Node", "type": "main", "index": 0 }]] },
+    "Dispatch Outbound Through Node": { "main": [[{ "node": "Sign Outbox Acknowledgement", "type": "main", "index": 0 }]] },
     "Sign Outbox Acknowledgement": { "main": [[{ "node": "Acknowledge Calendar Outbox Result", "type": "main", "index": 0 }]] }
   },
   "pinData": {},

@@ -40,23 +40,6 @@ export function createCalendarInternalRouter(key: string, service = new Calendar
   const router = Router();
   router.use(requireCalendarInternalHmac(key));
 
-  router.post('/connections/activate', async (req, res, next) => {
-    try {
-      const { operationId, tenantId, ownerId, provider, calendarId, credentialRef } = req.body ?? {};
-      if (![operationId, tenantId, ownerId, calendarId, credentialRef].every((value) => typeof value === 'string' && value)
-        || provider !== 'google'
-        || Object.keys(req.body).some((field) => !['operationId', 'tenantId', 'ownerId', 'provider', 'calendarId', 'credentialRef'].includes(field))) {
-        return res.status(400).json({ error: 'Invalid calendar connection activation' });
-      }
-      const connection = await CalendarConnectionModel.findOneAndUpdate(
-        { tenantId, ownerId, provider, calendarId },
-        { $set: { credentialRef, status: 'active' } },
-        { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
-      );
-      return res.status(201).json({ id: connection.id, provider, calendarId, status: connection.status });
-    } catch (error) { return next(error); }
-  });
-
   const applyInbound = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const command = req.body as CalendarInboundCommand;

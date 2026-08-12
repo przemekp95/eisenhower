@@ -192,22 +192,6 @@ describe('calendar integration boundary', () => {
     expect(replay.body.eventId).toBe(first.body.eventId);
   });
 
-  it('onboards a connection through the HMAC boundary without accepting provider secrets', async () => {
-    const path = '/internal/calendar/connections/activate';
-    const body = {
-      operationId: 'activate-connection-1', tenantId: 'local', ownerId: 'local-user',
-      provider: 'google', calendarId: 'primary', credentialRef: 'n8n:credential:google-1',
-    };
-    const auth = signed(path, body);
-    const response = await request(app).post(path)
-      .set('X-Eisenhower-Timestamp', auth.timestamp)
-      .set('X-Eisenhower-Signature', auth.signature).send(body);
-
-    expect(response.status).toBe(201);
-    expect(response.body).not.toHaveProperty('credentialRef');
-    expect(await CalendarConnectionModel.findOne()).toMatchObject({ status: 'active', credentialRef: body.credentialRef });
-  });
-
   it('claims an executable provider dispatch enriched with connection and binding data', async () => {
     const task = await TaskModel.create({ title: 'Bound update', schedule: { dueAt: new Date('2026-08-20T12:00:00.000Z'), timeZone: 'Europe/Warsaw' } });
     const connection = await CalendarConnectionModel.create({
@@ -286,4 +270,5 @@ describe('calendar integration boundary', () => {
       calendarId: 'primary', syncToken: 'sync-current', signalId: 'channel-1:42',
     });
   });
+
 });
