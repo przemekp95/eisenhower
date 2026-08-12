@@ -139,6 +139,9 @@ jobs:
       - name: Install pinned Python dependency auditor
         run: python -m pip install pip-audit==2.10.1
 
+      - name: Resolve experimental Python dependency graph
+        run: python -m pip install --dry-run --ignore-installed -r backend-ai/requirements-experimental.txt
+
       - name: Install mobile production dependencies for the security adapter test
         working-directory: mobile/eisenhower-matrix
         run: npm ci --omit=dev --ignore-scripts --no-audit

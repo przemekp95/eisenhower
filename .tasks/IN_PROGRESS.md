@@ -1,5 +1,19 @@
 # In Progress
 
+## TASK-045: Resolve default-branch Dependabot alerts and promote green dev
+**Priority:** P0 | **Tags:** security, dependencies, dependabot, release-gate
+
+Resolve the seven default-branch dependency alerts without bypassing the repository's dev-first branch policy, then promote the verified dependency changes through a fully green pull request to `dev`.
+
+### Plan
+
+- Reproduce the seven-alert security baseline and map each advisory to its manifest, patched version, dependency path and existing mitigation.
+- Apply the smallest compatible pytest and LangChain security upgrades on top of current `origin/dev`, preserving the tested Metro parser replacement for the unpatched transitive `image-size` advisories.
+- Run focused dependency, experimental-integration and mobile security checks, then the complete repository verification required for a dependency/lockfile change.
+- Open a PR to `dev`, require every exact-head check to pass, merge it, and verify the remote merge SHA plus post-merge `dev` CI without touching `master`, deployment or production.
+
+---
+
 ## TASK-013: Approve representative retrieval quality gates
 **Priority:** P1 | **Tags:** rag, evaluation, recall, mrr, human-gate
 

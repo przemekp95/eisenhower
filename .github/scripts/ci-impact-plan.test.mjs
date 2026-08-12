@@ -285,6 +285,7 @@ test("required contexts stay synchronized and expose explicit not-applicable job
   assert.equal((workflow.match(/TARGET: \$\{\{ needs\.resolve-run-mode\.outputs\.[a-z0-9_]+ \}\}/g) ?? []).length, 11);
 
   const auditCommands = [
+    "python -m pip install --dry-run --ignore-installed -r backend-ai/requirements-experimental.txt",
     "npm --prefix backend-node audit --omit=dev --audit-level=high",
     "npm --prefix packages/api-client audit --omit=dev --audit-level=high",
     "npm --prefix web audit --omit=dev --audit-level=high",
