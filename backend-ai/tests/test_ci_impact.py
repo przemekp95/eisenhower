@@ -677,9 +677,6 @@ def test_authoritative_resolver_does_not_mutate_actions_command_files(
   tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ):
   repo_root = Path(__file__).resolve().parents[2]
-  base_sha = subprocess.check_output(
-    ("git", "rev-parse", "HEAD^"), cwd=repo_root, text=True
-  ).strip()
   head_sha = subprocess.check_output(
     ("git", "rev-parse", "HEAD"), cwd=repo_root, text=True
   ).strip()
@@ -691,7 +688,7 @@ def test_authoritative_resolver_does_not_mutate_actions_command_files(
   monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
 
   plan = resolve_authoritative_plan(
-    repo_root, base_sha=base_sha, head_sha=head_sha,
+    repo_root, base_sha=head_sha, head_sha=head_sha,
     event_name="pull_request", ref_name="feature/test", base_ref_name="dev",
   )
 
