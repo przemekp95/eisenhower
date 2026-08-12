@@ -11,7 +11,7 @@ from .models import (
 )
 from ..generation.delta import InformationDeltaValidator, InformationDeltaViolation
 from ..generation.models import InformationDelta, KnownStatement
-from .errors import GenerationProviderError, InvalidGenerationOutput
+from .errors import GenerationProviderError, InvalidGenerationOutput, RerankerUnavailable
 from .ports import FallbackClassifier, GenerationProvider, Retriever
 
 
@@ -54,7 +54,10 @@ class RagAnalysisService:
     previous_output_statements: list[KnownStatement] | None = None,
     freshness_requirement: str = "snapshot_sufficient",
   ) -> AnalyzeResult:
-    hits, retrieval = self._retrieve(task, scope, limit=self.retrieval_limit)
+    try:
+      hits, retrieval = self._retrieve(task, scope, limit=self.retrieval_limit)
+    except RerankerUnavailable:
+      return self._fallback(task, RetrievalSummary(), "reranker_unavailable")
     if freshness_requirement == "current_world_required":
       delta = InformationDelta(
         status="freshness_unverified",

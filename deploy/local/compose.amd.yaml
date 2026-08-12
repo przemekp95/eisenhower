@@ -30,6 +30,46 @@ services:
     networks:
       - private
 
+  reranker:
+    image: ${AMD_RERANKER_IMAGE:-vllm/vllm-openai-rocm@sha256:3be0d8f3ec3ebcc99203e08d895392a8d749ed8a132f41574a8018cdaf525a22}
+    profiles:
+      - reranker-amd
+    ports:
+      - "${RERANKER_BIND_ADDRESS:-127.0.0.1}:${RERANKER_BIND_PORT:-8011}:8000"
+    environment:
+      - TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
+    command:
+      - --model
+      - BAAI/bge-reranker-v2-m3
+      - --revision
+      - 953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e
+      - --served-model-name
+      - BAAI/bge-reranker-v2-m3@953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e
+      - --runner
+      - pooling
+      - --max-model-len
+      - "192"
+      - --dtype
+      - float16
+      - --api-key
+      - ${RERANKER_API_KEY:?RERANKER_API_KEY is required}
+      - --no-enable-log-requests
+    ipc: host
+    group_add:
+      - video
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
+    volumes:
+      - ${RERANKER_MODEL_CACHE:-../../.runtime-cache/reranker-huggingface}:/root/.cache/huggingface
+    restart: unless-stopped
+    networks:
+      - private
+
 networks:
   private:
     name: ${COMPOSE_PRIVATE_NETWORK:-eisenhower-local-private}

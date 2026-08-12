@@ -16,6 +16,9 @@ def test_load_settings_uses_defaults():
   assert settings.rag_retrieval_enabled is False
   assert settings.rag_generation_enabled is False
   assert settings.rag_response_enabled is False
+  assert settings.rag_retrieval_strategy == "hybrid-bge-v1"
+  assert settings.reranker_base_url == "http://reranker:8000"
+  assert settings.reranker_api_key is None
   assert settings.memory_write_enabled is False
   assert settings.memory_retrieval_enabled is False
   assert settings.memory_response_enabled is False
@@ -58,6 +61,10 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
       "INDEX_VERSION": "index-v3",
       "RAG_RETRIEVAL_ENABLED": "true",
       "RAG_GENERATION_ENABLED": "false",
+      "RAG_RETRIEVAL_STRATEGY": "dense-v1",
+      "RERANKER_BASE_URL": "http://reranker.internal:8000",
+      "RERANKER_API_KEY": "reranker-token",
+      "RERANKER_ALLOWED_HOSTS": "reranker.internal",
       "INFERENCE_BASE_URL": "https://gpu.mesh.example/v1",
       "INFERENCE_API_KEY": "service-token",
       "INFERENCE_MODEL": "approved-model",
@@ -102,6 +109,10 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
   assert settings.index_version == "index-v3"
   assert settings.rag_retrieval_enabled is True
   assert settings.rag_generation_enabled is False
+  assert settings.rag_retrieval_strategy == "dense-v1"
+  assert settings.reranker_base_url == "http://reranker.internal:8000"
+  assert settings.reranker_api_key == "reranker-token"
+  assert settings.reranker_allowed_hosts == ("reranker.internal",)
   assert settings.inference_base_url == "https://gpu.mesh.example/v1"
   assert settings.inference_api_key == "service-token"
   assert settings.inference_model == "approved-model"
@@ -179,6 +190,15 @@ def test_generation_cannot_be_enabled_without_retrieval(tmp_path: Path):
       training_data_path=tmp_path / "training.json",
       model_cache_dir=tmp_path / "runtime",
       rag_generation_enabled=True,
+    )
+
+
+def test_unknown_retrieval_strategy_fails_closed(tmp_path: Path):
+  with pytest.raises(ValueError, match="RAG_RETRIEVAL_STRATEGY"):
+    Settings(
+      training_data_path=tmp_path / "training.json",
+      model_cache_dir=tmp_path / "runtime",
+      rag_retrieval_strategy="silent-dense-fallback",
     )
 
 

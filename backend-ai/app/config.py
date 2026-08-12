@@ -34,6 +34,10 @@ class Settings:
   rag_generation_enabled: bool | None = None
   rag_response_enabled: bool = False
   rag_allowed_tenants: tuple[str, ...] = ()
+  rag_retrieval_strategy: str = "hybrid-bge-v1"
+  reranker_base_url: str = "http://reranker:8000"
+  reranker_api_key: str | None = None
+  reranker_allowed_hosts: tuple[str, ...] = ()
   qdrant_url: str = "http://qdrant:6333"
   qdrant_api_key: str | None = None
   qdrant_collection_alias: str = "eisenhower-knowledge-active"
@@ -119,6 +123,8 @@ class Settings:
     object.__setattr__(self, "rag_generation_enabled", generation_enabled)
     if generation_enabled and not retrieval_enabled:
       raise ValueError("RAG generation requires RAG retrieval to be enabled.")
+    if self.rag_retrieval_strategy not in {"dense-v1", "hybrid-bge-v1"}:
+      raise ValueError("RAG_RETRIEVAL_STRATEGY must be 'dense-v1' or 'hybrid-bge-v1'.")
     timeout_values = (
       self.inference_connect_timeout_seconds,
       self.inference_read_timeout_seconds,
@@ -257,6 +263,10 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     ),
     rag_response_enabled=source.get("RAG_RESPONSE_ENABLED", "false").lower() in ("true", "1", "yes"),
     rag_allowed_tenants=parse_csv_list(source.get("RAG_ALLOWED_TENANTS"), ()),
+    rag_retrieval_strategy=source.get("RAG_RETRIEVAL_STRATEGY", "hybrid-bge-v1"),
+    reranker_base_url=source.get("RERANKER_BASE_URL", "http://reranker:8000"),
+    reranker_api_key=source.get("RERANKER_API_KEY") or None,
+    reranker_allowed_hosts=parse_csv_list(source.get("RERANKER_ALLOWED_HOSTS"), ()),
     qdrant_url=source.get("QDRANT_URL", "http://qdrant:6333"),
     qdrant_api_key=source.get("QDRANT_API_KEY") or None,
     qdrant_collection_alias=source.get(

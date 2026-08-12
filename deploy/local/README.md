@@ -140,6 +140,7 @@ private VPN/LAN address. On each caller, replace only the matching URL:
 | Remote MCP | no host port by default | access gateway `MCP_UPSTREAM` |
 | Access gateway | fixed `127.0.0.1`, configurable `ACCESS_GATEWAY_BIND_PORT` | private Tailscale Serve target |
 | vLLM | `INFERENCE_BIND_ADDRESS` | FastAPI: `INFERENCE_BASE_URL` and `INFERENCE_ALLOWED_HOSTS` |
+| vLLM reranker | `RERANKER_BIND_ADDRESS` | FastAPI: `RERANKER_BASE_URL` and `RERANKER_ALLOWED_HOSTS` |
 
 Never set a bind address to `0.0.0.0`. Private addressing alone is not an authorization boundary: enforce
 host firewall/VPN ACLs, deny public ingress, rotate service credentials, and use TLS/mTLS when the private
@@ -148,7 +149,22 @@ requires authenticated transport and a tested backup/restore plan before it is p
 
 ## Optional AMD inference contract
 
-Only after the physical ROCm gate selects the exact image digest, model/tokenizer revision, dtype or
+The AMD overlay also defines a separate `reranker-amd` profile for the default retrieval strategy.
+It pins the evaluated `BAAI/bge-reranker-v2-m3` revision, served-model identity, FP16 dtype,
+192-token context and authenticated score API. Start it independently from generation:
+
+```bash
+docker compose --env-file deploy/local/.env \
+  -f deploy/local/compose.yaml -f deploy/local/compose.amd.yaml \
+  --profile reranker-amd up reranker ai-service qdrant
+```
+
+`RAG_RETRIEVAL_ENABLED=true` now requires this service unless the operator explicitly selects the
+`dense-v1` rollback. A missing, wrong or unavailable reranker never triggers a silent dense fallback.
+The model cache defaults to `.runtime-cache/reranker-huggingface` on the workspace filesystem rather
+than a Docker-root volume; override `RERANKER_MODEL_CACHE` when moving the service to another host.
+
+Only after the separate generation physical ROCm gate selects the exact image digest, model/tokenizer revision, dtype or
 quantization, context and concurrency, render the overlay:
 
 ```bash

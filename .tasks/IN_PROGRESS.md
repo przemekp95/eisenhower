@@ -31,6 +31,9 @@ Implement a disabled-by-default comparison path for the existing dense retriever
 - Expand only train/dev with PL/EN, multi-document, exact-identifier and negative no-hit cases; keep the existing holdout byte-for-byte untouched.
 - Select bounded parameters on train, validate once on dev, and keep dense as the runtime default unless every approved quality and zero-tolerance gate passes.
 - Produce a new immutable exact-SHA comparison, run full regression and CI, then promote only evidence that remains truthful about the independent-human gate.
+- Following the owner's explicit rollout direction, make the selected hybrid plus pinned reranker strategy the runtime default whenever RAG retrieval is enabled; fail startup closed when its private authenticated endpoint does not satisfy the evaluated model and token bounds.
+- Preserve every `PENDING` human-review decision and the untouched holdout as unresolved evidence; do not present the owner's rollout authorization as independent review.
+- Drive the runtime wiring and portable local AMD contract through a red-green loop, run the full affected verification, and promote only the exact green SHA to `dev`.
 
 ### Conditional checkpoint
 
@@ -39,6 +42,8 @@ The repository owner approves the human decision gate green without reservations
 ### Progress
 
 The approved 19-file allowlist is refrozen at snapshot `2994f809649d3dd155faf09419557de7af70c7a77dae9aa4d3cf67f717ac70a8`; the v3 packet expands only train/dev to 42 balanced PL/EN exact-ID, multi-document, no-hit and ACL cases while preserving all six v2 holdout records semantically unchanged. Train-only selection chose document-diverse fielded BM25/RRF plus the revision-pinned `BAAI/bge-reranker-v2-m3`, bounded to 20 candidates and 192 tokens. The clean exact-SHA local MongoDB/Qdrant/private-ROCm comparison passes the proposed non-holdout gates: Recall@5 `0.9107`, MRR@5 `0.8048`, PL `0.8929`/`0.8000`, EN `0.9286`/`0.8095`, no-answer `1.0`, p95 `231.83 ms`, and zero duplicate, forbidden, stale or isolation hits. ROCm 7.2 on `gfx1151` served the pinned reranker over loopback-only vLLM; the temporary service and isolated stores were removed after evaluation. Dense remains the runtime default and holdout remains unobserved because `human-review-v3.json` still has 42 truthful `PENDING` decisions; independent human review is the only remaining gate before final holdout and promotion.
+
+The owner subsequently authorized the exact selected strategy as the default before independent review and holdout. Runtime now composes canonical dense plus fielded BM25 with the evaluated RRF weights and an authenticated private reranker that verifies the exact served model/revision and 192-token bound at startup; `dense-v1` is an explicit rollback and never an automatic fallback. A separate digest-pinned `reranker-amd` service can move independently and keeps its model cache on the workspace filesystem. Red-green tests prove typed classifier fallback for analysis, HTTP 503 for search and no dense substitution on reranker failure. Full `make verify` passes, including 611 backend-AI tests with the frozen holdout checks, 240 Node tests, 21 BDD scenarios/107 steps, 175 web tests plus 2 integrations, 192 mobile tests, 50 MCP tests, dependency audits, typecheck and pylint `10.00/10`. The 42 independent decisions remain `PENDING`, holdout remains unobserved, and no deployment or production approval is claimed.
 ---
 
 ## TASK-013: Approve representative retrieval quality gates

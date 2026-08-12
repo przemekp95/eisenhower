@@ -20,3 +20,7 @@ class InvalidGenerationOutput(GenerationProviderError):
 
 class ProjectionUnavailable(RuntimeError):
   """The vector projection could not complete because its runtime was unavailable."""
+
+
+class RerankerUnavailable(RuntimeError):
+  """The required default retrieval reranker could not safely serve the request."""

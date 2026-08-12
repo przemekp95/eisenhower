@@ -3,6 +3,7 @@ import pytest
 from app.generation.models import ClassificationOutput, GenerationResult
 from app.rag.application import RagAnalysisService
 from app.rag.errors import GenerationProviderUnavailable, InvalidGenerationOutput
+from app.rag.hybrid import RerankerUnavailable
 from app.rag.models import AccessScope, RetrievalHit
 
 
@@ -14,6 +15,11 @@ class StubRetriever:
   def retrieve(self, query):
     self.queries.append(query)
     return self.hits
+
+
+class UnavailableRerankerRetriever:
+  def retrieve(self, _query):
+    raise RerankerUnavailable("reranker provider failed")
 
 
 class StubGenerator:
@@ -98,6 +104,20 @@ def test_rag_analysis_returns_only_acl_scoped_citations():
   assert result.model_dump()["retrieval"]["hit_count"] == 1
   assert result.generation.execution_id == "a" * 64
   assert generator.requests[0].language == "en"
+
+
+def test_rag_analysis_falls_back_without_citations_when_default_reranker_is_unavailable():
+  service = RagAnalysisService(UnavailableRerankerRetriever(), None, StubFallback())
+
+  result = service.analyze(
+    "Prepare roadmap",
+    AccessScope(tenant_id="tenant-a", user_id="user-1", project_ids=["project-1"]),
+  )
+
+  assert result.mode == "fallback"
+  assert result.fallback_reason == "reranker_unavailable"
+  assert result.citations == []
+  assert result.retrieval.hit_count == 0
 
 
 def test_rag_analysis_rejects_generator_citations_not_present_in_context():
