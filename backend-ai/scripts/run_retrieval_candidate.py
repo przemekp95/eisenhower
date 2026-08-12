@@ -74,6 +74,34 @@ class PinnedMultilingualReranker:
     return [float(score) for score in scores]
 
 
+class VllmScoreReranker:
+  model_name = "BAAI/bge-reranker-v2-m3"
+  revision = "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e"
+
+  def __init__(self, base_url: str):
+    self.base_url = base_url.rstrip("/")
+    response = httpx.get(f"{self.base_url}/v1/models", timeout=10).raise_for_status()
+    models = response.json()["data"]
+    if len(models) != 1 or not models[0]["id"].endswith(self.revision):
+      raise ValueError("reranker endpoint does not expose the pinned model revision")
+
+  def score(self, query_text, ranked_candidates):
+    response = httpx.post(
+      f"{self.base_url}/score",
+      json={
+        "text_1": query_text,
+        "text_2": [
+          f"{candidate.title}\n{candidate.text}" for candidate in ranked_candidates
+        ],
+      },
+      timeout=30,
+    ).raise_for_status().json()
+    data = sorted(response["data"], key=lambda item: item["index"])
+    if len(data) != len(ranked_candidates):
+      raise ValueError("reranker endpoint returned an invalid score count")
+    return [float(item["score"]) for item in data]
+
+
 def _delete_alias(client: QdrantClient, alias: str) -> None:
   aliases = {item.alias_name for item in client.get_aliases().aliases}
   if alias in aliases:
@@ -88,6 +116,7 @@ def run(
   repository_root: Path | None = None,
   mongo_uri: str = "mongodb://127.0.0.1:27017/?directConnection=true",
   qdrant_url: str = "http://127.0.0.1:6333",
+  reranker_url: str | None = None,
 ) -> dict:
   repository_root = (repository_root or Path(__file__).resolve().parents[2]).resolve()
   manifest_path = repository_root / "docs" / "ai-rebuild" / "corpus-manifest-v1.json"
@@ -213,8 +242,14 @@ def run(
         "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e",
       ),
     )
-    for model_slug, model_name, model_revision in reranker_models:
-      reranker = PinnedMultilingualReranker(model_name, model_revision)
+    if reranker_url is not None:
+      reranker_models = (("bge-v2-m3", VllmScoreReranker(reranker_url)),)
+    else:
+      reranker_models = tuple(
+        (slug, PinnedMultilingualReranker(model_name, revision))
+        for slug, model_name, revision in reranker_models
+      )
+    for model_slug, reranker in reranker_models:
       for reranker_weight in (0.25, 0.5, 0.75, 1.0):
         candidate_limit = 20
         name = (
@@ -332,6 +367,10 @@ def main() -> None:
     help="Read the frozen corpus from an explicit clean exact-SHA checkout.",
   )
   parser.add_argument(
+    "--reranker-url",
+    help="Use a loopback/private vLLM score endpoint exposing the pinned BGE revision.",
+  )
+  parser.add_argument(
     "--mongo-uri", default="mongodb://127.0.0.1:27017/?directConnection=true",
     help="MongoDB URI for the isolated temporary candidate database.",
   )
@@ -347,6 +386,7 @@ def main() -> None:
     repository_root=args.repository_root,
     mongo_uri=args.mongo_uri,
     qdrant_url=args.qdrant_url,
+    reranker_url=args.reranker_url,
   )
   args.output.parent.mkdir(parents=True, exist_ok=True)
   args.output.write_text(
