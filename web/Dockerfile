@@ -16,6 +16,9 @@ RUN npm run build
 # Production stage
 FROM nginx:alpine@sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752 AS production
 
+ARG RELEASE_SHA
+LABEL org.opencontainers.image.revision=$RELEASE_SHA
+
 RUN apk add --no-cache curl && \
     mkdir -p /var/cache/nginx /tmp/nginx && \
     chown -R nginx:nginx /var/cache/nginx /tmp/nginx /usr/share/nginx/html

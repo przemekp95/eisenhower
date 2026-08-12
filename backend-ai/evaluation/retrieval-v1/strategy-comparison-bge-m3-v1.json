@@ -1,0 +1,44 @@
+{
+  "schema_version": "retrieval-strategy-selection-v1",
+  "recorded_at": "2026-08-12T15:59:44Z",
+  "evidence_level": "local-physical-rocm-container",
+  "candidate_sha256": "01cdfe5a9c4ec8f849ec382716397f98490d6cb1990cc6e15f45b0ac2096ab81",
+  "corpus_manifest_sha256": "849cae38385759db625a13ccb24fc56ee476672689b73e2ea393fb1470441cad",
+  "corpus_snapshot_sha256": "e851ef8725cf22ee858f706b1f7b1becbec051ba30f85a6dc531c5b24a407f37",
+  "dataset_sha256": "0dbb4fe44530a2180fbd6dd5790c91a3299757f6f7714da65373be2454ccd0d1",
+  "raw_runtime_report_sha256": "42da2ca4bd74ed933e1cd1f6bbbb31de017401220cde173662410cda424487c8",
+  "embedding": {
+    "model": "BAAI/bge-m3",
+    "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+    "version": "bge-m3-v1",
+    "vector_size": 1024,
+    "device": "AMD gfx1151 via PyTorch ROCm/HIP"
+  },
+  "runtime": {
+    "qdrant_server": "1.12.0",
+    "qdrant_client": "1.12.0",
+    "pymongo": "4.17.0",
+    "sentence_transformers": "5.7.0"
+  },
+  "non_holdout": {
+    "dense": {"recall_at_5": 0.9583, "mrr_at_5": 0.9167, "pl_recall_at_5": 1.0, "pl_mrr_at_5": 0.8333, "en_recall_at_5": 0.9167, "en_mrr_at_5": 1.0, "p95_ms": 89.9891},
+    "hybrid": {"recall_at_5": 0.9583, "mrr_at_5": 0.875, "pl_recall_at_5": 1.0, "pl_mrr_at_5": 0.9167, "en_recall_at_5": 0.9167, "en_mrr_at_5": 0.8333, "p95_ms": 123.2453}
+  },
+  "untouched_holdout": {
+    "dense": {"recall_at_5": 1.0, "mrr_at_5": 0.7778, "no_answer_accuracy": 0.8333, "p95_ms": 100.6431},
+    "hybrid": {"recall_at_5": 0.6667, "mrr_at_5": 0.2778, "no_answer_accuracy": 0.8333, "p95_ms": 125.5851}
+  },
+  "safety": {
+    "forbidden_hit_rate": 0.0,
+    "isolation_violation_rate": 0.0,
+    "stale_hit_rate": 0.0,
+    "duplicate_hit_rate": 0.0
+  },
+  "selection": {
+    "retrieval_shadow": "dense-bge-m3-v1",
+    "hybrid": "rejected_on_untouched_holdout",
+    "reranker": "rejected_for_quality_and_latency",
+    "response_gate": "no-go: holdout no-answer accuracy 0.8333 is below 1.0"
+  },
+  "cleanup": {"mongo_database_dropped": true, "qdrant_collection_deleted": true}
+}

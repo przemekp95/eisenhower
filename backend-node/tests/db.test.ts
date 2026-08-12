@@ -54,7 +54,9 @@ describe('database helpers', () => {
   it('reconnects when switching to a different uri while already connected', async () => {
     const disconnectSpy = jest.spyOn(mongoose, 'disconnect');
     const connectSpy = jest.spyOn(mongoose, 'connect');
-    const differentUri = `${mongoUri}different-db`;
+    const differentDatabaseUrl = new URL(mongoUri);
+    differentDatabaseUrl.pathname = '/different-db';
+    const differentUri = differentDatabaseUrl.toString();
 
     await connectToDatabase(differentUri);
 

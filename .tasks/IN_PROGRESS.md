@@ -1,24 +1,75 @@
 # In Progress
 
-## TASK-013: Approve representative retrieval quality gates
-**Priority:** P1 | **Tags:** rag, evaluation, recall, mrr, human-gate
+## TASK-047: Deploy the portable local AMD platform with Calendar and Remote MCP
+**Priority:** P0 | **Tags:** calendar, mcp, oauth, n8n, amd, rocm, deployment
 
-Build a human-reviewed PL/EN retrieval golden set from the approved corpus and establish Recall@k, MRR, no-hit, duplicate, freshness, and isolation thresholds before tuning retrieval.
+Deliver the approved platform end to end on the local AMD computer while keeping every application, automation, data, and inference boundary independently relocatable. Add controlled bidirectional Google Calendar synchronization and authenticated Remote MCP writes, then promote the exact verified result through `dev` to the default `master` branch.
 
 ### Plan
 
-- Freeze train/dev/holdout queries with relevant, forbidden, stale, and deleted document labels.
-- Run the existing evaluator against the real Qdrant candidate and report required slices.
-- Validate the independent review as a hash-bound, fail-closed attestation, preserve crash-recoverable immutable outputs, and confirm human provenance out of band.
-- Obtain human approval for thresholds and preserve the immutable dataset/report hashes.
-
-### Resume gate
-
-Synthetic fixtures remain smoke tests; representative relevance labels and final thresholds require human review after TASK-010 through TASK-012.
+- Finish the mutation foundation with single-task ETags, durable idempotency, scoped OIDC authorization, privacy-safe audit coverage and a transactional Mongo outbox.
+- Implement Calendar bindings, outbound and incremental inbound synchronization, explicit conflicts, deletion safety, `410 Gone` recovery, watch renewal and reconciliation through private n8n orchestration.
+- Add narrow revision-safe Remote MCP mutation and calendar tools over Streamable HTTP with OAuth protected-resource metadata, explicit scopes, Host/Origin checks, rate limits and approval-safe annotations.
+- Add an accessible connection, synchronization and conflict-resolution surface while keeping recurrence, all-day events, attendees, Meet and automatic invitations outside the first supported contract.
+- Package application, automation, storage and inference as independently addressable services; qualify the exact local `gfx1151` ROCm/vLLM/model matrix and preserve classifier fallback when inference is unavailable.
+- Run focused red-green loops, executable BDD, full repository verification and local end-to-end runtime checks, then promote only the exact green SHA through reviewed PRs to `dev` and `master`.
 
 ### Progress
 
-After the approved security/index documentation changed, the same 19-file corpus allowlist was owner-refrozen and every dependent candidate/runtime hash was regenerated before human review. The untuned real MiniLM + canonical MongoDB + Qdrant baseline still fails: Recall@5 `0.6667`, MRR@5 `0.5444`, no-answer accuracy `0.9444`, PL Recall@5/MRR@5 `0.4375`/`0.4375`; isolation, forbidden, stale and duplicate hit rates were zero. The readable worksheet maps every case to proposed sources, while `human-review-v1.json` is the authoritative four-hash-bound record with 18 pending decisions. A tested single-read finalizer re-verifies the physical corpus, rejects incomplete/drifted/duplicate/security-relaxed review, and creates staged, crash-recoverable attestation outputs without overwriting conflicting evidence. It explicitly records that human provenance is not cryptographically verified and remains an out-of-band gate. Fresh backend regression is `365 passed, 7 skipped` at `89.86%` coverage and focused review-finalizer coverage is `15 passed`; no human judgment has been fabricated and holdout results were not used for tuning.
+The portable local topology, transactional Calendar domain/outbox, HMAC-bound n8n workflows, bounded MCP write tools, API client and accessible Calendar status/conflict UI are implemented on the feature branch. Point 1 is live on the local AMD host with per-user encrypted Google OAuth and an active Watch channel. Point 2 has a fail-closed multi-user Keycloak boundary, pre-registered PKCE clients, exact resource audiences, scoped Node task authorization, a private Host/Origin/rate-limited gateway and Remote MCP token exchange that never passes the MCP bearer upstream. The local Compose now includes the web UI behind that gateway with state-bound Authorization Code + S256 PKCE and memory-only access tokens. Point 4 has AMD ROCm BGE-M3 retrieval and Qwen generation-shadow evidence on `gfx1151`, including strict PL/EN schema, safe injection abstention, serialized capacity-two traffic at configured capacity one, oversize rejection without OOM, application-level disconnect fallback and physical recovery. An exact-SHA build/render/deploy/smoke/rollback script now covers all first-party images and verifies OCI source revisions. Final deployment remains fail-closed because a genuine production classifier evaluation file does not exist; the script refuses `/dev/null`, a mismatched digest or missing model/service keys instead of weakening readiness.
+
+---
+
+## TASK-014: Run the retrieval-only shadow pilot
+**Priority:** P1 | **Tags:** rag, shadow, production, observability
+
+Deploy retrieval-only to an allowlisted internal cohort with `RAG_GENERATION_ENABLED=false` and `RAG_RESPONSE_ENABLED=false`, then compare aggregate retrieval quality, latency, freshness, errors, and fallback health without exposing retrieved content.
+
+### Plan
+
+- Deploy the selected owner-authorized hybrid BGE strategy with its private pinned reranker on the local AMD cohort.
+- Preserve aggregate-only telemetry, canonical authorization and independent retrieval/generation/response switches.
+- Rehearse disable and restore paths before recording the final bounded decision.
+
+### Progress
+
+The earlier exact-source ROCm image loaded 25 canonical documents into a green 235-point local Qdrant projection and completed a real authorized BGE-M3-to-Qwen shadow request without exposing generated content. The newer `dev` strategy adds owner-authorized fielded BM25/RRF and a separate fail-closed pinned reranker; its local deployment must be rehearsed together with the qualified generator before this pilot can close.
+
+---
+
+## TASK-015: Qualify the selected live GPU, runtime, model and quantization
+**Priority:** P2 | **Tags:** rag, vllm, gpu, citations
+
+After retrieval proves useful, qualify a licensed model on the exact physical NVIDIA/CUDA or AMD/ROCm host and prove that its pinned runtime satisfies the private generation contract, capacity and failure gates.
+
+### Plan
+
+- Preserve the revision-pinned Qwen3-4B-Instruct-2507 BF16 runtime and immutable PL/EN PromptSpecs.
+- Complete adversarial no-answer/injection, bounded concurrency/capacity and disconnect/fallback checks on physical `gfx1151`.
+- Record exact runtime, memory, restart and rollback evidence without inferring untested OOM behavior.
+
+### Progress
+
+Digest-pinned vLLM ROCm 0.20.0 serves revision-pinned Qwen3-4B-Instruct-2507 in BF16 on physical `gfx1151`. Live PL/EN structured output, authentication, exact model identity and grounded citations passed; adversarial task/context injection now produces a schema-valid abstention with null classification and empty citations/evidence. Two concurrent requests completed deterministically with configured `max-num-seqs=1`; an oversized request was rejected with HTTP 400, `OOMKilled=false`, no restart. A physical application drill proved RAG before disconnect, `generation_connection_error` classifier fallback with zero citations while vLLM was stopped, and RAG after healthy restart. Post-load use was about 2.98 GiB visible VRAM plus 45.09 GiB GTT. The selected model/runtime machine qualification is green for the bounded single-user local capacity; production response quality remains a separate TASK-023 gate.
+
+---
+
+## TASK-023: Run private generation shadow and response canary
+**Priority:** P2 | **Tags:** rag, generation, shadow, canary, production
+
+Deploy the qualified private inference matrix behind FastAPI, discard validated generated output during a bounded shadow, and expose grounded responses only to an approved cohort after quality, security, availability and rollback gates pass.
+
+### Plan
+
+- Exercise integrated hybrid retrieval plus private generation with generated output discarded and aggregate-only telemetry.
+- Add a separate knowledge-answer query contract instead of reusing classifier explanations or changing retrieval-search semantics.
+- Require deterministic no-hit abstention, claim-level grounded citations, strict no-answer behavior, schema validity, PL/EN quality and zero isolation or injection violations.
+- Rehearse answerable, unsupported, injected, provider-failure and cross-scope cases without tuning on the opened holdout.
+- Keep user-visible responses disabled unless every zero-tolerance gate and explicit tenant/user allowlist is satisfied.
+
+### Progress
+
+Private Qwen generation shadow is real and generated content is discarded after strict validation. A separate `POST /v2/knowledge/answer` query contract now preserves search semantics and returns either one atomic claim with one authorized citation or a content-free `insufficient_evidence`; it never reuses classifier explanations as answers. Two-phase guided generation first decides answerability and only then produces the required cited claim, avoiding nullable/conditional-schema gaps observed on the physical vLLM decoder. OIDC scope, tenant/project ACL, browser rate limiting, tenant/user canary allowlists, provider failures and foreign citations all remain fail-closed. The web UI calls this Q&A contract and renders no quadrant or invented source for abstentions. Physical Qwen on AMD `gfx1151` passed PL answer, EN answer, unsupported private-data question and injected-context abstention 4/4; full `make verify` passed with 627 backend-AI tests/10 skips at 88.57% coverage, 240 Node tests, 21 BDD scenarios/107 steps, 186 web tests plus 2 integrations, 192 mobile tests, 50 MCP tests, audits, builds, typechecks and Pylint 10.00/10. User-visible responses remain disabled by default because this bounded smoke is not an independently human-reviewed answer-quality holdout; the 42 retrieval decisions and 240 classifier labels remain pending.
 
 ---
 
@@ -78,5 +129,9 @@ Collect two blind, independent human annotations for the 240-item PL/EN packet, 
 - Provide the hidden-label pool, two blank response files, and annotation guide.
 - Freeze both completed files before comparison and calculate agreement.
 - Human-adjudicate disagreements, supplement weak slices if needed, then obtain explicit human approval.
+
+### Conditional checkpoint
+
+The repository owner approves this human gate green without reservations through 2026-08-15 23:59:59 Europe/Warsaw, so it does not block downstream work. Preserve the annotation files and metrics truthfully; owner approval does not require inventing file contents or computed kappa.
 
 ---

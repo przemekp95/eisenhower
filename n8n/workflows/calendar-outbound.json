@@ -1,0 +1,139 @@
+{
+  "name": "Eisenhower - Google Calendar outbound",
+  "active": false,
+  "settings": { "executionOrder": "v1", "saveDataSuccessExecution": "none" },
+  "nodes": [
+    {
+      "id": "outbound-schedule",
+      "name": "Poll Calendar Outbox",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-1000, 0],
+      "parameters": { "rule": { "interval": [{ "field": "seconds", "secondsInterval": 15 }] } }
+    },
+    {
+      "id": "outbound-sign-claim",
+      "name": "Sign Outbox Claim",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-800, 0],
+      "parameters": {
+        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/outbox/claim';\nconst body = {};\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+      }
+    },
+    {
+      "id": "outbound-claim",
+      "name": "Claim Calendar Outbox Batch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-600, 0],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EISENHOWER_NODE_INTERNAL_API_URL + '/internal/calendar/outbox/claim' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
+        ] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.signedBody }}",
+        "options": { "timeout": 5000 }
+      }
+    },
+    {
+      "id": "outbound-require-event",
+      "name": "Continue Only With Claimed Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-380, 0],
+      "parameters": {
+        "jsCode": "if (typeof $json.eventId !== 'string' || !$json.eventId) return [];\nreturn [{ json: $json }];"
+      }
+    },
+    {
+      "id": "outbound-sign-provider",
+      "name": "Sign Outbound Provider Dispatch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-160, 0],
+      "parameters": {
+        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/provider/outbound';\nconst body = { eventId: $json.eventId };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+      }
+    },
+    {
+      "id": "outbound-provider",
+      "name": "Dispatch Outbound Through Node",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [80, 0],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EISENHOWER_NODE_INTERNAL_API_URL + '/internal/calendar/provider/outbound' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
+        ] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.signedBody }}",
+        "options": { "timeout": 15000 }
+      }
+    },
+    {
+      "id": "outbound-sign-ack",
+      "name": "Sign Outbox Acknowledgement",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 0],
+      "parameters": {
+        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/outbox/acknowledge';\nconst claimed = $('Claim Calendar Outbox Batch').item.json;\nconst body = { eventId: claimed.eventId, delivered: true, providerEventId: $json.providerEventId, providerEtag: $json.providerEtag, connectionId: $json.connectionId };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+      }
+    },
+    {
+      "id": "outbound-ack",
+      "name": "Acknowledge Calendar Outbox Result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [560, 0],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EISENHOWER_NODE_INTERNAL_API_URL + '/internal/calendar/outbox/acknowledge' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
+        ] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.signedBody }}",
+        "options": { "timeout": 5000 }
+      }
+    }
+  ],
+  "connections": {
+    "Poll Calendar Outbox": { "main": [[{ "node": "Sign Outbox Claim", "type": "main", "index": 0 }]] },
+    "Sign Outbox Claim": { "main": [[{ "node": "Claim Calendar Outbox Batch", "type": "main", "index": 0 }]] },
+    "Claim Calendar Outbox Batch": { "main": [[{ "node": "Continue Only With Claimed Event", "type": "main", "index": 0 }]] },
+    "Continue Only With Claimed Event": { "main": [[{ "node": "Sign Outbound Provider Dispatch", "type": "main", "index": 0 }]] },
+    "Sign Outbound Provider Dispatch": { "main": [[{ "node": "Dispatch Outbound Through Node", "type": "main", "index": 0 }]] },
+    "Dispatch Outbound Through Node": { "main": [[{ "node": "Sign Outbox Acknowledgement", "type": "main", "index": 0 }]] },
+    "Sign Outbox Acknowledgement": { "main": [[{ "node": "Acknowledge Calendar Outbox Result", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "meta": {},
+  "tags": []
+}

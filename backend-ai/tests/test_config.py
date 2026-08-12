@@ -16,9 +16,15 @@ def test_load_settings_uses_defaults():
   assert settings.rag_retrieval_enabled is False
   assert settings.rag_generation_enabled is False
   assert settings.rag_response_enabled is False
+  assert not settings.rag_response_allowed_users
+  assert settings.rag_retrieval_strategy == "hybrid-bge-v1"
+  assert settings.reranker_base_url == "http://reranker:8000"
+  assert settings.reranker_api_key is None
   assert settings.memory_write_enabled is False
   assert settings.memory_retrieval_enabled is False
   assert settings.memory_response_enabled is False
+  assert settings.audit_database_path.name == "audit.sqlite3"
+  assert settings.release_sha == "0" * 40
   assert settings.inference_base_url == "http://inference:8000/v1"
   assert settings.inference_api_key is None
   assert settings.inference_model is None
@@ -28,6 +34,8 @@ def test_load_settings_uses_defaults():
   assert settings.prompt_id == "eisenhower-classifier"
   assert settings.prompt_version == "1.1.0"
   assert settings.local_model_revision == "e8f8c211226b894fcb81acc59f3b34ba3efd5f42"
+  assert settings.rag_embedding_model_name is None
+  assert settings.rag_embedding_model_revision is None
   assert settings.mongodb_uri is None
   assert settings.canonical_documents_collection == "rag_documents"
   assert settings.memory_write_enabled is False
@@ -56,6 +64,13 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
       "INDEX_VERSION": "index-v3",
       "RAG_RETRIEVAL_ENABLED": "true",
       "RAG_GENERATION_ENABLED": "false",
+      "RAG_EMBEDDING_MODEL_NAME": "BAAI/bge-m3",
+      "RAG_EMBEDDING_MODEL_REVISION": "5617a9f61b028005a4858fdac845db406aefb181",
+      "RAG_EMBEDDING_DEVICE": "cuda",
+      "RAG_RETRIEVAL_STRATEGY": "dense-v1",
+      "RERANKER_BASE_URL": "http://reranker.internal:8000",
+      "RERANKER_API_KEY": "reranker-token",
+      "RERANKER_ALLOWED_HOSTS": "reranker.internal",
       "INFERENCE_BASE_URL": "https://gpu.mesh.example/v1",
       "INFERENCE_API_KEY": "service-token",
       "INFERENCE_MODEL": "approved-model",
@@ -76,6 +91,9 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
       "MEMORY_RETRIEVAL_ENABLED": "true",
       "MEMORY_RESPONSE_ENABLED": "false",
       "MEMORY_POLICY_PATH": str(tmp_path / "memory-policy.json"),
+      "AUDIT_DATABASE_PATH": str(tmp_path / "security-audit.sqlite3"),
+      "AUDIT_HMAC_KEY": "a" * 32,
+      "RELEASE_SHA": "1" * 40,
     }
   )
 
@@ -97,6 +115,13 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
   assert settings.index_version == "index-v3"
   assert settings.rag_retrieval_enabled is True
   assert settings.rag_generation_enabled is False
+  assert settings.rag_embedding_model_name == "BAAI/bge-m3"
+  assert settings.rag_embedding_model_revision == "5617a9f61b028005a4858fdac845db406aefb181"
+  assert settings.rag_embedding_device == "cuda"
+  assert settings.rag_retrieval_strategy == "dense-v1"
+  assert settings.reranker_base_url == "http://reranker.internal:8000"
+  assert settings.reranker_api_key == "reranker-token"
+  assert settings.reranker_allowed_hosts == ("reranker.internal",)
   assert settings.inference_base_url == "https://gpu.mesh.example/v1"
   assert settings.inference_api_key == "service-token"
   assert settings.inference_model == "approved-model"
@@ -117,6 +142,9 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
   assert settings.memory_retrieval_enabled is True
   assert settings.memory_response_enabled is False
   assert settings.memory_policy_path == tmp_path / "memory-policy.json"
+  assert settings.audit_database_path == tmp_path / "security-audit.sqlite3"
+  assert settings.audit_hmac_key == "a" * 32
+  assert settings.release_sha == "1" * 40
 
 
 def test_load_settings_accepts_legacy_vllm_environment_as_compatibility_input():
@@ -151,6 +179,8 @@ def test_production_oidc_requires_issuer_audience_and_explicit_cors():
       "VLLM_MODEL": "approved-model",
       "RAG_RESPONSE_ENABLED": "false",
       "RAG_ALLOWED_TENANTS": "tenant-a,tenant-b",
+      "AUDIT_HMAC_KEY": "a" * 32,
+      "RELEASE_SHA": "1" * 40,
     }
   )
 
@@ -169,6 +199,34 @@ def test_generation_cannot_be_enabled_without_retrieval(tmp_path: Path):
       training_data_path=tmp_path / "training.json",
       model_cache_dir=tmp_path / "runtime",
       rag_generation_enabled=True,
+    )
+
+
+def test_production_response_canary_requires_explicit_tenant_and_user_cohorts(tmp_path: Path):
+  common = {
+    "training_data_path": tmp_path / "training.json",
+    "model_cache_dir": tmp_path / "runtime",
+    "app_env": "production",
+    "rag_retrieval_enabled": True,
+    "rag_generation_enabled": True,
+    "rag_response_enabled": True,
+  }
+  with pytest.raises(ValueError, match="tenant and user allowlists"):
+    Settings(**common)
+  settings = Settings(
+    **common,
+    rag_allowed_tenants=("owner-tenant",),
+    rag_response_allowed_users=("owner-sub",),
+  )
+  assert settings.rag_response_allowed_users == ("owner-sub",)
+
+
+def test_unknown_retrieval_strategy_fails_closed(tmp_path: Path):
+  with pytest.raises(ValueError, match="RAG_RETRIEVAL_STRATEGY"):
+    Settings(
+      training_data_path=tmp_path / "training.json",
+      model_cache_dir=tmp_path / "runtime",
+      rag_retrieval_strategy="silent-dense-fallback",
     )
 
 
@@ -192,8 +250,31 @@ def test_production_static_auth_requires_distinct_long_tokens():
         "EISENHOWER_API_TOKEN": "short",
         "EISENHOWER_ADMIN_TOKEN": "short",
         "CORS_ALLOW_ORIGINS": "https://app.example.com",
+        "AUDIT_HMAC_KEY": "a" * 32,
+        "RELEASE_SHA": "1" * 40,
       }
     )
+
+
+def test_production_requires_separate_audit_key_and_immutable_release_sha():
+  common = {
+    "APP_ENV": "production",
+    "AUTH_MODE": "static",
+    "EISENHOWER_API_TOKEN": "u" * 32,
+    "EISENHOWER_ADMIN_TOKEN": "a" * 32,
+    "CORS_ALLOW_ORIGINS": "https://app.example.com",
+  }
+
+  with pytest.raises(ValueError, match="AUDIT_HMAC_KEY"):
+    load_settings(common)
+  with pytest.raises(ValueError, match="RELEASE_SHA"):
+    load_settings({**common, "AUDIT_HMAC_KEY": "k" * 32})
+
+  settings = load_settings(
+    {**common, "AUDIT_HMAC_KEY": "k" * 32, "RELEASE_SHA": "1" * 40}
+  )
+
+  assert settings.release_sha == "1" * 40
 
 
 @pytest.mark.parametrize(

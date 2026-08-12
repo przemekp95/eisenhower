@@ -23,6 +23,7 @@ def test_alerts_use_real_inference_job_and_cover_worker_heartbeat():
   assert "eisenhower_job_worker_heartbeat_age_seconds" in rules["EisenhowerRagWorkerStale"]["expr"]
   assert "eisenhower_job_queue_enabled == 1" in rules["EisenhowerRagWorkerStale"]["expr"]
   assert "> 90" in rules["EisenhowerRagWorkerStale"]["expr"]
+  assert 'outcome="error"' in rules["EisenhowerAuditWriteFailed"]["expr"]
 
 
 def test_public_ci_upload_excludes_private_ai_registry_manifests_and_snapshots():

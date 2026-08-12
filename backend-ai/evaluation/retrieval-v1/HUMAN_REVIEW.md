@@ -1,6 +1,37 @@
 # TASK-013 retrieval review packet
 
-Status: **unapproved candidate — independent human review required**
+Status: **owner-authorized runtime default exception — independent human review still required**
+
+## Current refrozen packet (v2)
+
+## Current technical candidate (v3)
+
+The v3 packet adds only balanced train/dev coverage and preserves the six v2 holdout records
+semantically unchanged. `human-review-v3.json` is bound to the current candidate, thresholds and
+corpus manifest; all 42 decisions remain `PENDING`. The holdout has not been run.
+
+Train-only selection on the local AMD host chose fielded BM25/RRF plus revision-pinned
+`BAAI/bge-reranker-v2-m3` through a loopback-only ROCm/vLLM scoring service. The 192-token,
+20-candidate result passes the proposed non-holdout quality, latency and zero-tolerance gates, but
+does not substitute for independent relevance review. On 2026-08-12 the repository owner explicitly
+authorized this exact hybrid plus reranker configuration as the runtime default before that evidence
+was complete. The implementation must therefore remain fail-closed, retain `dense-v1` only as an
+explicit rollback and keep every `PENDING` decision plus the untouched holdout truthful. This is a
+rollout decision, not an independent relevance attestation or production-deployment proof.
+
+Authoritative technical report: `dense-hybrid-reranker-gpu192-v3-20260812.json`.
+
+The authoritative current inputs after the unchanged 19-file allowlist was refrozen on 2026-08-12 are:
+
+- candidate: `review-candidate-v2.jsonl`, SHA-256 `9bd58f71daadcaf46faaf05a2c4d2bec43d56d1865d69f4ce914b830cb589506`;
+- corpus manifest SHA-256: `0528fe77fd68e46afba65e1febc8f1a8372d6f98e9dcdb83caaff54cc51fbbef`;
+- corpus snapshot SHA-256: `e851ef8725cf22ee858f706b1f7b1becbec051ba30f85a6dc531c5b24a407f37`;
+- review record to complete: `human-review-v2.json` (18 decisions remain `PENDING`);
+- write-once technical comparison: `dense-hybrid-comparison-v2-20260812.json`, SHA-256 `383df23055202c49ba033201b6029ed6e2dff18ee009061d098c5b33cbe89b0c`.
+
+The v1 material below is retained as historical evidence and must not be completed against the
+refrozen corpus. The v2 comparison is non-holdout and does not substitute for independent human
+relevance review.
 
 ## Frozen inputs
 

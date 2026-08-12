@@ -91,7 +91,7 @@ Goal: automate allowlisted sources while keeping domain logic and online analysi
 | Implement and operate a worker that claims, executes, retries and completes queued jobs | L | P0 | ingestion application + runtime topology | permanently queued work/partial write | crash recovery, retry/dead-letter and source-to-index E2E |
 | Activate reviewed source workflows and sanitized error path | M | P1 | credentials + source APIs | credential/PII leakage | import/runtime E2E and retention review |
 | Reindex/evaluation workflows with named operations only | M | P1 | alias/eval API | arbitrary execution | allowlist and negative-schema tests |
-| Assess regular versus queue mode | S/M | P2 | measured workload | premature Redis/worker ops | written capacity decision; queue mode only with evidence |
+| Retain the one-host SQLite worker queue | S | P2 | current single-host topology | speculative messaging infrastructure | no Kafka, RabbitMQ, service bus or managed queue in the current scope |
 
 **Go:** source-to-citation E2E, idempotency, worker retry/dead-letter, replay, audit and rollback pass. **No-go:** no active queue consumer, n8n in `/analyze`, direct Qdrant writes, generic executor, trusted tenant fields, public admin UI, or unbounded execution retention.
 
@@ -161,6 +161,7 @@ This slice is small enough to diagnose yet crosses the critical security, corpus
 - n8n Simple Vector Store as production storage.
 - Public n8n, Qdrant or vLLM endpoints.
 - Redis/queue mode, MinIO, Kafka or a service bus without measured need.
+- CDN and managed queues in the current delivery scope; retain the existing SQLite worker queue.
 - A general n8n/MCP workflow executor, arbitrary URL fetch, shell or database tool.
 - Full CQRS/event sourcing without demonstrated scale/consistency need.
 - Blind indexing of full history, chats, mailboxes, attachments or unreviewed OCR.

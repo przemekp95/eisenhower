@@ -13,6 +13,7 @@ interface TaskPayload {
   description: string;
   urgent: boolean;
   important: boolean;
+  lifecycleState?: 'active' | 'completed' | 'archived' | 'trashed';
 }
 
 let backend: RunningBackendProcess;
@@ -110,8 +111,8 @@ async function createBackendTask(task: Omit<TaskPayload, '_id'>) {
   return (await response.json()) as TaskPayload;
 }
 
-async function listBackendTasks() {
-  const response = await fetch(`${backend.url}/tasks`, {
+async function listBackendTasks(lifecycle = 'active') {
+  const response = await fetch(`${backend.url}/tasks?lifecycle=${encodeURIComponent(lifecycle)}`, {
     headers: { Authorization: `Bearer ${TEST_API_TOKEN}` },
   });
   return (await response.json()) as TaskPayload[];
@@ -182,12 +183,12 @@ describe('App integration', () => {
       important: true,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Odśwież' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Odśwież tablicę' }));
 
     await waitFor(() => expect(screen.getByText('Fresh after refresh')).toBeInTheDocument());
   });
 
-  it('creates, updates and deletes tasks against the live backend', async () => {
+  it('creates, updates, trashes and permanently deletes tasks against the live backend', async () => {
     render(<AppComponent />);
 
     await waitFor(() =>
@@ -221,6 +222,13 @@ describe('App integration', () => {
 
     fireEvent.click(screen.getByLabelText(`Przełącz pilność zadania ${title}`));
 
+    await waitFor(() =>
+      expect(screen.getByLabelText(`Przełącz pilność zadania ${title}`)).toHaveAttribute(
+        'aria-pressed',
+        'true'
+      )
+    );
+
     await waitFor(async () => {
       const tasks = await listBackendTasks();
       expect(tasks).toEqual(
@@ -238,16 +246,44 @@ describe('App integration', () => {
     const article = taskCard.closest('article');
     expect(article).not.toBeNull();
 
-    fireEvent.click(within(article as HTMLElement).getByRole('button', { name: `Usuń ${title}` }));
     fireEvent.click(
       within(article as HTMLElement).getByRole('button', {
+        name: `Przenieś do kosza ${title}`,
+      })
+    );
+
+    await waitFor(() => expect(screen.queryByText(title)).not.toBeInTheDocument());
+    await waitFor(async () => {
+      const tasks = await listBackendTasks('trashed');
+      expect(tasks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            title,
+            lifecycleState: 'trashed',
+          }),
+        ])
+      );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kosz' }));
+    const trashedTaskCard = await screen.findByText(title);
+    const trashedArticle = trashedTaskCard.closest('article');
+    expect(trashedArticle).not.toBeNull();
+
+    fireEvent.click(
+      within(trashedArticle as HTMLElement).getByRole('button', {
+        name: `Usuń trwale ${title}`,
+      })
+    );
+    fireEvent.click(
+      within(trashedArticle as HTMLElement).getByRole('button', {
         name: 'Potwierdź trwałe usunięcie',
       })
     );
 
     await waitFor(() => expect(screen.queryByText(title)).not.toBeInTheDocument());
     await waitFor(async () => {
-      const tasks = await listBackendTasks();
+      const tasks = await listBackendTasks('all');
       expect(tasks).not.toEqual(
         expect.arrayContaining([
           expect.objectContaining({

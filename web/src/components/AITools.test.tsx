@@ -134,6 +134,24 @@ describe('AITools', () => {
       retrieval: { hit_count: 0, top_score: null, embedding_version: null },
       fallback_reason: 'rag_response_disabled',
     });
+    mockedApi.answerKnowledge.mockResolvedValue({
+      status: 'answered',
+      answer: 'Approved incident guidance.',
+      claims: [{ statement: 'Approved incident guidance.', citation_ids: ['chunk-1'] }],
+      citations: [
+        {
+          chunk_id: 'chunk-1',
+          document_id: 'document-1',
+          source_uri: 'eisenhower://repository/incident-policy',
+          title: 'Incident policy',
+          excerpt: 'Follow the approved incident process.',
+          score: 0.9,
+          content_version: 'v1',
+        },
+      ],
+      retrieval: { hit_count: 1, top_score: 0.9, embedding_version: 'minilm-v1' },
+      no_answer_reason: null,
+    });
   });
 
   afterEach(() => {
@@ -144,16 +162,16 @@ describe('AITools', () => {
     clearAdminToken();
     renderTools();
 
-    expect(screen.queryByLabelText('AI administrator token')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
-    fireEvent.change(screen.getByLabelText('AI administrator token'), {
+    expect(screen.queryByLabelText('Administrator code')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Administration' }));
+    fireEvent.change(screen.getByLabelText('Administrator code'), {
       target: { value: 'admin-only' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Unlock management' }));
-    expect(screen.getByRole('button', { name: 'Change administrator token' })).toBeInTheDocument();
-    await screen.findByText(/Total examples in the experience store/i);
-    fireEvent.click(screen.getByRole('button', { name: 'Change administrator token' }));
-    expect(screen.getByLabelText('AI administrator token')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open administration' }));
+    expect(screen.getByRole('button', { name: 'Change administrator code' })).toBeInTheDocument();
+    await screen.findByText(/Examples currently used to improve suggestions/i);
+    fireEvent.click(screen.getByRole('button', { name: 'Change administrator code' }));
+    expect(screen.getByLabelText('Administrator code')).toBeInTheDocument();
   });
 
   it('runs advanced analysis', async () => {
@@ -164,11 +182,11 @@ describe('AITools', () => {
     await waitFor(() => expect(screen.getByText(/Critical path/i)).toBeInTheDocument());
   });
 
-  it('exposes the governed RAG panel with tab semantics', async () => {
+  it('exposes approved sources with tab semantics', async () => {
     renderTools();
 
-    const groundedTab = screen.getByRole('tab', { name: 'Grounded RAG' });
-    expect(screen.getByRole('tab', { name: 'Advanced analysis' })).toHaveAttribute(
+    const groundedTab = screen.getByRole('tab', { name: 'Answers with sources' });
+    expect(screen.getByRole('tab', { name: 'Decision help' })).toHaveAttribute(
       'aria-selected',
       'true'
     );
@@ -177,14 +195,14 @@ describe('AITools', () => {
 
     expect(groundedTab).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'ai-tab-grounded');
-    fireEvent.click(screen.getByRole('button', { name: 'Run grounded analysis' }));
-    await waitFor(() => expect(screen.getByText('Fallback')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Check sources' }));
+    await waitFor(() => expect(screen.getByText('Answer with sources')).toBeInTheDocument());
   });
 
   it('supports arrow-key tab navigation in both directions', () => {
     renderTools();
-    const advanced = screen.getByRole('tab', { name: 'Advanced analysis' });
-    const grounded = screen.getByRole('tab', { name: 'Grounded RAG' });
+    const advanced = screen.getByRole('tab', { name: 'Decision help' });
+    const grounded = screen.getByRole('tab', { name: 'Answers with sources' });
 
     fireEvent.keyDown(advanced, { key: 'Enter' });
     expect(advanced).toHaveAttribute('aria-selected', 'true');
@@ -201,16 +219,34 @@ describe('AITools', () => {
     clearAdminToken();
     renderTools();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Zarządzanie' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Administracja' }));
     expect(screen.getByText('Dostęp administracyjny')).toBeInTheDocument();
-    expect(screen.getByLabelText('Token administratora AI')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Odblokuj zarządzanie' })).toBeDisabled();
-    fireEvent.change(screen.getByLabelText('Token administratora AI'), {
+    expect(screen.getByLabelText('Kod administratora')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Otwórz administrację' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Kod administratora'), {
       target: { value: 'polski-admin' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Odblokuj zarządzanie' }));
-    expect(screen.getByRole('button', { name: 'Zmień token administratora' })).toBeInTheDocument();
-    await screen.findByText(/Łączna liczba przykładów w magazynie doświadczeń/i);
+    fireEvent.click(screen.getByRole('button', { name: 'Otwórz administrację' }));
+    expect(screen.getByRole('button', { name: 'Zmień kod administratora' })).toBeInTheDocument();
+    await screen.findByText(/Przykłady używane obecnie do ulepszania podpowiedzi/i);
+  });
+
+  it('shows a clear inline message when the administrator code is rejected', () => {
+    clearAdminToken('rejected');
+    renderTools(undefined, { initialTab: 'manage' });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /administrator code is incorrect or has expired/i
+    );
+    expect(screen.getByLabelText('Administrator code')).toHaveFocus();
+  });
+
+  it('shows the rejected administrator message in Polish', () => {
+    localStorage.setItem('eisenhower-language', 'pl');
+    clearAdminToken('rejected');
+    renderTools(undefined, { initialTab: 'manage' });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/kod administratora jest nieprawidłowy/i);
   });
 
   it('focuses the close action, traps focus, and restores the opener', () => {
@@ -230,9 +266,9 @@ describe('AITools', () => {
     fireEvent.keyDown(window, { key: 'Tab' });
     expect(close).toHaveFocus();
 
-    screen.getByRole('tab', { name: 'Grounded RAG' }).focus();
+    screen.getByRole('tab', { name: 'Answers with sources' }).focus();
     fireEvent.keyDown(window, { key: 'Tab' });
-    expect(screen.getByRole('tab', { name: 'Grounded RAG' })).toHaveFocus();
+    expect(screen.getByRole('tab', { name: 'Answers with sources' })).toHaveFocus();
 
     opener.focus();
     fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
@@ -386,7 +422,7 @@ describe('AITools', () => {
     fireEvent.click(screen.getByText(/Review task list/i));
     await waitFor(() => expect(screen.getByText(/urgent outage: Do Now/i)).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText('OCR'));
+    fireEvent.click(screen.getByText('Read an image'));
     const file = new File(['urgent outage'], 'tasks.txt', { type: 'text/plain' });
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [file] },
@@ -404,14 +440,14 @@ describe('AITools', () => {
       </LanguageProvider>
     );
 
-    fireEvent.click(screen.getByText('OCR'));
+    fireEvent.click(screen.getByText('Read an image'));
     const file = new File(['urgent outage'], 'tasks.txt', { type: 'text/plain' });
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [file] },
     });
     await screen.findByDisplayValue('urgent outage');
     fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
-    await waitFor(() => expect(screen.getByText(/Persisted: 0. Failed: 1/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Added: 0. Not added: 1/i)).toBeInTheDocument());
   });
 
   it('uses the plural English OCR import summary', async () => {
@@ -419,7 +455,7 @@ describe('AITools', () => {
 
     renderTools(jest.fn().mockResolvedValue(3));
 
-    fireEvent.click(screen.getByText('OCR'));
+    fireEvent.click(screen.getByText('Read an image'));
     const file = new File(['urgent outage'], 'tasks.txt', { type: 'text/plain' });
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [file] },
@@ -437,7 +473,7 @@ describe('AITools', () => {
 
     renderTools(jest.fn().mockResolvedValue(1));
 
-    fireEvent.click(screen.getByText('OCR'));
+    fireEvent.click(screen.getByText('Odczytaj obraz'));
     const file = new File(['urgent outage'], 'tasks.txt', { type: 'text/plain' });
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [file] },
@@ -455,7 +491,7 @@ describe('AITools', () => {
 
     renderTools(jest.fn().mockResolvedValue(2));
 
-    fireEvent.click(screen.getByText('OCR'));
+    fireEvent.click(screen.getByText('Odczytaj obraz'));
     const file = new File(['urgent outage'], 'tasks.txt', { type: 'text/plain' });
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [file] },
@@ -473,7 +509,7 @@ describe('AITools', () => {
 
     renderTools(jest.fn().mockResolvedValue(5));
 
-    fireEvent.click(screen.getByText('OCR'));
+    fireEvent.click(screen.getByText('Odczytaj obraz'));
     const file = new File(['urgent outage'], 'tasks.txt', { type: 'text/plain' });
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [file] },
@@ -491,7 +527,7 @@ describe('AITools', () => {
 
     renderTools(jest.fn().mockResolvedValue(12));
 
-    fireEvent.click(screen.getByText('OCR'));
+    fireEvent.click(screen.getByText('Odczytaj obraz'));
     const file = new File(['urgent outage'], 'tasks.txt', { type: 'text/plain' });
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [file] },
@@ -506,10 +542,12 @@ describe('AITools', () => {
   it('handles AI management actions', async () => {
     renderTools();
 
-    fireEvent.click(screen.getByText('Manage'));
+    fireEvent.click(screen.getByText('Administration'));
 
     await waitFor(() =>
-      expect(screen.getByText(/Total examples in the experience store/i)).toBeInTheDocument()
+      expect(
+        screen.getByText(/Examples currently used to improve suggestions/i)
+      ).toBeInTheDocument()
     );
     fireEvent.change(screen.getByPlaceholderText(/Task text/i), {
       target: { value: 'Review architecture notes' },
@@ -522,16 +560,17 @@ describe('AITools', () => {
     fireEvent.change(screen.getByPlaceholderText(/Task corrected by the user/i), {
       target: { value: 'Escalate vendor issue' },
     });
-    fireEvent.click(screen.getByText(/Learn feedback/i));
+    fireEvent.click(screen.getByText(/Save correction/i));
     await waitFor(() =>
       expect(mockedApi.learnFromFeedback).toHaveBeenCalledWith('Escalate vendor issue', 1, 0)
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /^Retrain$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Refresh task suggestions/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Confirm refresh/i }));
     await waitFor(() => expect(mockedApi.retrainModel).toHaveBeenCalledWith(true));
 
-    fireEvent.click(screen.getByText(/Clear training data/i));
-    fireEvent.click(screen.getByText(/Confirm clearing training data/i));
+    fireEvent.click(screen.getByText(/Clear learned examples/i));
+    fireEvent.click(screen.getByText(/Confirm clearing learned examples/i));
     await waitFor(() => expect(mockedApi.clearTrainingData).toHaveBeenCalledWith(true));
 
     fireEvent.click(screen.getByText(/Load examples/i));

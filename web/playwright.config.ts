@@ -5,6 +5,7 @@ const webDir = __dirname;
 const backendDir = path.resolve(webDir, '../backend-node');
 const frontendUrl = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:4173';
 const apiUrl = process.env.PLAYWRIGHT_API_URL ?? 'http://127.0.0.1:3101';
+const apiPort = new URL(apiUrl).port || '80';
 const { NO_COLOR: _ignoredNoColor, ...childEnv } = process.env;
 
 export default defineConfig({
@@ -13,7 +14,9 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // All projects intentionally share one disposable backend database. Serial
+  // execution prevents one browser project from tearing down another's state.
+  workers: 1,
   timeout: 30_000,
   expect: {
     timeout: 10_000,
@@ -30,8 +33,22 @@ export default defineConfig({
       },
     },
     {
-      name: 'mobile-chromium',
-      use: { ...devices['Pixel 7'], contextOptions: { reducedMotion: 'reduce' } },
+      name: 'mobile-390-chromium',
+      use: {
+        ...devices['iPhone 13'],
+        browserName: 'chromium',
+        viewport: { width: 390, height: 844 },
+        contextOptions: { reducedMotion: 'reduce' },
+      },
+    },
+    {
+      name: 'mobile-320-chromium',
+      use: {
+        ...devices['iPhone 13'],
+        browserName: 'chromium',
+        viewport: { width: 320, height: 740 },
+        contextOptions: { reducedMotion: 'reduce' },
+      },
     },
   ],
   use: {
@@ -47,7 +64,7 @@ export default defineConfig({
       env: {
         ...childEnv,
         HOST: '127.0.0.1',
-        PORT: '3101',
+        PORT: apiPort,
         NODE_ENV: 'test',
         EISENHOWER_API_TOKEN: 'test-api-token',
         CORS_ALLOW_ORIGINS: frontendUrl,
@@ -57,7 +74,7 @@ export default defineConfig({
       url: `${apiUrl}/health`,
     },
     {
-      command: 'npm run dev -- --host 127.0.0.1 --port 4173 --strictPort',
+      command: 'npm run dev -- --host 127.0.0.1 --port 4173 --strictPort --force',
       cwd: webDir,
       env: {
         ...childEnv,

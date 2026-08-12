@@ -1,19 +1,18 @@
 import { useEffect, useState } from 'react';
-import { analyzeTaskWithRag, GroundedAnalysis } from '../../services/api';
+import { answerKnowledge, KnowledgeAnswer } from '../../services/api';
 import { useLanguage } from '../../i18n/LanguageContext';
 
 interface Props {
   taskTitle: string;
 }
 
-const MODE_STYLES: Record<GroundedAnalysis['mode'], string> = {
-  rag: 'border-emerald-300/25 bg-emerald-300/10 text-emerald-100',
-  fallback: 'border-amber-300/25 bg-amber-300/10 text-amber-100',
-  no_answer: 'border-slate-300/20 bg-slate-300/10 text-slate-100',
+const MODE_STYLES: Record<KnowledgeAnswer['status'], string> = {
+  answered: 'border-emerald-300/25 bg-emerald-300/10 text-emerald-100',
+  insufficient_evidence: 'border-slate-300/20 bg-slate-300/10 text-slate-100',
 };
 
 export default function GroundedAIAnalysis({ taskTitle }: Props) {
-  const [result, setResult] = useState<GroundedAnalysis | null>(null);
+  const [result, setResult] = useState<KnowledgeAnswer | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { language, t } = useLanguage();
@@ -28,10 +27,10 @@ export default function GroundedAIAnalysis({ taskTitle }: Props) {
     setError(null);
 
     try {
-      setResult(await analyzeTaskWithRag(taskTitle));
-    } catch (issue) {
+      setResult(await answerKnowledge(taskTitle, language));
+    } catch {
       setResult(null);
-      setError(issue instanceof Error ? issue.message : t('ai.grounded.failed'));
+      setError(t('ai.grounded.failed'));
     } finally {
       setLoading(false);
     }
@@ -67,40 +66,20 @@ export default function GroundedAIAnalysis({ taskTitle }: Props) {
         <div aria-live="polite" className="space-y-4" data-testid="grounded-result">
           <div className="flex flex-wrap items-center gap-2 border-y border-white/10 py-3">
             <span
-              className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${MODE_STYLES[result.mode]}`}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${MODE_STYLES[result.status]}`}
             >
-              {t(`ai.grounded.mode.${result.mode}`)}
+              {t(`ai.grounded.mode.${result.status}`)}
             </span>
-            <span className="text-xs text-white/55">
-              {t('ai.grounded.hits').replace('{count}', String(result.retrieval.hit_count))}
-            </span>
-            {result.retrieval.embedding_version ? (
-              <span className="text-xs text-white/40">
-                {t('ai.grounded.embedding').replace(
-                  '{version}',
-                  result.retrieval.embedding_version
-                )}
-              </span>
-            ) : null}
           </div>
 
-          {result.mode === 'no_answer' ? (
+          {result.status === 'insufficient_evidence' ? (
             <div className="border-l-2 border-slate-300/40 pl-4">
               <p className="font-medium text-white">{t('ai.grounded.noAnswer')}</p>
-              {result.fallback_reason ? (
-                <p className="mt-1 text-sm text-white/55">
-                  {t('ai.grounded.reason').replace('{reason}', result.fallback_reason)}
-                </p>
-              ) : null}
+              <p className="mt-1 text-sm text-white/55">{t('ai.grounded.nextStep')}</p>
             </div>
           ) : (
             <div className="space-y-2">
-              <p className="text-sm leading-6 text-white">{result.explanation}</p>
-              {result.quadrant_name ? (
-                <p className="text-xs uppercase tracking-[0.16em] text-white/50">
-                  {t('ai.grounded.quadrant').replace('{quadrant}', result.quadrant_name)}
-                </p>
-              ) : null}
+              <p className="text-sm leading-6 text-white">{result.answer}</p>
             </div>
           )}
 
@@ -112,16 +91,10 @@ export default function GroundedAIAnalysis({ taskTitle }: Props) {
                   <li key={citation.chunk_id} className="py-4">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                       <p className="font-medium text-white">{citation.title}</p>
-                      <span className="text-xs text-white/45">
-                        {t('ai.grounded.score').replace('{score}', citation.score.toFixed(2))}
-                      </span>
                     </div>
                     <blockquote className="mt-2 border-l border-cyan-200/30 pl-3 text-sm leading-6 text-white/70">
                       {citation.excerpt}
                     </blockquote>
-                    <p className="mt-2 break-all font-mono text-[11px] text-white/40">
-                      {citation.source_uri}
-                    </p>
                   </li>
                 ))}
               </ol>

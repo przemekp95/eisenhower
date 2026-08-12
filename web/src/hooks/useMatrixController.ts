@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useMemo, useRef, useState } from 'react';
 import { DropResult } from '@hello-pangea/dnd';
 import {
   classifyTask,
@@ -12,7 +12,7 @@ import { quadrantToTaskState, resolveSuggestedQuadrant } from '../components/mat
 
 interface UseMatrixControllerOptions {
   tasks: Task[];
-  onAddTask: (task: TaskInput) => Promise<void>;
+  onAddTask: (task: TaskInput, idempotencyKey?: string) => Promise<void>;
   onUpdateTask: (id: string, patch: Partial<TaskInput>) => Promise<void>;
   translate: (key: TranslationKey) => string;
 }
@@ -34,6 +34,10 @@ export function useMatrixController({
   const [showAiTools, setShowAiTools] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [createPending, setCreatePending] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const createPendingRef = useRef(false);
+  const createOperationKeyRef = useRef<string | null>(null);
 
   const quadrants = useMemo(
     () => [
@@ -66,32 +70,47 @@ export function useMatrixController({
   };
 
   const updateNewTaskField = <Key extends keyof TaskInput>(key: Key, value: TaskInput[Key]) => {
+    createOperationKeyRef.current = null;
     setNewTask((current) => ({ ...current, [key]: value }));
   };
 
-  const openAiTools = () => {
+  const openAiTools = useCallback(() => {
     setShowAiTools(true);
-  };
+  }, []);
 
-  const closeAiTools = () => {
+  const closeAiTools = useCallback(() => {
     setShowAiTools(false);
-  };
+  }, []);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!newTask.title.trim()) {
+    if (!newTask.title.trim() || createPendingRef.current) {
       return;
     }
 
+    createPendingRef.current = true;
+    setCreatePending(true);
+    setCreateError(null);
+    const operationKey =
+      createOperationKeyRef.current ??
+      `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    createOperationKeyRef.current = operationKey;
     try {
-      await onAddTask({
-        ...newTask,
-        title: newTask.title.trim(),
-        description: newTask.description.trim(),
-      });
+      await onAddTask(
+        {
+          ...newTask,
+          title: newTask.title.trim(),
+          description: newTask.description.trim(),
+        },
+        operationKey
+      );
+      createOperationKeyRef.current = null;
       resetNewTask();
     } catch {
-      // The owner surfaces the mutation error. Keeping state here preserves the complete draft.
+      setCreateError(translate('status.createError'));
+    } finally {
+      createPendingRef.current = false;
+      setCreatePending(false);
     }
   };
 
@@ -109,8 +128,8 @@ export function useMatrixController({
         urgent: prediction.urgent,
         important: prediction.important,
       }));
-    } catch (issue) {
-      setAiError(issue instanceof Error ? issue.message : 'Suggestion failed');
+    } catch {
+      setAiError(translate('ai.analysis.failed'));
     } finally {
       setAiLoading(false);
     }
@@ -185,8 +204,8 @@ export function useMatrixController({
       try {
         await learnFromAcceptedOCRTasks(persistedTasks);
         learned = true;
-      } catch (issue) {
-        feedbackError = issue instanceof Error ? issue.message : 'Feedback failed';
+      } catch {
+        feedbackError = translate('ai.manage.actionFailed');
       }
     }
 
@@ -208,6 +227,8 @@ export function useMatrixController({
     aiError,
     aiLoading,
     closeAiTools,
+    createError,
+    createPending,
     handleAnalysisComplete,
     handleAnalysisImport,
     handleDragEnd,

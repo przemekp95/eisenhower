@@ -10,6 +10,30 @@ from .evaluation import EvaluationCaseResult, evaluate_results
 from ..job_worker import PermanentJobError
 from .golden import GoldenCase, load_golden_dataset
 from .models import AccessScope, RetrievalQuery
+from .ports import Retriever
+
+
+def select_train_strategy(reports: dict[str, dict]) -> str:
+  """Select a safe candidate using train metrics without consulting dev or holdout."""
+  ranked: list[tuple[tuple[float, ...], str]] = []
+  for name, report in reports.items():
+    metrics = report["metrics"]
+    if any(metrics[key] != 0.0 for key in (
+      "forbidden_hit_rate", "stale_hit_rate", "isolation_violation_rate",
+    )):
+      continue
+    languages = metrics["by_language"]
+    score = (
+      min(languages["pl"]["recall_at_k"], languages["en"]["recall_at_k"]),
+      min(languages["pl"]["mrr"], languages["en"]["mrr"]),
+      metrics["recall_at_k"],
+      metrics["mrr"],
+      -metrics["document_duplicate_rate"],
+    )
+    ranked.append((score, name))
+  if not ranked:
+    raise ValueError("train selection has no candidate passing zero-tolerance gates")
+  return max(ranked, key=lambda item: (item[0], item[1]))[1]
 
 
 class GoldenEvaluationRunner:
@@ -160,6 +184,59 @@ class RetrievalGoldenRunner:
       split=case.split,
       result_mode="no_answer" if no_hit else "rag",
     )
+
+
+class RetrievalStrategyComparisonRunner:
+  """Compares retrieval strategies without tuning on the holdout by default."""
+
+  _STRATEGY_ORDER = ("dense", "hybrid", "reranked")
+  _SPLITS = {"train", "dev", "holdout"}
+
+  def __init__(self, strategies: dict[str, Retriever], *, clock: Callable[[], float] = perf_counter):
+    names = set(strategies)
+    if not {"dense", "hybrid"}.issubset(names):
+      raise ValueError("strategy comparison requires dense and hybrid retrievers")
+    if not names.issubset(self._STRATEGY_ORDER):
+      raise ValueError("strategy comparison accepts only dense, hybrid, and reranked")
+    self.strategies = {
+      name: strategies[name]
+      for name in self._STRATEGY_ORDER
+      if name in strategies
+    }
+    self.clock = clock
+
+  def run(
+    self,
+    cases: list[GoldenCase],
+    *,
+    k: int = 5,
+    split: str | None = None,
+  ) -> dict:
+    if split is not None and split not in self._SPLITS:
+      raise ValueError("comparison split must be train, dev, or holdout")
+    selected = (
+      [case for case in cases if case.split == split]
+      if split is not None
+      else [case for case in cases if case.split != "holdout"]
+    )
+    if not selected:
+      raise ValueError("strategy comparison has no cases in the selected split")
+    if {case.language for case in selected} != {"pl", "en"}:
+      raise ValueError("strategy comparison requires Polish and English cases")
+    versions = {case.dataset_version for case in selected}
+    if len(versions) != 1:
+      raise ValueError("strategy comparison requires one dataset version")
+    reports = {
+      name: RetrievalGoldenRunner(retriever, clock=self.clock).run(selected, k=k)
+      for name, retriever in self.strategies.items()
+    }
+    return {
+      "schema_version": "retrieval-strategy-comparison-v1",
+      "dataset_version": next(iter(versions)),
+      "evaluated_split": split or "non_holdout",
+      "case_ids": [case.case_id for case in selected],
+      "strategies": reports,
+    }
 
 
 class RepositoryEvaluationHandler:

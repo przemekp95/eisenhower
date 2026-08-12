@@ -1,9 +1,13 @@
+import pytest
+
 from app.rag.golden import GoldenCase
 from app.job_worker import PermanentJobError
 from app.rag.golden_runner import (
   GoldenEvaluationRunner,
   RepositoryEvaluationHandler,
   RetrievalGoldenRunner,
+  RetrievalStrategyComparisonRunner,
+  select_train_strategy,
 )
 from app.rag.models import AnalyzeResult, Citation, RetrievalHit, RetrievalSummary
 
@@ -142,3 +146,128 @@ def test_repository_evaluation_handler_allowlists_dataset_and_writes_report_atom
     pass
   else:
     raise AssertionError("unknown datasets must be rejected")
+
+
+class ComparisonRetriever:
+  def __init__(self, document_id):
+    self.document_id = document_id
+    self.queries = []
+
+  def retrieve(self, query):
+    self.queries.append(query.text)
+    return [RetrievalHit(
+      chunk_id=f"chunk-{self.document_id}", document_id=self.document_id,
+      text="context", score=0.9, source_uri=f"note://{self.document_id}",
+      title="Doc", tenant_id=query.scope.tenant_id, project_id=query.project_id,
+      embedding_version="minilm-v1", content_version="v1",
+    )]
+
+
+def _comparison_case(case_id, language, split):
+  return GoldenCase(
+    dataset_version="comparison-v1", case_id=case_id, tenant_id="tenant-a",
+    user_id="user-1", project_ids=["p1"], query_project_id="p1",
+    language=language, split=split, task=f"query-{case_id}",
+    answerability="answerable", relevant_document_ids=["doc-hybrid"], tags=["comparison"],
+  )
+
+
+def test_strategy_comparison_reports_dense_hybrid_optional_reranked_pl_en_and_latency():
+  dense = ComparisonRetriever("doc-dense")
+  hybrid = ComparisonRetriever("doc-hybrid")
+  reranked = ComparisonRetriever("doc-hybrid")
+  cases = [
+    _comparison_case("dev-pl", "pl", "dev"),
+    _comparison_case("train-en", "en", "train"),
+    _comparison_case("holdout-pl", "pl", "holdout"),
+    _comparison_case("holdout-en", "en", "holdout"),
+  ]
+  runner = RetrievalStrategyComparisonRunner({
+    "dense": dense,
+    "hybrid": hybrid,
+    "reranked": reranked,
+  })
+
+  report = runner.run(cases, k=5)
+
+  assert report["schema_version"] == "retrieval-strategy-comparison-v1"
+  assert report["evaluated_split"] == "non_holdout"
+  assert report["case_ids"] == ["dev-pl", "train-en"]
+  assert list(report["strategies"]) == ["dense", "hybrid", "reranked"]
+  assert report["strategies"]["dense"]["metrics"]["recall_at_k"] == 0.0
+  assert report["strategies"]["hybrid"]["metrics"]["recall_at_k"] == 1.0
+  for strategy in report["strategies"].values():
+    assert set(strategy["metrics"]["by_language"]) == {"pl", "en"}
+    assert set(strategy["metrics"]["latency_ms"]) == {"p50", "p95", "max"}
+  assert "query-holdout-pl" not in hybrid.queries
+  assert "query-holdout-en" not in hybrid.queries
+
+
+def test_strategy_comparison_evaluates_holdout_only_when_explicitly_selected():
+  dense = ComparisonRetriever("doc-dense")
+  hybrid = ComparisonRetriever("doc-hybrid")
+  cases = [
+    _comparison_case("dev-pl", "pl", "dev"),
+    _comparison_case("train-en", "en", "train"),
+    _comparison_case("holdout-pl", "pl", "holdout"),
+    _comparison_case("holdout-en", "en", "holdout"),
+  ]
+
+  report = RetrievalStrategyComparisonRunner({
+    "dense": dense,
+    "hybrid": hybrid,
+  }).run(cases, split="holdout")
+
+  assert report["evaluated_split"] == "holdout"
+  assert report["case_ids"] == ["holdout-pl", "holdout-en"]
+  assert hybrid.queries == ["query-holdout-pl", "query-holdout-en"]
+
+
+def test_strategy_comparison_requires_dense_hybrid_and_both_language_slices():
+  only_polish = [_comparison_case("dev-pl", "pl", "dev")]
+
+  with pytest.raises(ValueError, match="dense and hybrid"):
+    RetrievalStrategyComparisonRunner({"dense": ComparisonRetriever("doc-dense")})
+  with pytest.raises(ValueError, match="Polish and English"):
+    RetrievalStrategyComparisonRunner({
+      "dense": ComparisonRetriever("doc-dense"),
+      "hybrid": ComparisonRetriever("doc-hybrid"),
+    }).run(only_polish)
+
+
+def test_train_strategy_selection_prioritizes_worst_language_then_global_quality():
+  def report(recall, mrr, pl_recall, pl_mrr, en_recall, en_mrr, duplicates=0.0):
+    return {"metrics": {
+      "recall_at_k": recall, "mrr": mrr,
+      "document_duplicate_rate": duplicates,
+      "forbidden_hit_rate": 0.0, "stale_hit_rate": 0.0,
+      "isolation_violation_rate": 0.0,
+      "by_language": {
+        "pl": {"recall_at_k": pl_recall, "mrr": pl_mrr},
+        "en": {"recall_at_k": en_recall, "mrr": en_mrr},
+      },
+    }}
+
+  selected = select_train_strategy({
+    "high-global-weak-pl": report(0.95, 0.9, 0.7, 0.7, 1.0, 1.0),
+    "balanced": report(0.9, 0.85, 0.9, 0.8, 0.9, 0.9),
+  })
+
+  assert selected == "balanced"
+
+
+def test_train_strategy_selection_rejects_security_or_freshness_violations():
+  safe = {
+    "metrics": {
+      "recall_at_k": 0.8, "mrr": 0.8, "document_duplicate_rate": 0.0,
+      "forbidden_hit_rate": 0.0, "stale_hit_rate": 0.0,
+      "isolation_violation_rate": 0.0,
+      "by_language": {
+        "pl": {"recall_at_k": 0.8, "mrr": 0.8},
+        "en": {"recall_at_k": 0.8, "mrr": 0.8},
+      },
+    },
+  }
+  unsafe = {"metrics": {**safe["metrics"], "recall_at_k": 1.0, "forbidden_hit_rate": 0.1}}
+
+  assert select_train_strategy({"unsafe": unsafe, "safe": safe}) == "safe"

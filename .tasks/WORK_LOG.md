@@ -1,5 +1,32 @@
 # Completion log
 
+2026-08-12 — TASK-023 CI follow-up: Replaced the stale classifier fixture in grounded-answer Playwright coverage with the separate knowledge-answer contract and added desktop/mobile fail-closed no-answer coverage; focused E2E passed 6/6 before the exact-head PR rerun.
+
+2026-08-12 — TASK-023 milestone: Added a separate claim-cited knowledge-answer API and web surface with two-phase fail-closed Qwen decoding; physical AMD PL/EN answer and unsupported/injection abstention passed 4/4, and full `make verify` passed while the independent human/holdout response gate remains open.
+
+2026-08-12 — TASK-047 milestone: Integrated current `dev`, added the web UI to local Compose with state-bound OIDC S256 PKCE, created exact-SHA OCI-labelled build/render/deploy/smoke/rollback tooling, and closed bounded Qwen injection/capacity/oversize/disconnect recovery gates while preserving the missing human production evaluation as a hard deployment blocker.
+
+2026-08-12 — TASK-014/TASK-015/TASK-023 milestone: Proved the exact-source BGE-M3-to-Qwen chain on physical `gfx1151` with strict PL/EN output, grounded citations, aggregate-only generation shadow and a real inference rollback; retained fail-closed response and human-quality gates during integration with the newer hybrid reranker strategy.
+
+2026-08-12 — TASK-043 milestone: Owner-authorized `hybrid-bge-v1` became the fail-closed runtime default with an exact revision/192-token authenticated reranker contract, explicit dense rollback and separate digest-pinned AMD service; full `make verify` passed while 42 independent decisions, holdout, deployment and production remain open.
+
+2026-08-12 — TASK-047 milestone: Closed point 2 in source and an isolated real runtime with Keycloak 26.7 multi-user OIDC, no static fallback, exact MCP resource audience, RFC 8693 exchange, scoped Node task authorization and private-gateway controls; two stable subjects in one tenant produced API and Remote MCP visibility counts 1 versus 0, while exact-SHA production deployment and broader task gates remain pending.
+
+2026-08-12 — TASK-047 milestone: Deployed point 1 on the local AMD host with user-separated encrypted Google OAuth, narrow Tailscale HTTPS callback/webhook routing, published tokenless n8n workflows, a real incremental baseline and active Google Watch channel; full Node 190/190, build, n8n 12/12 and deploy 10/10 passed while the broader task remains in progress.
+
+2026-08-12 — TASK-045: Patched the five Python dependency advisories, preserved the tested Metro parser mitigation for two unpatched image-size advisories, added fail-closed experimental dependency resolution, and merged green PR #167 to `dev` as `cdae711f`; exact-SHA post-merge CI passed without changing `master`, deployment or production.
+
+2026-08-12 — TASK-046: Delivered a task-first accessible PL/EN web UX for nontechnical users and administrators with honest sync states, revision-safe editing, guarded AI administration, clean mobile dependency audit, full local `make verify`, 18/18 desktop/mobile Playwright and no CI/deployment/production claim.
+
+2026-08-12 — TASK-042: Added durable privacy-safe fail-closed audit chains for Node, FastAPI, memory/consent, ingest/reindex, MCP and rollout decisions plus exact-release Prometheus source/config; local verification passed without claiming deployment or real alert delivery.
+
+2026-08-12 — TASK-027: Added revision-safe complete/reopen/archive/trash/restore/permanent-delete lifecycle behavior across Node, shared API, web and mobile, with final deletion restricted to trash and live-backend integration coverage.
+
+2026-08-12 — TASK-025: Added timezone-safe due/reminder schedules across Node, shared API, web and mobile plus generic Android local notifications and offline/permission handling; physical notification delivery remains unverified.
+
+2026-08-12 — TASK-026: Added tenant-scoped owner/assignee Delegate handoffs, valid status transitions, separate in-app views and mobile offline conflict handling; cross-user OIDC runtime and external notifications remain unclaimed.
+
+2026-08-12 — TASK-044: Recorded evidence triggers for cache, remote MCP, horizontal scaling and GraphRAG while deferring all four; explicitly kept CDN and managed queues out and retained the SQLite worker.
 2026-08-12 — TASK-041: Removed historical trailing whitespace from the object-storage implementation with identical Python AST/tokens, 21/21 focused tests, and a clean full master promotion diff; no behavior or release gate was weakened.
 
 2026-08-12 — TASK-040: Restored the required E2E accessibility gate with durable active-language contrast, a reduced-motion ready-state fallback and a semantic intro-ready Axe boundary, without sleeps or disabled rules.

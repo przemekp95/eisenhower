@@ -1,21 +1,67 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd';
-import { Task, TaskInput } from '../types';
+import {
+  Task,
+  TaskDelegationAssignment,
+  TaskDelegationStatus,
+  TaskInput,
+  TaskLifecycleAction,
+  TaskLifecycleFilter,
+  TaskSchedule,
+  TaskView,
+} from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
 import { shouldDisableMotion } from '../lib/motion';
 import { restoreReadyState } from '../lib/uiState';
 import { useMatrixController } from '../hooks/useMatrixController';
 import { AIToolsComponent, MatrixSceneComponent } from './matrixLazyComponents';
+import TaskDelegationPanel from './TaskDelegationPanel';
+import TaskScheduleEditor from './TaskScheduleEditor';
+
+const LIFECYCLE_FILTERS: TaskLifecycleFilter[] = [
+  'active',
+  'completed',
+  'archived',
+  'trashed',
+  'all',
+];
+
+const LIFECYCLE_ACTIONS: Record<Exclude<TaskLifecycleFilter, 'all'>, TaskLifecycleAction[]> = {
+  active: ['complete', 'archive', 'trash'],
+  completed: ['reopen', 'archive', 'trash'],
+  archived: ['restore', 'trash'],
+  trashed: ['restore'],
+};
 
 interface Props {
   tasks: Task[];
   loading: boolean;
-  onAddTask: (task: TaskInput) => Promise<void>;
+  onAddTask: (task: TaskInput, idempotencyKey?: string) => Promise<void>;
   onUpdateTask: (id: string, patch: Partial<TaskInput>) => Promise<void>;
   onDeleteTask: (id: string) => Promise<void>;
+  lifecycleFilter?: TaskLifecycleFilter;
+  onLifecycleFilterChange?: (filter: TaskLifecycleFilter) => void;
+  onLifecycleTask?: (id: string, action: TaskLifecycleAction) => Promise<void>;
+  onUpdateSchedule?: (id: string, schedule: TaskSchedule | null) => Promise<void>;
+  taskView?: TaskView;
+  onUpdateDelegation?: (id: string, delegation: TaskDelegationAssignment | null) => Promise<void>;
+  onDelegationStatus?: (id: string, status: TaskDelegationStatus) => Promise<void>;
 }
 
-export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDeleteTask }: Props) {
+export default function Matrix({
+  tasks,
+  loading,
+  onAddTask,
+  onUpdateTask,
+  onDeleteTask,
+  lifecycleFilter = 'active',
+  onLifecycleFilterChange = () => undefined,
+  onLifecycleTask = async () => undefined,
+  onUpdateSchedule = async () => undefined,
+  taskView = 'owned',
+  onUpdateDelegation = async () => undefined,
+  onDelegationStatus = async () => undefined,
+}: Props) {
   const { t } = useLanguage();
   const format = (template: string, values: Record<string, string>) =>
     Object.entries(values).reduce(
@@ -27,10 +73,20 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
     shouldDisableMotion() ? 'ready' : 'pending'
   );
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [editingTask, setEditingTask] = useState<{
+    id: string;
+    title: string;
+    description: string;
+  } | null>(null);
+  const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
+  const [pendingLifecycleId, setPendingLifecycleId] = useState<string | null>(null);
+  const [taskErrors, setTaskErrors] = useState<Record<string, string>>({});
   const {
     aiError,
     aiLoading,
     closeAiTools,
+    createError,
+    createPending,
     handleAnalysisComplete,
     handleAnalysisImport,
     handleDragEnd,
@@ -48,6 +104,38 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
     onUpdateTask,
     translate: t,
   });
+
+  const runTaskUpdate = async (id: string, patch: Partial<TaskInput>) => {
+    setPendingTaskId(id);
+    setTaskErrors((current) => ({ ...current, [id]: '' }));
+    try {
+      await onUpdateTask(id, patch);
+      setEditingTask((current) => (current?.id === id ? null : current));
+    } catch (issue) {
+      setTaskErrors((current) => ({
+        ...current,
+        [id]: issue instanceof Error ? issue.message : t('status.saveError'),
+      }));
+    } finally {
+      setPendingTaskId(null);
+    }
+  };
+
+  const runTaskDelete = async (id: string) => {
+    setPendingTaskId(id);
+    setTaskErrors((current) => ({ ...current, [id]: '' }));
+    try {
+      await onDeleteTask(id);
+      setPendingDeleteId(null);
+    } catch (issue) {
+      setTaskErrors((current) => ({
+        ...current,
+        [id]: issue instanceof Error ? issue.message : t('status.saveError'),
+      }));
+    } finally {
+      setPendingTaskId(null);
+    }
+  };
 
   useEffect(() => {
     const root = matrixRef.current;
@@ -139,7 +227,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
     <div
       ref={matrixRef}
       data-matrix-intro={matrixIntroState}
-      className="matrix-shell relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-slate-900/82 p-6 shadow-[0_30px_100px_rgba(2,6,23,0.62)] backdrop-blur-xl"
+      className="matrix-shell relative overflow-hidden rounded-[2rem] border border-white/10 bg-slate-900/82 p-4 shadow-[0_30px_100px_rgba(2,6,23,0.62)] backdrop-blur-xl sm:rounded-[2.5rem] sm:p-6"
     >
       <div aria-hidden="true" className="matrix-noise" />
       <div
@@ -160,11 +248,11 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
         <MatrixSceneComponent />
       </Suspense>
 
-      <div className="relative z-10 space-y-6">
+      <div className="relative z-10 space-y-4 sm:space-y-6">
         <form
           data-matrix-form
           onSubmit={handleSubmit}
-          className="relative grid gap-3 overflow-hidden rounded-4xl border border-white/10 bg-black/[0.28] p-4 backdrop-blur md:grid-cols-2"
+          className="relative grid grid-cols-2 gap-3 overflow-hidden rounded-4xl border border-white/10 bg-black/[0.28] p-4 backdrop-blur"
         >
           <div
             aria-hidden="true"
@@ -174,20 +262,28 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
             aria-hidden="true"
             className="pointer-events-none absolute -left-12 top-10 h-28 w-28 rounded-full bg-emerald-300/10 blur-3xl"
           />
-          <input
-            value={newTask.title}
-            onChange={(event) => updateNewTaskField('title', event.target.value)}
-            className="rounded-full border border-white/10 bg-white/10 px-4 py-3 text-white transition-all placeholder:text-white/50 focus:border-emerald-200/40 focus:bg-white/12 focus:outline-hidden"
-            placeholder={t('form.title')}
-            aria-label={t('form.title')}
-          />
-          <input
-            value={newTask.description}
-            onChange={(event) => updateNewTaskField('description', event.target.value)}
-            className="rounded-full border border-white/10 bg-white/10 px-4 py-3 text-white transition-all placeholder:text-white/50 focus:border-cyan-200/40 focus:bg-white/12 focus:outline-hidden"
-            placeholder={t('form.description')}
-            aria-label={t('form.description')}
-          />
+          <label className="relative col-span-2 text-sm font-medium text-white/80 md:col-span-1">
+            {t('form.title')}
+            <input
+              value={newTask.title}
+              disabled={createPending}
+              onChange={(event) => updateNewTaskField('title', event.target.value)}
+              className="mt-1 min-h-12 w-full rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-white transition-all placeholder:text-white/50 focus:border-emerald-200/40 focus:bg-white/12 focus:outline-hidden"
+              placeholder={t('form.title')}
+              aria-label={t('form.title')}
+            />
+          </label>
+          <label className="relative col-span-2 text-sm font-medium text-white/80 md:col-span-1">
+            {t('form.description')}
+            <input
+              value={newTask.description}
+              disabled={createPending}
+              onChange={(event) => updateNewTaskField('description', event.target.value)}
+              className="mt-1 min-h-12 w-full rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-white transition-all placeholder:text-white/50 focus:border-cyan-200/40 focus:bg-white/12 focus:outline-hidden"
+              placeholder={t('form.description')}
+              aria-label={t('form.description')}
+            />
+          </label>
           <label
             className={`flex cursor-pointer items-center justify-between rounded-2xl border px-4 py-3 transition-all ${
               newTask.urgent
@@ -197,6 +293,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
           >
             <input
               type="checkbox"
+              disabled={createPending}
               checked={newTask.urgent}
               onChange={(event) => updateNewTaskField('urgent', event.target.checked)}
               className="sr-only"
@@ -232,6 +329,7 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
           >
             <input
               type="checkbox"
+              disabled={createPending}
               checked={newTask.important}
               onChange={(event) => updateNewTaskField('important', event.target.checked)}
               className="sr-only"
@@ -258,26 +356,28 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
               />
             </span>
           </label>
-          <div className="flex flex-wrap gap-2 md:col-span-2">
+          <div className="col-span-2 flex flex-wrap gap-2">
             <button
               type="submit"
-              className="rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 transition-all hover:-translate-y-0.5 hover:bg-emerald-300 hover:shadow-lg hover:shadow-emerald-500/20"
+              disabled={createPending}
+              className="min-h-11 rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 transition-all hover:-translate-y-0.5 hover:bg-emerald-300 hover:shadow-lg hover:shadow-emerald-500/20 disabled:cursor-wait disabled:opacity-60"
             >
-              {t('form.submit')}
+              {createPending ? t('task.saving') : t('form.submit')}
             </button>
             <button
               type="button"
+              disabled={createPending || aiLoading}
               onClick={() => {
                 void handleSuggest();
               }}
-              className="rounded-full bg-white/10 px-4 py-2 text-sm text-white transition-all hover:bg-white/15 hover:text-white"
+              className="rounded-full bg-white/10 px-4 py-2 text-sm text-white transition-all hover:bg-white/15 hover:text-white disabled:opacity-50"
             >
               {aiLoading ? t('ai.suggesting') : t('ai.suggest')}
             </button>
             <button
               type="button"
               onClick={openAiTools}
-              disabled={!newTask.title.trim()}
+              disabled={createPending || !newTask.title.trim()}
               className={`rounded-full bg-white/10 px-4 py-2 text-sm text-white transition-all hover:bg-white/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10 ${
                 newTask.title.trim() ? 'pulse-ai' : ''
               }`}
@@ -286,7 +386,34 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
             </button>
           </div>
           {aiError ? <p className="md:col-span-2 text-sm text-red-200">{aiError}</p> : null}
+          {createError ? (
+            <p role="alert" className="md:col-span-2 text-sm text-red-200">
+              {createError}
+            </p>
+          ) : null}
         </form>
+
+        <nav
+          aria-label={t('lifecycle.filter.label')}
+          className="flex gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-black/20 p-2"
+        >
+          {LIFECYCLE_FILTERS.map((filter) => (
+            <button
+              key={filter}
+              type="button"
+              aria-pressed={lifecycleFilter === filter}
+              onClick={() => onLifecycleFilterChange(filter)}
+              className={`min-h-11 shrink-0 rounded-full px-4 py-2 text-sm font-medium ${
+                lifecycleFilter === filter
+                  ? 'bg-cyan-200 text-slate-950'
+                  : 'bg-white/7 text-white/70 hover:bg-white/12 hover:text-white'
+              }`}
+            >
+              {t(`lifecycle.filter.${filter}`)}
+            </button>
+          ))}
+        </nav>
+        <p className="text-sm leading-6 text-white/70">{t('matrix.help')}</p>
 
         <DragDropContext onDragEnd={(result) => void handleDragEnd(result)}>
           <div className="grid gap-4 lg:grid-cols-2">
@@ -306,9 +433,15 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
                     <div className="mb-3 flex items-center justify-between">
                       <div>
                         <h3 className="text-lg font-semibold text-white">{quadrant.label}</h3>
-                        {quadrant.key === 'delete' ? (
-                          <p className="text-xs text-white/55">{t('matrix.deleteHint')}</p>
-                        ) : null}
+                        <p className="text-xs text-white/55">
+                          {quadrant.key === 'do'
+                            ? t('matrix.doHint')
+                            : quadrant.key === 'delegate'
+                              ? t('matrix.delegateHint')
+                              : quadrant.key === 'schedule'
+                                ? t('matrix.scheduleHint')
+                                : t('matrix.deleteHint')}
+                        </p>
                       </div>
                       <span
                         data-matrix-float
@@ -331,90 +464,231 @@ export default function Matrix({ tasks, loading, onAddTask, onUpdateTask, onDele
                                 className="pointer-events-none absolute inset-x-0 top-0 h-14 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0))]"
                               />
                               <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <h4 className="font-semibold">{task.title}</h4>
-                                  <p className="mt-1 text-sm text-white/70">{task.description}</p>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    {...dragProvided.dragHandleProps}
-                                    aria-label={format(t('task.drag'), { title: task.title })}
-                                    className="cursor-grab rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/70 transition-all hover:bg-white/15 hover:text-white active:cursor-grabbing"
+                                {editingTask?.id === task._id ? (
+                                  <form
+                                    className="min-w-0 flex-1 space-y-3"
+                                    onSubmit={(event) => {
+                                      event.preventDefault();
+                                      if (!editingTask.title.trim()) return;
+                                      void runTaskUpdate(task._id, {
+                                        title: editingTask.title.trim(),
+                                        description: editingTask.description.trim(),
+                                      });
+                                    }}
                                   >
-                                    ⋮⋮
-                                  </button>
-                                  {pendingDeleteId === task._id ? (
-                                    <div
-                                      role="group"
-                                      aria-label={`${t('task.delete')} ${task.title}`}
-                                      className="flex gap-1"
-                                    >
+                                    <label className="block text-xs font-medium text-white/70">
+                                      {t('task.editTitle')}
+                                      <input
+                                        autoFocus
+                                        aria-label={t('task.editTitle')}
+                                        value={editingTask.title}
+                                        onChange={(event) =>
+                                          setEditingTask({
+                                            ...editingTask,
+                                            title: event.target.value,
+                                          })
+                                        }
+                                        className="mt-1 min-h-11 w-full rounded-xl border border-white/20 bg-slate-900 px-3 py-2 text-white"
+                                      />
+                                    </label>
+                                    <label className="block text-xs font-medium text-white/70">
+                                      {t('task.editDescription')}
+                                      <textarea
+                                        aria-label={t('task.editDescription')}
+                                        value={editingTask.description}
+                                        onChange={(event) =>
+                                          setEditingTask({
+                                            ...editingTask,
+                                            description: event.target.value,
+                                          })
+                                        }
+                                        className="mt-1 min-h-20 w-full resize-y rounded-xl border border-white/20 bg-slate-900 px-3 py-2 text-white"
+                                      />
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
                                       <button
-                                        type="button"
-                                        onClick={() => {
-                                          setPendingDeleteId(null);
-                                          void onDeleteTask(task._id);
-                                        }}
-                                        className="rounded-full bg-red-500 px-3 py-1 text-xs font-semibold text-white"
+                                        type="submit"
+                                        disabled={
+                                          pendingTaskId === task._id || !editingTask.title.trim()
+                                        }
+                                        className="min-h-11 rounded-xl bg-emerald-300 px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-40"
                                       >
-                                        {t('task.confirmDelete')}
+                                        {pendingTaskId === task._id
+                                          ? t('task.saving')
+                                          : t('task.saveEdit')}
                                       </button>
                                       <button
                                         type="button"
-                                        onClick={() => setPendingDeleteId(null)}
-                                        className="rounded-full bg-white/10 px-3 py-1 text-xs"
+                                        onClick={() => setEditingTask(null)}
+                                        className="min-h-11 rounded-xl bg-white/10 px-3 py-2 text-xs"
                                       >
-                                        {t('task.cancelDelete')}
+                                        {t('task.cancelEdit')}
                                       </button>
                                     </div>
-                                  ) : (
+                                  </form>
+                                ) : (
+                                  <div className="min-w-0 flex-1">
+                                    <h4 className="font-semibold">{task.title}</h4>
+                                    {task.description ? (
+                                      <p className="mt-1 text-sm text-white/70">
+                                        {task.description}
+                                      </p>
+                                    ) : null}
+                                    <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100/70">
+                                      {t(`lifecycle.state.${task.lifecycleState ?? 'active'}`)}
+                                    </p>
+                                  </div>
+                                )}
+                                {taskView === 'owned' ? (
+                                  <div className="flex items-center gap-1">
                                     <button
                                       type="button"
-                                      aria-label={`${t('task.delete')} ${task.title}`}
-                                      onClick={() => setPendingDeleteId(task._id)}
-                                      className="rounded-full bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-100 transition-all hover:bg-red-500/30 hover:text-white"
+                                      {...dragProvided.dragHandleProps}
+                                      disabled={(task.lifecycleState ?? 'active') !== 'active'}
+                                      aria-label={format(t('task.drag'), { title: task.title })}
+                                      className="min-h-11 cursor-grab rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold text-white/70 transition-all hover:bg-white/15 hover:text-white active:cursor-grabbing"
                                     >
-                                      {t('task.delete')}
+                                      ⋮⋮
                                     </button>
+                                    {(task.lifecycleState ?? 'active') === 'trashed' &&
+                                    pendingDeleteId === task._id ? (
+                                      <div
+                                        role="alertdialog"
+                                        aria-label={`${t('lifecycle.action.delete')} ${task.title}`}
+                                        className="flex gap-1"
+                                      >
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            void runTaskDelete(task._id);
+                                          }}
+                                          disabled={pendingTaskId === task._id}
+                                          className="min-h-11 rounded-xl bg-red-500 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40"
+                                        >
+                                          {t('task.confirmDelete')}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setPendingDeleteId(null)}
+                                          className="min-h-11 rounded-xl bg-white/10 px-3 py-2 text-xs"
+                                        >
+                                          {t('task.cancelDelete')}
+                                        </button>
+                                      </div>
+                                    ) : (task.lifecycleState ?? 'active') === 'trashed' ? (
+                                      <button
+                                        type="button"
+                                        aria-label={`${t('lifecycle.action.delete')} ${task.title}`}
+                                        onClick={() => setPendingDeleteId(task._id)}
+                                        className="min-h-11 rounded-xl bg-red-500/20 px-3 py-2 text-xs font-semibold text-red-100 transition-all hover:bg-red-500/30 hover:text-white"
+                                      >
+                                        {t('lifecycle.action.delete')}
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                              </div>
+                              {taskView === 'owned' && editingTask?.id !== task._id ? (
+                                <button
+                                  type="button"
+                                  aria-label={format(t('task.edit'), { title: task.title })}
+                                  onClick={() =>
+                                    setEditingTask({
+                                      id: task._id,
+                                      title: task.title,
+                                      description: task.description,
+                                    })
+                                  }
+                                  className="mt-3 min-h-11 rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold hover:bg-white/15"
+                                >
+                                  {format(t('task.edit'), { title: task.title })}
+                                </button>
+                              ) : null}
+                              {taskErrors[task._id] ? (
+                                <p role="alert" className="mt-3 text-sm text-red-200">
+                                  {taskErrors[task._id]}
+                                </p>
+                              ) : null}
+                              {taskView === 'owned' ? (
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                  {LIFECYCLE_ACTIONS[task.lifecycleState ?? 'active'].map(
+                                    (action) => (
+                                      <button
+                                        key={action}
+                                        type="button"
+                                        disabled={pendingLifecycleId === task._id}
+                                        aria-label={`${t(`lifecycle.action.${action}`)} ${task.title}`}
+                                        onClick={async () => {
+                                          setPendingLifecycleId(task._id);
+                                          try {
+                                            await onLifecycleTask(task._id, action);
+                                          } finally {
+                                            setPendingLifecycleId(null);
+                                          }
+                                        }}
+                                        className="min-h-11 rounded-xl border border-emerald-200/20 bg-emerald-300/10 px-3 py-2 text-xs font-semibold text-emerald-50 disabled:opacity-50"
+                                      >
+                                        {t(`lifecycle.action.${action}`)}
+                                      </button>
+                                    )
                                   )}
+                                  <button
+                                    type="button"
+                                    aria-label={format(t('task.toggleUrgent'), {
+                                      title: task.title,
+                                    })}
+                                    aria-pressed={task.urgent}
+                                    onClick={() => {
+                                      void runTaskUpdate(task._id, { urgent: !task.urgent });
+                                    }}
+                                    disabled={
+                                      pendingTaskId === task._id ||
+                                      (task.lifecycleState ?? 'active') !== 'active'
+                                    }
+                                    className={`min-h-11 rounded-xl px-3 py-2 text-xs transition-all disabled:opacity-40 ${
+                                      task.urgent
+                                        ? 'bg-rose-400 text-slate-950 hover:bg-rose-300'
+                                        : 'bg-white/10 text-white hover:bg-white/15'
+                                    }`}
+                                  >
+                                    {t('form.urgent')}:{' '}
+                                    {task.urgent ? t('state.on') : t('state.off')}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label={format(t('task.toggleImportant'), {
+                                      title: task.title,
+                                    })}
+                                    aria-pressed={task.important}
+                                    onClick={() => {
+                                      void runTaskUpdate(task._id, { important: !task.important });
+                                    }}
+                                    disabled={
+                                      pendingTaskId === task._id ||
+                                      (task.lifecycleState ?? 'active') !== 'active'
+                                    }
+                                    className={`min-h-11 rounded-xl px-3 py-2 text-xs transition-all disabled:opacity-40 ${
+                                      task.important
+                                        ? 'bg-cyan-300 text-slate-950 hover:bg-cyan-200'
+                                        : 'bg-white/10 text-white hover:bg-white/15'
+                                    }`}
+                                  >
+                                    {t('form.important')}:{' '}
+                                    {task.important ? t('state.on') : t('state.off')}
+                                  </button>
                                 </div>
-                              </div>
-                              <div className="mt-4 flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  aria-label={format(t('task.toggleUrgent'), { title: task.title })}
-                                  aria-pressed={task.urgent}
-                                  onClick={() => {
-                                    void onUpdateTask(task._id, { urgent: !task.urgent });
-                                  }}
-                                  className={`rounded-full px-3 py-1 text-xs transition-all hover:-translate-y-0.5 ${
-                                    task.urgent
-                                      ? 'bg-rose-400 text-slate-950 hover:bg-rose-300'
-                                      : 'bg-white/10 text-white hover:bg-white/15'
-                                  }`}
-                                >
-                                  {t('form.urgent')}: {task.urgent ? t('state.on') : t('state.off')}
-                                </button>
-                                <button
-                                  type="button"
-                                  aria-label={format(t('task.toggleImportant'), {
-                                    title: task.title,
-                                  })}
-                                  aria-pressed={task.important}
-                                  onClick={() => {
-                                    void onUpdateTask(task._id, { important: !task.important });
-                                  }}
-                                  className={`rounded-full px-3 py-1 text-xs transition-all hover:-translate-y-0.5 ${
-                                    task.important
-                                      ? 'bg-cyan-300 text-slate-950 hover:bg-cyan-200'
-                                      : 'bg-white/10 text-white hover:bg-white/15'
-                                  }`}
-                                >
-                                  {t('form.important')}:{' '}
-                                  {task.important ? t('state.on') : t('state.off')}
-                                </button>
-                              </div>
+                              ) : null}
+                              <TaskScheduleEditor
+                                task={task}
+                                onSave={onUpdateSchedule}
+                                readOnly={taskView === 'delegated'}
+                              />
+                              <TaskDelegationPanel
+                                task={task}
+                                view={taskView}
+                                onAssign={onUpdateDelegation}
+                                onStatus={onDelegationStatus}
+                              />
                             </article>
                           )}
                         </Draggable>

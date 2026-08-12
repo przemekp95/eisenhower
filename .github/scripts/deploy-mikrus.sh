@@ -89,6 +89,8 @@ if [[ "$MIKRUS_HOST" == *:* ]]; then
 fi
 scp_target="${MIKRUS_USER}@${scp_host}:${app_dir}/docker-compose.yml"
 http_check_scp_target="${MIKRUS_USER}@${scp_host}:${app_dir}/assert-http-status.sh"
+prometheus_scp_target="${MIKRUS_USER}@${scp_host}:${app_dir}/prometheus.yml"
+alerts_scp_target="${MIKRUS_USER}@${scp_host}:${app_dir}/alert_rules.yml"
 
 log "Deploy target: ${ssh_target}:${app_dir}"
 
@@ -139,6 +141,10 @@ REMOTE_BACKUP
 
 log "Uploading docker-compose.yml."
 scp "${ssh_opts[@]}" "deploy/mikrus/docker-compose.yml" "$scp_target"
+
+log "Uploading private Prometheus configuration and alert rules."
+scp "${ssh_opts[@]}" "deploy/mikrus/prometheus.yml" "$prometheus_scp_target"
+scp "${ssh_opts[@]}" "deploy/mikrus/alert_rules.yml" "$alerts_scp_target"
 
 log "Uploading fail-closed HTTP status verifier."
 scp "${ssh_opts[@]}" ".github/scripts/assert-http-status.sh" "$http_check_scp_target"
@@ -263,7 +269,7 @@ echo "Waiting for container readiness."
 deadline=$((SECONDS + 180))
 while (( SECONDS < deadline )); do
   ready=true
-  for service in mongodb ai-service api-service frontend; do
+  for service in mongodb ai-service api-service frontend prometheus; do
     container_id="$(docker compose --env-file .env -f docker-compose.yml ps -q "$service")"
     if [[ -z "$container_id" ]]; then
       ready=false
@@ -295,6 +301,13 @@ echo "Running public HTTPS smoke checks."
 ./assert-http-status.sh "$MIKRUS_PUBLIC_URL/ai/" 200
 ./assert-http-status.sh "$MIKRUS_PUBLIC_URL/ai/health/live" 200
 ./assert-http-status.sh "$MIKRUS_PUBLIC_URL/ai/health/ready" 200
+
+echo "Verifying exact-SHA process metrics and active Prometheus rules."
+expected_release_metric="eisenhower_release_info{sha=\"$IMAGE_TAG\"} 1"
+docker compose --env-file .env -f docker-compose.yml exec -T ai-service \
+  curl -fsS http://127.0.0.1:8000/metrics | grep -F "$expected_release_metric"
+docker compose --env-file .env -f docker-compose.yml exec -T prometheus \
+  wget -qO- http://127.0.0.1:9090/api/v1/rules | grep -F 'EisenhowerAuditWriteFailed'
 
 printf '%s\n' "$IMAGE_TAG" > .deployed-image-tag
 rm -f docker-compose.rollback.yml .env.rollback .rollback-image-tag

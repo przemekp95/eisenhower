@@ -1,14 +1,60 @@
-# n8n asynchronous ingestion scaffold
+# n8n asynchronous integration workflows
 
 These inactive importable workflows keep n8n out of every synchronous analysis request. n8n is an orchestration boundary for source polling/webhooks, normalization handoff, reindexing, tombstones, evaluation launches, retry, and alerting. FastAPI remains the owner of domain validation, ACL enforcement, deterministic chunk production, checksums, vector writes, and online retrieval/generation.
+
+Calendar automation follows the same boundary: Node owns task and calendar rules, per-user encrypted OAuth grants, bindings, conflicts, sync tokens, idempotency and the transactional outbox. n8n is tokenless: it owns no Google credential and performs only bounded, HMAC-signed calls to Node's Calendar provider adapter. A Google push notification is a signal to pull changes; it is never trusted as event data.
 
 ## Workflows
 
 - `workflows/async-rag-ingestion.json` accepts only `upsert`, `tombstone`, `reindex_project`, and `start_rag_evaluation` events. It authenticates the webhook with n8n Header Auth, asks the internal API to verify the HMAC signature and replay window, then dispatches one named asynchronous job with bounded retry.
 - `workflows/rag-ingestion-error.json` emits a sanitized alert. It deliberately omits raw input, document content, secrets, and full error objects.
 - `contracts/ingestion-event.schema.json` fixes the versioned envelope, ACL metadata, checksums, and embedding/chunking versions. It prevents a source connector from silently changing the indexing contract.
+- `workflows/calendar-outbound.json` claims one canonical outbox event, sends only its `eventId` to `/internal/calendar/provider/outbound`, and acknowledges the provider result. Node resolves the authoritative connection and encrypted per-user grant.
+- `workflows/calendar-inbound.json` acknowledges the webhook immediately, asks Node to validate and atomically claim the watch signal, then requests changes through `/internal/calendar/provider/changes` using only the authoritative `connectionId` and optional checkpoint. It translates only bound timed events into camelCase `event_changed`, `event_deleted` and `sync_checkpoint` commands. `410 Gone` requests a controlled full resync instead of guessing state.
+- `workflows/calendar-reconciliation.json` claims authoritative connection jobs, requests repair pages through Node and renews the watch through `/internal/calendar/provider/watch`. It intentionally excludes recurrence, all-day events, attendees, Meet and invitation delivery.
 
 There is no generic workflow executor and no n8n MCP server in this scaffold. If n8n MCP is added later, allowlist only individually reviewed workflows such as `sync_calendar`, `reindex_project`, or `start_rag_evaluation`; never expose arbitrary workflow selection, arbitrary URLs, code, commands, or credential access.
+
+## Google Calendar activation
+
+The three Calendar workflows are deliberately imported inactive. Before activation:
+
+1. Complete the user-facing Google OAuth flow in Node. Node must store the refresh/access grant encrypted and bind it to the authenticated tenant, owner and Calendar connection. No OAuth client secret, access token or refresh token belongs in n8n, Git or workflow JSON.
+2. Set only `EISENHOWER_NODE_INTERNAL_API_URL`, `CALENDAR_INTERNAL_HMAC_KEY` and `GOOGLE_CALENDAR_WEBHOOK_URL` for Calendar orchestration. The HMAC key must be the same dedicated value configured in Node and contain at least 32 bytes. The private Node base URL must not have a trailing slash because the exact request path is signed; the Google webhook URL must be HTTPS and expose only the inbound path through the gateway.
+3. Calendar signing uses the Code node's Node.js `crypto` module. Self-hosted n8n must explicitly set `NODE_FUNCTION_ALLOW_BUILTIN=crypto`; do not allow additional built-ins or external modules for these workflows.
+4. Import and inspect the three shared workflows, run a two-user isolation rehearsal, then activate outbound, inbound and reconciliation together. There is no workflow or Google credential per user to clone or administer in n8n.
+
+The checked-in JSON proves source and contract shape only. Until users grant Google OAuth consent to Node and the workflows are imported and activated, live Calendar synchronization is not deployed.
+
+### Calendar internal HTTP signing
+
+Every Calendar request to Node is signed independently. A signing Code node first creates the final
+camelCase body and serializes it exactly once with `JSON.stringify`. The following HTTP Request node sends
+that exact string as raw `application/json`; it must never use n8n's JSON-body mode, which could
+reserialize the object after signing.
+
+The lower-case hexadecimal signature is HMAC-SHA256 over:
+
+```text
+v1 + "\n" + timestamp + "\n" + POST + "\n" + exact_path + "\n" + exact_raw_json
+```
+
+Headers are `X-Eisenhower-Timestamp` (Unix seconds) and `X-Eisenhower-Signature`. The exact signed paths
+are connection activation, outbox claim/acknowledgement, notification validation, sync apply/reset,
+reconciliation claim, provider outbound/changes/watch and watch renewal under `/internal/calendar`. Node enforces the five-minute window
+and constant-time digest comparison. There is no bearer-token fallback for these Calendar endpoints.
+
+The outbound claim contract is `eventId`, `type`, tenant/owner/aggregate fields, `payload`, and a
+`provider` object containing `connectionId`, `calendarId` and, for update/delete, `providerEventId` and
+`providerEtag`. Node must not lease an event that lacks the provider data needed to execute it. Notification
+validation returns the authoritative scope, connection/calendar IDs, stored page/sync tokens and `signalId`;
+the workflow does not infer them from untrusted Google headers. Reconciliation claim returns `jobs` with
+the same authoritative camelCase scope and checkpoint data.
+
+Provider routes deliberately do not accept tenant or owner as authorization input. Outbound receives only
+`eventId`; changes receives `connectionId` plus optional `syncToken`/`pageToken`; watch receives
+`connectionId` plus the rendered HTTPS webhook address. Node resolves and verifies the stored connection,
+scope and encrypted OAuth grant. n8n must never receive the decrypted grant or choose a grant reference.
 
 ## Security and idempotency contract
 

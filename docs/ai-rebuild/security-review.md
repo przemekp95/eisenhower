@@ -38,7 +38,7 @@ The target exposes only the public edge and keeps Express, FastAPI, Qdrant, vLLM
 | Tenant isolation | cross-tenant vector/task leak | Derive identity from verified token; mandatory tenant + ACL filters; validate requested project; deny cross-tenant admin wildcard; negative tests and audit | Qdrant filter and request scope exist locally; real-db isolation tests required |
 | Secrets/PII | leakage through corpus, logs, n8n executions, prompts | secret manager; data minimization; classification/redaction; encryption; retention/deletion; sanitized errors; no raw prompt/content logs by default | Config uses environment variables; secret manager/data policy/runtime review missing |
 | Rate limits | cost/availability abuse | per-principal/tenant/IP budgets by endpoint; concurrent generation cap; request size limits; retry budget; 429/Retry-After | A local per-principal sliding-window limit protects the v2 AI routes; it is in-memory and not distributed |
-| Audit log | repudiation or invisible sensitive reads | append-only events for auth decisions, corpus commands, reindex/alias, admin changes, MCP sensitive reads; actor/tenant/action/resource/outcome/correlation, never secrets/content | Hashed-subject audit events for v2/internal requests exist locally; a durable compliant audit sink/schema/retention is not implemented |
+| Audit log | repudiation or invisible sensitive reads | append-only events for auth decisions, corpus commands, reindex/alias, admin changes, MCP sensitive reads; actor/tenant/action/resource/outcome/correlation, never secrets/content | A local SQLite WAL sink now persists closed-schema, HMAC-pseudonymous, release/request-bound events with authenticated chain/head/retention anchors and fail-closed sensitive mutations. Node auth/Origin rejections use a separate HMAC-chained file plus authenticated head; MCP and rollout use the canonical sink. Deployed retention access and alert drills remain unverified |
 
 ## Authentication and authorization contract
 
@@ -76,7 +76,7 @@ Retry network/5xx failures with exponential backoff and jitter. Do not retry aut
 
 ## MCP-specific review
 
-Local `stdio` minimizes network exposure. Remote HTTP requires the current MCP authorization specification, HTTPS, strict `Origin`, an audience-bound token, trusted gateway, private bind, connection/request limits and audit. Tool names are a static allowlist. Never expose arbitrary URL, command, workflow, database query, prompt, credential or filesystem tools. Upstream API tokens remain server configuration, not tool input/output.
+Local `stdio` minimizes network exposure. Remote HTTP requires the current MCP authorization specification, HTTPS, strict `Origin`, an audience-bound token, trusted gateway, private bind, connection/request limits and audit. Tool names are a static allowlist. Never expose arbitrary URL, command, workflow, database query, prompt, credential or filesystem tools. Upstream API tokens remain server configuration, not tool input/output. CDN and managed queues are explicitly outside the current product scope; the one-host SQLite worker remains the selected job transport.
 
 ## Security release gate
 

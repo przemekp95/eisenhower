@@ -4,6 +4,8 @@ import {
   addTrainingExample,
   analyzeTask,
   analyzeTaskWithRag,
+  answerKnowledge,
+  answerKnowledge,
   batchAnalyzeTasks,
   clearTrainingData,
   classifyTask,
@@ -11,13 +13,22 @@ import {
   deleteTask,
   extractTasksFromImage,
   getCapabilities,
+  getCalendarConflicts,
+  getCalendarStatus,
+  getDelegatedTasks,
   getExamplesByQuadrant,
   getTasks,
   getTrainingStats,
   learnFromAcceptedOCRTasks,
   learnFromFeedback,
   retrainModel,
+  requestCalendarSync,
+  resolveCalendarConflict,
   setProviderEnabled,
+  transitionTaskLifecycle,
+  transitionTaskDelegation,
+  updateTaskDelegation,
+  updateTaskSchedule,
   updateTask,
   clearApiToken,
   setApiToken,
@@ -29,6 +40,7 @@ const taskResponse = {
   description: '',
   urgent: false,
   important: false,
+  lifecycleState: 'active' as const,
   revision: 4,
 };
 
@@ -148,7 +160,7 @@ describe('api service', () => {
     expect((global.fetch as jest.Mock).mock.calls[1][1]?.headers?.Authorization).toBeUndefined();
   });
 
-  it('clears only the admin credential after rejected administrator credentials', async () => {
+  it('preserves admin credentials on authorization failures such as disabled management', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: false,
       status: 403,
@@ -156,6 +168,19 @@ describe('api service', () => {
     });
 
     await expect(getTrainingStats()).rejects.toThrow('Administrator access required');
+
+    expect(getApiToken()).toBe('runtime-only-test-token');
+    expect(getAdminToken()).toBe('runtime-only-admin-token');
+  });
+
+  it('clears only the admin credential after an administrator authentication failure', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ error: 'Invalid administrator code' }),
+    });
+
+    await expect(getTrainingStats()).rejects.toThrow('Invalid administrator code');
 
     expect(getApiToken()).toBe('runtime-only-test-token');
     expect(getAdminToken()).toBeNull();
@@ -183,7 +208,10 @@ describe('api service', () => {
       });
 
     await getTasks();
-    await createTask({ title: 'Task', description: '', urgent: false, important: false });
+    await createTask(
+      { title: 'Task', description: '', urgent: false, important: false },
+      'web-create-test'
+    );
     await updateTask('1', { urgent: true }, 3);
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
@@ -201,7 +229,10 @@ describe('api service', () => {
     );
     expect(global.fetch).toHaveBeenCalledWith(
       `${runtimeConfig.apiUrl}/tasks`,
-      expect.objectContaining({ method: 'POST' })
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'Idempotency-Key': 'web-create-test' }),
+      })
     );
     expect(global.fetch).toHaveBeenCalledWith(
       `${runtimeConfig.apiUrl}/tasks/1`,
@@ -215,6 +246,223 @@ describe('api service', () => {
       expect.objectContaining({
         method: 'DELETE',
         headers: expect.objectContaining({ 'If-Match': '"4"' }),
+      })
+    );
+  });
+
+  it('uses the authenticated calendar endpoints for status, sync, conflicts and resolution', async () => {
+    const calendarConflict = {
+      _id: 'conflict-1',
+      taskId: 'task-1',
+      status: 'open' as const,
+      revision: 2,
+      providerSnapshot: {
+        title: 'Google title',
+        dueAt: '2026-08-20T12:00:00.000Z',
+        timeZone: 'Europe/Warsaw',
+      },
+    };
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({
+          status: 'connected',
+          connection: { id: 'connection-1', provider: 'google', calendarId: 'primary' },
+          openConflicts: 1,
+          pendingOutbox: 0,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 202,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ eventId: 'sync-1' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => [calendarConflict],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ ...calendarConflict, status: 'resolved_provider', revision: 3 }),
+      });
+
+    await getCalendarStatus();
+    await requestCalendarSync('sync-key');
+    await getCalendarConflicts();
+    await resolveCalendarConflict('conflict/1', 'google', 2, 'resolve-key');
+
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      `${runtimeConfig.apiUrl}/calendar/status`,
+      expect.objectContaining({ credentials: 'omit' })
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      `${runtimeConfig.apiUrl}/calendar/sync-requests`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'Idempotency-Key': 'sync-key' }),
+      })
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      3,
+      `${runtimeConfig.apiUrl}/calendar/conflicts`,
+      expect.objectContaining({ credentials: 'omit' })
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      4,
+      `${runtimeConfig.apiUrl}/calendar/conflicts/conflict%2F1/resolve`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'Idempotency-Key': 'resolve-key',
+          'If-Match': '"2"',
+        }),
+        body: JSON.stringify({ strategy: 'google' }),
+      })
+    );
+  });
+
+  it('filters lifecycle views and sends revision-safe lifecycle actions', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => [{ ...taskResponse, lifecycleState: 'trashed' }],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({ ...taskResponse, lifecycleState: 'active', revision: 5 }),
+      });
+
+    await getTasks('trashed');
+    await transitionTaskLifecycle('task/1', 'restore', 4);
+
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      `${runtimeConfig.apiUrl}/tasks?lifecycle=trashed`,
+      expect.any(Object)
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      `${runtimeConfig.apiUrl}/tasks/task%2F1/lifecycle`,
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ action: 'restore' }),
+        headers: expect.objectContaining({ 'If-Match': '"4"' }),
+      })
+    );
+  });
+
+  it('sets and clears task schedules through the shared client', async () => {
+    const schedule = {
+      dueAt: '2026-08-15T12:00:00.000Z',
+      timeZone: 'Europe/Warsaw',
+      remindAt: '2026-08-15T10:00:00.000Z',
+    };
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({ ...taskResponse, schedule, revision: 5 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({ ...taskResponse, revision: 6 }),
+      });
+
+    await updateTaskSchedule('task/1', schedule, 4);
+    await updateTaskSchedule('task/1', null, 5);
+
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      `${runtimeConfig.apiUrl}/tasks/task%2F1/schedule`,
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ schedule }),
+        headers: expect.objectContaining({ 'If-Match': '"4"' }),
+      })
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      `${runtimeConfig.apiUrl}/tasks/task%2F1/schedule`,
+      expect.objectContaining({ body: JSON.stringify({ schedule: null }) })
+    );
+  });
+
+  it('lists delegated work and sends delegation commands through the shared client', async () => {
+    const delegation = {
+      assigneeUserId: 'user-b',
+      displayLabel: 'Pat',
+      handoffNote: 'Use the runbook.',
+      status: 'offered' as const,
+      offeredAt: '2026-08-12T12:00:00.000Z',
+      statusUpdatedAt: '2026-08-12T12:00:00.000Z',
+    };
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => [{ ...taskResponse, delegation }],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({ ...taskResponse, delegation, revision: 5 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({
+          ...taskResponse,
+          delegation: { ...delegation, status: 'accepted' },
+          revision: 6,
+        }),
+      });
+
+    await getDelegatedTasks();
+    await updateTaskDelegation(
+      'task/1',
+      { assigneeUserId: 'user-b', displayLabel: 'Pat', handoffNote: 'Use the runbook.' },
+      4
+    );
+    await transitionTaskDelegation('task/1', 'accepted', 5);
+
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      `${runtimeConfig.apiUrl}/tasks/delegated`,
+      expect.any(Object)
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      `${runtimeConfig.apiUrl}/tasks/task%2F1/delegation`,
+      expect.objectContaining({
+        method: 'PUT',
+        headers: expect.objectContaining({ 'If-Match': '"4"' }),
+      })
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      3,
+      `${runtimeConfig.apiUrl}/tasks/task%2F1/delegation/status`,
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ status: 'accepted' }),
       })
     );
   });
@@ -395,6 +643,85 @@ describe('api service', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ task: 'ground this task' }),
+      })
+    );
+  });
+
+  it('uses the governed knowledge-answer endpoint with the UI language', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({
+        status: 'insufficient_evidence',
+        answer: null,
+        claims: [],
+        citations: [],
+        retrieval: { hit_count: 0, top_score: null, embedding_version: null },
+        generation: null,
+        no_answer_reason: 'insufficient_context',
+      }),
+    });
+
+    await answerKnowledge('Nieznane pytanie', 'pl');
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${runtimeConfig.aiApiUrl}/v2/knowledge/answer`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'Nieznane pytanie',
+          language: 'pl',
+          project_id: null,
+          limit: 5,
+        }),
+      })
+    );
+  });
+
+  it('uses the separate governed knowledge-answer endpoint', async () => {
+    const response = {
+      status: 'insufficient_evidence',
+      answer: null,
+      claims: [],
+      citations: [],
+      retrieval: { hit_count: 0, top_score: null, embedding_version: null },
+      no_answer_reason: 'no_retrieval_hits',
+    };
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => response,
+    });
+
+    await expect(answerKnowledge('What is approved?', 'pl')).resolves.toEqual(response);
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${runtimeConfig.aiApiUrl}/v2/knowledge/answer`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'What is approved?',
+          language: 'pl',
+          project_id: null,
+          limit: 5,
+        }),
+      })
+    );
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => response,
+    });
+    await answerKnowledge('What is approved?');
+    expect((global.fetch as jest.Mock).mock.calls[1][1].body).toBe(
+      JSON.stringify({
+        query: 'What is approved?',
+        language: 'en',
+        project_id: null,
+        limit: 5,
       })
     );
   });

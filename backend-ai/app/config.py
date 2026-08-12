@@ -19,6 +19,9 @@ def parse_csv_list(value: str | None, default: tuple[str, ...]) -> tuple[str, ..
 class Settings:
   training_data_path: Path
   model_cache_dir: Path
+  audit_database_path: Path | None = None
+  audit_hmac_key: str = "development-audit-key-change-me-now"
+  release_sha: str = "0000000000000000000000000000000000000000"
   app_env: str = "development"
   auth_mode: str = "static"
   api_token: str = "test-api-token"
@@ -31,10 +34,18 @@ class Settings:
   rag_generation_enabled: bool | None = None
   rag_response_enabled: bool = False
   rag_allowed_tenants: tuple[str, ...] = ()
+  rag_response_allowed_users: tuple[str, ...] = ()
+  rag_retrieval_strategy: str = "hybrid-bge-v1"
+  reranker_base_url: str = "http://reranker:8000"
+  reranker_api_key: str | None = None
+  reranker_allowed_hosts: tuple[str, ...] = ()
   qdrant_url: str = "http://qdrant:6333"
   qdrant_api_key: str | None = None
   qdrant_collection_alias: str = "eisenhower-knowledge-active"
   embedding_version: str = "minilm-v1"
+  rag_embedding_model_name: str | None = None
+  rag_embedding_model_revision: str | None = None
+  rag_embedding_device: str | None = None
   chunking_version: str = "chars-1200-overlap-160-v1"
   inference_base_url: str = "http://inference:8000/v1"
   inference_api_key: str | None = None
@@ -49,6 +60,8 @@ class Settings:
   prompt_artifact_dir: Path = DEFAULT_PROMPT_ARTIFACT_DIR
   prompt_id: str = "eisenhower-classifier"
   prompt_version: str = "1.1.0"
+  knowledge_prompt_id: str = "knowledge-answer"
+  knowledge_prompt_version: str = "1.0.0"
   retrieval_version: str = "retrieval-v1"
   index_version: str = "index-v1"
   internal_api_token: str | None = None
@@ -108,12 +121,24 @@ class Settings:
   )
 
   def __post_init__(self) -> None:
+    if self.audit_database_path is None:
+      object.__setattr__(self, "audit_database_path", self.model_cache_dir / "audit.sqlite3")
     retrieval_enabled = self.rag_enabled if self.rag_retrieval_enabled is None else self.rag_retrieval_enabled
     generation_enabled = self.rag_enabled if self.rag_generation_enabled is None else self.rag_generation_enabled
     object.__setattr__(self, "rag_retrieval_enabled", retrieval_enabled)
     object.__setattr__(self, "rag_generation_enabled", generation_enabled)
     if generation_enabled and not retrieval_enabled:
       raise ValueError("RAG generation requires RAG retrieval to be enabled.")
+    if self.app_env == "production" and self.rag_response_enabled and not generation_enabled:
+      raise ValueError("RAG responses require RAG generation to be enabled.")
+    if (
+      self.app_env == "production"
+      and self.rag_response_enabled
+      and (not self.rag_allowed_tenants or not self.rag_response_allowed_users)
+    ):
+      raise ValueError("Production RAG responses require explicit tenant and user allowlists.")
+    if self.rag_retrieval_strategy not in {"dense-v1", "hybrid-bge-v1"}:
+      raise ValueError("RAG_RETRIEVAL_STRATEGY must be 'dense-v1' or 'hybrid-bge-v1'.")
     timeout_values = (
       self.inference_connect_timeout_seconds,
       self.inference_read_timeout_seconds,
@@ -125,6 +150,8 @@ class Settings:
       raise ValueError("Inference timeouts and circuit reset must be finite and positive.")
     if self.inference_circuit_failure_threshold < 1:
       raise ValueError("Inference circuit failure threshold must be positive.")
+    if bool(self.rag_embedding_model_name) != bool(self.rag_embedding_model_revision):
+      raise ValueError("RAG embedding model name and revision must be configured together.")
     if self.memory_retrieval_enabled and not self.memory_write_enabled:
       raise ValueError("Memory retrieval requires governed memory writes.")
     if self.memory_response_enabled and not self.memory_retrieval_enabled:
@@ -159,6 +186,10 @@ class Settings:
       character not in "0123456789abcdef" for character in self.local_model_revision
     ):
       raise ValueError("Local model revision must be a lowercase 40-character hexadecimal commit.")
+    if len(self.release_sha) != 40 or any(
+      character not in "0123456789abcdef" for character in self.release_sha
+    ):
+      raise ValueError("RELEASE_SHA must be a lowercase 40-character hexadecimal commit.")
     if self.chunking_version != "chars-1200-overlap-160-v1":
       raise ValueError("Unsupported CHUNKING_VERSION for the configured 1200/160 chunker.")
 
@@ -193,6 +224,20 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
       raise ValueError("Static production tokens must each contain at least 32 characters.")
     if api_token == admin_token:
       raise ValueError("EISENHOWER_ADMIN_TOKEN must differ from EISENHOWER_API_TOKEN.")
+  configured_audit_hmac_key = source.get("AUDIT_HMAC_KEY")
+  audit_hmac_key = configured_audit_hmac_key or "development-audit-key-change-me-now"
+  release_sha = source.get("RELEASE_SHA", "0" * 40)
+  if app_env == "production":
+    if (
+      configured_audit_hmac_key is None
+      or len(audit_hmac_key) < 32
+      or audit_hmac_key in {api_token, admin_token}
+    ):
+      raise ValueError("AUDIT_HMAC_KEY must be a separate secret of at least 32 characters in production.")
+    if release_sha == "0" * 40 or len(release_sha) != 40 or any(
+      character not in "0123456789abcdef" for character in release_sha
+    ):
+      raise ValueError("RELEASE_SHA must identify the exact lowercase 40-character production commit.")
   internal_api_token = source.get("EISENHOWER_INTERNAL_API_TOKEN") or None
   internal_allowed_tenants = parse_csv_list(source.get("INTERNAL_ALLOWED_TENANTS"), ())
   if app_env == "production" and internal_api_token and not internal_allowed_tenants:
@@ -207,6 +252,13 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     model_cache_dir=Path(
       source.get("MODEL_CACHE_DIR", str(base_dir / "data" / "runtime"))
     ),
+    audit_database_path=(
+      Path(source["AUDIT_DATABASE_PATH"])
+      if source.get("AUDIT_DATABASE_PATH")
+      else None
+    ),
+    audit_hmac_key=audit_hmac_key,
+    release_sha=release_sha,
     app_env=app_env,
     auth_mode=auth_mode,
     api_token=api_token,
@@ -227,12 +279,20 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     ),
     rag_response_enabled=source.get("RAG_RESPONSE_ENABLED", "false").lower() in ("true", "1", "yes"),
     rag_allowed_tenants=parse_csv_list(source.get("RAG_ALLOWED_TENANTS"), ()),
+    rag_response_allowed_users=parse_csv_list(source.get("RAG_RESPONSE_ALLOWED_USERS"), ()),
+    rag_retrieval_strategy=source.get("RAG_RETRIEVAL_STRATEGY", "hybrid-bge-v1"),
+    reranker_base_url=source.get("RERANKER_BASE_URL", "http://reranker:8000"),
+    reranker_api_key=source.get("RERANKER_API_KEY") or None,
+    reranker_allowed_hosts=parse_csv_list(source.get("RERANKER_ALLOWED_HOSTS"), ()),
     qdrant_url=source.get("QDRANT_URL", "http://qdrant:6333"),
     qdrant_api_key=source.get("QDRANT_API_KEY") or None,
     qdrant_collection_alias=source.get(
       "QDRANT_COLLECTION_ALIAS", "eisenhower-knowledge-active"
     ),
     embedding_version=source.get("EMBEDDING_VERSION", "minilm-v1"),
+    rag_embedding_model_name=source.get("RAG_EMBEDDING_MODEL_NAME") or None,
+    rag_embedding_model_revision=source.get("RAG_EMBEDDING_MODEL_REVISION") or None,
+    rag_embedding_device=source.get("RAG_EMBEDDING_DEVICE") or None,
     chunking_version=source.get("CHUNKING_VERSION", "chars-1200-overlap-160-v1"),
     inference_base_url=source.get(
       "INFERENCE_BASE_URL",
@@ -252,6 +312,8 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     ),
     prompt_id=source.get("PROMPT_ID", "eisenhower-classifier"),
     prompt_version=source.get("PROMPT_VERSION", "1.1.0"),
+    knowledge_prompt_id=source.get("KNOWLEDGE_PROMPT_ID", "knowledge-answer"),
+    knowledge_prompt_version=source.get("KNOWLEDGE_PROMPT_VERSION", "1.0.0"),
     retrieval_version=source.get("RETRIEVAL_VERSION", "retrieval-v1"),
     index_version=source.get("INDEX_VERSION", "index-v1"),
     internal_api_token=internal_api_token,

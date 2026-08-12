@@ -1,0 +1,270 @@
+{
+  "realm": "eisenhower",
+  "displayName": "Eisenhower Local",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": false,
+  "rememberMe": true,
+  "verifyEmail": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "roles": {
+    "realm": [
+      { "name": "user", "description": "Ordinary Eisenhower user" },
+      { "name": "admin", "description": "Eisenhower administrator" }
+    ]
+  },
+  "clientScopes": [
+    {
+      "name": "eisenhower-claims",
+      "description": "Identity and authorization claims consumed by Eisenhower services",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "subject",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-sub-mapper",
+          "consentRequired": false,
+          "config": {
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "tenant-id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "tenant_id",
+            "claim.name": "tenant_id",
+            "jsonType.label": "String",
+            "multivalued": "false",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "project-ids",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "project_ids",
+            "claim.name": "project_ids",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "usermodel.realmRoleMapping.rolePrefix": "",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "api-target",
+      "description": "Audience binding for tokens accepted by the Eisenhower API",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "eisenhower-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mcp:tools",
+      "description": "Invoke the pre-registered Eisenhower MCP resource",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "mcp-resource-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "${OIDC_MCP_RESOURCE_URL}",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "mcp-exchange-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "eisenhower-mcp-exchange",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tasks:read",
+      "description": "Read tasks owned by the authenticated subject",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "true" }
+    },
+    {
+      "name": "tasks:write",
+      "description": "Mutate tasks owned by the authenticated subject",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "true" }
+    },
+    {
+      "name": "calendar:read",
+      "description": "Read Calendar connection and synchronization state",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "true" }
+    },
+    {
+      "name": "calendar:write",
+      "description": "Manage the authenticated subject's Calendar connection and synchronization",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "true" }
+    },
+    {
+      "name": "knowledge:read",
+      "description": "Read tenant-scoped knowledge with citations",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "true" }
+    },
+    {
+      "name": "ai:analyze",
+      "description": "Invoke bounded AI analysis as the authenticated subject",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "true" }
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "eisenhower-api",
+      "name": "Eisenhower API resource",
+      "description": "Bearer-only audience validated by Node and Python services",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "publicClient": false,
+      "bearerOnly": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": false,
+      "defaultClientScopes": []
+    },
+    {
+      "clientId": "eisenhower-web",
+      "name": "Eisenhower local web",
+      "description": "Pre-registered browser client using Authorization Code with PKCE",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": true,
+      "redirectUris": ["${EISENHOWER_OIDC_REDIRECT_URI}"],
+      "webOrigins": ["${EISENHOWER_OIDC_WEB_ORIGIN}"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${EISENHOWER_OIDC_POST_LOGOUT_REDIRECT_URI}"
+      },
+      "defaultClientScopes": [
+        "eisenhower-claims", "api-target", "tasks:read", "tasks:write",
+        "calendar:read", "calendar:write", "knowledge:read", "ai:analyze"
+      ]
+    },
+    {
+      "clientId": "eisenhower-mcp-client",
+      "name": "Pre-registered Eisenhower MCP client",
+      "description": "Local MCP Authorization Code client; CIMD and DCR are intentionally disabled",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": true,
+      "redirectUris": ["${EISENHOWER_MCP_REDIRECT_URI}"],
+      "webOrigins": [],
+      "attributes": { "pkce.code.challenge.method": "S256" },
+      "defaultClientScopes": [
+        "eisenhower-claims", "mcp:tools", "tasks:read", "tasks:write",
+        "calendar:read", "calendar:write", "knowledge:read", "ai:analyze"
+      ]
+    },
+    {
+      "clientId": "eisenhower-mcp-exchange",
+      "name": "Eisenhower MCP token exchange",
+      "description": "Confidential internal client exchanging MCP resource tokens for API tokens",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${EISENHOWER_MCP_CLIENT_SECRET}",
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": false,
+      "attributes": { "standard.token.exchange.enabled": "true" },
+      "defaultClientScopes": [
+        "eisenhower-claims", "api-target", "tasks:read", "tasks:write",
+        "calendar:read", "calendar:write", "knowledge:read", "ai:analyze"
+      ]
+    }
+  ]
+}

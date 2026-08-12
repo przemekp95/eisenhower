@@ -51,6 +51,12 @@ export default function AIManagement({ onModelUpdated }: Props) {
   const [preserveExperience, setPreserveExperience] = useState(true);
   const [keepDefaults, setKeepDefaults] = useState(true);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [confirmProvider, setConfirmProvider] = useState<{
+    provider: AIProviderName;
+    label: string;
+  } | null>(null);
+  const [confirmRetrain, setConfirmRetrain] = useState(false);
+  const [refreshWarning, setRefreshWarning] = useState('');
 
   const quadrants = [
     { value: 0, label: t('matrix.do') },
@@ -90,8 +96,8 @@ export default function AIManagement({ onModelUpdated }: Props) {
   };
 
   useEffect(() => {
-    void refreshStatus().catch((issue) => {
-      setError(issue instanceof Error ? issue.message : t('ai.manage.failedLoadStats'));
+    void refreshStatus().catch(() => {
+      setError(t('ai.manage.failedLoadStats'));
     });
   }, [t]);
 
@@ -104,15 +110,20 @@ export default function AIManagement({ onModelUpdated }: Props) {
     setLoadingAction(actionKey);
     setError('');
     setMessage('');
+    setRefreshWarning('');
 
     try {
       await action();
-      await refreshStatus();
       afterSuccess?.();
       onModelUpdated();
       setMessage(successMessage);
-    } catch (issue) {
-      setError(issue instanceof Error ? issue.message : t('ai.manage.actionFailed'));
+      try {
+        await refreshStatus();
+      } catch {
+        setRefreshWarning(t('ai.manage.refreshWarning'));
+      }
+    } catch {
+      setError(t('ai.manage.actionFailed'));
     } finally {
       setLoadingAction(null);
     }
@@ -132,8 +143,8 @@ export default function AIManagement({ onModelUpdated }: Props) {
           quadrant: quadrants[examplesQuadrant].label,
         })
       );
-    } catch (issue) {
-      setError(issue instanceof Error ? issue.message : t('ai.manage.failedLoadExamples'));
+    } catch {
+      setError(t('ai.manage.failedLoadExamples'));
     } finally {
       setLoadingAction(null);
     }
@@ -173,19 +184,18 @@ export default function AIManagement({ onModelUpdated }: Props) {
     label: string,
     nextEnabled: boolean
   ) => {
+    if (!nextEnabled) {
+      setConfirmProvider({ provider, label });
+      return;
+    }
     await runAction(
       `provider-${provider}`,
       () => setProviderEnabled(provider, nextEnabled).then(() => undefined),
-      format(
-        nextEnabled
-          ? t('ai.manage.provider.enabledMessage')
-          : t('ai.manage.provider.disabledMessage'),
-        {
-          provider: label,
-        }
-      )
+      format(t('ai.manage.provider.enabledMessage'), { provider: label })
     );
   };
+
+  const managementEnabled = capabilities?.training_management !== false;
 
   return (
     <section className="space-y-4 text-sm text-white">
@@ -198,20 +208,6 @@ export default function AIManagement({ onModelUpdated }: Props) {
             <div className="mt-3 space-y-2 text-white/80">
               <p className="text-2xl font-semibold text-white">{stats.total_examples}</p>
               <p>{t('ai.manage.totalExamples')}</p>
-              {stats.model_name ? (
-                <p className="text-white/55">
-                  {format(t('ai.manage.modelStatus'), {
-                    model: stats.model_name,
-                    status: stats.model_ready ? t('ai.manage.on') : t('ai.manage.off'),
-                  })}
-                </p>
-              ) : null}
-              {stats.model_encoder ? (
-                <p className="text-white/45">
-                  {format(t('ai.manage.modelEncoder'), { encoder: stats.model_encoder })}
-                </p>
-              ) : null}
-              {stats.model_error ? <p className="text-red-200">{stats.model_error}</p> : null}
               <p className="text-white/55">
                 {format(t('ai.manage.lastUpdated'), {
                   date: new Date(stats.last_updated).toLocaleString(),
@@ -229,36 +225,67 @@ export default function AIManagement({ onModelUpdated }: Props) {
           <div className="mt-3 space-y-3">
             {providerStates.length > 0 ? (
               providerStates.map(({ key, label, control }) => (
-                <label
+                <div
                   key={key}
-                  className={`flex items-center justify-between gap-4 rounded-2xl border px-3 py-3 transition-colors ${
+                  className={`rounded-2xl border px-3 py-3 transition-colors ${
                     control.active
                       ? 'border-emerald-400/30 bg-emerald-500/10'
                       : 'border-white/10 bg-white/6'
                   }`}
                 >
-                  <div className="min-w-0">
-                    <p className="font-semibold text-white">{label}</p>
-                    <p className="text-xs text-white/60">{getProviderStatusLabel(control)}</p>
-                    {control.reason ? (
-                      <p className="mt-1 text-xs text-white/45">{control.reason}</p>
-                    ) : null}
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-white">{label}</p>
+                      <p className="text-xs text-white/60">{getProviderStatusLabel(control)}</p>
+                    </div>
+                    <label className="relative inline-flex min-h-11 items-center">
+                      <span className="sr-only">
+                        {format(t('ai.manage.provider.toggle'), { provider: label })}
+                      </span>
+                      <input
+                        type="checkbox"
+                        aria-label={format(t('ai.manage.provider.toggle'), { provider: label })}
+                        checked={control.enabled}
+                        disabled={!managementEnabled || loadingAction === `provider-${key}`}
+                        onChange={(event) =>
+                          void handleProviderToggle(key, label, event.target.checked)
+                        }
+                        className="peer sr-only"
+                      />
+                      <span className="h-7 w-12 rounded-full bg-white/12 transition-colors peer-checked:bg-cyan-400/70 peer-disabled:opacity-50" />
+                      <span className="pointer-events-none absolute left-1 h-5 w-5 rounded-full bg-white transition-transform peer-checked:translate-x-5" />
+                    </label>
                   </div>
-                  <span className="relative inline-flex items-center">
-                    <input
-                      type="checkbox"
-                      aria-label={format(t('ai.manage.provider.toggle'), { provider: label })}
-                      checked={control.enabled}
-                      disabled={loadingAction === `provider-${key}`}
-                      onChange={(event) =>
-                        void handleProviderToggle(key, label, event.target.checked)
-                      }
-                      className="peer sr-only"
-                    />
-                    <span className="h-7 w-12 rounded-full bg-white/12 transition-colors peer-checked:bg-cyan-400/70 peer-disabled:opacity-50" />
-                    <span className="pointer-events-none absolute left-1 h-5 w-5 rounded-full bg-white transition-transform peer-checked:translate-x-5" />
-                  </span>
-                </label>
+                  <p className="mt-2 text-xs leading-5 text-white/55">
+                    {t('ai.manage.providerImpact')}
+                  </p>
+                  {confirmProvider?.provider === key ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={loadingAction !== null}
+                        onClick={() => {
+                          setConfirmProvider(null);
+                          void runAction(
+                            `provider-${key}`,
+                            () => setProviderEnabled(key, false).then(() => undefined),
+                            format(t('ai.manage.provider.disabledMessage'), { provider: label })
+                          );
+                        }}
+                        className={`${buttonClass} bg-red-500 text-white`}
+                      >
+                        {format(t('ai.manage.confirmProviderOff'), { provider: label })}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmProvider(null)}
+                        className={`${buttonClass} bg-white/10 text-white`}
+                      >
+                        {t('ai.manage.cancel')}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               ))
             ) : (
               <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs text-white/50">
@@ -269,33 +296,50 @@ export default function AIManagement({ onModelUpdated }: Props) {
         </div>
       </div>
 
+      {!managementEnabled ? (
+        <p
+          role="status"
+          className="rounded-2xl border border-amber-300/30 bg-amber-950/30 p-4 text-amber-100"
+        >
+          {t('ai.manage.managementUnavailable')}
+        </p>
+      ) : null}
+
       <div className="grid gap-4 xl:grid-cols-2">
         <div className={cardClass}>
           <p className="text-xs uppercase tracking-[0.32em] text-cyan-200/70">
             {t('ai.manage.addTrainingExample')}
           </p>
           <div className="mt-3 space-y-3">
-            <input
-              value={exampleText}
-              onChange={(event) => setExampleText(event.target.value)}
-              className={fieldClass}
-              placeholder={t('ai.manage.taskText')}
-            />
-            <select
-              value={exampleQuadrant}
-              onChange={(event) => setExampleQuadrant(Number(event.target.value))}
-              className={fieldClass}
-            >
-              {quadrants.map((quadrant) => (
-                <option key={quadrant.value} value={quadrant.value} className="bg-slate-950">
-                  {quadrant.label}
-                </option>
-              ))}
-            </select>
+            <label className="block text-xs font-medium text-white/70">
+              {t('ai.manage.exampleTextLabel')}
+              <input
+                value={exampleText}
+                onChange={(event) => setExampleText(event.target.value)}
+                className={`${fieldClass} mt-1`}
+                placeholder={t('ai.manage.taskText')}
+              />
+            </label>
+            <label className="block text-xs font-medium text-white/70">
+              {t('ai.manage.exampleQuadrantLabel')}
+              <select
+                value={exampleQuadrant}
+                onChange={(event) => setExampleQuadrant(Number(event.target.value))}
+                className={`${fieldClass} mt-1`}
+              >
+                {quadrants.map((quadrant) => (
+                  <option key={quadrant.value} value={quadrant.value} className="bg-slate-950">
+                    {quadrant.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               type="button"
               className={`${buttonClass} bg-emerald-500 text-slate-950 hover:-translate-y-0.5 hover:bg-emerald-400 hover:shadow-lg hover:shadow-emerald-500/20`}
-              disabled={loadingAction !== null || exampleText.trim().length === 0}
+              disabled={
+                !managementEnabled || loadingAction !== null || exampleText.trim().length === 0
+              }
               onClick={() =>
                 void runAction(
                   'add-example',
@@ -319,48 +363,59 @@ export default function AIManagement({ onModelUpdated }: Props) {
             {t('ai.manage.feedbackLoop')}
           </p>
           <div className="mt-3 space-y-3">
-            <input
-              value={feedbackTask}
-              onChange={(event) => setFeedbackTask(event.target.value)}
-              className={fieldClass}
-              placeholder={t('ai.manage.feedbackTask')}
-            />
+            <label className="block text-xs font-medium text-white/70">
+              {t('ai.manage.feedbackTextLabel')}
+              <input
+                value={feedbackTask}
+                onChange={(event) => setFeedbackTask(event.target.value)}
+                className={`${fieldClass} mt-1`}
+                placeholder={t('ai.manage.feedbackTask')}
+              />
+            </label>
             <div className="grid gap-3 sm:grid-cols-2">
-              <select
-                value={predictedQuadrant}
-                onChange={(event) => setPredictedQuadrant(Number(event.target.value))}
-                className={fieldClass}
-              >
-                {quadrants.map((quadrant) => (
-                  <option
-                    key={`predicted-${quadrant.value}`}
-                    value={quadrant.value}
-                    className="bg-slate-950"
-                  >
-                    {t('ai.manage.predicted')}: {quadrant.label}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={correctQuadrant}
-                onChange={(event) => setCorrectQuadrant(Number(event.target.value))}
-                className={fieldClass}
-              >
-                {quadrants.map((quadrant) => (
-                  <option
-                    key={`correct-${quadrant.value}`}
-                    value={quadrant.value}
-                    className="bg-slate-950"
-                  >
-                    {t('ai.manage.correct')}: {quadrant.label}
-                  </option>
-                ))}
-              </select>
+              <label className="block text-xs font-medium text-white/70">
+                {t('ai.manage.predictedLabel')}
+                <select
+                  value={predictedQuadrant}
+                  onChange={(event) => setPredictedQuadrant(Number(event.target.value))}
+                  className={`${fieldClass} mt-1`}
+                >
+                  {quadrants.map((quadrant) => (
+                    <option
+                      key={`predicted-${quadrant.value}`}
+                      value={quadrant.value}
+                      className="bg-slate-950"
+                    >
+                      {t('ai.manage.predicted')}: {quadrant.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs font-medium text-white/70">
+                {t('ai.manage.correctLabel')}
+                <select
+                  value={correctQuadrant}
+                  onChange={(event) => setCorrectQuadrant(Number(event.target.value))}
+                  className={`${fieldClass} mt-1`}
+                >
+                  {quadrants.map((quadrant) => (
+                    <option
+                      key={`correct-${quadrant.value}`}
+                      value={quadrant.value}
+                      className="bg-slate-950"
+                    >
+                      {t('ai.manage.correct')}: {quadrant.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
             <button
               type="button"
               className={`${buttonClass} bg-cyan-500 text-slate-950 hover:-translate-y-0.5 hover:bg-cyan-400 hover:shadow-lg hover:shadow-cyan-500/20`}
-              disabled={loadingAction !== null || feedbackTask.trim().length === 0}
+              disabled={
+                !managementEnabled || loadingAction !== null || feedbackTask.trim().length === 0
+              }
               onClick={() =>
                 void runAction(
                   'feedback',
@@ -402,27 +457,49 @@ export default function AIManagement({ onModelUpdated }: Props) {
               />
               {t('ai.manage.keepDefaults')}
             </label>
+            <p className="text-xs leading-5 text-white/55">{t('ai.manage.retrainImpact')}</p>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 className={`${buttonClass} bg-violet-500 text-white hover:-translate-y-0.5 hover:bg-violet-400 hover:shadow-lg hover:shadow-violet-500/20`}
-                disabled={loadingAction !== null}
-                onClick={() =>
+                disabled={!managementEnabled || loadingAction !== null}
+                onClick={() => {
+                  if (!confirmRetrain) {
+                    setConfirmRetrain(true);
+                    return;
+                  }
+                  setConfirmRetrain(false);
                   void runAction(
                     'retrain',
                     async () => {
                       await retrainModel(preserveExperience);
                     },
                     t('ai.manage.retrained')
-                  )
-                }
+                  );
+                }}
               >
-                {loadingAction === 'retrain' ? t('ai.manage.retraining') : t('ai.manage.retrain')}
+                {loadingAction === 'retrain'
+                  ? t('ai.manage.retraining')
+                  : confirmRetrain
+                    ? t('ai.manage.confirmRetrain')
+                    : t('ai.manage.retrain')}
               </button>
+              {confirmRetrain ? (
+                <button
+                  type="button"
+                  className={`${buttonClass} bg-white/5 text-white`}
+                  onClick={() => setConfirmRetrain(false)}
+                >
+                  {t('ai.manage.cancel')}
+                </button>
+              ) : null}
+            </div>
+            <p className="text-xs leading-5 text-white/55">{t('ai.manage.clearImpact')}</p>
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 className={`${buttonClass} bg-white/10 text-white hover:bg-white/15 hover:text-white`}
-                disabled={loadingAction !== null}
+                disabled={!managementEnabled || loadingAction !== null}
                 onClick={() => {
                   if (!confirmClear) {
                     setConfirmClear(true);
@@ -456,7 +533,7 @@ export default function AIManagement({ onModelUpdated }: Props) {
                   className={`${buttonClass} bg-white/5 text-white`}
                   onClick={() => setConfirmClear(false)}
                 >
-                  {t('task.cancelDelete')}
+                  {t('ai.manage.cancel')}
                 </button>
               ) : null}
             </div>
@@ -468,21 +545,24 @@ export default function AIManagement({ onModelUpdated }: Props) {
             {t('ai.manage.browseExamples')}
           </p>
           <div className="mt-3 space-y-3">
-            <select
-              value={examplesQuadrant}
-              onChange={(event) => setExamplesQuadrant(Number(event.target.value))}
-              className={fieldClass}
-            >
-              {quadrants.map((quadrant) => (
-                <option
-                  key={`browse-${quadrant.value}`}
-                  value={quadrant.value}
-                  className="bg-slate-950"
-                >
-                  {quadrant.label}
-                </option>
-              ))}
-            </select>
+            <label className="block text-xs font-medium text-white/70">
+              {t('ai.manage.examplesQuadrantLabel')}
+              <select
+                value={examplesQuadrant}
+                onChange={(event) => setExamplesQuadrant(Number(event.target.value))}
+                className={`${fieldClass} mt-1`}
+              >
+                {quadrants.map((quadrant) => (
+                  <option
+                    key={`browse-${quadrant.value}`}
+                    value={quadrant.value}
+                    className="bg-slate-950"
+                  >
+                    {quadrant.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               type="button"
               className={`${buttonClass} bg-white/10 text-white hover:bg-white/15 hover:text-white`}
@@ -519,8 +599,33 @@ export default function AIManagement({ onModelUpdated }: Props) {
         </div>
       </div>
 
-      {message ? <p className="text-sm text-emerald-200">{message}</p> : null}
-      {error ? <p className="text-sm text-red-200">{error}</p> : null}
+      <button
+        type="button"
+        disabled={loadingAction !== null}
+        onClick={() => {
+          setRefreshWarning('');
+          setError('');
+          void refreshStatus().catch(() => setError(t('ai.manage.failedLoadStats')));
+        }}
+        className={`${buttonClass} border border-white/15 bg-white/5 text-white hover:bg-white/10`}
+      >
+        {t('ai.manage.refresh')}
+      </button>
+      {message ? (
+        <p role="status" aria-live="polite" className="text-sm text-emerald-200">
+          {message}
+        </p>
+      ) : null}
+      {refreshWarning ? (
+        <p role="alert" className="text-sm text-amber-200">
+          {refreshWarning}
+        </p>
+      ) : null}
+      {error ? (
+        <p role="alert" className="text-sm text-red-200">
+          {error}
+        </p>
+      ) : null}
     </section>
   );
 }

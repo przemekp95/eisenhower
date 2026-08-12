@@ -61,7 +61,10 @@ immutable registered candidate, a matching fresh checksummed green report and an
 approval receipt authenticated with an owner-controlled HMAC key file (`0600`, at least 32 bytes).
 Stable canary assignment uses only a caller-supplied pseudonym and stores no
 subject identifier. `--apply` changes only the local atomic pointer; it never deploys. Previous
-pointers are retained for rollback.
+pointers are retained for rollback. Applied transitions and rollback additionally require
+`--audit-database`, a separate `--audit-key-file` with `0600` permissions, and the exact
+`--release-sha`; the command fails closed before changing the pointer when that durable audit
+configuration is incomplete. Dry runs remain non-mutating and may omit it.
 
 TASK-001, TASK-002 and TASK-013 remain human gates. Hardware, model, GPU, quantization and license
 selection remain TASK-015. Live vLLM, production traffic, shadow/canary deployment, publication,

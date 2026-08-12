@@ -5,7 +5,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..generation.models import GenerationResult, InformationDelta, KnownStatement
+from ..generation.models import (
+  GenerationResult,
+  InformationDelta,
+  KnowledgeAnswerClaim,
+  KnownStatement,
+)
 
 
 class StrictModel(BaseModel):
@@ -77,6 +82,21 @@ class GenerationRequest(StrictModel):
       raise ValueError("known and previous-output statement ids must be globally unique")
 
 
+class KnowledgeAnswerRequest(StrictModel):
+  task: str = Field(..., min_length=1, max_length=2000)
+  context: list[RetrievalHit]
+  language: Literal["pl", "en"] = "en"
+  retrieval_version: str = "retrieval-v1"
+  index_version: str = "index-v1"
+  known_state: None = None
+  previous_output_statements: None = None
+  freshness_requirement: Literal["snapshot_sufficient"] = "snapshot_sufficient"
+
+  @property
+  def delta_requested(self) -> bool:
+    return False
+
+
 class Citation(StrictModel):
   chunk_id: str
   document_id: str
@@ -115,6 +135,16 @@ class AnalyzeResult(StrictModel):
   generation: GenerationMetadata | None = None
   fallback_reason: str | None = None
   information_delta: InformationDelta | None = None
+
+
+class KnowledgeAnswerResponse(StrictModel):
+  status: Literal["answered", "insufficient_evidence"]
+  answer: str | None = None
+  claims: list[KnowledgeAnswerClaim] = Field(default_factory=list)
+  citations: list[Citation] = Field(default_factory=list)
+  retrieval: RetrievalSummary = Field(default_factory=RetrievalSummary)
+  generation: GenerationMetadata | None = None
+  no_answer_reason: str | None = None
 
 
 class SourceDocument(StrictModel):

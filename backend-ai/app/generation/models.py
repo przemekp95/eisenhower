@@ -300,8 +300,80 @@ class ClassificationOutput(StrictFrozenModel):
     return self
 
 
+class KnowledgeAnswerClaim(StrictFrozenModel):
+  statement: str = Field(..., min_length=1, max_length=1000)
+  citation_ids: list[str] = Field(..., min_length=1, max_length=12)
+
+  @model_validator(mode="after")
+  def citation_ids_are_unique(self):
+    if len(self.citation_ids) != len(set(self.citation_ids)):
+      raise ValueError("knowledge claim citation ids must be unique")
+    return self
+
+
+class KnowledgeAnswerOutput(StrictFrozenModel):
+  status: Literal["answered", "insufficient_evidence"]
+  answer: str | None = Field(default=None, max_length=4000)
+  claims: list[KnowledgeAnswerClaim] = Field(default_factory=list, max_length=12)
+  citations: list[str] = Field(default_factory=list, max_length=20)
+  no_answer_reason: Literal[
+    "none",
+    "insufficient_context",
+    "conflicting_context",
+    "unsupported_query",
+    "prompt_injection_detected",
+  ]
+
+  @model_validator(mode="after")
+  def answer_shape_is_grounded(self):
+    if len(self.citations) != len(set(self.citations)):
+      raise ValueError("knowledge answer citation ids must be unique")
+    used_citations = {
+      citation_id for claim in self.claims for citation_id in claim.citation_ids
+    }
+    if self.status == "answered":
+      if not self.answer or not str(self.answer).strip():
+        raise ValueError("answered output requires a non-empty answer")
+      if not self.claims or not self.citations:
+        raise ValueError("answered output requires claims and citations")
+      if used_citations != set(self.citations):
+        raise ValueError("answer citations must exactly match claim citations")
+      if self.no_answer_reason != "none":
+        raise ValueError("answered output requires no_answer_reason=none")
+    else:
+      if self.answer is not None or self.claims or self.citations:
+        raise ValueError("insufficient_evidence must not contain answer content")
+      if self.no_answer_reason == "none":
+        raise ValueError("insufficient_evidence requires a concrete no_answer_reason")
+    return self
+
+
+class KnowledgeAnswerDecision(StrictFrozenModel):
+  status: Literal["answered", "insufficient_evidence"]
+
+
+class KnowledgeGroundedAnswer(StrictFrozenModel):
+  status: Literal["answered"]
+  answer: str = Field(..., min_length=1, max_length=4000)
+  citation_id: str = Field(..., min_length=1, max_length=256)
+  no_answer_reason: Literal["none"]
+
+
 class GenerationResult(StrictFrozenModel):
   output: ClassificationOutput
+  execution_id: str = Field(..., pattern=r"^[a-f0-9]{64}$")
+  prompt_id: str
+  prompt_version: str
+  language: Literal["pl", "en"]
+  model_id: str
+  model_revision: str
+  schema_version: str
+  input_tokens: int = Field(..., ge=0)
+  context_chunk_ids: list[str] = Field(default_factory=list)
+
+
+class KnowledgeAnswerResult(StrictFrozenModel):
+  output: KnowledgeAnswerOutput
   execution_id: str = Field(..., pattern=r"^[a-f0-9]{64}$")
   prompt_id: str
   prompt_version: str

@@ -54,6 +54,8 @@ export class EisenhowerWorld extends World {
   response?: Response;
   taskId?: string;
   taskRevision?: number;
+  actorTenantId = 'local';
+  actorUserId = 'local-user';
 
   constructor(options: IWorldOptions) {
     super(options);
@@ -75,6 +77,8 @@ Before(function (this: EisenhowerWorld) {
   this.response = undefined;
   this.taskId = undefined;
   this.taskRevision = undefined;
+  this.actorTenantId = 'local';
+  this.actorUserId = 'local-user';
 });
 
 After(async () => {

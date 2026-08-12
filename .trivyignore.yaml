@@ -1,15 +1,1 @@
-vulnerabilities:
-  - id: CVE-2025-71329
-    paths:
-      - "mobile/eisenhower-matrix/package-lock.json"
-    purls:
-      - "pkg:npm/image-size@1.2.1"
-    expired_at: 2026-10-31
-    statement: Temporary Expo and Metro build-tool exception; no patched image-size release is available.
-  - id: CVE-2025-71330
-    paths:
-      - "mobile/eisenhower-matrix/package-lock.json"
-    purls:
-      - "pkg:npm/image-size@1.2.1"
-    expired_at: 2026-10-31
-    statement: Temporary Expo and Metro build-tool exception; no patched image-size release is available.
+vulnerabilities: []

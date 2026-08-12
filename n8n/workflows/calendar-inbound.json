@@ -1,0 +1,189 @@
+{
+  "name": "Eisenhower - Google Calendar inbound signal",
+  "active": false,
+  "settings": { "executionOrder": "v1", "saveDataSuccessExecution": "none" },
+  "nodes": [
+    {
+      "id": "inbound-webhook",
+      "webhookId": "4e3a92f1-d81b-4af2-b414-529017013cc0",
+      "name": "Receive Google Calendar Signal",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1100, 0],
+      "parameters": { "httpMethod": "POST", "path": "eisenhower-google-calendar", "responseMode": "responseNode", "options": {} }
+    },
+    {
+      "id": "inbound-respond",
+      "name": "Acknowledge Signal Immediately",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [-880, -180],
+      "parameters": { "respondWith": "json", "responseBody": "={\"accepted\":true}", "options": { "responseCode": 202 } }
+    },
+    {
+      "id": "inbound-sign-validate",
+      "name": "Sign Notification Validation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-880, 40],
+      "parameters": {
+        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/notifications/validate';\nconst headers = $json.headers || {};\nconst body = { channelId: headers['x-goog-channel-id'], resourceId: headers['x-goog-resource-id'], messageNumber: headers['x-goog-message-number'] };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+      }
+    },
+    {
+      "id": "inbound-validate",
+      "name": "Validate Channel And Claim Signal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-650, 40],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EISENHOWER_NODE_INTERNAL_API_URL + '/internal/calendar/notifications/validate' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
+        ] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.signedBody }}",
+        "options": { "timeout": 5000 }
+      }
+    },
+    {
+      "id": "inbound-sign-provider-changes",
+      "name": "Sign Provider Changes Pull",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-430, 40],
+      "parameters": {
+        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/provider/changes';\nconst checkpoint = $json.pageToken || $json.syncToken || 'full-resync';\nconst body = { connectionId: $json.connectionId, checkpoint };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+      }
+    },
+    {
+      "id": "inbound-fetch",
+      "name": "Pull Provider Changes Through Node",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-200, 40],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EISENHOWER_NODE_INTERNAL_API_URL + '/internal/calendar/provider/changes' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
+        ] },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.signedBody }}",
+        "options": { "timeout": 15000, "response": { "response": { "responseFormat": "json" } } }
+      }
+    },
+    {
+      "id": "inbound-gone",
+      "name": "Sync Token Is Gone",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-190, 40],
+      "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.statusCode }}", "rightValue": 410, "operator": { "type": "number", "operation": "equals" } }], "combinator": "and" }, "options": {} }
+    },
+    {
+      "id": "inbound-sign-reset",
+      "name": "Sign Controlled Sync Reset",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [40, -100],
+      "parameters": {
+        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/sync/reset';\nconst signal = $('Validate Channel And Claim Signal').item.json;\nconst body = { operationId: `${signal.signalId}:reset`, tenantId: signal.tenantId, ownerId: signal.ownerId, connectionId: signal.connectionId };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+      }
+    },
+    {
+      "id": "inbound-reset",
+      "name": "Request Controlled Full Resync",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [280, -100],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EISENHOWER_NODE_INTERNAL_API_URL + '/internal/calendar/sync/reset' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
+        ] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.signedBody }}",
+        "options": { "timeout": 5000 }
+      }
+    },
+    {
+      "id": "inbound-expand",
+      "name": "Expand Provider Changes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [40, 160],
+      "parameters": {
+        "jsCode": "const signal = $('Validate Channel And Claim Signal').item.json;\nconst payload = $json.body ?? {};\nconst page = typeof payload === 'string' ? JSON.parse(payload) : payload;\nconst commands = [];\nif (page.resetRequired) commands.push({ operationId: `${signal.signalId}:reset`, tenantId: signal.tenantId, ownerId: signal.ownerId, connectionId: signal.connectionId, kind: 'sync_token_gone' });\nfor (const event of (page.events || [])) {\n  const base = { operationId: `${signal.signalId}:event:${event.id}:${event.etag}`, tenantId: signal.tenantId, ownerId: signal.ownerId, connectionId: signal.connectionId, providerEventId: event.id, providerEtag: event.etag };\n  if (event.status === 'cancelled') commands.push({ ...base, kind: 'event_deleted' });\n  else if (event.start && event.start.dateTime) commands.push({ ...base, kind: 'event_changed', title: event.summary || '', dueAt: event.start.dateTime, timeZone: event.start.timeZone || 'UTC' });\n}\nconst token = page.nextPageToken || page.nextSyncToken;\nif (token) commands.push({ operationId: `${signal.signalId}:checkpoint:${token}`, tenantId: signal.tenantId, ownerId: signal.ownerId, connectionId: signal.connectionId, kind: 'sync_checkpoint', ...(page.nextPageToken ? { nextPageToken: page.nextPageToken } : {}), ...(page.nextSyncToken ? { nextSyncToken: page.nextSyncToken } : {}) });\nreturn commands.map(command => ({ json: { command } }));"
+      }
+    },
+    {
+      "id": "inbound-sign-apply",
+      "name": "Sign Incremental Sync Apply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [280, 160],
+      "parameters": {
+        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/sync/apply';\nconst body = $json.command;\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+      }
+    },
+    {
+      "id": "inbound-apply",
+      "name": "Apply Incremental Calendar Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 160],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EISENHOWER_NODE_INTERNAL_API_URL + '/internal/calendar/sync/apply' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
+        ] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.signedBody }}",
+        "options": { "timeout": 15000 }
+      }
+    }
+  ],
+  "connections": {
+    "Receive Google Calendar Signal": { "main": [[{ "node": "Acknowledge Signal Immediately", "type": "main", "index": 0 }, { "node": "Sign Notification Validation", "type": "main", "index": 0 }]] },
+    "Sign Notification Validation": { "main": [[{ "node": "Validate Channel And Claim Signal", "type": "main", "index": 0 }]] },
+    "Validate Channel And Claim Signal": { "main": [[{ "node": "Sign Provider Changes Pull", "type": "main", "index": 0 }]] },
+    "Sign Provider Changes Pull": { "main": [[{ "node": "Pull Provider Changes Through Node", "type": "main", "index": 0 }]] },
+    "Pull Provider Changes Through Node": { "main": [[{ "node": "Sync Token Is Gone", "type": "main", "index": 0 }]] },
+    "Sync Token Is Gone": { "main": [[{ "node": "Sign Controlled Sync Reset", "type": "main", "index": 0 }], [{ "node": "Expand Provider Changes", "type": "main", "index": 0 }]] },
+    "Sign Controlled Sync Reset": { "main": [[{ "node": "Request Controlled Full Resync", "type": "main", "index": 0 }]] },
+    "Expand Provider Changes": { "main": [[{ "node": "Sign Incremental Sync Apply", "type": "main", "index": 0 }]] },
+    "Sign Incremental Sync Apply": { "main": [[{ "node": "Apply Incremental Calendar Page", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "meta": {},
+  "tags": []
+}

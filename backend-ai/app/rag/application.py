@@ -6,12 +6,14 @@ from .models import (
   Citation,
   GenerationMetadata,
   GenerationRequest,
+  KnowledgeAnswerRequest,
+  KnowledgeAnswerResponse,
   RetrievalQuery,
   RetrievalSummary,
 )
 from ..generation.delta import InformationDeltaValidator, InformationDeltaViolation
 from ..generation.models import InformationDelta, KnownStatement
-from .errors import GenerationProviderError, InvalidGenerationOutput
+from .errors import GenerationProviderError, InvalidGenerationOutput, RerankerUnavailable
 from .ports import FallbackClassifier, GenerationProvider, Retriever
 
 
@@ -54,7 +56,10 @@ class RagAnalysisService:
     previous_output_statements: list[KnownStatement] | None = None,
     freshness_requirement: str = "snapshot_sufficient",
   ) -> AnalyzeResult:
-    hits, retrieval = self._retrieve(task, scope, limit=self.retrieval_limit)
+    try:
+      hits, retrieval = self._retrieve(task, scope, limit=self.retrieval_limit)
+    except RerankerUnavailable:
+      return self._fallback(task, RetrievalSummary(), "reranker_unavailable")
     if freshness_requirement == "current_world_required":
       delta = InformationDelta(
         status="freshness_unverified",
@@ -183,6 +188,76 @@ class RagAnalysisService:
       "retrieval": retrieval,
     }
 
+  def answer(
+    self,
+    query: str,
+    scope: AccessScope,
+    *,
+    language: str = "en",
+    limit: int = 5,
+    project_id: str | None = None,
+  ) -> KnowledgeAnswerResponse:
+    try:
+      hits, retrieval = self._retrieve(query, scope, limit=limit, project_id=project_id)
+    except RerankerUnavailable:
+      return self._knowledge_no_answer(RetrievalSummary(), "reranker_unavailable")
+    if not hits:
+      return self._knowledge_no_answer(retrieval, "no_retrieval_hits")
+    if self.generator is None:
+      return self._knowledge_no_answer(retrieval, "generation_disabled")
+
+    try:
+      generated = self.generator.answer(KnowledgeAnswerRequest(
+        task=query,
+        context=hits,
+        language=language,
+        retrieval_version=self.retrieval_version,
+        index_version=self.index_version,
+      ))
+    except InvalidGenerationOutput as error:
+      return self._knowledge_no_answer(retrieval, error.reason)
+    except GenerationProviderError as error:
+      return self._knowledge_no_answer(retrieval, error.reason)
+
+    output = generated.output
+    generation = GenerationMetadata(
+      execution_id=generated.execution_id,
+      prompt_id=generated.prompt_id,
+      prompt_version=generated.prompt_version,
+      model_id=generated.model_id,
+      model_revision=generated.model_revision,
+      schema_version=generated.schema_version,
+      language=generated.language,
+      input_tokens=generated.input_tokens,
+    )
+    if output.status == "insufficient_evidence":
+      return self._knowledge_no_answer(
+        retrieval,
+        output.no_answer_reason or "insufficient_context",
+        generation=generation,
+      )
+
+    hit_by_id = {hit.chunk_id: hit for hit in hits}
+    claim_citations = {
+      citation_id for claim in output.claims for citation_id in claim.citation_ids
+    }
+    if (
+      not output.answer
+      or not output.claims
+      or not output.citations
+      or claim_citations != set(output.citations)
+      or any(citation_id not in hit_by_id for citation_id in output.citations)
+    ):
+      return self._knowledge_no_answer(retrieval, "invalid_citations")
+    return KnowledgeAnswerResponse(
+      status="answered",
+      answer=output.answer,
+      claims=output.claims,
+      citations=[self._citation(hit_by_id[citation_id]) for citation_id in output.citations],
+      retrieval=retrieval,
+      generation=generation,
+    )
+
   def _retrieve(
     self,
     query: str,
@@ -238,6 +313,23 @@ class RagAnalysisService:
       citations=[],
       retrieval=retrieval,
       fallback_reason=reason,
+    )
+
+  @staticmethod
+  def _knowledge_no_answer(
+    retrieval: RetrievalSummary,
+    reason: str,
+    *,
+    generation: GenerationMetadata | None = None,
+  ) -> KnowledgeAnswerResponse:
+    return KnowledgeAnswerResponse(
+      status="insufficient_evidence",
+      answer=None,
+      claims=[],
+      citations=[],
+      retrieval=retrieval,
+      generation=generation,
+      no_answer_reason=reason,
     )
 
   @staticmethod

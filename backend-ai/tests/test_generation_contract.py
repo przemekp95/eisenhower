@@ -8,6 +8,8 @@ from app.generation.models import (
   Evidence,
   Fact,
   GenerationConfig,
+  KnowledgeAnswerClaim,
+  KnowledgeAnswerOutput,
   PromptSpec,
 )
 
@@ -90,6 +92,34 @@ def test_output_rejects_duplicate_or_unreferenced_citations_and_extra_fields():
     )
   with pytest.raises(ValidationError):
     ClassificationOutput.model_validate({**common, "evidence": [], "citations": [], "extra": True})
+
+
+def test_knowledge_answer_requires_every_claim_to_be_cited_and_no_answer_to_be_empty():
+  answered = KnowledgeAnswerOutput(
+    status="answered",
+    answer="MongoDB is canonical.",
+    claims=[KnowledgeAnswerClaim(statement="MongoDB is canonical.", citation_ids=["chunk-1"])],
+    citations=["chunk-1"],
+    no_answer_reason="none",
+  )
+  assert answered.citations == ["chunk-1"]
+
+  with pytest.raises(ValidationError, match="exactly match"):
+    KnowledgeAnswerOutput(
+      status="answered",
+      answer="Unsupported second citation.",
+      claims=[KnowledgeAnswerClaim(statement="One claim.", citation_ids=["chunk-1"])],
+      citations=["chunk-1", "chunk-2"],
+      no_answer_reason="none",
+    )
+  with pytest.raises(ValidationError, match="must not contain answer content"):
+    KnowledgeAnswerOutput(
+      status="insufficient_evidence",
+      answer="Guess",
+      claims=[],
+      citations=[],
+      no_answer_reason="insufficient_context",
+    )
 
 
 def _prompt_spec(**updates) -> PromptSpec:

@@ -243,6 +243,16 @@ const styles = StyleSheet.create({
     marginTop: 4,
     color: '#94a3b8',
   },
+  scheduleBox: {
+    gap: 8,
+  },
+  scheduleEditor: {
+    gap: 8,
+  },
+  scheduleError: {
+    color: '#fca5a5',
+    fontWeight: '700',
+  },
   pendingSyncBadge: {
     alignSelf: 'flex-start',
     marginTop: 8,

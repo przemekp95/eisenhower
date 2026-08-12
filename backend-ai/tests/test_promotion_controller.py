@@ -3,9 +3,11 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from hashlib import sha256
 import json
+from types import SimpleNamespace
 
 import pytest
 
+from app.audit import AuditAction, AuditOutcome, SqliteAuditSink
 from app.artifacts.models import CandidateManifest, GitLineage, LineageGroup, RuntimeLineage
 from app.ops.promotion import (
   PromotionBlocked,
@@ -13,6 +15,29 @@ from app.ops.promotion import (
   stable_canary_assignment,
   verify_hmac_approval,
 )
+from scripts.ai_promotion import _load_audit_sink
+
+
+def test_promotion_cli_requires_complete_durable_audit_config_for_apply(tmp_path):
+  args = SimpleNamespace(
+    apply=True,
+    audit_database=None,
+    audit_key_file=None,
+    release_sha=None,
+  )
+  with pytest.raises(PromotionBlocked, match="requires --audit-database"):
+    _load_audit_sink(args)
+
+  key_path = tmp_path / "audit.key"
+  key_path.write_bytes(b"cli-audit-key-with-at-least-thirty-two-bytes")
+  key_path.chmod(0o600)
+  args.audit_database = tmp_path / "audit.sqlite3"
+  args.audit_key_file = key_path
+  args.release_sha = "f" * 40
+
+  sink = _load_audit_sink(args)
+  assert sink is not None
+  sink.close()
 
 
 def _green_report(candidate_id: str) -> dict:
@@ -59,11 +84,103 @@ def _approval_verifier(approval: dict) -> bool:
   return approval.get("approval_source") == "owner_out_of_band"
 
 
+def _audit_sink(tmp_path):
+  return SqliteAuditSink(
+    tmp_path / "audit.sqlite3",
+    hmac_key=b"promotion-audit-test-key-at-least-32-bytes",
+  )
+
+
+def test_applied_transition_and_rollback_are_audited_without_candidate_or_actor_leakage(tmp_path):
+  sink = _audit_sink(tmp_path)
+  controller = PromotionController(
+    tmp_path / "promotion",
+    candidate_verifier=_candidate,
+    approval_verifier=_approval_verifier,
+    audit_sink=sink,
+    release_sha="d" * 40,
+  )
+
+  controller.transition(
+    phase="retrieval", target_mode="shadow", candidate_id="rag-v1", canary_percent=0,
+    quality_report=_green_report("rag-v1"), approval=_approval("retrieval", "rag-v1"),
+    dry_run=False, request_id="request-transition",
+  )
+  controller.rollback(actor_id="release-owner", request_id="request-rollback")
+
+  records = sink.query(limit=20)
+  assert [(record.action, record.outcome) for record in records] == [
+    (AuditAction.ROLLOUT_DECISION, AuditOutcome.ATTEMPT),
+    (AuditAction.ROLLOUT_DECISION, AuditOutcome.SUCCESS),
+    (AuditAction.ROLLBACK_DECISION, AuditOutcome.ATTEMPT),
+    (AuditAction.ROLLBACK_DECISION, AuditOutcome.SUCCESS),
+  ]
+  assert [record.request_id for record in records] == [
+    "request-transition", "request-transition", "request-rollback", "request-rollback"
+  ]
+  database_bytes = sink.path.read_bytes()
+  assert b"rag-v1" not in database_bytes
+  assert b"owner-out-of-band" not in database_bytes
+  assert b"release-owner" not in database_bytes
+
+
+def test_applied_transition_fails_closed_before_validation_or_pointer_write_when_audit_fails(tmp_path):
+  sink = _audit_sink(tmp_path)
+  sink.close()
+  verifier_calls = []
+  controller = PromotionController(
+    tmp_path / "promotion",
+    candidate_verifier=verifier_calls.append,
+    approval_verifier=_approval_verifier,
+    audit_sink=sink,
+    release_sha="d" * 40,
+  )
+  before = controller.read()
+
+  with pytest.raises(PromotionBlocked, match="audit"):
+    controller.transition(
+      phase="retrieval", target_mode="shadow", candidate_id="rag-v1", canary_percent=0,
+      quality_report=_green_report("rag-v1"), approval=_approval("retrieval", "rag-v1"),
+      dry_run=False, request_id="request-transition",
+    )
+
+  assert not verifier_calls
+  assert controller.read() == before
+
+
+def test_rejected_transition_is_audited_and_does_not_change_pointer(tmp_path):
+  sink = _audit_sink(tmp_path)
+  controller = PromotionController(
+    tmp_path / "promotion",
+    candidate_verifier=_candidate,
+    approval_verifier=_approval_verifier,
+    audit_sink=sink,
+    release_sha="d" * 40,
+  )
+  before = controller.read()
+
+  with pytest.raises(PromotionBlocked, match="quality"):
+    controller.transition(
+      phase="retrieval", target_mode="shadow", candidate_id="rag-v1", canary_percent=0,
+      quality_report={**_green_report("rag-v1"), "status": "blocked"},
+      approval=_approval("retrieval", "rag-v1"), dry_run=False,
+      request_id="request-rejected",
+    )
+
+  assert controller.read() == before
+  records = sink.query(limit=10)
+  assert [(record.action, record.outcome) for record in records] == [
+    (AuditAction.ROLLOUT_DECISION, AuditOutcome.ATTEMPT),
+    (AuditAction.ROLLOUT_DECISION, AuditOutcome.REJECTED),
+  ]
+
+
 def test_controller_promotes_each_phase_independently_and_rolls_back_atomically(tmp_path):
   candidates = {"rag-v1": _candidate("rag-v1"), "llm-v1": _candidate("llm-v1", "llmops")}
   controller = PromotionController(
     tmp_path / "promotion", candidate_verifier=lambda candidate_id: candidates[candidate_id],
     approval_verifier=_approval_verifier,
+    audit_sink=_audit_sink(tmp_path), release_sha="d" * 40,
   )
   initial = controller.read()
   assert {phase: value["mode"] for phase, value in initial["phases"].items()} == {
@@ -103,6 +220,7 @@ def test_controller_fails_closed_on_dependency_transition_evidence_or_approval(
       candidate_id, "llmops" if candidate_id.startswith("llm-") else "ragops"
     ),
     approval_verifier=_approval_verifier,
+    audit_sink=_audit_sink(tmp_path), release_sha="d" * 40,
   )
   with pytest.raises(PromotionBlocked, match=match):
     controller.transition(

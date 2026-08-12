@@ -1,0 +1,65 @@
+limit_req_zone $binary_remote_addr zone=access_per_ip:10m rate=30r/s;
+map_hash_bucket_size 128;
+
+map $http_origin $origin_allowed {
+    default 0;
+    "" 1;
+    "${ACCESS_GATEWAY_ALLOWED_ORIGIN}" 1;
+}
+
+server {
+    listen 8080;
+    server_name _;
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    set $identity_upstream ${IDENTITY_UPSTREAM};
+    set $mcp_upstream ${MCP_UPSTREAM};
+    set $api_upstream ${API_UPSTREAM};
+    set $ai_upstream ${AI_UPSTREAM};
+    set $web_upstream ${WEB_UPSTREAM};
+    access_log off;
+    server_tokens off;
+    client_max_body_size 1m;
+
+    if ($host != "${ACCESS_GATEWAY_HOST}") { return 421; }
+    if ($origin_allowed = 0) { return 403; }
+
+    limit_req zone=access_per_ip burst=20 nodelay;
+
+    proxy_connect_timeout 3s;
+    proxy_send_timeout 15s;
+    proxy_read_timeout 60s;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $http_host;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+    location = /identity { return 308 /identity/; }
+    location /identity/ {
+        proxy_pass http://$identity_upstream;
+    }
+
+    location = /mcp {
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+        proxy_pass http://$mcp_upstream/mcp;
+    }
+
+    location = /.well-known/oauth-protected-resource/mcp {
+        proxy_pass http://$mcp_upstream/.well-known/oauth-protected-resource/mcp;
+    }
+
+    location /api/ {
+        rewrite ^/api/(.*)$ /$1 break;
+        proxy_pass http://$api_upstream;
+    }
+
+    location /ai/ {
+        rewrite ^/ai/(.*)$ /$1 break;
+        proxy_pass http://$ai_upstream;
+    }
+
+    location / {
+        proxy_pass http://$web_upstream;
+    }
+}

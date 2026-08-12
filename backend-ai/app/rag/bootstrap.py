@@ -13,6 +13,7 @@ from ..generation.delta import EmbeddingStatementSimilarity, InformationDeltaVal
 from .adapters import (
   CircuitBreakerGenerationProvider,
   MiniLMEmbeddingProvider,
+  SentenceTransformerEmbeddingProvider,
   QdrantRetriever,
   QdrantIngestionAdapter,
   OpenAICompatibleGenerationProvider,
@@ -22,6 +23,7 @@ from .application import RagAnalysisService
 from .canonical import CanonicalIngestionApplication, CanonicalRetriever
 from .collections import QdrantCollectionManager
 from .ingestion import DeterministicChunker
+from .hybrid import CanonicalBm25Retriever, HybridRetriever, PrivateVllmReranker
 from .mongo_document_store import MongoCanonicalDocumentStore
 
 
@@ -44,6 +46,7 @@ def build_rag_service(
   *,
   qdrant_client=None,
   mongo_client=None,
+  reranker_client=None,
 ) -> RagAnalysisService:
   if not settings.rag_retrieval_enabled:
     raise ValueError("RAG retrieval is disabled")
@@ -54,10 +57,7 @@ def build_rag_service(
     raise ValueError("MONGODB_URI is required for canonical RAG retrieval")
   if settings.mongodb_uri and not is_private_mongodb_uri(settings.mongodb_uri):
     raise ValueError("MongoDB must use a fixed private-network endpoint")
-  embedding = MiniLMEmbeddingProvider(
-    fallback_classifier.local_model,
-    version=settings.embedding_version,
-  )
+  embedding = _build_retrieval_embedding(settings, fallback_classifier.local_model)
   qdrant = qdrant_client or QdrantClient(
     url=settings.qdrant_url,
     api_key=settings.qdrant_api_key,
@@ -76,12 +76,41 @@ def build_rag_service(
   canonical_store = MongoCanonicalDocumentStore(
     mongo_client[settings.mongodb_database][settings.canonical_documents_collection]
   )
-  retriever = CanonicalRetriever(
+  dense_retriever = CanonicalRetriever(
     projection_retriever,
     canonical_store,
     embedding_version=settings.embedding_version,
     chunker=DeterministicChunker(max_chars=1200, overlap_chars=160),
   )
+  if settings.rag_retrieval_strategy == "dense-v1":
+    retriever = dense_retriever
+  else:
+    if not settings.reranker_api_key:
+      raise ValueError("RERANKER_API_KEY is required for hybrid-bge-v1")
+    lexical_retriever = CanonicalBm25Retriever(
+      canonical_store,
+      embedding_version=settings.embedding_version,
+      chunker=DeterministicChunker(max_chars=1200, overlap_chars=160),
+      title_weight=2.0,
+      text_weight=1.0,
+    )
+    reranker = PrivateVllmReranker(
+      settings.reranker_base_url,
+      settings.reranker_api_key,
+      allowed_hosts=settings.reranker_allowed_hosts,
+      client=reranker_client,
+    )
+    retriever = HybridRetriever(
+      dense_retriever,
+      lexical_retriever,
+      rrf_k=20,
+      dense_rrf_weight=1.0,
+      lexical_rrf_weight=2.0,
+      candidate_multiplier=4,
+      reranker=reranker,
+      reranker_candidate_limit=20,
+      reranker_weight=1.0,
+    )
   return RagAnalysisService(
     retriever,
     generator,
@@ -97,7 +126,11 @@ def _build_generation_provider(settings: Settings):
     raise ValueError("INFERENCE_API_KEY and INFERENCE_MODEL are required when RAG generation is enabled")
   prompt_registry = PromptRegistry.load_directory(settings.prompt_artifact_dir)
   prompt_specs = [
-    prompt_registry.get(settings.prompt_id, settings.prompt_version, language)
+    prompt_registry.get(prompt_id, prompt_version, language)
+    for prompt_id, prompt_version in (
+      (settings.prompt_id, settings.prompt_version),
+      (settings.knowledge_prompt_id, settings.knowledge_prompt_version),
+    )
     for language in ("pl", "en")
   ]
   if any(
@@ -132,6 +165,8 @@ def _build_generation_provider(settings: Settings):
       prompt_renderer=prompt_renderer,
       prompt_id=settings.prompt_id,
       prompt_version=settings.prompt_version,
+      knowledge_prompt_id=settings.knowledge_prompt_id,
+      knowledge_prompt_version=settings.knowledge_prompt_version,
       connect_timeout_seconds=settings.inference_connect_timeout_seconds,
       read_timeout_seconds=settings.inference_read_timeout_seconds,
       write_timeout_seconds=settings.inference_write_timeout_seconds,
@@ -155,10 +190,7 @@ def build_ingestion_application(
     raise ValueError("MONGODB_URI is required for canonical RAG ingestion")
   if settings.mongodb_uri and not is_private_mongodb_uri(settings.mongodb_uri):
     raise ValueError("MongoDB must use a fixed private-network endpoint")
-  embedding = MiniLMEmbeddingProvider(
-    ai_service.local_model,
-    version=settings.embedding_version,
-  )
+  embedding = _build_retrieval_embedding(settings, ai_service.local_model)
   qdrant = qdrant_client or QdrantClient(
     url=settings.qdrant_url,
     api_key=settings.qdrant_api_key,
@@ -189,4 +221,15 @@ def build_ingestion_application(
     canonical_store,
     adapter,
     DeterministicChunker(max_chars=1200, overlap_chars=160),
+  )
+
+
+def _build_retrieval_embedding(settings: Settings, local_model):
+  if settings.rag_embedding_model_name is None:
+    return MiniLMEmbeddingProvider(local_model, version=settings.embedding_version)
+  return SentenceTransformerEmbeddingProvider(
+    settings.rag_embedding_model_name,
+    revision=settings.rag_embedding_model_revision or "",
+    version=settings.embedding_version,
+    device=settings.rag_embedding_device,
   )

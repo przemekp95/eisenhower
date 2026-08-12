@@ -29,6 +29,11 @@ describe('runtimeConfig in a node runtime', () => {
     expect(runtimeConfig).toEqual({
       apiUrl: 'http://node-api.test',
       aiApiUrl: 'http://node-ai.test',
+      oidcIssuer: undefined,
+      oidcClientId: undefined,
+      oidcRedirectUri: undefined,
+      oidcScopes:
+        'openid profile email tasks:read tasks:write calendar:read calendar:write knowledge:read ai:analyze',
     });
   });
 });

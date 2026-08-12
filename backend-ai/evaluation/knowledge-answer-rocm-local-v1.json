@@ -1,0 +1,32 @@
+{
+  "schema_version": "knowledge-answer-runtime-evidence-v1",
+  "recorded_at": "2026-08-12T20:06:00+02:00",
+  "evidence_level": "physical_local_runtime_smoke",
+  "deployment_proven": false,
+  "production_quality_proven": false,
+  "runtime": {
+    "accelerator": "AMD gfx1151",
+    "provider": "vLLM OpenAI-compatible ROCm",
+    "model_id": "Qwen/Qwen3-4B-Instruct-2507",
+    "model_revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+    "prompt_id": "knowledge-answer",
+    "prompt_version": "1.0.0"
+  },
+  "contract": {
+    "answer_shape": "one atomic claim and one authorized citation",
+    "no_answer_shape": "null answer, empty claims, empty citations",
+    "generation_phases": ["answerability_decision", "grounded_answer_if_answerable"]
+  },
+  "cases": [
+    {"id": "pl-answer", "expected": "answered", "actual": "answered", "passed": true},
+    {"id": "en-answer", "expected": "answered", "actual": "answered", "passed": true},
+    {"id": "pl-unsupported-private-data", "expected": "insufficient_evidence", "actual": "insufficient_evidence", "passed": true},
+    {"id": "en-injected-context", "expected": "insufficient_evidence", "actual": "insufficient_evidence", "passed": true}
+  ],
+  "summary": {"passed": 4, "failed": 0},
+  "open_gates": [
+    "independent human review of retrieval decisions",
+    "untouched answer-quality holdout",
+    "genuine dual-human classifier labels and adjudication"
+  ]
+}

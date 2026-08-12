@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from hashlib import sha256
 from typing import Literal
+from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +13,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .auth import AuthError, OIDCVerifier, ServiceTokenVerifier, StaticTokenVerifier, TokenVerifier
+from .audit import AuditAction, AuditEvent, AuditOutcome, SqliteAuditSink
 from .config import Settings, load_settings
 from .device import get_device
 from .defaults import QUADRANT_NAMES
@@ -18,7 +21,14 @@ from .local_model import ModelNotReadyError
 from .generation.models import KnownStatement
 from .jobs import JobConflictError, SqliteJobQueue
 from .metrics import MetricsRegistry
-from .rag.models import AccessScope, AnalyzeResult, Citation, RetrievalSummary
+from .rag.errors import RerankerUnavailable
+from .rag.models import (
+  AccessScope,
+  AnalyzeResult,
+  Citation,
+  KnowledgeAnswerResponse,
+  RetrievalSummary,
+)
 from .service import ProviderDisabledError, QuadrantAIService
 from .security_controls import SlidingWindowRateLimiter
 from .store import TrainingStore
@@ -35,6 +45,19 @@ WEBHOOK_JOB_TYPES = {
   "tombstone": "rag.tombstone",
   "reindex_project": "rag.reindex_project",
   "start_rag_evaluation": "rag.evaluate",
+}
+REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+SENSITIVE_ACTIONS = {
+  "/add-example": AuditAction.ADMIN_OPERATION,
+  "/retrain": AuditAction.ADMIN_OPERATION,
+  "/learn-feedback": AuditAction.ADMIN_OPERATION,
+  "/learn-ocr-feedback": AuditAction.ADMIN_OPERATION,
+  "/training-data": AuditAction.ADMIN_OPERATION,
+  "/internal/webhooks/n8n/verify": AuditAction.INGEST,
+  "/internal/rag/ingestion/upsert": AuditAction.INGEST,
+  "/internal/rag/ingestion/tombstone": AuditAction.INGEST,
+  "/internal/rag/reindex": AuditAction.REINDEX,
+  "/internal/rag/evaluations": AuditAction.ADMIN_OPERATION,
 }
 
 
@@ -84,6 +107,13 @@ class KnowledgeSearchResponse(StrictRequest):
   no_answer_reason: str | None = None
 
 
+class KnowledgeAnswerApiRequest(StrictRequest):
+  query: str = Field(..., min_length=1, max_length=2000)
+  language: Literal["en", "pl"] = "en"
+  project_id: str | None = Field(default=None, max_length=128)
+  limit: int = Field(default=5, ge=1, le=20)
+
+
 class InternalJobRequest(StrictRequest):
   event_id: str = Field(..., min_length=1, max_length=128)
   tenant_id: str = Field(..., min_length=1, max_length=128)
@@ -123,6 +153,7 @@ def create_app(
   rag_service=None,
   token_verifier: TokenVerifier | None = None,
   metrics_registry: MetricsRegistry | None = None,
+  audit_sink=None,
 ) -> FastAPI:
   resolved_settings = settings or load_settings()
   resolved_store = store or TrainingStore(resolved_settings.training_data_path)
@@ -167,6 +198,11 @@ def create_app(
     )
   ai_rate_limiter = SlidingWindowRateLimiter(limit=30, window_seconds=60)
   metrics = metrics_registry or MetricsRegistry()
+  metrics.set_release_sha(resolved_settings.release_sha)
+  audit = audit_sink or SqliteAuditSink(
+    resolved_settings.audit_database_path,
+    hmac_key=resolved_settings.audit_hmac_key.encode("utf-8"),
+  )
 
   app = FastAPI(
     title=resolved_settings.app_name,
@@ -180,16 +216,79 @@ def create_app(
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
   )
 
+  def record_audit(
+    request: Request,
+    action: AuditAction,
+    outcome: AuditOutcome,
+    *,
+    principal=None,
+  ) -> None:
+    resolved_principal = principal or getattr(request.state, "principal", None)
+    try:
+      audit.record(
+        AuditEvent(
+          service="backend-ai",
+          release_sha=resolved_settings.release_sha,
+          event_id=uuid4().hex,
+          request_id=request.state.request_id,
+          action=action,
+          outcome=outcome,
+          tenant_id=(resolved_principal.tenant_id if resolved_principal else "unknown"),
+          actor_id=(resolved_principal.user_id if resolved_principal else "anonymous"),
+          resource_id=request.url.path,
+        )
+      )
+    except Exception:
+      metrics.observe_audit("error")
+      raise
+    metrics.observe_audit(outcome.value)
+
+  @app.middleware("http")
+  async def audit_sensitive_requests(request: Request, call_next):
+    action = SENSITIVE_ACTIONS.get(request.url.path)
+    if action is None and request.url.path.startswith("/providers/"):
+      action = AuditAction.ADMIN_OPERATION
+    if action is None or request.method not in UNSAFE_METHODS:
+      return await call_next(request)
+    try:
+      record_audit(request, action, AuditOutcome.ATTEMPT)
+    except Exception:
+      request_logger.error("Required security audit preflight failed", exc_info=True)
+      return JSONResponse(status_code=503, content={"error": "Security audit is unavailable"})
+    try:
+      response = await call_next(request)
+    except Exception:
+      try:
+        record_audit(request, action, AuditOutcome.ERROR)
+      except Exception:
+        request_logger.critical("Security audit result write failed", exc_info=True)
+      raise
+    outcome = AuditOutcome.SUCCESS if response.status_code < 400 else AuditOutcome.REJECTED
+    try:
+      record_audit(request, action, outcome)
+    except Exception:
+      request_logger.critical("Security audit result write failed", exc_info=True)
+      return JSONResponse(status_code=503, content={"error": "Security audit is unavailable"})
+    return response
+
   @app.middleware("http")
   async def authenticate_requests(request: Request, call_next):
     if request.url.path in {"/", "/metrics", "/health/live", "/health/ready"} or request.method == "OPTIONS":
       return await call_next(request)
     origin = request.headers.get("origin")
     if origin and request.method in UNSAFE_METHODS and origin not in resolved_settings.cors_allow_origins:
+      try:
+        record_audit(request, AuditAction.ACL_REJECTION, AuditOutcome.REJECTED)
+      except Exception:
+        return JSONResponse(status_code=503, content={"error": "Security audit is unavailable"})
       return JSONResponse(status_code=403, content={"error": "Untrusted browser origin"})
     authorization = request.headers.get("authorization", "")
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() != "bearer" or not token:
+      try:
+        record_audit(request, AuditAction.AUTH_REJECTION, AuditOutcome.REJECTED)
+      except Exception:
+        return JSONResponse(status_code=503, content={"error": "Security audit is unavailable"})
       return JSONResponse(
         status_code=401,
         content={"error": "Authentication required"},
@@ -201,9 +300,21 @@ def create_app(
         raise AuthError("Internal API is disabled")
       request.state.principal = verifier.verify(token)
     except AuthError:
-      return JSONResponse(status_code=403, content={"error": "Access denied"})
+      try:
+        record_audit(request, AuditAction.AUTH_REJECTION, AuditOutcome.REJECTED)
+      except Exception:
+        return JSONResponse(status_code=503, content={"error": "Security audit is unavailable"})
+      return JSONResponse(
+        status_code=401,
+        content={"error": "Access denied"},
+        headers={"WWW-Authenticate": "Bearer"},
+      )
     principal = request.state.principal
-    if request.url.path in {"/v2/ai/analyze", "/v2/knowledge/search"}:
+    if request.url.path in {
+      "/v2/ai/analyze",
+      "/v2/knowledge/search",
+      "/v2/knowledge/answer",
+    }:
       rate_key = f"{principal.tenant_id}:{principal.user_id}:{request.url.path}"
       if not ai_rate_limiter.allow(rate_key):
         return JSONResponse(
@@ -269,6 +380,14 @@ def create_app(
 
     return response
 
+  @app.middleware("http")
+  async def bind_request_id(request: Request, call_next):
+    supplied = request.headers.get("x-request-id", "")
+    request.state.request_id = supplied if REQUEST_ID_PATTERN.fullmatch(supplied) else uuid4().hex
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request.state.request_id
+    return response
+
   @app.get("/")
   def root():
     return {"service": resolved_settings.app_name, "status": "ok"}
@@ -327,6 +446,13 @@ def create_app(
       not resolved_settings.rag_allowed_tenants
       or principal.tenant_id in resolved_settings.rag_allowed_tenants
     )
+    user_enabled = (
+      (
+        resolved_settings.app_env != "production"
+        and not resolved_settings.rag_response_allowed_users
+      )
+      or principal.user_id in resolved_settings.rag_response_allowed_users
+    )
     generation_enabled = bool(
       resolved_rag_service is not None
       and getattr(resolved_rag_service, "generation_enabled", True)
@@ -336,11 +462,15 @@ def create_app(
       and tenant_enabled
       and request.freshness_requirement == "current_world_required"
     )
-    if (
-      resolved_rag_service is not None
-      and generation_enabled
+    response_enabled = (
+      generation_enabled
       and resolved_settings.rag_response_enabled
       and tenant_enabled
+      and user_enabled
+    )
+    if (
+      resolved_rag_service is not None
+      and response_enabled
     ) or current_world_abstention:
       delta_requested = (
         request.known_state is not None
@@ -359,7 +489,36 @@ def create_app(
       else:
         result = resolved_rag_service.analyze(request.task, scope, language=request.language)
     else:
-      if resolved_rag_service is not None and tenant_enabled:
+      if resolved_rag_service is not None and tenant_enabled and generation_enabled:
+        generation_started = time.perf_counter()
+        try:
+          shadow_result = resolved_rag_service.analyze(
+            request.task,
+            scope,
+            language=request.language,
+          )
+          shadow_outcome = "no_answer" if shadow_result.mode == "no_answer" else "success"
+          metrics.observe_generation(
+            shadow_outcome,
+            duration_seconds=time.perf_counter() - generation_started,
+            input_tokens=(
+              shadow_result.generation.input_tokens
+              if shadow_result.generation is not None
+              else 0
+            ),
+          )
+          if shadow_result.generation is not None:
+            metrics.observe_rag_validation("schema", "accepted")
+            if shadow_result.mode == "rag":
+              metrics.observe_rag_validation("citations", "accepted")
+        except Exception:
+          request_logger.warning("Optional generation shadow failed", exc_info=True)
+          metrics.observe_generation(
+            "unavailable",
+            duration_seconds=time.perf_counter() - generation_started,
+            input_tokens=0,
+          )
+      elif resolved_rag_service is not None and tenant_enabled:
         retrieval_started = time.perf_counter()
         try:
           shadow = resolved_rag_service.retrieve_summary(request.task, scope)
@@ -382,6 +541,8 @@ def create_app(
         fallback_reason = "rag_response_disabled"
       elif not generation_enabled:
         fallback_reason = "generation_disabled"
+      elif not user_enabled:
+        fallback_reason = "user_not_enabled"
       else:
         fallback_reason = "tenant_not_enabled"
       result = AnalyzeResult(
@@ -454,6 +615,16 @@ def create_app(
         limit=request.limit,
         project_id=request.project_id,
       )
+    except RerankerUnavailable as error:
+      metrics.observe_rag_retrieval(
+        "search",
+        hit_count=None,
+        duration_seconds=time.perf_counter() - retrieval_started,
+      )
+      raise HTTPException(
+        status_code=503,
+        detail="Default retrieval reranker is unavailable.",
+      ) from error
     except Exception:
       metrics.observe_rag_retrieval(
         "search",
@@ -465,6 +636,82 @@ def create_app(
       "search",
       hit_count=result["retrieval"].hit_count,
       duration_seconds=time.perf_counter() - retrieval_started,
+    )
+    return result
+
+  @app.post("/v2/knowledge/answer", response_model=KnowledgeAnswerResponse)
+  def answer_knowledge(request: KnowledgeAnswerApiRequest, http_request: Request):
+    principal = http_request.state.principal
+    if "*" not in principal.scopes and not ({"knowledge:read", "ai:analyze"} & set(principal.scopes)):
+      raise HTTPException(status_code=403, detail="Missing knowledge:read scope.")
+    project_ids = list(principal.project_ids)
+    if request.project_id:
+      if "admin" not in principal.roles and request.project_id not in project_ids:
+        raise HTTPException(status_code=403, detail="Project is outside the authenticated scope.")
+      project_ids = [request.project_id]
+    scope = AccessScope(
+      tenant_id=principal.tenant_id,
+      user_id=principal.user_id,
+      project_ids=project_ids,
+      roles=principal.roles,
+    )
+    tenant_enabled = (
+      not resolved_settings.rag_allowed_tenants
+      or principal.tenant_id in resolved_settings.rag_allowed_tenants
+    )
+    user_enabled = (
+      (
+        resolved_settings.app_env != "production"
+        and not resolved_settings.rag_response_allowed_users
+      )
+      or principal.user_id in resolved_settings.rag_response_allowed_users
+    )
+    generation_enabled = bool(
+      resolved_rag_service is not None
+      and getattr(resolved_rag_service, "generation_enabled", True)
+    )
+    if resolved_rag_service is None:
+      reason = "rag_disabled"
+    elif not resolved_settings.rag_response_enabled:
+      reason = "rag_response_disabled"
+    elif not generation_enabled:
+      reason = "generation_disabled"
+    elif not tenant_enabled:
+      reason = "tenant_not_enabled"
+    elif not user_enabled:
+      reason = "user_not_enabled"
+    else:
+      reason = None
+    if reason is not None:
+      return KnowledgeAnswerResponse(
+        status="insufficient_evidence",
+        answer=None,
+        claims=[],
+        citations=[],
+        retrieval=RetrievalSummary(),
+        no_answer_reason=reason,
+      )
+
+    started = time.perf_counter()
+    result = resolved_rag_service.answer(
+      request.query,
+      scope,
+      language=request.language,
+      limit=request.limit,
+      project_id=request.project_id,
+    )
+    metrics.observe_rag_retrieval(
+      "answer",
+      hit_count=result.retrieval.hit_count,
+      duration_seconds=time.perf_counter() - started,
+    )
+    generation_outcome = (
+      "success" if result.status == "answered" else "no_answer"
+    )
+    metrics.observe_generation(
+      generation_outcome,
+      duration_seconds=time.perf_counter() - started,
+      input_tokens=result.generation.input_tokens if result.generation else 0,
     )
     return result
 

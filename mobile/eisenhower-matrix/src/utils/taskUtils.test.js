@@ -42,6 +42,7 @@ describe('taskUtils', () => {
       remoteId: null,
       syncState: 'pending_create',
       clientOperationId: 'mobile-1',
+      lifecycleState: 'active',
     });
   });
 

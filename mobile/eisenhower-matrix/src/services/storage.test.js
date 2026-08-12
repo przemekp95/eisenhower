@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { loadLanguage, loadTasks, saveLanguage, saveTasks } from './storage';
+import { loadDelegatedTasks, loadLanguage, loadTasks, saveDelegatedTasks, saveLanguage, saveTasks } from './storage';
 import { getSampleTasks } from '../utils/taskUtils';
 
 describe('storage service', () => {
@@ -30,6 +30,7 @@ describe('storage service', () => {
         remoteId: null,
         syncState: 'pending_create',
         clientOperationId: 'mobile-1',
+        lifecycleState: 'active',
       },
     ]);
   });
@@ -53,5 +54,15 @@ describe('storage service', () => {
   it('falls back to localized seeds when stored JSON is invalid', async () => {
     await AsyncStorage.setItem('eisenhower-mobile/tasks', '{bad json');
     await expect(loadTasks('en')).resolves.toEqual(getSampleTasks('en'));
+  });
+
+  it('persists delegated work separately from owned tasks', async () => {
+    await expect(loadDelegatedTasks('pl')).resolves.toEqual([]);
+    await saveDelegatedTasks([{ id: 'delegated-1', title: 'Handoff', delegationRole: 'assignee' }]);
+    await expect(loadDelegatedTasks('pl')).resolves.toEqual([
+      expect.objectContaining({ id: 'delegated-1', delegationRole: 'assignee' }),
+    ]);
+    await AsyncStorage.setItem('eisenhower-mobile/delegated-tasks', '{bad json');
+    await expect(loadDelegatedTasks('en')).resolves.toEqual([]);
   });
 });

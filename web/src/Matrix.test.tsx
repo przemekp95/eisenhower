@@ -286,8 +286,87 @@ describe('Matrix', () => {
     expect(screen.getByText('Later task')).toBeInTheDocument();
   });
 
+  it('runs lifecycle filters and default workflow callbacks safely', async () => {
+    renderMatrix({
+      tasks: [
+        {
+          _id: 'workflow',
+          title: 'Workflow task',
+          description: '',
+          urgent: true,
+          important: false,
+          lifecycleState: 'active',
+        },
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Wszystkie' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ukończ Workflow task' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dodaj termin Workflow task' }));
+    fireEvent.change(screen.getByLabelText('Termin'), { target: { value: '2026-08-16T09:30' } });
+    fireEvent.change(screen.getByLabelText('Strefa czasowa'), { target: { value: 'UTC' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Zapisz termin' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Przekaż Workflow task' }));
+    fireEvent.change(screen.getByLabelText('Identyfikator osoby'), { target: { value: 'user-b' } });
+    fireEvent.change(screen.getByLabelText('Nazwa wyświetlana'), { target: { value: 'Pat' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Wyślij przekazanie' }));
+
+    await act(async () => Promise.resolve());
+  });
+
+  it('renders delegated read-only cards with and without handoff details', () => {
+    const view = renderMatrix({
+      taskView: 'delegated',
+      tasks: [
+        {
+          _id: 'plain',
+          title: 'Plain delegated',
+          description: '',
+          urgent: true,
+          important: false,
+          lifecycleState: 'active',
+        },
+      ],
+    });
+
+    expect(
+      screen.queryByRole('button', { name: 'Dodaj termin Plain delegated' })
+    ).not.toBeInTheDocument();
+    view.rerender(
+      <LanguageProvider>
+        <Matrix
+          tasks={[
+            {
+              _id: 'assigned',
+              title: 'Assigned delegated',
+              description: '',
+              urgent: true,
+              important: false,
+              lifecycleState: 'active',
+              delegation: {
+                assigneeUserId: 'user-b',
+                displayLabel: 'Pat',
+                handoffNote: '',
+                status: 'offered',
+                offeredAt: '2026-08-12T12:00:00.000Z',
+                statusUpdatedAt: '2026-08-12T12:05:00.000Z',
+              },
+            },
+          ]}
+          loading={false}
+          taskView="delegated"
+          onAddTask={jest.fn()}
+          onUpdateTask={jest.fn()}
+          onDeleteTask={jest.fn()}
+        />
+      </LanguageProvider>
+    );
+    expect(screen.getByText('Pat')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Akceptuj Assigned delegated' }));
+  });
+
   it('places delegate and schedule tasks under their canonical quadrant labels', () => {
-    render(
+    const view = render(
       <LanguageProvider>
         <Matrix
           tasks={[
@@ -335,12 +414,15 @@ describe('Matrix', () => {
     fireEvent.click(screen.getByText(/Dodaj zadanie/i));
 
     await waitFor(() =>
-      expect(onAddTask).toHaveBeenCalledWith({
-        title: 'Plan sprintu',
-        description: '',
-        urgent: false,
-        important: false,
-      })
+      expect(onAddTask).toHaveBeenCalledWith(
+        {
+          title: 'Plan sprintu',
+          description: '',
+          urgent: false,
+          important: false,
+        },
+        expect.stringMatching(/^web-/)
+      )
     );
   });
 
@@ -359,6 +441,53 @@ describe('Matrix', () => {
     await waitFor(() => expect(onAddTask).toHaveBeenCalled());
     expect(screen.getByPlaceholderText(/Tytuł zadania|Task title/i)).toHaveValue('Keep this draft');
     expect(screen.getByPlaceholderText(/Opis|Description/i)).toHaveValue('Still needed');
+    expect(screen.getByRole('alert')).toHaveTextContent(/szkic pozostał/i);
+  });
+
+  it('reuses the create operation key for an unchanged retry and rotates it after editing', async () => {
+    const onAddTask = jest.fn().mockRejectedValue(new Error('offline'));
+    renderMatrix({ tasks: [], onAddTask });
+    const title = screen.getByPlaceholderText(/Tytuł zadania|Task title/i);
+    const submit = screen.getByRole('button', { name: /Dodaj zadanie|Add task/i });
+
+    fireEvent.change(title, { target: { value: 'Retry this' } });
+    fireEvent.click(submit);
+    await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(1));
+    const firstKey = onAddTask.mock.calls[0][1];
+
+    fireEvent.click(submit);
+    await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(2));
+    expect(onAddTask.mock.calls[1][1]).toBe(firstKey);
+
+    fireEvent.change(title, { target: { value: 'Changed draft' } });
+    fireEvent.click(submit);
+    await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(3));
+    expect(onAddTask.mock.calls[2][1]).not.toBe(firstKey);
+  });
+
+  it('prevents a second create request while the first request is pending', async () => {
+    let finishCreate: (() => void) | undefined;
+    const onAddTask = jest.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishCreate = resolve;
+        })
+    );
+    renderMatrix({ tasks: [], onAddTask });
+
+    fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania|Task title/i), {
+      target: { value: 'Only once' },
+    });
+    const submit = screen.getByRole('button', { name: /Dodaj zadanie|Add task/i });
+    fireEvent.click(submit);
+    fireEvent.click(submit);
+
+    expect(onAddTask).toHaveBeenCalledTimes(1);
+    expect(submit).toBeDisabled();
+    expect(submit).toHaveTextContent(/Zapisywanie|Saving/i);
+
+    finishCreate?.();
+    await waitFor(() => expect(submit).not.toBeDisabled());
   });
 
   it('ignores empty submissions and trims form fields when creating a task', async () => {
@@ -392,12 +521,15 @@ describe('Matrix', () => {
     fireEvent.click(screen.getByText(/Dodaj zadanie/i));
 
     await waitFor(() =>
-      expect(onAddTask).toHaveBeenCalledWith({
-        title: 'Plan sprintu',
-        description: 'dopiąć release',
-        urgent: true,
-        important: true,
-      })
+      expect(onAddTask).toHaveBeenCalledWith(
+        {
+          title: 'Plan sprintu',
+          description: 'dopiąć release',
+          urgent: true,
+          important: true,
+        },
+        expect.stringMatching(/^web-/)
+      )
     );
   });
 
@@ -405,10 +537,19 @@ describe('Matrix', () => {
     const onUpdateTask = jest.fn().mockResolvedValue(undefined);
     const onDeleteTask = jest.fn().mockResolvedValue(undefined);
 
-    render(
+    const view = render(
       <LanguageProvider>
         <Matrix
-          tasks={[{ _id: '1', title: 'Task', description: '', urgent: false, important: false }]}
+          tasks={[
+            {
+              _id: '1',
+              title: 'Task',
+              description: '',
+              urgent: false,
+              important: false,
+              lifecycleState: 'active',
+            },
+          ]}
           loading={false}
           onAddTask={jest.fn()}
           onUpdateTask={onUpdateTask}
@@ -418,16 +559,124 @@ describe('Matrix', () => {
     );
 
     fireEvent.click(screen.getByLabelText('Przełącz pilność zadania Task'));
+    await waitFor(() => expect(onUpdateTask).toHaveBeenCalledWith('1', { urgent: true }));
     fireEvent.click(screen.getByLabelText('Przełącz ważność zadania Task'));
-    fireEvent.click(screen.getAllByText(/Usuń/i).at(-1)!);
+    await waitFor(() => expect(onUpdateTask).toHaveBeenCalledWith('1', { important: true }));
+
+    view.rerender(
+      <LanguageProvider>
+        <Matrix
+          tasks={[
+            {
+              _id: '1',
+              title: 'Task',
+              description: '',
+              urgent: false,
+              important: false,
+              lifecycleState: 'trashed',
+            },
+          ]}
+          loading={false}
+          lifecycleFilter="trashed"
+          onAddTask={jest.fn()}
+          onUpdateTask={onUpdateTask}
+          onDeleteTask={onDeleteTask}
+        />
+      </LanguageProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń trwale Task' }));
     fireEvent.click(screen.getByText('Anuluj'));
     expect(onDeleteTask).not.toHaveBeenCalled();
-    fireEvent.click(screen.getAllByText(/Usuń/i).at(-1)!);
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń trwale Task' }));
     fireEvent.click(screen.getByText('Potwierdź trwałe usunięcie'));
 
-    await waitFor(() => expect(onUpdateTask).toHaveBeenCalledWith('1', { urgent: true }));
-    await waitFor(() => expect(onUpdateTask).toHaveBeenCalledWith('1', { important: true }));
     await waitFor(() => expect(onDeleteTask).toHaveBeenCalledWith('1'));
+  });
+
+  it('edits title and description and preserves the draft after a conflict', async () => {
+    const onUpdateTask = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('To zadanie zmieniło się w innym miejscu.'))
+      .mockResolvedValueOnce(undefined);
+    const view = renderMatrix({
+      tasks: [
+        {
+          _id: '1',
+          title: 'Old title',
+          description: 'Old description',
+          urgent: true,
+          important: true,
+        },
+      ],
+      onUpdateTask,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edytuj Old title' }));
+    fireEvent.change(screen.getByLabelText('Tytuł edytowanego zadania'), {
+      target: { value: 'New title' },
+    });
+    fireEvent.change(screen.getByLabelText('Opis edytowanego zadania'), {
+      target: { value: 'New description' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Zapisz zmiany' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/zmieniło się w innym miejscu/i);
+    expect(screen.getByLabelText('Tytuł edytowanego zadania')).toHaveValue('New title');
+    fireEvent.click(screen.getByRole('button', { name: 'Zapisz zmiany' }));
+    await waitFor(() => expect(onUpdateTask).toHaveBeenCalledTimes(2));
+  });
+
+  it('handles non-Error update failures, empty edits, cancellation and delete failures locally', async () => {
+    const onUpdateTask = jest.fn().mockRejectedValue('offline');
+    const onDeleteTask = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('Delete unavailable'))
+      .mockRejectedValueOnce('offline');
+    const view = renderMatrix({
+      tasks: [
+        { _id: '1', title: 'Task', description: 'Description', urgent: true, important: true },
+      ],
+      onUpdateTask,
+      onDeleteTask,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edytuj Task' }));
+    const title = screen.getByLabelText('Tytuł edytowanego zadania');
+    fireEvent.change(title, { target: { value: '   ' } });
+    fireEvent.submit(title.closest('form')!);
+    expect(onUpdateTask).not.toHaveBeenCalled();
+    fireEvent.change(title, { target: { value: 'Changed' } });
+    fireEvent.submit(title.closest('form')!);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/nie udało się zapisać/i);
+    fireEvent.click(screen.getByRole('button', { name: 'Anuluj edycję' }));
+    expect(screen.queryByLabelText('Tytuł edytowanego zadania')).not.toBeInTheDocument();
+
+    view.rerender(
+      <LanguageProvider>
+        <Matrix
+          tasks={[
+            {
+              _id: '1',
+              title: 'Task',
+              description: 'Description',
+              urgent: true,
+              important: true,
+              lifecycleState: 'trashed',
+            },
+          ]}
+          loading={false}
+          lifecycleFilter="trashed"
+          onAddTask={jest.fn()}
+          onUpdateTask={onUpdateTask}
+          onDeleteTask={onDeleteTask}
+        />
+      </LanguageProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń trwale Task' }));
+    for (const expected of [/Delete unavailable/i, /nie udało się zapisać/i]) {
+      fireEvent.click(screen.getByRole('button', { name: 'Potwierdź trwałe usunięcie' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent(expected);
+    }
   });
 
   it('keeps the drag handle separate from task action buttons', () => {
@@ -759,7 +1008,7 @@ describe('Matrix', () => {
     });
     fireEvent.click(screen.getByText(/Zasugeruj kwadrant/i));
 
-    await waitFor(() => expect(screen.getByText('AI offline')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Analiza nie powiodła się')).toBeInTheDocument());
   });
 
   it('falls back to a default message for non-error AI suggestion failures', async () => {
@@ -782,7 +1031,7 @@ describe('Matrix', () => {
     });
     fireEvent.click(screen.getByText(/Zasugeruj kwadrant/i));
 
-    await waitFor(() => expect(screen.getByText('Suggestion failed')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Analiza nie powiodła się')).toBeInTheDocument());
   });
 
   it('opens lazy AI tools when a title exists', async () => {
