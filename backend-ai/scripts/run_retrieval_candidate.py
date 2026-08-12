@@ -5,6 +5,7 @@ from hashlib import sha256
 from importlib.metadata import version
 import json
 from pathlib import Path
+import re
 import subprocess
 from time import perf_counter
 from uuid import uuid4
@@ -66,8 +67,12 @@ def run(
   manifest = CorpusManifest.load(manifest_path)
   candidate_bytes = candidate_path.read_bytes()
   cases = load_golden_dataset(candidate_path)
-  if any(case.dataset_version != "retrieval-review-candidate-v1-unapproved" for case in cases):
-    raise ValueError("this runner accepts only the explicitly unapproved review candidate")
+  dataset_versions = {case.dataset_version for case in cases}
+  if len(dataset_versions) != 1 or not re.fullmatch(
+    r"retrieval-review-candidate-v[1-9][0-9]*-unapproved",
+    next(iter(dataset_versions), ""),
+  ):
+    raise ValueError("this runner accepts one versioned, explicitly unapproved review candidate")
 
   settings = Settings(
     training_data_path=repository_root / "data" / "training.jsonl",
@@ -212,6 +217,8 @@ def main() -> None:
     help="Qdrant URL for the isolated temporary candidate collection.",
   )
   args = parser.parse_args()
+  if args.output.exists():
+    raise ValueError("retrieval comparison output already exists; refusing to overwrite evidence")
   report = run(
     args.candidate,
     repository_root=args.repository_root,
@@ -226,7 +233,10 @@ def main() -> None:
   print(json.dumps({
     "output": str(args.output),
     "sha256": sha256(args.output.read_bytes()).hexdigest(),
-    "metrics": report["strategy_comparison"]["strategies"],
+    "metrics": {
+      name: strategy["metrics"]
+      for name, strategy in report["strategy_comparison"]["strategies"].items()
+    },
     "cleanup": report["cleanup"],
   }, ensure_ascii=False, sort_keys=True))
 

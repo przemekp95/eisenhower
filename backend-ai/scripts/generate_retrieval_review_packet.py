@@ -4,6 +4,7 @@ import argparse
 from hashlib import sha256
 import json
 from pathlib import Path
+import re
 
 from app.rag.corpus_manifest import normalize_source_text
 from app.rag.golden import GoldenCase
@@ -34,7 +35,14 @@ CASES = [
 def main() -> None:
   parser = argparse.ArgumentParser()
   parser.add_argument("--output", type=Path)
+  parser.add_argument(
+    "--dataset-version",
+    default="retrieval-review-candidate-v1-unapproved",
+    help="Versioned unapproved candidate identifier.",
+  )
   args = parser.parse_args()
+  if not re.fullmatch(r"retrieval-review-candidate-v[1-9][0-9]*-unapproved", args.dataset_version):
+    raise ValueError("dataset version must identify a versioned unapproved retrieval candidate")
   root = Path(__file__).resolve().parents[2]
   manifest = json.loads(
     (root / "docs" / "ai-rebuild" / "corpus-manifest-v1.json").read_text(encoding="utf-8")
@@ -55,7 +63,7 @@ def main() -> None:
     project_ids = [query_project]
     tenant_id = "unapproved-tenant" if "tenant-isolation" in tags else "eisenhower-owner"
     record = GoldenCase(
-      dataset_version="retrieval-review-candidate-v1-unapproved",
+      dataset_version=args.dataset_version,
       case_id=case_id,
       tenant_id=tenant_id,
       user_id="eisenhower-owner" if tenant_id == "eisenhower-owner" else "external-user",
