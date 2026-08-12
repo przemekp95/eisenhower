@@ -222,6 +222,13 @@ describe('App integration', () => {
 
     fireEvent.click(screen.getByLabelText(`Przełącz pilność zadania ${title}`));
 
+    await waitFor(() =>
+      expect(screen.getByLabelText(`Przełącz pilność zadania ${title}`)).toHaveAttribute(
+        'aria-pressed',
+        'true'
+      )
+    );
+
     await waitFor(async () => {
       const tasks = await listBackendTasks();
       expect(tasks).toEqual(

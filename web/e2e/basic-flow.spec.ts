@@ -102,7 +102,9 @@ test('opens administration independently and explains the separate credential', 
 test('creates, edits, classifies and permanently deletes a task with keyboard controls', async ({
   page,
 }) => {
-  test.setTimeout(45_000);
+  // The flow includes a complete WCAG scan after six persisted mutations.
+  // Narrow mobile CI runners need enough time for Axe without skipping checks.
+  test.setTimeout(75_000);
   await enter(page);
 
   const title = `E2E smoke ${Date.now()}`;
@@ -143,17 +145,16 @@ test('creates, edits, classifies and permanently deletes a task with keyboard co
   await expect(removableCard).toBeVisible();
   await removableCard
     .getByRole('button', { name: `Przenieś do kosza ${editedTitle}`, exact: true })
-    .focus();
-  await page.keyboard.press('Enter');
+    .press('Enter');
   await expect(page.getByRole('heading', { name: editedTitle, exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Kosz', exact: true }).click();
   const trashedCard = taskCard(page, editedTitle);
   await trashedCard
     .getByRole('button', { name: `Usuń trwale ${editedTitle}`, exact: true })
-    .focus();
-  await page.keyboard.press('Enter');
-  await trashedCard.getByRole('button', { name: 'Potwierdź trwałe usunięcie' }).focus();
-  await page.keyboard.press('Enter');
+    .press('Enter');
+  await trashedCard
+    .getByRole('button', { name: 'Potwierdź trwałe usunięcie' })
+    .press('Enter');
   await expect(page.getByRole('heading', { name: editedTitle, exact: true })).toHaveCount(0);
   await expectAccessible(page);
 });
