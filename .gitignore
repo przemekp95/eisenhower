@@ -44,6 +44,8 @@ backend-ai/chroma_db/
 backend-ai/data/huggingface/
 backend-ai/data/runtime/
 backend-ai/data/*.lock
+backend-ai/ci-impact/cache/
+backend-ai/ci-impact/registry/
 
 # Mobile / Expo
 mobile/eisenhower-matrix/node_modules/

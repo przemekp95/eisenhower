@@ -1,0 +1,18 @@
+{
+  "plan_version": "ci-impact-plan/v1",
+  "schema_version": "ci-impact-deterministic-adapter-v1",
+  "target_to_jobs": {
+    "api-client": ["test-api-client"],
+    "backend-ai": ["test-backend-ai"],
+    "backend-node": ["test-backend-node"],
+    "dependency-audit": ["security-lint"],
+    "frontend-e2e": ["test-frontend-e2e"],
+    "frontend-integration": ["test-frontend-integration"],
+    "mcp": ["test-mcp-adapter"],
+    "mobile": ["test-mobile"],
+    "mobile-native-android": ["test-mobile-native-android"],
+    "n8n": ["test-n8n-workflows"],
+    "security-lint": ["security-lint"],
+    "web": ["test-frontend"]
+  }
+}

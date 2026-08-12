@@ -17,6 +17,24 @@ Replaced the threshold-level active language token with `text-blue-800`, made th
 
 ---
 
+## TASK-039: Build a shadow CI impact classifier
+**Priority:** P1 | **Tags:** ci, mlops, classifier, shadow, safety
+
+Build and verify a separate multilabel change-impact classifier that predicts CI job probabilities with explicit unknown/abstain behavior. Keep full CI authoritative in shadow mode and preserve the existing four-class Eisenhower task classifier contract.
+
+### Plan
+
+- Define isolated versioned dataset, feature, model, prediction, evaluation and lineage contracts with fail-closed validation and conservative human-review labels.
+- Implement deterministic path/change/dependency features, a rule baseline, a dependency-light multilabel model, temporal/epoch evaluation and counterfactual shadow planning.
+- Add red-green tests for dependency, workflow, lockfile, rename, delete, binary and unknown-path epochs plus metrics, calibration, abstention and immutable evidence.
+- Document data acquisition, labeling, shadow operation, additive integration, threat/risk boundaries and exact local verification without changing CI workflow, deployment or production.
+
+### Outcome
+
+Added an isolated versioned multilabel CI-impact contract, Git-derived path/change/import features, conservative GitHub history dataset, temporal/epoch evaluation, rule baseline, immutable candidate lineage and a counterfactual shadow CLI without changing the quadrant classifier or CI workflow. The authenticated snapshot contains 19 merged PRs, 868 files, 162 trusted job observations and 209 deliberately unknown labels; training therefore fails closed and no model quality or eligible candidate is claimed. Shadow evaluation independently reruns the canonical planner, binds it to trusted immutable Actions context, sanitizes command-file environment, and falls back to all 11 jobs for missing/mismatched evidence, local context, OOD, drift, low confidence or any error. Focused tests passed 47/47; fresh full `make verify` passed with backend AI 553/6 skipped at 88.65%, Node 113, web 154 plus 2 integration, mobile 136, API client 14, MCP 26, BDD 16 scenarios/63 steps and Pylint 10.00/10. No workflow/ruleset, merge, deployment, `master` or production change occurred.
+
+---
+
 ## TASK-038: Add deterministic change-impact CI planning
 **Priority:** P1 | **Tags:** ci, reliability, performance, security
 

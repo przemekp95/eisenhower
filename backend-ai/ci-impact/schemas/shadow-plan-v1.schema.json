@@ -1,0 +1,94 @@
+{
+  "$id": "https://eisenhower.invalid/schemas/shadow-plan-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "abstain": {
+      "title": "Abstain",
+      "type": "boolean"
+    },
+    "canonical_jobs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Canonical Jobs",
+      "type": "array"
+    },
+    "classifier_jobs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Classifier Jobs",
+      "type": "array"
+    },
+    "deterministic_jobs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Deterministic Jobs",
+      "type": "array"
+    },
+    "effective_jobs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Effective Jobs",
+      "type": "array"
+    },
+    "full_ci": {
+      "title": "Full Ci",
+      "type": "boolean"
+    },
+    "mode": {
+      "const": "shadow",
+      "default": "shadow",
+      "title": "Mode",
+      "type": "string"
+    },
+    "model_checksum": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model Checksum"
+    },
+    "probabilities": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Probabilities",
+      "type": "object"
+    },
+    "reasons": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reasons",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "ci-impact-shadow-plan-v1",
+      "default": "ci-impact-shadow-plan-v1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "probabilities",
+    "canonical_jobs",
+    "deterministic_jobs",
+    "classifier_jobs",
+    "effective_jobs",
+    "abstain",
+    "full_ci",
+    "reasons"
+  ],
+  "title": "ShadowPlan",
+  "type": "object"
+}

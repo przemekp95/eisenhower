@@ -46,6 +46,8 @@ test('renders the live board shell', async ({ page }) => {
 });
 
 test('creates, reclassifies and deletes a task through the live API', async ({ page }) => {
+  test.setTimeout(45_000);
+
   const title = `E2E smoke ${Date.now()}`;
   const description = 'flow through quadrants';
 

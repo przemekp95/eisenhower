@@ -1,0 +1,21 @@
+{
+  "check_evidence_policy": "GitHub Actions app check-suite head_sha must equal the PR head SHA",
+  "collected_at": "2026-08-11T23:48:03.718211+00:00",
+  "job_config_sha256": "6dabe335fe7cdf8a4e2051c5ae282eba3519d3ba4cfca161fbbb96a95e09eec7",
+  "label_policy": "observed job conclusions remain unknown until conservative manual review",
+  "labeled_required": 0,
+  "labeled_safe_to_skip": 0,
+  "pull_request_range": [
+    141,
+    160
+  ],
+  "record_count": 19,
+  "schema_version": "ci-impact-dataset-v1",
+  "sha256": "df5f3030dae337c167e92f8d587fa753a240ded3c8f995563e703ad6fdb6f61a",
+  "source": {
+    "base": "dev",
+    "provider": "github",
+    "repo": "przemekp95/eisenhower"
+  },
+  "unknown": 209
+}
