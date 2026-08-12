@@ -24,8 +24,10 @@ import { createGoogleCalendarProviderRouter } from './routes/googleCalendarProvi
 import { HealthState } from './types';
 import {
   createOidcTokenVerifier,
+  OidcTokenVerifier,
   requireBearerToken,
   requireOidcToken,
+  requireTaskScope,
   requireTrustedBrowserOrigin,
 } from './auth';
 
@@ -39,6 +41,7 @@ export interface CreateAppOptions {
   googleOAuthPort?: GoogleOAuthPort;
   googleCalendarPort?: GoogleCalendarPort;
   googleCalendarConfig?: GoogleCalendarConfig;
+  oidcTokenVerifier?: OidcTokenVerifier;
 }
 
 const DEFAULT_AI_READINESS_TIMEOUT_MS = 3_000;
@@ -194,17 +197,16 @@ export function createApp(options: CreateAppOptions = {}) {
   }
 
   if (config.authMode === 'oidc') {
-    app.use(requireOidcToken(createOidcTokenVerifier({
-      issuer: config.oidcIssuer!,
-      audience: config.oidcAudience!,
-      jwksUrl: config.oidcJwksUrl!,
-    }), auditRejection));
+    const oidcTokenVerifier = options.oidcTokenVerifier ?? createOidcTokenVerifier({
+      issuer: config.oidcIssuer!, audience: config.oidcAudience!, jwksUrl: config.oidcJwksUrl!,
+    });
+    app.use(requireOidcToken(oidcTokenVerifier, auditRejection));
   } else {
     app.use(requireBearerToken(config.apiToken, auditRejection));
   }
 
   app.use(requireTrustedBrowserOrigin(config.corsAllowOrigins, auditRejection));
-  app.use('/tasks', createTasksRouter());
+  app.use('/tasks', requireTaskScope(auditRejection), createTasksRouter());
   app.use('/calendar', createCalendarRouter(auditRejection));
   if (googleOAuthService) {
     app.use('/calendar/oauth', createGoogleOAuthUserRouter(googleOAuthService, auditRejection));

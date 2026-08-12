@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-12 — TASK-047 milestone: Closed point 2 in source and an isolated real runtime with Keycloak 26.7 multi-user OIDC, no static fallback, exact MCP resource audience, RFC 8693 exchange, scoped Node task authorization and private-gateway controls; two stable subjects in one tenant produced API and Remote MCP visibility counts 1 versus 0, while exact-SHA production deployment and broader task gates remain pending.
+
 2026-08-12 — TASK-047 milestone: Deployed point 1 on the local AMD host with user-separated encrypted Google OAuth, narrow Tailscale HTTPS callback/webhook routing, published tokenless n8n workflows, a real incremental baseline and active Google Watch channel; full Node 190/190, build, n8n 12/12 and deploy 10/10 passed while the broader task remains in progress.
 
 2026-08-12 — TASK-045: Patched the five Python dependency advisories, preserved the tested Metro parser mitigation for two unpatched image-size advisories, added fail-closed experimental dependency resolution, and merged green PR #167 to `dev` as `cdae711f`; exact-SHA post-merge CI passed without changing `master`, deployment or production.

@@ -22,11 +22,10 @@ services:
       - NODE_ENV=production
       - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/eisenhower?replicaSet=rs0}
       - AI_SERVICE_URL=${AI_SERVICE_URL:-http://ai-service:8000}
-      - AUTH_MODE=${AUTH_MODE:-static}
-      - EISENHOWER_API_TOKEN=${EISENHOWER_API_TOKEN:?EISENHOWER_API_TOKEN is required}
-      - OIDC_ISSUER=${OIDC_ISSUER:-}
-      - OIDC_AUDIENCE=${OIDC_AUDIENCE:-}
-      - OIDC_JWKS_URL=${OIDC_JWKS_URL:-}
+      - AUTH_MODE=oidc
+      - OIDC_ISSUER=${OIDC_ISSUER:?OIDC_ISSUER is required}
+      - OIDC_AUDIENCE=${OIDC_AUDIENCE:?OIDC_AUDIENCE is required}
+      - OIDC_JWKS_URL=${OIDC_JWKS_URL:?OIDC_JWKS_URL is required}
       - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://127.0.0.1}
       - AUDIT_HMAC_KEY=${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY is required}
       - CALENDAR_INTERNAL_HMAC_KEY=${CALENDAR_INTERNAL_HMAC_KEY:?CALENDAR_INTERNAL_HMAC_KEY is required}
@@ -77,13 +76,11 @@ services:
       - "${AI_BIND_ADDRESS:-127.0.0.1}:${AI_BIND_PORT:-8000}:8000"
     environment:
       - APP_ENV=production
-      - AUTH_MODE=${AUTH_MODE:-static}
-      - EISENHOWER_API_TOKEN=${EISENHOWER_API_TOKEN:?EISENHOWER_API_TOKEN is required}
-      - EISENHOWER_ADMIN_TOKEN=${EISENHOWER_ADMIN_TOKEN:?EISENHOWER_ADMIN_TOKEN is required}
+      - AUTH_MODE=oidc
       - EISENHOWER_INTERNAL_API_TOKEN=${EISENHOWER_INTERNAL_API_TOKEN:?EISENHOWER_INTERNAL_API_TOKEN is required}
-      - OIDC_ISSUER=${OIDC_ISSUER:-}
-      - OIDC_AUDIENCE=${OIDC_AUDIENCE:-}
-      - OIDC_JWKS_URL=${OIDC_JWKS_URL:-}
+      - OIDC_ISSUER=${OIDC_ISSUER:?OIDC_ISSUER is required}
+      - OIDC_AUDIENCE=${OIDC_AUDIENCE:?OIDC_AUDIENCE is required}
+      - OIDC_JWKS_URL=${OIDC_JWKS_URL:?OIDC_JWKS_URL is required}
       - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://127.0.0.1}
       - AUDIT_HMAC_KEY=${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY is required}
       - AUDIT_DATABASE_PATH=/app/audit/audit.sqlite3
@@ -169,6 +166,106 @@ services:
       - n8n_data:/home/node/.n8n
       - ../../n8n/workflows:/workflows:ro
 
+  identity-db:
+    <<: *common
+    image: ${IDENTITY_DB_IMAGE:-postgres:17.6-alpine}
+    environment:
+      - POSTGRES_DB=keycloak
+      - POSTGRES_USER=${IDENTITY_DB_USERNAME:?IDENTITY_DB_USERNAME is required}
+      - POSTGRES_PASSWORD=${IDENTITY_DB_PASSWORD:?IDENTITY_DB_PASSWORD is required}
+    volumes:
+      - identity_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  identity-service:
+    <<: *common
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.7.0}
+    command: ["start", "--import-realm"]
+    depends_on:
+      identity-db:
+        condition: service_healthy
+    environment:
+      - KC_DB=postgres
+      - KC_DB_URL=jdbc:postgresql://identity-db:5432/keycloak
+      - KC_DB_USERNAME=${IDENTITY_DB_USERNAME:?IDENTITY_DB_USERNAME is required}
+      - KC_DB_PASSWORD=${IDENTITY_DB_PASSWORD:?IDENTITY_DB_PASSWORD is required}
+      - KC_BOOTSTRAP_ADMIN_USERNAME=${KC_BOOTSTRAP_ADMIN_USERNAME:?KC_BOOTSTRAP_ADMIN_USERNAME is required}
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=${KC_BOOTSTRAP_ADMIN_PASSWORD:?KC_BOOTSTRAP_ADMIN_PASSWORD is required}
+      - KC_HOSTNAME=${OIDC_PUBLIC_ORIGIN:?OIDC_PUBLIC_ORIGIN is required}
+      - KC_HTTP_ENABLED=true
+      - KC_HTTP_RELATIVE_PATH=/identity
+      - KC_PROXY_HEADERS=xforwarded
+      - KC_HEALTH_ENABLED=true
+      - JAVA_OPTS_KC_HEAP=-XX:MaxRAMPercentage=65
+      - EISENHOWER_OIDC_REDIRECT_URI=${EISENHOWER_OIDC_REDIRECT_URI:?EISENHOWER_OIDC_REDIRECT_URI is required}
+      - EISENHOWER_OIDC_WEB_ORIGIN=${EISENHOWER_OIDC_WEB_ORIGIN:?EISENHOWER_OIDC_WEB_ORIGIN is required}
+      - EISENHOWER_OIDC_POST_LOGOUT_REDIRECT_URI=${EISENHOWER_OIDC_POST_LOGOUT_REDIRECT_URI:?EISENHOWER_OIDC_POST_LOGOUT_REDIRECT_URI is required}
+      - EISENHOWER_MCP_REDIRECT_URI=${EISENHOWER_MCP_REDIRECT_URI:?EISENHOWER_MCP_REDIRECT_URI is required}
+      - EISENHOWER_MCP_CLIENT_SECRET=${EISENHOWER_MCP_CLIENT_SECRET:?EISENHOWER_MCP_CLIENT_SECRET is required}
+      - OIDC_MCP_RESOURCE_URL=${OIDC_MCP_RESOURCE_URL:?OIDC_MCP_RESOURCE_URL is required}
+    volumes:
+      - ./identity/eisenhower-realm.json:/opt/keycloak/data/import/eisenhower-realm.json:ro
+
+  mcp-service:
+    <<: *common
+    image: ${MCP_IMAGE:?MCP_IMAGE must be a versioned tag or digest}
+    depends_on:
+      api-service:
+        condition: service_started
+      ai-service:
+        condition: service_started
+      identity-service:
+        condition: service_started
+    environment:
+      - MCP_TRANSPORT=streamable-http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - MCP_HTTP_PATH=/mcp
+      - MCP_BEHIND_TRUSTED_PROXY=true
+      - MCP_OIDC_ISSUER=${OIDC_ISSUER:?OIDC_ISSUER is required}
+      - MCP_OIDC_AUDIENCE=${OIDC_MCP_RESOURCE_URL:?OIDC_MCP_RESOURCE_URL is required}
+      - MCP_OIDC_JWKS_URL=${OIDC_JWKS_URL:?OIDC_JWKS_URL is required}
+      - MCP_RESOURCE_SERVER_URL=${OIDC_MCP_RESOURCE_URL:?OIDC_MCP_RESOURCE_URL is required}
+      - MCP_OIDC_TOKEN_ENDPOINT=${OIDC_ISSUER:?OIDC_ISSUER is required}/protocol/openid-connect/token
+      - MCP_OIDC_CLIENT_ID=eisenhower-mcp-exchange
+      - MCP_OIDC_CLIENT_SECRET=${EISENHOWER_MCP_CLIENT_SECRET:?EISENHOWER_MCP_CLIENT_SECRET is required}
+      - EISENHOWER_API_AUDIENCE=${OIDC_AUDIENCE:?OIDC_AUDIENCE is required}
+      - EISENHOWER_TASK_API_BASE_URL=${ACCESS_PUBLIC_ORIGIN:?ACCESS_PUBLIC_ORIGIN is required}/api
+      - EISENHOWER_AI_API_BASE_URL=${ACCESS_PUBLIC_ORIGIN:?ACCESS_PUBLIC_ORIGIN is required}/ai
+      - EISENHOWER_API_TIMEOUT_SECONDS=5
+      - EISENHOWER_AUDIT_DB_PATH=/app/audit/mcp-audit.sqlite3
+      - EISENHOWER_AUDIT_HMAC_KEY_FILE=/run/eisenhower/audit.key
+      - EISENHOWER_AUDIT_HMAC_KEY=${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY is required}
+      - EISENHOWER_RELEASE_SHA=${RELEASE_SHA:?RELEASE_SHA is required}
+    volumes:
+      - audit_data:/app/audit
+    tmpfs:
+      - /run/eisenhower:mode=0700,uid=1001,gid=1001
+
+  access-gateway:
+    <<: *common
+    image: ${ACCESS_GATEWAY_IMAGE:-nginx:1.27.5-alpine}
+    depends_on:
+      identity-service:
+        condition: service_started
+      mcp-service:
+        condition: service_started
+    ports:
+      - "127.0.0.1:${ACCESS_GATEWAY_BIND_PORT:-8790}:8080"
+    environment:
+      - ACCESS_GATEWAY_HOST=${ACCESS_GATEWAY_HOST:?ACCESS_GATEWAY_HOST is required}
+      - ACCESS_GATEWAY_ALLOWED_ORIGIN=${ACCESS_GATEWAY_ALLOWED_ORIGIN:?ACCESS_GATEWAY_ALLOWED_ORIGIN is required}
+      - IDENTITY_UPSTREAM=${ACCESS_GATEWAY_IDENTITY_UPSTREAM:-identity-service:8080}
+      - MCP_UPSTREAM=${ACCESS_GATEWAY_MCP_UPSTREAM:-mcp-service:8000}
+      - API_UPSTREAM=${ACCESS_GATEWAY_API_UPSTREAM:-api-service:3001}
+      - AI_UPSTREAM=${ACCESS_GATEWAY_AI_UPSTREAM:-ai-service:8000}
+    volumes:
+      - ./access-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
+
   calendar-gateway:
     <<: *common
     image: ${CALENDAR_GATEWAY_IMAGE:-nginx:1.27.5-alpine}
@@ -192,6 +289,7 @@ volumes:
   rag_jobs:
   model_cache:
   audit_data:
+  identity_db_data:
 
 networks:
   private:
