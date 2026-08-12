@@ -6,6 +6,7 @@ services:
     profiles:
       - retrieval-amd
     environment:
+      - RELEASE_SHA=${AI_ROCM_RELEASE_SHA:?AI_ROCM_RELEASE_SHA must match the immutable image source SHA}
       - RAG_RETRIEVAL_ENABLED=true
       - RAG_GENERATION_ENABLED=false
       - RAG_RESPONSE_ENABLED=false
@@ -28,6 +29,7 @@ services:
     profiles:
       - retrieval-amd
     environment:
+      - RELEASE_SHA=${AI_ROCM_RELEASE_SHA:?AI_ROCM_RELEASE_SHA must match the immutable image source SHA}
       - RAG_RETRIEVAL_ENABLED=true
       - RAG_GENERATION_ENABLED=false
       - RAG_RESPONSE_ENABLED=false

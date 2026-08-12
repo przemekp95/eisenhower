@@ -7,6 +7,8 @@ env
 pip-log.txt
 pip-delete-this-directory.txt
 .tox
+venv
+data/runtime
 .coverage
 .coverage.*
 .pytest_cache

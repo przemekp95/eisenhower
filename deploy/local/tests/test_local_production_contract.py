@@ -115,6 +115,10 @@ class LocalProductionContractTest(unittest.TestCase):
       self.assertIn("EMBEDDING_VERSION=bge-m3-v1", service["environment"])
     self.assertIn("RAG_GENERATION_ENABLED=false", ai["environment"])
     self.assertIn("RAG_RESPONSE_ENABLED=false", ai["environment"])
+    rocm_dockerfile = (ROOT / "backend-ai" / "Dockerfile.rocm").read_text(encoding="utf-8")
+    self.assertIn("ENTRYPOINT []", rocm_dockerfile)
+    self.assertIn("grpcio==1.78.0", rocm_dockerfile)
+    self.assertIn("'protobuf>=6.31.1,<7'", rocm_dockerfile)
 
   def test_application_images_receive_required_production_identity_and_audit_config(self):
     for name in ("api-service", "ai-service"):
