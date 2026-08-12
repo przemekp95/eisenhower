@@ -21,6 +21,7 @@ from .local_model import ModelNotReadyError
 from .generation.models import KnownStatement
 from .jobs import JobConflictError, SqliteJobQueue
 from .metrics import MetricsRegistry
+from .ops.response_canary import ResponseCanaryRouter
 from .rag.errors import RerankerUnavailable
 from .rag.models import (
   AccessScope,
@@ -167,6 +168,15 @@ def create_app(
     from .rag.bootstrap import build_rag_service
 
     resolved_rag_service = build_rag_service(resolved_settings, resolved_ai_service)
+  response_canary_router = (
+    ResponseCanaryRouter(
+      resolved_settings.rag_response_promotion_pointer_path,
+      candidate_id=str(resolved_settings.rag_response_candidate_id),
+    )
+    if resolved_settings.rag_response_promotion_pointer_path
+    and resolved_settings.rag_response_candidate_id
+    else None
+  )
   resolved_settings.model_cache_dir.mkdir(parents=True, exist_ok=True)
   resolved_verifier = token_verifier
   if resolved_verifier is None:
@@ -462,11 +472,25 @@ def create_app(
       and tenant_enabled
       and request.freshness_requirement == "current_world_required"
     )
+    response_promotion_reason = None
+    if (
+      response_canary_router is not None
+      and resolved_settings.rag_response_enabled
+      and generation_enabled
+      and tenant_enabled
+      and user_enabled
+    ):
+      response_canary_decision = response_canary_router.evaluate(
+        principal.tenant_id, principal.user_id
+      )
+      metrics.observe_response_canary(response_canary_decision.outcome)
+      response_promotion_reason = response_canary_decision.reason
     response_enabled = (
       generation_enabled
       and resolved_settings.rag_response_enabled
       and tenant_enabled
       and user_enabled
+      and response_promotion_reason is None
     )
     if (
       resolved_rag_service is not None
@@ -541,10 +565,12 @@ def create_app(
         fallback_reason = "rag_response_disabled"
       elif not generation_enabled:
         fallback_reason = "generation_disabled"
+      elif not tenant_enabled:
+        fallback_reason = "tenant_not_enabled"
       elif not user_enabled:
         fallback_reason = "user_not_enabled"
       else:
-        fallback_reason = "tenant_not_enabled"
+        fallback_reason = response_promotion_reason or "response_promotion_invalid"
       result = AnalyzeResult(
         mode="fallback",
         quadrant=classification["quadrant"],
@@ -680,6 +706,12 @@ def create_app(
       reason = "tenant_not_enabled"
     elif not user_enabled:
       reason = "user_not_enabled"
+    elif response_canary_router is not None:
+      response_canary_decision = response_canary_router.evaluate(
+        principal.tenant_id, principal.user_id
+      )
+      metrics.observe_response_canary(response_canary_decision.outcome)
+      reason = response_canary_decision.reason
     else:
       reason = None
     if reason is not None:

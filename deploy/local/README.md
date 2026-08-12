@@ -40,7 +40,10 @@ fail-closed. FastAPI keeps its deterministic classifier fallback when private ge
 2. Copy `.env.example` to `.env`, replace the placeholder image tags and populate secrets. Keep `.env`
    outside version control and readable only by its owner. `AI_EVALUATION_FILE` must be the absolute host
    path to an owner-approved production evaluation artifact; its approved digest is a separate required
-   input. A development benchmark is not a production substitute.
+   input. A development benchmark is not a production substitute. If responses are enabled,
+   `AI_PROMOTION_ROOT` must contain the controller-written `current.json`, and
+   `RAG_RESPONSE_CANDIDATE_ID` must match its response candidate. The pointer is mounted read-only;
+   expiry or corruption automatically returns fallback without a container restart.
 3. Render without pulling or starting containers:
 
    ```bash

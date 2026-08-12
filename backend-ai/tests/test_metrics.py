@@ -5,6 +5,7 @@ def test_prometheus_metrics_are_aggregate_and_do_not_leak_tenant_or_prompt():
   metrics = MetricsRegistry()
   metrics.observe_http("POST", "/v2/ai/analyze", 200, 0.125)
   metrics.observe_rag_result("fallback", "vllm_timeout")
+  metrics.observe_response_canary("not_selected")
   metrics.observe_rag_retrieval("shadow", hit_count=2, duration_seconds=0.075)
   metrics.observe_rag_analysis("fallback", duration_seconds=0.125)
   metrics.observe_rag_validation("citations", "rejected")
@@ -20,6 +21,7 @@ def test_prometheus_metrics_are_aggregate_and_do_not_leak_tenant_or_prompt():
 
   assert 'eisenhower_http_requests_total{method="POST",route="/v2/ai/analyze",status="200"} 1' in rendered
   assert 'eisenhower_rag_results_total{mode="fallback",reason="vllm_timeout"} 1' in rendered
+  assert 'eisenhower_response_canary_decisions_total{outcome="not_selected"} 1' in rendered
   assert 'eisenhower_rag_retrieval_total{stage="shadow",outcome="hit"} 1' in rendered
   assert 'eisenhower_rag_retrieval_duration_seconds_sum{stage="shadow",outcome="hit"} 0.075000' in rendered
   assert 'eisenhower_rag_retrieval_duration_seconds_bucket{stage="shadow",outcome="hit",le="0.100"} 1' in rendered
@@ -55,6 +57,7 @@ def test_prometheus_labels_are_bounded_instead_of_accepting_private_or_cardinal_
   metrics.observe_rag_validation("private-chunk", "private-value")
   metrics.observe_memory("private-memory-id", "private-content", duration_seconds=1)
   metrics.observe_information_delta("private-known-statement")
+  metrics.observe_response_canary("private-user-id")
 
   rendered = metrics.render()
 
@@ -73,4 +76,5 @@ def test_prometheus_labels_are_bounded_instead_of_accepting_private_or_cardinal_
   assert 'stage="other",outcome="error"' in rendered
   assert 'kind="other",outcome="other"' in rendered
   assert 'operation="other",outcome="other"' in rendered
+  assert 'eisenhower_response_canary_decisions_total{outcome="other"} 1' in rendered
   assert 'status="other"' in rendered

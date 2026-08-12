@@ -159,8 +159,11 @@ class LocalProductionContractTest(unittest.TestCase):
         service["environment"],
       )
       self.assertIn("EMBEDDING_VERSION=bge-m3-v1", service["environment"])
-    self.assertIn("RAG_GENERATION_ENABLED=false", ai["environment"])
-    self.assertIn("RAG_RESPONSE_ENABLED=false", ai["environment"])
+    self.assertIn("RAG_GENERATION_ENABLED=${RAG_GENERATION_ENABLED:-false}", ai["environment"])
+    self.assertIn("RAG_RESPONSE_ENABLED=${RAG_RESPONSE_ENABLED:-false}", ai["environment"])
+    self.assertIn("RAG_RESPONSE_PROMOTION_POINTER_PATH=/app/promotion/current.json", ai["environment"])
+    self.assertIn("RAG_RESPONSE_CANDIDATE_ID=${RAG_RESPONSE_CANDIDATE_ID:-}", ai["environment"])
+    self.assertIn("${AI_PROMOTION_ROOT:-./.runtime/promotion}:/app/promotion:ro", ai["volumes"])
     rocm_dockerfile = (ROOT / "backend-ai" / "Dockerfile.rocm").read_text(encoding="utf-8")
     self.assertIn("ENTRYPOINT []", rocm_dockerfile)
     self.assertIn("grpcio==1.78.0", rocm_dockerfile)

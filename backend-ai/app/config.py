@@ -33,6 +33,8 @@ class Settings:
   rag_retrieval_enabled: bool | None = None
   rag_generation_enabled: bool | None = None
   rag_response_enabled: bool = False
+  rag_response_promotion_pointer_path: Path | None = None
+  rag_response_candidate_id: str | None = None
   rag_allowed_tenants: tuple[str, ...] = ()
   rag_response_allowed_users: tuple[str, ...] = ()
   rag_retrieval_strategy: str = "hybrid-bge-v1"
@@ -137,6 +139,12 @@ class Settings:
       and (not self.rag_allowed_tenants or not self.rag_response_allowed_users)
     ):
       raise ValueError("Production RAG responses require explicit tenant and user allowlists.")
+    if (
+      self.app_env == "production"
+      and self.rag_response_enabled
+      and (self.rag_response_promotion_pointer_path is None or not self.rag_response_candidate_id)
+    ):
+      raise ValueError("Production RAG responses require a promotion pointer and candidate ID.")
     if self.rag_retrieval_strategy not in {"dense-v1", "hybrid-bge-v1"}:
       raise ValueError("RAG_RETRIEVAL_STRATEGY must be 'dense-v1' or 'hybrid-bge-v1'.")
     timeout_values = (
@@ -278,6 +286,12 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
       else None
     ),
     rag_response_enabled=source.get("RAG_RESPONSE_ENABLED", "false").lower() in ("true", "1", "yes"),
+    rag_response_promotion_pointer_path=(
+      Path(source["RAG_RESPONSE_PROMOTION_POINTER_PATH"])
+      if source.get("RAG_RESPONSE_PROMOTION_POINTER_PATH")
+      else None
+    ),
+    rag_response_candidate_id=source.get("RAG_RESPONSE_CANDIDATE_ID") or None,
     rag_allowed_tenants=parse_csv_list(source.get("RAG_ALLOWED_TENANTS"), ()),
     rag_response_allowed_users=parse_csv_list(source.get("RAG_RESPONSE_ALLOWED_USERS"), ()),
     rag_retrieval_strategy=source.get("RAG_RETRIEVAL_STRATEGY", "hybrid-bge-v1"),
