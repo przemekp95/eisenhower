@@ -52,10 +52,9 @@ class PinnedMiniLMEmbedding:
 
 
 class PinnedMultilingualReranker:
-  model_name = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
-  revision = "1427fd652930e4ba29e8149678df786c240d8825"
-
-  def __init__(self):
+  def __init__(self, model_name: str, revision: str):
+    self.model_name = model_name
+    self.revision = revision
     revision = {"revision": self.revision}
     self.encoder = CrossEncoder(
       self.model_name,
@@ -202,38 +201,54 @@ def run(
     }
     selected_base = select_train_strategy(train_reports)
     base_configuration = configurations[selected_base]
-    reranker = PinnedMultilingualReranker()
-    for reranker_weight in (0.25, 0.5, 0.75, 1.0):
-      candidate_limit = 20
-      name = f"{selected_base}-reranked{candidate_limit}-weight{reranker_weight:g}"
-      configurations[name] = {
-        **base_configuration,
-        "reranker_candidate_limit": candidate_limit,
-        "reranker_weight": reranker_weight,
-        "reranker_model": reranker.model_name,
-        "reranker_revision": reranker.revision,
-      }
-      lexical_retriever = CanonicalBm25Retriever(
-        store,
-        embedding_version=embedding.version,
-        chunker=chunker,
-        title_weight=base_configuration["title_weight"],
-        text_weight=base_configuration["text_weight"],
-      )
-      candidate_retrievers[name] = HybridRetriever(
-        dense_retriever,
-        lexical_retriever,
-        rrf_k=base_configuration["rrf_k"],
-        dense_rrf_weight=base_configuration["dense_rrf_weight"],
-        lexical_rrf_weight=base_configuration["lexical_rrf_weight"],
-        candidate_multiplier=base_configuration["candidate_multiplier"],
-        reranker=reranker,
-        reranker_candidate_limit=candidate_limit,
-        reranker_weight=reranker_weight,
-      )
-      train_reports[name] = RetrievalGoldenRunner(
-        candidate_retrievers[name]
-      ).run(train_cases, k=5)
+    reranker_models = (
+      (
+        "mmarco",
+        "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+        "1427fd652930e4ba29e8149678df786c240d8825",
+      ),
+      (
+        "bge-v2-m3",
+        "BAAI/bge-reranker-v2-m3",
+        "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e",
+      ),
+    )
+    for model_slug, model_name, model_revision in reranker_models:
+      reranker = PinnedMultilingualReranker(model_name, model_revision)
+      for reranker_weight in (0.25, 0.5, 0.75, 1.0):
+        candidate_limit = 20
+        name = (
+          f"{selected_base}-{model_slug}-reranked{candidate_limit}"
+          f"-weight{reranker_weight:g}"
+        )
+        configurations[name] = {
+          **base_configuration,
+          "reranker_candidate_limit": candidate_limit,
+          "reranker_weight": reranker_weight,
+          "reranker_model": reranker.model_name,
+          "reranker_revision": reranker.revision,
+        }
+        lexical_retriever = CanonicalBm25Retriever(
+          store,
+          embedding_version=embedding.version,
+          chunker=chunker,
+          title_weight=base_configuration["title_weight"],
+          text_weight=base_configuration["text_weight"],
+        )
+        candidate_retrievers[name] = HybridRetriever(
+          dense_retriever,
+          lexical_retriever,
+          rrf_k=base_configuration["rrf_k"],
+          dense_rrf_weight=base_configuration["dense_rrf_weight"],
+          lexical_rrf_weight=base_configuration["lexical_rrf_weight"],
+          candidate_multiplier=base_configuration["candidate_multiplier"],
+          reranker=reranker,
+          reranker_candidate_limit=candidate_limit,
+          reranker_weight=reranker_weight,
+        )
+        train_reports[name] = RetrievalGoldenRunner(
+          candidate_retrievers[name]
+        ).run(train_cases, k=5)
     selected_name = select_train_strategy(train_reports)
     hybrid_retriever = candidate_retrievers[selected_name]
     dev_validation = RetrievalStrategyComparisonRunner({
