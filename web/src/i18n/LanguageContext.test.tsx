@@ -29,7 +29,9 @@ describe('LanguageContext', () => {
     );
 
     await waitFor(() => expect(screen.getByText('en')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'English' })).toHaveClass('text-blue-800');
     fireEvent.click(screen.getByText('Polski'));
+    expect(screen.getByRole('button', { name: 'Polski' })).toHaveClass('text-blue-800');
     expect(localStorage.getItem('eisenhower-language')).toBe('pl');
   });
 

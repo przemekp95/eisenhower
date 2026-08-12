@@ -26,6 +26,7 @@ test.beforeEach(async ({ page }) => {
   await page.getByRole('button', { name: 'Odblokuj' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Eisenhower Matrix' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Dodaj zadanie' })).toBeVisible();
+  await expect(page.locator('main')).toHaveAttribute('data-app-intro', 'ready');
 });
 
 test('renders the live board shell', async ({ page }) => {
