@@ -57,6 +57,8 @@ services:
       - inference-amd
     ports:
       - "${INFERENCE_BIND_ADDRESS:-127.0.0.1}:${INFERENCE_BIND_PORT:-8010}:8000"
+    environment:
+      - VLLM_API_KEY=${INFERENCE_API_KEY:?INFERENCE_API_KEY is required}
     command:
       - --model
       - ${INFERENCE_MODEL:?INFERENCE_MODEL is required}
@@ -76,8 +78,6 @@ services:
       - "1"
       - --gpu-memory-utilization
       - ${INFERENCE_GPU_MEMORY_UTILIZATION:-0.80}
-      - --api-key
-      - ${INFERENCE_API_KEY:?INFERENCE_API_KEY is required}
     ipc: host
     group_add:
       - video
@@ -95,7 +95,7 @@ services:
       test:
         - CMD-SHELL
         - >-
-          curl -fsS -H 'Authorization: Bearer ${INFERENCE_API_KEY}'
+          curl -fsS -H "Authorization: Bearer $$VLLM_API_KEY"
           http://127.0.0.1:8000/v1/models >/dev/null
       interval: 30s
       timeout: 10s
