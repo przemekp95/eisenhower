@@ -38,8 +38,8 @@ export default function BatchAnalysis({ onBatchComplete }: Props) {
       const payload = await batchAnalyzeTasks(tasks);
       setResult(payload);
       onBatchComplete(payload);
-    } catch (issue) {
-      setError(issue instanceof Error ? issue.message : t('ai.batch.failed'));
+    } catch {
+      setError(t('ai.batch.failed'));
     } finally {
       setLoading(false);
     }

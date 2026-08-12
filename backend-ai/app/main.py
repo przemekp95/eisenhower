@@ -201,7 +201,11 @@ def create_app(
         raise AuthError("Internal API is disabled")
       request.state.principal = verifier.verify(token)
     except AuthError:
-      return JSONResponse(status_code=403, content={"error": "Access denied"})
+      return JSONResponse(
+        status_code=401,
+        content={"error": "Access denied"},
+        headers={"WWW-Authenticate": "Bearer"},
+      )
     principal = request.state.principal
     if request.url.path in {"/v2/ai/analyze", "/v2/knowledge/search"}:
       rate_key = f"{principal.tenant_id}:{principal.user_id}:{request.url.path}"

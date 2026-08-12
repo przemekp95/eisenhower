@@ -7,8 +7,9 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "audit:production": "node scripts/auditPolicy.js",
+    "audit:production": "npm audit --omit=dev --audit-level=high && npm run test:security",
     "test": "jest --runInBand",
+    "test:security": "node --test vendor/metro-image-size/index.security.js",
     "test:coverage": "jest --coverage --runInBand"
   },
   "dependencies": {
@@ -19,6 +20,8 @@
     "expo-image-picker": "~55.0.22",
     "expo-network": "~55.0.16",
     "expo-status-bar": "^55.0.6",
+    "image-size": "file:./vendor/metro-image-size",
+    "probe-image-size": "7.3.0",
     "react": "19.2.0",
     "react-native": "0.83.10",
     "react-native-safe-area-context": "~5.6.2"
@@ -37,6 +40,7 @@
     "ws@8.19.0": "8.21.0",
     "xcode": {
       "uuid": "11.1.1"
-    }
+    },
+    "image-size": "file:./vendor/metro-image-size"
   }
 }

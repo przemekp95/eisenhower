@@ -23,6 +23,19 @@ Feature: Manage tasks in the Eisenhower matrix
     Then the request succeeds with status 200
     And the returned task is in the "Do Now" quadrant
 
+  Scenario: Edit the wording of an existing task
+    Given my task "Draft quarterly plan" is in the "Schedule" quadrant
+    When I rename the task to "Prepare quarterly plan" and describe it as "Review with the team"
+    Then the request succeeds with status 200
+    And the returned task is named "Prepare quarterly plan" with description "Review with the team"
+
+  Scenario: Protect a newer change from being overwritten
+    Given my task "Shared plan" is in the "Schedule" quadrant
+    And someone else renames the task to "Shared plan updated elsewhere"
+    When I try to rename my older version to "My stale draft"
+    Then the request fails because the task changed
+    And the task is still named "Shared plan updated elsewhere"
+
   Scenario: Retry one mobile creation operation safely
     When I retry creating the task "Retry-safe plan" twice with operation key "mobile-bdd-operation-1"
     Then the request succeeds with status 200

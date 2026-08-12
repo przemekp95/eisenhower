@@ -91,6 +91,44 @@ When(
   },
 );
 
+When(
+  'I rename the task to {string} and describe it as {string}',
+  async function (this: EisenhowerWorld, title: string, description: string) {
+    assert.ok(this.taskId, 'A task must exist before it can be edited');
+    assert.ok(Number.isInteger(this.taskRevision), 'The current revision must be available');
+    this.response = await authenticated(this)
+      .put(`/tasks/${this.taskId}`)
+      .set('If-Match', `"${this.taskRevision}"`)
+      .send({ title, description });
+    this.taskRevision = this.response.body.revision;
+  },
+);
+
+Given(
+  'someone else renames the task to {string}',
+  async function (this: EisenhowerWorld, title: string) {
+    assert.ok(this.taskId, 'A task must exist before it can be changed elsewhere');
+    assert.ok(Number.isInteger(this.taskRevision), 'The current revision must be available');
+    const response = await authenticated(this)
+      .put(`/tasks/${this.taskId}`)
+      .set('If-Match', `"${this.taskRevision}"`)
+      .send({ title });
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+  },
+);
+
+When(
+  'I try to rename my older version to {string}',
+  async function (this: EisenhowerWorld, title: string) {
+    assert.ok(this.taskId, 'A task must exist before it can be edited');
+    assert.ok(Number.isInteger(this.taskRevision), 'The older revision must be available');
+    this.response = await authenticated(this)
+      .put(`/tasks/${this.taskId}`)
+      .set('If-Match', `"${this.taskRevision}"`)
+      .send({ title });
+  },
+);
+
 When('I delete the task', async function (this: EisenhowerWorld) {
   assert.ok(this.taskId, 'A task must exist before it can be deleted');
   assert.ok(Number.isInteger(this.taskRevision), 'The current revision must be available');
@@ -132,6 +170,30 @@ Then('the request fails as not found', function (this: EisenhowerWorld) {
   assert.equal(this.response.status, 404);
   assert.equal(this.response.body.error, 'Task not found');
 });
+
+Then('the request fails because the task changed', function (this: EisenhowerWorld) {
+  assert.ok(this.response, 'A request must be made before its status is checked');
+  assert.equal(this.response.status, 412);
+  assert.equal(this.response.body.code, 'task_revision_conflict');
+});
+
+Then(
+  'the returned task is named {string} with description {string}',
+  function (this: EisenhowerWorld, title: string, description: string) {
+    assert.ok(this.response, 'A task response must exist');
+    assert.equal(this.response.body.title, title);
+    assert.equal(this.response.body.description, description);
+  },
+);
+
+Then(
+  'the task is still named {string}',
+  async function (this: EisenhowerWorld, title: string) {
+    assert.ok(this.taskId, 'The task id must be available');
+    const task = await TaskModel.findById(this.taskId);
+    assert.equal(task?.title, title);
+  },
+);
 
 Then("the other tenant's task still exists", async function (this: EisenhowerWorld) {
   assert.ok(this.taskId, 'The other tenant task id must be available');

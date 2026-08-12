@@ -8,10 +8,17 @@ import ImageUpload from './ai/ImageUpload';
 import type { OCRImportSummary } from './ai/ImageUpload';
 import { BatchAnalysisResult, LangChainAnalysis, OCRResult } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
-import { clearAdminToken, getAdminToken, setAdminToken, subscribeToApiToken } from '../authSession';
+import {
+  clearAdminToken,
+  getAdminRejection,
+  getAdminToken,
+  setAdminToken,
+  subscribeToApiToken,
+} from '../authSession';
 
 interface Props {
   taskTitle: string;
+  initialTab?: Tab;
   onClose: () => void;
   onAnalysisComplete: (analysis: LangChainAnalysis) => void;
   onAnalysisTaskAdd?: (analysis: LangChainAnalysis) => Promise<void> | void;
@@ -30,7 +37,13 @@ function AdminAccessPanel({ children }: { children: React.ReactNode }) {
   const { language } = useLanguage();
   const adminToken = useSyncExternalStore(subscribeToApiToken, getAdminToken, getAdminToken);
   const [credential, setCredential] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
   const pl = language === 'pl';
+  const rejected = getAdminRejection() === 'rejected';
+
+  useEffect(() => {
+    if (!adminToken) inputRef.current?.focus();
+  }, [adminToken]);
 
   if (!adminToken) {
     const submit = (event: FormEvent) => {
@@ -41,15 +54,26 @@ function AdminAccessPanel({ children }: { children: React.ReactNode }) {
     return (
       <form onSubmit={submit} className="space-y-3 rounded-2xl border border-white/10 p-4">
         <h3 className="font-semibold">{pl ? 'Dostęp administracyjny' : 'Administrator access'}</h3>
-        <p className="text-sm text-white/65">
+        <p className="text-sm leading-6 text-white/65">
           {pl
-            ? 'Token administratora jest wymagany wyłącznie do operacji zarządzania.'
-            : 'The administrator token is requested only for management operations.'}
+            ? 'Wpisz osobny kod administratora otrzymany od właściciela systemu. Ten kod służy wyłącznie do zarządzania i nie otwiera zadań użytkownika.'
+            : 'Enter the separate administrator code provided by the system owner. It is used only for management and does not open user tasks.'}
         </p>
+        {rejected ? (
+          <p
+            role="alert"
+            className="rounded-xl border border-red-300/30 bg-red-950/40 p-3 text-sm text-red-100"
+          >
+            {pl
+              ? 'Kod administratora jest nieprawidłowy lub wygasł. Sprawdź go albo skontaktuj się z właścicielem systemu.'
+              : 'The administrator code is incorrect or has expired. Check it or contact the system owner.'}
+          </p>
+        ) : null}
         <label htmlFor="ai-admin-token" className="block text-sm">
-          {pl ? 'Token administratora AI' : 'AI administrator token'}
+          {pl ? 'Kod administratora' : 'Administrator code'}
         </label>
         <input
+          ref={inputRef}
           id="ai-admin-token"
           type="password"
           autoComplete="off"
@@ -62,7 +86,7 @@ function AdminAccessPanel({ children }: { children: React.ReactNode }) {
           disabled={!credential.trim()}
           className="rounded-full bg-cyan-300 px-4 py-2 font-semibold text-slate-950 disabled:opacity-40"
         >
-          {pl ? 'Odblokuj zarządzanie' : 'Unlock management'}
+          {pl ? 'Otwórz administrację' : 'Open administration'}
         </button>
       </form>
     );
@@ -76,7 +100,7 @@ function AdminAccessPanel({ children }: { children: React.ReactNode }) {
           onClick={clearAdminToken}
           className="rounded-full border border-white/15 px-4 py-2 text-sm"
         >
-          {pl ? 'Zmień token administratora' : 'Change administrator token'}
+          {pl ? 'Zmień kod administratora' : 'Change administrator code'}
         </button>
       </div>
       {children}
@@ -86,12 +110,13 @@ function AdminAccessPanel({ children }: { children: React.ReactNode }) {
 
 export default function AITools({
   taskTitle,
+  initialTab = 'analysis',
   onClose,
   onAnalysisComplete,
   onAnalysisTaskAdd,
   onOCRTasksExtracted,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>('analysis');
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [lastSummary, setLastSummary] = useState('');
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -141,7 +166,9 @@ export default function AITools({
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    closeButtonRef.current!.focus();
+    if (initialTab !== 'manage' || getAdminToken()) {
+      closeButtonRef.current!.focus();
+    }
 
     return () => {
       document.body.style.overflow = previousBodyOverflow;
@@ -152,7 +179,7 @@ export default function AITools({
         previouslyFocused.focus();
       }
     };
-  }, [onClose]);
+  }, [initialTab, onClose]);
 
   const format = (template: string, values: Record<string, string | number>) =>
     Object.entries(values).reduce(

@@ -139,6 +139,16 @@ def build_real_client(real_model_bundle, *, tesseract_available: bool | None = N
   )
 
 
+def test_invalid_bearer_is_an_authentication_failure_with_a_challenge(tmp_path: Path):
+  client = build_client(tmp_path)
+
+  response = client.get("/training-stats", headers={"Authorization": "Bearer wrong-code"})
+
+  assert response.status_code == 401
+  assert response.headers["www-authenticate"] == "Bearer"
+  assert response.json() == {"error": "Access denied"}
+
+
 class FakeRagService:
   def __init__(self):
     self.calls = []

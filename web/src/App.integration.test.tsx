@@ -182,7 +182,7 @@ describe('App integration', () => {
       important: true,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Odśwież' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Odśwież tablicę' }));
 
     await waitFor(() => expect(screen.getByText('Fresh after refresh')).toBeInTheDocument());
   });

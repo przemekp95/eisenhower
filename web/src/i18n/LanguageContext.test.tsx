@@ -33,6 +33,7 @@ describe('LanguageContext', () => {
     fireEvent.click(screen.getByText('Polski'));
     expect(screen.getByRole('button', { name: 'Polski' })).toHaveClass('text-blue-800');
     expect(localStorage.getItem('eisenhower-language')).toBe('pl');
+    expect(document.documentElement).toHaveAttribute('lang', 'pl');
   });
 
   it('falls back to polish for invalid saved values, switches to english, and falls back for missing keys', async () => {
@@ -53,6 +54,7 @@ describe('LanguageContext', () => {
 
     await waitFor(() => expect(screen.getByText('en')).toBeInTheDocument());
     expect(localStorage.getItem('eisenhower-language')).toBe('en');
+    expect(document.documentElement).toHaveAttribute('lang', 'en');
   });
 
   it('throws when used without a provider', () => {

@@ -148,7 +148,7 @@ describe('api service', () => {
     expect((global.fetch as jest.Mock).mock.calls[1][1]?.headers?.Authorization).toBeUndefined();
   });
 
-  it('clears only the admin credential after rejected administrator credentials', async () => {
+  it('preserves admin credentials on authorization failures such as disabled management', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: false,
       status: 403,
@@ -156,6 +156,19 @@ describe('api service', () => {
     });
 
     await expect(getTrainingStats()).rejects.toThrow('Administrator access required');
+
+    expect(getApiToken()).toBe('runtime-only-test-token');
+    expect(getAdminToken()).toBe('runtime-only-admin-token');
+  });
+
+  it('clears only the admin credential after an administrator authentication failure', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ error: 'Invalid administrator code' }),
+    });
+
+    await expect(getTrainingStats()).rejects.toThrow('Invalid administrator code');
 
     expect(getApiToken()).toBe('runtime-only-test-token');
     expect(getAdminToken()).toBeNull();
@@ -183,7 +196,10 @@ describe('api service', () => {
       });
 
     await getTasks();
-    await createTask({ title: 'Task', description: '', urgent: false, important: false });
+    await createTask(
+      { title: 'Task', description: '', urgent: false, important: false },
+      'web-create-test'
+    );
     await updateTask('1', { urgent: true }, 3);
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
@@ -201,7 +217,10 @@ describe('api service', () => {
     );
     expect(global.fetch).toHaveBeenCalledWith(
       `${runtimeConfig.apiUrl}/tasks`,
-      expect.objectContaining({ method: 'POST' })
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'Idempotency-Key': 'web-create-test' }),
+      })
     );
     expect(global.fetch).toHaveBeenCalledWith(
       `${runtimeConfig.apiUrl}/tasks/1`,

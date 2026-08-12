@@ -1,5 +1,23 @@
 # Done
 
+## TASK-042: Rebuild the web UX for nontechnical users and administrators
+**Priority:** P0 | **Tags:** web, ux, accessibility, auth, admin
+
+Make the web application self-explanatory for nontechnical users and administrators while preserving static Bearer authentication, ACL, optimistic concurrency, fail-closed AI controls and existing quality gates.
+
+### Plan
+
+- Replace the technical hero and ambiguous status copy with a task-first PL/EN information architecture, honest local connection/sync states and an independent Administration entry point.
+- Improve access-code guidance and errors without persisting secrets, add editable task title/description with revision conflicts and draft preservation, and keep destructive actions explicitly confirmed.
+- Rework administration with durable labels, plain-language impact guidance, freshness/pending/error states and guarded high-impact operations without weakening role checks or fail-closed behavior.
+- Verify semantic keyboard/mobile behavior, dynamic document language, reduced motion, Axe, unit/integration/Playwright and bounded stakeholder-readable Cucumber scenarios, then update user/admin guidance and security/methodology conclusions.
+
+### Outcome
+
+Replaced the technical landing page with a task-first PL/EN experience, in-memory access-code guidance, honest local sync/offline states, keyboard-safe create/edit/classify/delete flows and an independent Administration entry with guarded high-impact AI actions. Preserved Bearer/ACL/origin/revision/fail-closed contracts, added create idempotency and correct 401/403 handling, expanded bounded Cucumber scenarios and Playwright/Axe coverage at desktop, 390 px and 320 px, and documented both personas. Removed the temporary mobile audit exception and both Trivy ignores by replacing the vulnerable Metro-only image parser with a tested local adapter; clean install audit, Android export, full `make verify` and 18/18 Playwright passed locally. No CI, merge, deployment, production or human usability validation was performed.
+
+---
+
 ## TASK-041: Clear the master promotion whitespace gate
 **Priority:** P0 | **Tags:** release-gate, quality, python
 

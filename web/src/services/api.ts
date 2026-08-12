@@ -18,13 +18,13 @@ import { runtimeConfig } from '../config';
 import type { Language } from '../i18n/translations';
 import {
   clearApiToken,
-  clearAdminToken,
-  clearTokens,
   getAccessToken,
   getAdminToken,
   setAdminToken,
   setApiToken,
   setCredentials,
+  rejectAdminToken,
+  rejectApiToken,
 } from '../authSession';
 
 const { createAiApi, createTaskApi } = apiClient;
@@ -39,7 +39,7 @@ function getTaskApi() {
   return createTaskApi(runtimeConfig.apiUrl, {
     fetch: fetchWithoutAmbientCredentials,
     accessToken: getAccessToken,
-    onUnauthorized: clearTokens,
+    onUnauthorized: rejectApiToken,
   });
 }
 
@@ -48,8 +48,8 @@ function getAiApi() {
     fetch: fetchWithoutAmbientCredentials,
     accessToken: getAccessToken,
     adminToken: getAdminToken,
-    onUnauthorized: clearTokens,
-    onAdminUnauthorized: clearAdminToken,
+    onUnauthorized: rejectApiToken,
+    onAdminUnauthorized: rejectAdminToken,
   });
 }
 
@@ -72,8 +72,8 @@ export async function getTasks(): Promise<TaskDto[]> {
   return getTaskApi().listTasks();
 }
 
-export async function createTask(task: TaskInputDto): Promise<TaskDto> {
-  return getTaskApi().createTask(task);
+export async function createTask(task: TaskInputDto, idempotencyKey?: string): Promise<TaskDto> {
+  return getTaskApi().createTask(task, idempotencyKey);
 }
 
 export async function updateTask(

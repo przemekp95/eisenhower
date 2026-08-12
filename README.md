@@ -30,6 +30,8 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 - `qdrant`: opt-in vector store for the canonical local RAG profile; not enabled in the current Mikrus runtime
 - `minio`: experimental local-profile service, not a dependency of the supported runtime
 
+Plain-language browser instructions are available in [`docs/WEB_GUIDE.md`](docs/WEB_GUIDE.md).
+
 ## Runtime Configuration
 
 ### Web
@@ -72,7 +74,7 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 - `EISENHOWER_API_TOKEN`: user token shared with the Node API for ordinary task and AI operations
 - `EISENHOWER_ADMIN_TOKEN`: separate 32+ character token for all training-data writes (including feedback), retraining and AI provider management; it must differ from the user token
 
-Web and mobile ask for both tokens at runtime, keep them only in memory, and attach the appropriate value in the `Authorization` header. Do not put either token in `VITE_*`, `EXPO_PUBLIC_*`, runtime-config.js, URLs, localStorage, or AsyncStorage. Because neither API authenticates with ambient cookies, classic credentialed CSRF is not applicable to the current authentication contract; unsafe browser requests are additionally rejected when their `Origin` is outside `CORS_ALLOW_ORIGINS`. Both APIs disable credentialed CORS, and the production web adapter explicitly uses Fetch `credentials: 'omit'` for every task and AI request while retaining the bearer header.
+Web asks for the user token at entry and requests the separate administrator token only after the user opens Administration. Mobile asks for both tokens at runtime. Both clients keep these values only in memory and attach the appropriate value in the `Authorization` header. Do not put either token in `VITE_*`, `EXPO_PUBLIC_*`, runtime-config.js, URLs, localStorage, or AsyncStorage. Because neither API authenticates with ambient cookies, classic credentialed CSRF is not applicable to the current authentication contract; unsafe browser requests are additionally rejected when their `Origin` is outside `CORS_ALLOW_ORIGINS`. Both APIs disable credentialed CORS, and the production web adapter explicitly uses Fetch `credentials: 'omit'` for every task and AI request while retaining the bearer header.
 
 ---
 
@@ -107,7 +109,7 @@ Root commands:
 
 Before starting the root Docker Compose stack, copy `.env.example` to `.env` and replace every placeholder with a unique local credential.
 
-`make verify` mirrors the local release-quality sweep used most often in CI: backend-node build + coverage + executable Cucumber/Gherkin BDD, web build + coverage + integration, backend-ai pytest, and mobile coverage. The current BDD slice documents the task lifecycle, tenant isolation, bearer/browser-origin protection, and request validation under `backend-node/features/`; it is intentionally narrower than repository-wide BDD.
+`make verify` mirrors the local release-quality sweep used most often in CI: backend-node build + coverage + executable Cucumber/Gherkin BDD, web build + coverage + integration, backend-ai pytest, and mobile coverage. The current BDD slice documents the task lifecycle (including edit and stale-revision protection), tenant isolation, bearer/browser-origin protection, and request validation under `backend-node/features/`; it is intentionally narrower than repository-wide BDD.
 
 The standard backend AI development environment installs `requirements-dev.txt`, which includes core runtime and test/audit tools but excludes research frameworks. Install `requirements-experimental.txt` separately only to run the opt-in LangChain/MinIO experiments.
 

@@ -102,7 +102,7 @@ function createAuthorizedRequest(optionsOrFetch, credential = 'access') {
       !token && Object.keys(init).length === 0 && Object.keys(headers).length === 0
         ? await request(url)
         : await request(url, requestInit);
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       if (credential === 'admin') {
         options.onAdminUnauthorized?.();
       } else {
@@ -252,10 +252,13 @@ function createTaskApi(baseUrl, optionsOrFetch) {
         code: 'invalid_response',
       });
     },
-    async createTask(task) {
+    async createTask(task, idempotencyKey) {
+      const idempotencyHeaders = typeof idempotencyKey === 'string' && idempotencyKey.length > 0
+        ? { 'Idempotency-Key': idempotencyKey }
+        : {};
       const response = await request(buildUrl(baseUrl, TASK_API_PATHS.tasks), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...idempotencyHeaders },
         body: JSON.stringify(toTaskInputDto(task)),
       });
       return readJson(response, {

@@ -47,7 +47,7 @@ describe('AI component error paths', () => {
     renderWithLanguage(<AdvancedAIAnalysis taskTitle="task" onAnalysisComplete={jest.fn()} />);
     fireEvent.click(screen.getByText(/Run advanced analysis/i));
 
-    await waitFor(() => expect(screen.getByText('Local analysis offline')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Analysis failed')).toBeInTheDocument());
   });
 
   it('ignores empty advanced-analysis titles and falls back on unknown failures', async () => {
@@ -290,7 +290,7 @@ describe('AI component error paths', () => {
 
     fireEvent.click(screen.getByText(/Add to matrix/i));
 
-    await waitFor(() => expect(screen.getByText('Matrix unavailable')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Adding to matrix failed')).toBeInTheDocument());
   });
 
   it('validates and handles batch failures', async () => {
@@ -305,7 +305,7 @@ describe('AI component error paths', () => {
     });
     fireEvent.click(screen.getByText(/Review task list/i));
 
-    await waitFor(() => expect(screen.getByText('Batch failed')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Bulk review failed')).toBeInTheDocument());
   });
 
   it('falls back on unknown batch failures', async () => {
@@ -353,7 +353,7 @@ describe('AI component error paths', () => {
       target: { files: [file] },
     });
 
-    await waitFor(() => expect(screen.getByText('OCR unavailable')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('OCR failed')).toBeInTheDocument());
   });
 
   it('requires OCR review and explicit import before persisting selected edited tasks', async () => {
@@ -439,19 +439,19 @@ describe('AI component error paths', () => {
     expect(screen.getByText('Select at least one non-empty task.')).toBeInTheDocument();
 
     fireEvent.click(include);
-    fireEvent.click(screen.getByText(/Send persisted tasks as explicit training feedback/i));
+    fireEvent.click(screen.getByText(/Help improve suggestions using the accepted tasks/i));
     fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
     await waitFor(() => expect(screen.getByText('OCR failed')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
-    await waitFor(() => expect(screen.getByText('Import unavailable')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('OCR failed')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
-    await waitFor(() => expect(screen.getByText('Feedback unavailable')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('OCR failed')).toBeInTheDocument());
     expect(onTasksExtracted).toHaveBeenLastCalledWith(expect.any(Object), true);
   });
 
   it.each([
-    ['en', 'Feedback: sent.'],
-    ['pl', 'Feedback: wysłany.'],
+    ['en', 'Improve suggestions: yes.'],
+    ['pl', 'Ulepszanie podpowiedzi: tak.'],
   ] as const)('reports explicit learned feedback in %s', async (language, expected) => {
     localStorage.setItem('eisenhower-language', language);
     mockedApi.extractTasksFromImage.mockResolvedValueOnce(reviewedOcrPayload());
@@ -468,8 +468,8 @@ describe('AI component error paths', () => {
     fireEvent.click(
       screen.getByText(
         language === 'pl'
-          ? /Wyślij zapisane zadania jako świadomy feedback/i
-          : /Send persisted tasks as explicit training feedback/i
+          ? /Pomóż ulepszać podpowiedzi na podstawie zaakceptowanych zadań/i
+          : /Help improve suggestions using the accepted tasks/i
       )
     );
     fireEvent.click(
@@ -512,7 +512,9 @@ describe('AI component error paths', () => {
 
     renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
 
-    await waitFor(() => expect(screen.getByText('Failed to load stats')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/administration status could not be loaded/i)).toBeInTheDocument()
+    );
   });
 
   it('falls back to the default load error for non-Error status failures', async () => {
@@ -522,7 +524,9 @@ describe('AI component error paths', () => {
 
     renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
 
-    await waitFor(() => expect(screen.getByText('Failed to load stats')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/administration status could not be loaded/i)).toBeInTheDocument()
+    );
   });
 
   it('runs the management success flow against real form state', async () => {
@@ -571,8 +575,11 @@ describe('AI component error paths', () => {
     renderWithLanguage(<AIManagement onModelUpdated={onModelUpdated} />);
 
     await waitFor(() =>
-      expect(screen.getByText(/Model: local-minilm-mlp \(on\)/i)).toBeInTheDocument()
+      expect(
+        screen.getByText(/Examples currently used to improve suggestions/i)
+      ).toBeInTheDocument()
     );
+    expect(screen.queryByText(/local-minilm-mlp/i)).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText(/Task text/i), {
       target: { value: 'Escalate outage' },
@@ -594,32 +601,97 @@ describe('AI component error paths', () => {
     fireEvent.change(screen.getAllByRole('combobox')[2], {
       target: { value: '2' },
     });
-    fireEvent.click(screen.getByText(/Learn feedback/i));
+    fireEvent.click(screen.getByText(/Save correction/i));
     await waitFor(() =>
       expect(mockedApi.learnFromFeedback).toHaveBeenCalledWith('Prepare QBR', 3, 2)
     );
 
-    fireEvent.click(screen.getByLabelText(/Keep deprecated compatibility flag on retrain/i));
-    fireEvent.click(screen.getByLabelText(/Keep seed examples when clearing training data/i));
-    fireEvent.click(screen.getByText(/^Retrain$/i));
+    fireEvent.click(screen.getByLabelText(/Keep existing learning examples/i));
+    fireEvent.click(screen.getByLabelText(/Keep the built-in starting examples/i));
+    fireEvent.click(screen.getByText(/Refresh task suggestions/i));
+    fireEvent.click(screen.getByRole('button', { name: /^Cancel$/i }));
+    expect(mockedApi.retrainModel).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText(/Refresh task suggestions/i));
+    fireEvent.click(screen.getByText(/Confirm refresh/i));
     await waitFor(() => expect(mockedApi.retrainModel).toHaveBeenCalledWith(false));
 
-    fireEvent.click(screen.getByText(/Clear training data/i));
+    fireEvent.click(screen.getByText(/Clear learned examples/i));
     fireEvent.click(screen.getByText(/^Cancel$/i));
     expect(mockedApi.clearTrainingData).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByText(/Clear training data/i));
-    fireEvent.click(screen.getByText(/Confirm clearing training data/i));
+    fireEvent.click(screen.getByText(/Clear learned examples/i));
+    fireEvent.click(screen.getByText(/Confirm clearing learned examples/i));
     await waitFor(() => expect(mockedApi.clearTrainingData).toHaveBeenCalledWith(false));
 
     fireEvent.change(screen.getAllByRole('combobox')[3], {
       target: { value: '3' },
     });
-    fireEvent.click(screen.getByText(/Load examples/i));
+    fireEvent.click(screen.getByRole('button', { name: /^Load examples$/i }));
     await waitFor(() => expect(screen.getByText('Inbox cleanup')).toBeInTheDocument());
     expect(
       within(screen.getByText('Inbox cleanup').closest('li') as HTMLElement).getByText('Delete')
     ).toBeInTheDocument();
     expect(onModelUpdated).toHaveBeenCalledTimes(4);
+  });
+
+  it('keeps a completed action successful when the following status refresh fails', async () => {
+    mockedApi.getTrainingStats
+      .mockResolvedValueOnce({
+        total_examples: 2,
+        quadrant_distribution: { '0': 1, '1': 1, '2': 0, '3': 0 },
+        data_sources: { default: 2 },
+        data_file: 'data.json',
+        model_file: 'memory',
+        last_updated: new Date().toISOString(),
+      })
+      .mockRejectedValueOnce(new Error('refresh unavailable'));
+    mockedApi.getCapabilities.mockResolvedValue({
+      classification: true,
+      langchain_analysis: true,
+      ocr: true,
+      batch_analysis: true,
+      training_management: true,
+      providers: { local_model: true, tesseract: true, ocr: true },
+    });
+    mockedApi.addTrainingExample.mockResolvedValue(undefined);
+
+    renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
+    await screen.findByText(/Examples currently used to improve suggestions/i);
+    fireEvent.change(screen.getByLabelText('Example task text'), {
+      target: { value: 'Keep the success result' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add example' }));
+
+    await waitFor(() => expect(mockedApi.addTrainingExample).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole('status')).toHaveTextContent(/Example saved/i);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not be loaded/i);
+  });
+
+  it('is read-only when management mutations are unavailable', async () => {
+    mockedApi.getTrainingStats.mockResolvedValue({
+      total_examples: 2,
+      quadrant_distribution: { '0': 1, '1': 1, '2': 0, '3': 0 },
+      data_sources: { default: 2 },
+      data_file: 'data.json',
+      model_file: 'memory',
+      last_updated: new Date().toISOString(),
+    });
+    mockedApi.getCapabilities.mockResolvedValue({
+      classification: true,
+      langchain_analysis: true,
+      ocr: true,
+      batch_analysis: true,
+      training_management: false,
+      providers: { local_model: true, tesseract: true, ocr: true },
+    });
+
+    renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
+
+    expect(await screen.findByRole('status')).toHaveTextContent(/changes are disabled/i);
+    expect(
+      screen.getByLabelText(/Change availability of Automatic task suggestions/i)
+    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Refresh task suggestions/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Clear learned examples/i })).toBeDisabled();
   });
 
   it('renders local model metadata and errors in the training state card', async () => {
@@ -662,12 +734,15 @@ describe('AI component error paths', () => {
     renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
 
     await waitFor(() =>
-      expect(screen.getByText(/Model: local-minilm-mlp \(off\)/i)).toBeInTheDocument()
+      expect(
+        screen.getByText(/Examples currently used to improve suggestions/i)
+      ).toBeInTheDocument()
     );
+    expect(screen.queryByText(/local-minilm-mlp/i)).not.toBeInTheDocument();
     expect(
-      screen.getByText(/Encoder: sentence-transformers\/paraphrase-multilingual-MiniLM-L12-v2/i)
-    ).toBeInTheDocument();
-    expect(screen.getAllByText('Model bootstrap failed.')).toHaveLength(2);
+      screen.queryByText(/sentence-transformers\/paraphrase-multilingual-MiniLM-L12-v2/i)
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Model bootstrap failed.')).not.toBeInTheDocument();
   });
 
   it('shows partial status failures when capabilities cannot load', async () => {
@@ -683,9 +758,11 @@ describe('AI component error paths', () => {
 
     renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
 
-    await waitFor(() => expect(screen.getByText('Failed to load stats')).toBeInTheDocument());
-    expect(screen.getByText(/Total examples in the experience store/i)).toBeInTheDocument();
-    expect(screen.getByText(/Loading providers/i)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText(/administration status could not be loaded/i)).toBeInTheDocument()
+    );
+    expect(screen.getByText(/Examples currently used to improve suggestions/i)).toBeInTheDocument();
+    expect(screen.getByText(/Checking available features/i)).toBeInTheDocument();
   });
 
   it('surfaces management action and example-loading failures', async () => {
@@ -724,7 +801,9 @@ describe('AI component error paths', () => {
     renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
 
     await waitFor(() =>
-      expect(screen.getByText(/Total examples in the experience store/i)).toBeInTheDocument()
+      expect(
+        screen.getByText(/Examples currently used to improve suggestions/i)
+      ).toBeInTheDocument()
     );
 
     fireEvent.change(screen.getByPlaceholderText(/Task text/i), {
@@ -733,7 +812,7 @@ describe('AI component error paths', () => {
     fireEvent.click(screen.getByText(/Add example/i));
     await waitFor(() => expect(screen.getByText('Action failed')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText(/Load examples/i));
+    fireEvent.click(screen.getByRole('button', { name: /^Load examples$/i }));
     await waitFor(() => expect(screen.getByText('Failed to load examples')).toBeInTheDocument());
   });
 
@@ -769,15 +848,18 @@ describe('AI component error paths', () => {
 
     renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
 
-    await waitFor(() => expect(screen.getByText(/Training state/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getAllByText(/Saved learning examples/i).length).toBeGreaterThan(0)
+    );
 
-    fireEvent.click(screen.getByRole('button', { name: /^Retrain$/i }));
-    await waitFor(() => expect(screen.getByText('Retrain exploded')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Refresh task suggestions/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Confirm refresh/i }));
+    await waitFor(() => expect(screen.getByText('Action failed')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText(/Load examples/i));
-    await waitFor(() => expect(screen.getByText('Example loader down')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /^Load examples$/i }));
+    await waitFor(() => expect(screen.getByText('Failed to load examples')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText(/Load examples/i));
+    fireEvent.click(screen.getByRole('button', { name: /^Load examples$/i }));
     await waitFor(() => expect(screen.getByText('Unknown bucket task')).toBeInTheDocument());
     expect(screen.getByText('Quadrant 9')).toBeInTheDocument();
   });
@@ -873,20 +955,39 @@ describe('AI component error paths', () => {
 
     renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
 
-    await waitFor(() => expect(screen.getByText(/Local model/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getAllByText(/Automatic task suggestions/i).length).toBeGreaterThan(0)
+    );
 
-    fireEvent.click(screen.getByLabelText(/Toggle Local model/i));
+    fireEvent.click(screen.getByLabelText(/Change availability of Automatic task suggestions/i));
+    fireEvent.click(screen.getByRole('button', { name: /^Cancel$/i }));
+    expect(mockedApi.setProviderEnabled).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText(/Change availability of Automatic task suggestions/i));
+    fireEvent.click(
+      screen.getByRole('button', { name: /Confirm turning off Automatic task suggestions/i })
+    );
     await waitFor(() =>
       expect(mockedApi.setProviderEnabled).toHaveBeenCalledWith('local_model', false)
     );
-    await waitFor(() => expect(screen.getByText(/Local model disabled\./i)).toBeInTheDocument());
-    expect(screen.getAllByText(/Disabled in AI management/i).length).toBeGreaterThan(0);
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Automatic task suggestions has been turned off\./i)
+      ).toBeInTheDocument()
+    );
+    expect(screen.getAllByText(/Turned off by an administrator/i).length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByLabelText(/Toggle Tesseract/i));
+    fireEvent.click(screen.getByLabelText(/Change availability of Reading text from images/i));
+    fireEvent.click(
+      screen.getByRole('button', { name: /Confirm turning off Reading text from images/i })
+    );
     await waitFor(() =>
       expect(mockedApi.setProviderEnabled).toHaveBeenCalledWith('tesseract', false)
     );
-    await waitFor(() => expect(screen.getByText(/Tesseract disabled\./i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Reading text from images has been turned off\./i)
+      ).toBeInTheDocument()
+    );
   });
 
   it('enables a disabled provider and reports the success state', async () => {
@@ -947,14 +1048,16 @@ describe('AI component error paths', () => {
     renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
 
     await waitFor(() =>
-      expect(screen.getAllByText(/Disabled in AI management/i).length).toBeGreaterThan(0)
+      expect(screen.getAllByText(/Turned off by an administrator/i).length).toBeGreaterThan(0)
     );
 
-    fireEvent.click(screen.getByLabelText(/Toggle Local model/i));
+    fireEvent.click(screen.getByLabelText(/Change availability of Automatic task suggestions/i));
     await waitFor(() =>
       expect(mockedApi.setProviderEnabled).toHaveBeenCalledWith('local_model', true)
     );
-    await waitFor(() => expect(screen.getByText(/Local model enabled\./i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Automatic task suggestions is now available\./i)).toBeInTheDocument()
+    );
   });
 
   it('surfaces provider toggle failures and unavailable states', async () => {
@@ -996,13 +1099,43 @@ describe('AI component error paths', () => {
 
     renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
 
-    await waitFor(() =>
-      expect(screen.getAllByText(/Unavailable in this runtime/i)).toHaveLength(2)
-    );
-    expect(screen.getByText('Model bootstrap failed.')).toBeInTheDocument();
-    expect(screen.getByText('Tesseract binary is not available.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText(/Currently unavailable/i)).toHaveLength(2));
+    expect(screen.queryByText('Model bootstrap failed.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tesseract binary is not available.')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText(/Toggle Local model/i));
-    await waitFor(() => expect(screen.getByText('Provider switch failed')).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText(/Change availability of Automatic task suggestions/i));
+    fireEvent.click(
+      screen.getByRole('button', { name: /Confirm turning off Automatic task suggestions/i })
+    );
+    await waitFor(() => expect(screen.getByText('Action failed')).toBeInTheDocument());
+  });
+
+  it('refreshes administration status locally and reports a failed manual refresh', async () => {
+    mockedApi.getTrainingStats
+      .mockResolvedValueOnce({
+        total_examples: 2,
+        quadrant_distribution: { '0': 1, '1': 1, '2': 0, '3': 0 },
+        data_sources: { default: 2 },
+        data_file: 'data.json',
+        model_file: 'memory',
+        last_updated: new Date().toISOString(),
+      })
+      .mockRejectedValueOnce(new Error('offline'));
+    mockedApi.getCapabilities.mockResolvedValue({
+      classification: true,
+      langchain_analysis: true,
+      ocr: true,
+      batch_analysis: true,
+      training_management: true,
+      providers: { local_model: true, tesseract: true, ocr: true },
+    });
+
+    renderWithLanguage(<AIManagement onModelUpdated={jest.fn()} />);
+    await screen.findByText(/Examples currently used to improve suggestions/i);
+    fireEvent.click(screen.getByRole('button', { name: /^Refresh status$/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /administration status could not be loaded/i
+    );
   });
 });

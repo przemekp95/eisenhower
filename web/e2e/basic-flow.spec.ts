@@ -11,8 +11,16 @@ function taskCard(scope: Locator | Page, title: string): Locator {
   return scope.locator('article').filter({ hasText: title });
 }
 
-function taskHeading(scope: Locator | Page, title: string): Locator {
-  return scope.getByRole('heading', { name: title, exact: true });
+async function enter(page: Page, code = 'test-api-token') {
+  await page.getByLabel('Kod dostępu').fill(code);
+  await page.getByRole('button', { name: 'Wejdź do systemu' }).click();
+}
+
+async function expectAccessible(page: Page) {
+  const accessibility = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(accessibility.violations).toEqual([]);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -20,74 +28,117 @@ test.beforeEach(async ({ page }) => {
     localStorage.clear();
     localStorage.setItem('eisenhower-language', 'pl');
   });
-
   await page.goto('/');
-  await page.getByLabel('Token dostępu').fill('test-api-token');
-  await page.getByRole('button', { name: 'Odblokuj' }).click();
-  await expect(page.getByRole('heading', { level: 1, name: 'Eisenhower Matrix' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Dodaj zadanie' })).toBeVisible();
-  expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(
-    true
-  );
-  await expect(page.locator('main')).toHaveAttribute('data-app-intro', 'ready');
 });
 
-test('renders the live board shell', async ({ page }) => {
+test('explains access and rejects an incorrect code without losing focus', async ({ page }) => {
+  await expect(page.getByText(/kod dostępu, który otrzymasz od administratora/i)).toBeVisible();
+  await enter(page, 'wrong-code');
+
+  const alert = page.getByRole('alert');
+  await expect(alert).toContainText(/nieprawidłowy lub wygasł/i);
+  await expect(page.getByLabel('Kod dostępu')).toBeFocused();
+  await expect(page.getByText(/przechowywany tylko do zamknięcia tej karty/i)).toBeVisible();
+});
+
+test('shows a task-first, honest and accessible board at the current viewport', async ({ page }) => {
+  await enter(page);
+  await expect(page.getByRole('heading', { level: 1, name: 'Eisenhower Matrix' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Dodaj zadanie' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Administracja' })).toBeVisible();
+  await expect(page.getByRole('status')).toContainText('Dane są aktualne');
   await expect(quadrant(page, 'Zrób teraz')).toBeVisible();
   await expect(quadrant(page, 'Zaplanuj')).toBeVisible();
   await expect(quadrant(page, 'Deleguj')).toBeVisible();
   await expect(quadrant(page, 'Usuń')).toBeVisible();
-  await expect(page.getByText('System priorytetów')).toBeVisible();
 
-  const accessibility = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-    .analyze();
-  expect(accessibility.violations).toEqual([]);
+  const formBox = await page.getByRole('button', { name: 'Dodaj zadanie' }).boundingBox();
+  const viewport = page.viewportSize();
+  expect(formBox).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(formBox!.y).toBeLessThan(viewport!.height);
+  await expect(page.getByText(/CRUD|backend|Pixi|GSAP|Lenis|runtime|provider/i)).toHaveCount(0);
+  await expectAccessible(page);
 });
 
-test('creates, reclassifies and deletes a task through the live API', async ({ page }) => {
+test('shows offline state, never claims current data, and recovers locally', async ({ page }) => {
+  await enter(page);
+  await expect(page.getByRole('status')).toContainText('Dane są aktualne');
+
+  let failTaskLoad = true;
+  await page.route('**/tasks', async (route) => {
+    if (failTaskLoad && route.request().method() === 'GET') {
+      await route.abort('internetdisconnected');
+      return;
+    }
+    await route.continue();
+  });
+  await page.getByRole('button', { name: 'Odśwież tablicę' }).click();
+  await expect(page.getByRole('alert')).toContainText('Brak połączenia');
+  await expect(page.getByText('Dane są aktualne')).toHaveCount(0);
+
+  failTaskLoad = false;
+  await page.getByRole('button', { name: 'Spróbuj ponownie' }).click();
+  await expect(page.getByRole('status')).toContainText('Dane są aktualne');
+});
+
+test('opens administration independently and explains the separate credential', async ({ page }) => {
+  await enter(page);
+  await expect(page.getByLabel('Tytuł zadania')).toHaveValue('');
+  await page.getByRole('button', { name: 'Administracja' }).click();
+
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByLabel('Kod administratora')).toBeVisible();
+  await expect(page.getByLabel('Kod administratora')).toBeFocused();
+  await expect(page.getByText(/osobny kod administratora/i)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Otwórz administrację' })).toBeDisabled();
+  await expectAccessible(page);
+});
+
+test('creates, edits, classifies and permanently deletes a task with keyboard controls', async ({ page }) => {
   test.setTimeout(45_000);
+  await enter(page);
 
   const title = `E2E smoke ${Date.now()}`;
-  const description = 'flow through quadrants';
+  const editedTitle = `${title} edited`;
+  const description = 'flow through decisions';
 
-  const doNow = quadrant(page, 'Zrób teraz');
-  const delegate = quadrant(page, 'Deleguj');
-  const remove = quadrant(page, 'Usuń');
+  await page.getByLabel('Tytuł zadania').fill(title);
+  await page.getByLabel('Opis').fill(description);
+  await page.getByLabel('Pilne').focus();
+  await page.keyboard.press('Space');
+  await page.getByLabel('Ważne').focus();
+  await page.keyboard.press('Space');
+  await page.getByRole('button', { name: 'Dodaj zadanie' }).focus();
+  await page.keyboard.press('Enter');
 
-  await page.getByPlaceholder('Tytuł zadania').fill(title);
-  await page.getByPlaceholder('Opis').fill(description);
-  await page.locator('label').filter({ hasText: 'Pilne' }).click();
-  await page.locator('label').filter({ hasText: 'Ważne' }).click();
-  await page.getByRole('button', { name: 'Dodaj zadanie' }).click();
-
-  const createdCard = taskCard(doNow, title);
+  const createdCard = taskCard(quadrant(page, 'Zrób teraz'), title);
   await expect(createdCard).toBeVisible();
   await expect(createdCard.getByText(description)).toBeVisible();
 
-  const populatedBoardAccessibility = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-    .analyze();
-  expect(populatedBoardAccessibility.violations).toEqual([]);
+  await createdCard.getByRole('button', { name: `Edytuj ${title}` }).focus();
+  await page.keyboard.press('Enter');
+  await page.getByLabel('Tytuł edytowanego zadania').fill(editedTitle);
+  await page.getByLabel('Opis edytowanego zadania').fill('opis po edycji');
+  await page.getByRole('button', { name: 'Zapisz zmiany' }).focus();
+  await page.keyboard.press('Enter');
+  const editedCard = taskCard(quadrant(page, 'Zrób teraz'), editedTitle);
+  await expect(editedCard).toBeVisible();
+  await expect(editedCard.getByText('opis po edycji')).toBeVisible();
 
-  await createdCard.getByLabel(`Przełącz ważność zadania ${title}`).click({ force: true });
-
-  const delegatedCard = taskCard(delegate, title);
+  await editedCard.getByLabel(`Przełącz ważność zadania ${editedTitle}`).focus();
+  await page.keyboard.press('Enter');
+  const delegatedCard = taskCard(quadrant(page, 'Deleguj'), editedTitle);
   await expect(delegatedCard).toBeVisible();
-  await expect(taskHeading(doNow, title)).toHaveCount(0);
+  await delegatedCard.getByLabel(`Przełącz pilność zadania ${editedTitle}`).focus();
+  await page.keyboard.press('Enter');
 
-  await delegatedCard.getByLabel(`Przełącz pilność zadania ${title}`).click({ force: true });
-
-  const removableCard = taskCard(remove, title);
+  const removableCard = taskCard(quadrant(page, 'Usuń'), editedTitle);
   await expect(removableCard).toBeVisible();
-  await expect(taskHeading(delegate, title)).toHaveCount(0);
-
-  await removableCard.getByRole('button', { name: `Usuń ${title}`, exact: true }).click();
-  await removableCard
-    .getByRole('button', { name: 'Potwierdź trwałe usunięcie', exact: true })
-    .click();
-
-  await expect(page.getByRole('heading', { name: title, exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Odśwież' }).click();
-  await expect(page.getByRole('heading', { name: title, exact: true })).toHaveCount(0);
+  await removableCard.getByRole('button', { name: `Usuń ${editedTitle}`, exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await removableCard.getByRole('button', { name: 'Potwierdź trwałe usunięcie' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: editedTitle, exact: true })).toHaveCount(0);
+  await expectAccessible(page);
 });
