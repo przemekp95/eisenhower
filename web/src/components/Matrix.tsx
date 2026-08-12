@@ -249,31 +249,10 @@ export default function Matrix({
       </Suspense>
 
       <div className="relative z-10 space-y-4 sm:space-y-6">
-        <nav
-          aria-label={t('lifecycle.filter.label')}
-          className="flex flex-wrap gap-2 rounded-2xl border border-white/10 bg-black/20 p-2"
-        >
-          {LIFECYCLE_FILTERS.map((filter) => (
-            <button
-              key={filter}
-              type="button"
-              aria-pressed={lifecycleFilter === filter}
-              onClick={() => onLifecycleFilterChange(filter)}
-              className={`min-h-11 rounded-full px-4 py-2 text-sm font-medium ${
-                lifecycleFilter === filter
-                  ? 'bg-cyan-200 text-slate-950'
-                  : 'bg-white/7 text-white/70 hover:bg-white/12 hover:text-white'
-              }`}
-            >
-              {t(`lifecycle.filter.${filter}`)}
-            </button>
-          ))}
-        </nav>
-        <p className="text-sm leading-6 text-white/70">{t('matrix.help')}</p>
         <form
           data-matrix-form
           onSubmit={handleSubmit}
-          className="relative grid gap-3 overflow-hidden rounded-4xl border border-white/10 bg-black/[0.28] p-4 backdrop-blur md:grid-cols-2"
+          className="relative grid grid-cols-2 gap-3 overflow-hidden rounded-4xl border border-white/10 bg-black/[0.28] p-4 backdrop-blur"
         >
           <div
             aria-hidden="true"
@@ -283,7 +262,7 @@ export default function Matrix({
             aria-hidden="true"
             className="pointer-events-none absolute -left-12 top-10 h-28 w-28 rounded-full bg-emerald-300/10 blur-3xl"
           />
-          <label className="relative text-sm font-medium text-white/80">
+          <label className="relative col-span-2 text-sm font-medium text-white/80 md:col-span-1">
             {t('form.title')}
             <input
               value={newTask.title}
@@ -294,7 +273,7 @@ export default function Matrix({
               aria-label={t('form.title')}
             />
           </label>
-          <label className="relative text-sm font-medium text-white/80">
+          <label className="relative col-span-2 text-sm font-medium text-white/80 md:col-span-1">
             {t('form.description')}
             <input
               value={newTask.description}
@@ -377,7 +356,7 @@ export default function Matrix({
               />
             </span>
           </label>
-          <div className="flex flex-wrap gap-2 md:col-span-2">
+          <div className="col-span-2 flex flex-wrap gap-2">
             <button
               type="submit"
               disabled={createPending}
@@ -413,6 +392,28 @@ export default function Matrix({
             </p>
           ) : null}
         </form>
+
+        <nav
+          aria-label={t('lifecycle.filter.label')}
+          className="flex gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-black/20 p-2"
+        >
+          {LIFECYCLE_FILTERS.map((filter) => (
+            <button
+              key={filter}
+              type="button"
+              aria-pressed={lifecycleFilter === filter}
+              onClick={() => onLifecycleFilterChange(filter)}
+              className={`min-h-11 shrink-0 rounded-full px-4 py-2 text-sm font-medium ${
+                lifecycleFilter === filter
+                  ? 'bg-cyan-200 text-slate-950'
+                  : 'bg-white/7 text-white/70 hover:bg-white/12 hover:text-white'
+              }`}
+            >
+              {t(`lifecycle.filter.${filter}`)}
+            </button>
+          ))}
+        </nav>
+        <p className="text-sm leading-6 text-white/70">{t('matrix.help')}</p>
 
         <DragDropContext onDragEnd={(result) => void handleDragEnd(result)}>
           <div className="grid gap-4 lg:grid-cols-2">
