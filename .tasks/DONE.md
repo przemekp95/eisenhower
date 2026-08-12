@@ -1,5 +1,23 @@
 # Done
 
+## TASK-045: Resolve default-branch Dependabot alerts and promote green dev
+**Priority:** P0 | **Tags:** security, dependencies, dependabot, release-gate
+
+Resolve the seven default-branch dependency alerts without bypassing the repository's dev-first branch policy, then promote the verified dependency changes through a fully green pull request to `dev`.
+
+### Plan
+
+- Reproduce the seven-alert security baseline and map each advisory to its manifest, patched version, dependency path and existing mitigation.
+- Apply the smallest compatible pytest and LangChain security upgrades on top of current `origin/dev`, preserving the tested Metro parser replacement for the unpatched transitive `image-size` advisories.
+- Run focused dependency, experimental-integration and mobile security checks, then the complete repository verification required for a dependency/lockfile change.
+- Open a PR to `dev`, require every exact-head check to pass, merge it, and verify the remote merge SHA plus post-merge `dev` CI without touching `master`, deployment or production.
+
+### Outcome
+
+Upgraded both affected pytest manifests to patched `9.0.3` and the isolated LangChain experiment to the smallest compatible `langchain-core==1.2.22` plus `langchain-qdrant==1.0.0` stack, closing all five Python advisories once the default branch is promoted. Added a continuous fail-closed resolver check after proving Dependabot's original core-only update was incompatible. Current `dev` already replaces the unpatched transitive Metro `image-size` parser with a tested local adapter, so all seven findings are fixed or mitigated on `dev` without dismissing valid default-branch alerts. Focused LangChain tests passed 4/4, mobile security 5/5 with zero production audit findings, full local `make verify` passed, PR #167 passed every exact-head check and merged as `cdae711fa98be37f64a78ede93cc516fa51e5dab`; post-merge CI run `31589328464` passed all jobs on that exact SHA. `master`, default-branch alert state, deployment and production were not changed.
+
+---
+
 ## TASK-042: Rebuild the web UX for nontechnical users and administrators
 **Priority:** P0 | **Tags:** web, ux, accessibility, auth, admin
 
