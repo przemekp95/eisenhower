@@ -98,6 +98,71 @@ describe('app middleware', () => {
     expect(origin.status).toBe(503);
   });
 
+  it('enforces explicit OIDC task scopes and audits denials without bearer data', async () => {
+    process.env.AUTH_MODE = 'oidc';
+    process.env.OIDC_ISSUER = 'https://identity.example.com';
+    process.env.OIDC_AUDIENCE = 'eisenhower-api';
+    process.env.OIDC_JWKS_URL = 'https://identity.example.com/.well-known/jwks.json';
+    const events: AuditEvent[] = [];
+    const app = createApp({
+      aiHealthChecker: async () => 'healthy',
+      databaseStatusResolver: () => 'connected',
+      auditSink: { record: (event) => { events.push(event); } },
+      oidcTokenVerifier: async (token) => ({
+        tenantId: 'tenant-a',
+        userId: 'user-a',
+        roles: [],
+        projectIds: [],
+        scopes: token === 'read-only' ? ['tasks:read'] : ['tasks:write'],
+      }),
+    });
+
+    const deniedRead = await request(app)
+      .get('/tasks')
+      .set('Authorization', 'Bearer write-only');
+    const deniedHead = await request(app)
+      .head('/tasks')
+      .set('Authorization', 'Bearer write-only');
+    const deniedMutation = await request(app)
+      .post('/tasks')
+      .set('Authorization', 'Bearer read-only')
+      .send({ title: 'must not be persisted' });
+
+    expect(deniedRead.status).toBe(403);
+    expect(deniedHead.status).toBe(403);
+    expect(deniedMutation.status).toBe(403);
+    expect(deniedMutation.body).toEqual({
+      error: 'Required scope is missing', code: 'insufficient_scope',
+    });
+    expect(events).toHaveLength(3);
+    expect(events.every((event) => event.action === 'acl_rejection')).toBe(true);
+    expect(JSON.stringify(events)).not.toContain('read-only');
+    expect(JSON.stringify(events)).not.toContain('write-only');
+  });
+
+  it('fails closed when an OIDC task-scope rejection cannot be audited', async () => {
+    process.env.AUTH_MODE = 'oidc';
+    process.env.OIDC_ISSUER = 'https://identity.example.com';
+    process.env.OIDC_AUDIENCE = 'eisenhower-api';
+    process.env.OIDC_JWKS_URL = 'https://identity.example.com/.well-known/jwks.json';
+    const app = createApp({
+      aiHealthChecker: async () => 'healthy',
+      databaseStatusResolver: () => 'connected',
+      auditSink: { record: () => { throw new Error('disk unavailable'); } },
+      oidcTokenVerifier: async () => ({
+        tenantId: 'tenant-a', userId: 'user-a', roles: [], projectIds: [], scopes: ['tasks:read'],
+      }),
+    });
+
+    const response = await request(app)
+      .post('/tasks')
+      .set('Authorization', 'Bearer read-only')
+      .send({ title: 'must not be persisted' });
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({ error: 'Security audit is unavailable' });
+  });
+
   it('rejects incomplete production audit identity configuration', () => {
     process.env.NODE_ENV = 'production';
     process.env.AUTH_MODE = 'static';

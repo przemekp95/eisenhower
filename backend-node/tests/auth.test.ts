@@ -1,7 +1,12 @@
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
 import request from 'supertest';
 import express from 'express';
-import { createOidcTokenVerifier, requireOidcToken, requireScope } from '../src/auth';
+import {
+  createOidcTokenVerifier,
+  requireOidcToken,
+  requireScope,
+  requireTaskScope,
+} from '../src/auth';
 
 describe('OIDC bearer verification', () => {
   it('verifies signature, issuer, audience and derives tenant scope from claims', async () => {
@@ -131,6 +136,29 @@ describe('OIDC bearer verification', () => {
     expect((await request(app).get('/allowed')).status).toBe(204);
     expect((await request(app).get('/denied')).status).toBe(403);
     expect((await request(app).get('/audit-failed')).status).toBe(503);
+  });
+
+  it('requires task read scope for GET/HEAD and write scope for mutations', async () => {
+    const app = express();
+    app.use((req, _res, next) => {
+      req.auth = {
+        tenantId: 'tenant-a', userId: 'user-a', roles: [], projectIds: [],
+        scopes: req.get('x-scopes')?.split(' ') ?? [],
+      };
+      next();
+    });
+    app.use('/tasks', requireTaskScope());
+    app.all('/tasks/{*path}', (_req, res) => res.sendStatus(204));
+    app.all('/tasks', (_req, res) => res.sendStatus(204));
+
+    expect((await request(app).get('/tasks').set('X-Scopes', 'tasks:read')).status).toBe(204);
+    expect((await request(app).head('/tasks/one').set('X-Scopes', 'tasks:read')).status).toBe(204);
+    expect((await request(app).get('/tasks').set('X-Scopes', 'tasks:write')).status).toBe(403);
+    expect((await request(app).head('/tasks/one').set('X-Scopes', 'tasks:write')).status).toBe(403);
+    expect((await request(app).options('/tasks')).status).toBe(204);
+    expect((await request(app).post('/tasks').set('X-Scopes', 'tasks:write')).status).toBe(204);
+    expect((await request(app).put('/tasks/one').set('X-Scopes', 'tasks:read')).status).toBe(403);
+    expect((await request(app).delete('/tasks/one').set('X-Scopes', 'tasks:read')).status).toBe(403);
   });
 
   it('enforces OIDC bearer authentication in Express middleware', async () => {

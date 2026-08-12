@@ -43,6 +43,28 @@ class McpSdkV2ContractTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "loopback"):
                 server.main()
 
+    def test_streamable_http_allows_private_container_bind_only_behind_declared_proxy(self) -> None:
+        remote = unittest.mock.Mock()
+        with patch.dict(
+            os.environ,
+            {
+                "MCP_TRANSPORT": "streamable-http",
+                "MCP_HOST": "0.0.0.0",
+                "MCP_BEHIND_TRUSTED_PROXY": "true",
+            },
+            clear=False,
+        ), patch.object(server, "_remote_server_from_environment", return_value=remote):
+            server.main()
+
+        remote.run.assert_called_once_with(
+            transport="streamable-http",
+            json_response=True,
+            host="0.0.0.0",
+            port=8000,
+            streamable_http_path="/mcp",
+            max_request_body_size=1048576,
+        )
+
     def test_official_client_lists_exactly_the_bounded_tools(self) -> None:
         async def verify() -> None:
             async with Client(server.mcp) as client:
