@@ -65,6 +65,8 @@ Deploy the qualified private inference matrix behind FastAPI, discard validated 
 - Add a separate knowledge-answer query contract instead of reusing classifier explanations or changing retrieval-search semantics.
 - Require deterministic no-hit abstention, claim-level grounded citations, strict no-answer behavior, schema validity, PL/EN quality and zero isolation or injection violations.
 - Rehearse answerable, unsupported, injected, provider-failure and cross-scope cases without tuning on the opened holdout.
+- Freeze a separate balanced knowledge-answer holdout and immutable policy before its first live execution; score answerability, required facts, citations, schema and injection resistance without model-as-judge labels.
+- Run that sealed packet once through the physical AMD/Qwen path, publish checksum-bound aggregate evidence and connect only the automated result to the response quality gate.
 - Keep user-visible responses disabled unless every zero-tolerance gate and explicit tenant/user allowlist is satisfied.
 
 ### Progress
