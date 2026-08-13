@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-13 — TASK-023 deploy follow-up: Aligned the knowledge-service health start period with the 10-minute GPU model warm-up contract after a cold exact-master build took longer than the previous 30-second grace period; the live probe and retry threshold remain unchanged.
+
 2026-08-13 — TASK-023 deploy follow-up: Made response-only startup dependency-ordered after a clean exact-master redeploy exposed the knowledge bootstrap racing the reranker health gate; inference and reranker now become healthy before knowledge-service and gateway start.
 
 2026-08-13 — TASK-023 runtime follow-up: Deployed the owner-approved response canary on the local AMD GPU at exact master `4bd9448a`; corrected isolated Compose startup, pinned the evaluated PromptSpec, and bounded the reranker to 10% VRAM so Qwen generation, BGE-M3 embeddings, and reranking remain healthy together.
