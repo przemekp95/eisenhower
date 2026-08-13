@@ -13,6 +13,9 @@ GATEWAY_CONFIG_PATH = ROOT / "deploy" / "local" / "calendar-gateway.conf.templat
 ACCESS_GATEWAY_CONFIG_PATH = ROOT / "deploy" / "local" / "access-gateway.conf.template"
 DEPLOY_SCRIPT_PATH = ROOT / "deploy" / "local" / "deploy.sh"
 KEYCLOAK_REALM_PATH = ROOT / "deploy" / "local" / "identity" / "eisenhower-realm.json"
+KEYCLOAK_USER_PROFILE_PATH = (
+  ROOT / "deploy" / "local" / "identity" / "eisenhower-user-profile.json"
+)
 KEYCLOAK_E2E_REALM_PATH = (
   ROOT / "deploy" / "local" / "identity" / "e2e" / "eisenhower-e2e-realm.json"
 )
@@ -476,7 +479,10 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertNotIn("ports", identity)
     self.assertEqual(
       identity["volumes"],
-      ["./identity/eisenhower-realm.json:/opt/keycloak/data/import/eisenhower-realm.json:ro"],
+      [
+        "./identity/eisenhower-realm.json:/opt/keycloak/data/import/eisenhower-realm.json:ro",
+        "./identity/eisenhower-user-profile.json:/opt/keycloak/data/import/eisenhower-user-profile.json:ro",
+      ],
     )
     self.assertNotIn("e2e", str(identity))
     self.assertIn("JAVA_OPTS_KC_HEAP=-XX:MaxRAMPercentage=65", identity["environment"])
@@ -507,6 +513,12 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn("client_max_body_size", config)
     self.assertIn("if ($host != \"${ACCESS_GATEWAY_HOST}\")", config)
     self.assertIn("if ($origin_allowed = 0)", config)
+    self.assertIn('map "$uri|$http_origin" $keycloak_form_origin_allowed', config)
+    self.assertIn(
+      "~^/identity/realms/eisenhower/login-actions/.*\\|null$ 1;",
+      config,
+    )
+    self.assertNotIn('map $http_origin $origin_allowed', config)
     self.assertIn("location /identity/", config)
     self.assertIn("location = /mcp", config)
     self.assertIn("location = /.well-known/oauth-protected-resource/mcp", config)
@@ -514,6 +526,17 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn("location /ai/", config)
     self.assertIn("access_log off;", config)
     self.assertNotIn("$http_authorization", config)
+
+  def test_identity_profile_declares_non_user_editable_tenant_boundaries(self):
+    profile = json.loads(KEYCLOAK_USER_PROFILE_PATH.read_text())
+    attributes = {item["name"]: item for item in profile["attributes"]}
+    self.assertEqual(attributes["tenant_id"]["permissions"]["edit"], ["admin"])
+    self.assertEqual(attributes["project_ids"]["permissions"]["edit"], ["admin"])
+    self.assertFalse(attributes["tenant_id"]["multivalued"])
+    self.assertTrue(attributes["project_ids"]["multivalued"])
+    deploy_script = DEPLOY_SCRIPT_PATH.read_text()
+    self.assertIn("configure_identity_profile", deploy_script)
+    self.assertIn("update users/profile", deploy_script)
 
 
 if __name__ == "__main__":

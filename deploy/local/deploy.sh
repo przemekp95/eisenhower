@@ -134,6 +134,20 @@ validate_response_inputs() {
   }
 }
 
+configure_identity_profile() {
+  compose_base exec -T identity-service sh -eu -c '
+    kcadm=/opt/keycloak/bin/kcadm.sh
+    "$kcadm" config credentials \
+      --server http://127.0.0.1:8080/identity \
+      --realm master \
+      --user "$KC_BOOTSTRAP_ADMIN_USERNAME" \
+      --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null
+    "$kcadm" update users/profile \
+      --realm eisenhower \
+      -f /opt/keycloak/data/import/eisenhower-user-profile.json
+  '
+}
+
 render() {
   compose_base config --quiet
   compose config --quiet
@@ -185,6 +199,7 @@ case "$action" in
     record_rollback
     compose_base up --no-deps audit-volume-init
     compose_base up -d --wait mongodb qdrant identity-db identity-service n8n
+    configure_identity_profile
     compose up --no-deps -d --wait inference reranker
     compose up --no-deps -d --wait knowledge-service
     compose_base up --no-deps -d --wait ai-service api-service web mcp-service

@@ -112,3 +112,4 @@
 2026-08-10 — TASK-007: Recorded reranking, hybrid search, knowledge graph, and agentic or multi-step RAG as deferred decisions with evidence-based revisit and ADR gates; `git diff --check` passed.
 
 Add newest entries at the top using `YYYY-MM-DD — TASK-ID: outcome and verification`.
+2026-08-13 — TASK-047 milestone: Fixed the production browser login path by narrowly accepting Chromium's opaque `Origin: null` only on Keycloak login actions, made tenant/project user-profile claims an idempotent deploy step, and verified the issue against the real private HTTPS runtime before promotion.

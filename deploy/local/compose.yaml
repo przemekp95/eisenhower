@@ -305,6 +305,7 @@ services:
       - OIDC_MCP_RESOURCE_URL=${OIDC_MCP_RESOURCE_URL:?OIDC_MCP_RESOURCE_URL is required}
     volumes:
       - ./identity/eisenhower-realm.json:/opt/keycloak/data/import/eisenhower-realm.json:ro
+      - ./identity/eisenhower-user-profile.json:/opt/keycloak/data/import/eisenhower-user-profile.json:ro
 
   mcp-service:
     <<: *common
