@@ -28,6 +28,11 @@ export AI_IMAGE="local/eisenhower-ai:${release_sha}"
 export AI_ROCM_IMAGE="local/eisenhower-ai-rocm:${release_sha}"
 export MCP_IMAGE="local/eisenhower-mcp:${release_sha}"
 export WEB_IMAGE="local/eisenhower-web:${release_sha}"
+export LOCAL_MODEL_OWNER_APPROVAL_BYPASS=false
+
+compose_base() {
+  docker compose --env-file "$env_file" -f "$compose_base" "$@"
+}
 
 compose() {
   docker compose --env-file "$env_file" \
@@ -86,15 +91,34 @@ validate_runtime_inputs() {
   test -n "${INFERENCE_MODEL:-}" || { echo "INFERENCE_MODEL is required" >&2; exit 1; }
   test -n "${INFERENCE_MODEL_REVISION:-}" || { echo "INFERENCE_MODEL_REVISION is required" >&2; exit 1; }
   test -n "${RERANKER_API_KEY:-}" || { echo "RERANKER_API_KEY is required" >&2; exit 1; }
-  test "${AI_EVALUATION_FILE:-}" != "/dev/null" && test -f "${AI_EVALUATION_FILE:-}" || {
-    echo "A real production AI_EVALUATION_FILE is required" >&2
+  validate_classifier_approval
+}
+
+validate_classifier_approval() {
+  if test "${AI_EVALUATION_FILE:-}" != "/dev/null" && test -f "${AI_EVALUATION_FILE:-}"; then
+    actual_digest="$(sha256sum "$AI_EVALUATION_FILE" | awk '{print $1}')"
+    test "$actual_digest" = "${LOCAL_MODEL_APPROVED_EVALUATION_SHA256:-}" || {
+      echo "Production evaluation digest mismatch" >&2
+      exit 1
+    }
+    export LOCAL_MODEL_OWNER_APPROVAL_BYPASS=false
+    return
+  fi
+
+  approval_deadline="${LOCAL_MODEL_OWNER_APPROVAL_VALID_UNTIL:-}"
+  test -n "$approval_deadline" || {
+    echo "A real production evaluation or time-bounded owner approval is required" >&2
     exit 1
   }
-  actual_digest="$(sha256sum "$AI_EVALUATION_FILE" | awk '{print $1}')"
-  test "$actual_digest" = "${LOCAL_MODEL_APPROVED_EVALUATION_SHA256:-}" || {
-    echo "Production evaluation digest mismatch" >&2
+  approval_epoch="$(date -d "$approval_deadline" +%s 2>/dev/null)" || {
+    echo "Owner approval deadline must be a valid ISO-8601 timestamp" >&2
     exit 1
   }
+  test "$approval_epoch" -gt "$(date +%s)" || {
+    echo "Owner approval has expired" >&2
+    exit 1
+  }
+  export LOCAL_MODEL_OWNER_APPROVAL_BYPASS=true
 }
 
 validate_response_inputs() {
@@ -111,6 +135,7 @@ validate_response_inputs() {
 }
 
 render() {
+  compose_base config --quiet
   compose config --quiet
 }
 
@@ -119,7 +144,7 @@ smoke() {
   curl -fsS "http://127.0.0.1:${ACCESS_GATEWAY_BIND_PORT:-8790}/" \
     -H "Host: ${ACCESS_GATEWAY_HOST}" >/dev/null
   curl -fsS "http://127.0.0.1:${NODE_BIND_PORT:-3001}/health/ready" >/dev/null
-  curl -fsS "http://127.0.0.1:${AI_BIND_PORT:-8000}/health/live" >/dev/null
+  curl -fsS "http://127.0.0.1:${AI_BIND_PORT:-8000}/health/ready" >/dev/null
   curl -fsS "http://127.0.0.1:${INFERENCE_BIND_PORT:-8010}/v1/models" \
     -H "Authorization: Bearer ${INFERENCE_API_KEY}" >/dev/null
 }
@@ -158,7 +183,12 @@ case "$action" in
     build_images
     render
     record_rollback
-    compose up -d --wait
+    compose_base up -d --wait mongodb qdrant audit-volume-init identity-db identity-service n8n
+    compose up --no-deps -d --wait inference reranker
+    compose up --no-deps -d --wait knowledge-service
+    compose_base up --no-deps -d --wait ai-service api-service web mcp-service
+    compose_base up --no-deps -d rag-worker
+    compose_base up --no-deps -d --wait access-gateway calendar-gateway
     smoke
     ;;
   deploy-response)

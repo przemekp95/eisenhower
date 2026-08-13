@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
 import math
 
 from app.config import Settings
@@ -517,6 +518,58 @@ def test_required_evaluation_missing_fails_closed_without_writing_artifact(tmp_p
     raise AssertionError("Missing required evaluation must block promotion")
 
   assert model.current_pointer_path.exists() is False
+
+
+def test_time_bounded_owner_approval_can_replace_missing_human_evaluation(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    evaluation_data_path=tmp_path / "missing-evaluation.json",
+    local_model_require_evaluation=True,
+    local_model_owner_approval_bypass=True,
+    local_model_owner_approval_valid_until=(
+      datetime.now(timezone.utc) + timedelta(hours=1)
+    ).isoformat(),
+    local_model_epochs=6,
+    local_model_patience=2,
+  )
+  model = LocalMiniLMClassifier(settings=settings, encoder=FakeEncoder())
+
+  result = model.train(records())
+
+  assert result["promoted"] is True
+  assert result["quality_gate"]["gate"]["passed"] is True
+  assert result["quality_gate"]["gate"]["mode"] == "time_bounded_owner_approval"
+  assert model.predict("urgent deadline today").quadrant in {0, 1, 2, 3}
+
+
+def test_expired_owner_approval_blocks_classifier_at_request_time(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    evaluation_data_path=tmp_path / "missing-evaluation.json",
+    local_model_require_evaluation=True,
+    local_model_owner_approval_bypass=True,
+    local_model_owner_approval_valid_until=(
+      datetime.now(timezone.utc) + timedelta(hours=1)
+    ).isoformat(),
+    local_model_epochs=6,
+    local_model_patience=2,
+  )
+  model = LocalMiniLMClassifier(settings=settings, encoder=FakeEncoder())
+  model.train(records())
+  object.__setattr__(
+    settings,
+    "local_model_owner_approval_valid_until",
+    (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(),
+  )
+
+  try:
+    model.predict("urgent deadline today")
+  except ModelNotReadyError as issue:
+    assert "Owner approval expired" in str(issue)
+  else:
+    raise AssertionError("Expired owner approval must fail closed at request time")
 
 
 def test_production_profile_rejects_self_declared_development_evaluation(tmp_path: Path):
