@@ -40,7 +40,10 @@ fail-closed. FastAPI keeps its deterministic classifier fallback when private ge
 2. Copy `.env.example` to `.env`, replace the placeholder image tags and populate secrets. Keep `.env`
    outside version control and readable only by its owner. `AI_EVALUATION_FILE` must be the absolute host
    path to an owner-approved production evaluation artifact; its approved digest is a separate required
-   input. A development benchmark is not a production substitute. If responses are enabled,
+   input. A development benchmark is not a production substitute. A direct owner decision may temporarily
+   accept the missing independent-human artifact by setting `LOCAL_MODEL_OWNER_APPROVAL_VALID_UNTIL` to a
+   timezone-aware ISO-8601 deadline. This is recorded as an evidence bypass rather than fabricated evaluation
+   data, and classifier requests fail closed automatically after the deadline. If responses are enabled,
    `AI_PROMOTION_ROOT` must contain the controller-written `current.json`, and
    `RAG_RESPONSE_CANDIDATE_ID` must match its response candidate. The pointer is mounted read-only;
    expiry or corruption automatically returns fallback without a container restart.
@@ -78,10 +81,14 @@ deploy/local/deploy.sh deploy
 deploy/local/deploy.sh smoke
 ```
 
-The script refuses a dirty index/worktree, derives every first-party image tag from `HEAD`, verifies the
+The full `deploy` action starts infrastructure first, then the independently bounded GPU inference/reranker
+and knowledge runtime, the CPU classifier plus API/web/MCP, and finally both gateways. This prevents the web
+gateway from becoming healthy before its UI upstream exists and avoids loading a second BGE retrieval model
+into GPU memory for the ordinary classifier. The script refuses a dirty index/worktree, derives every first-party image tag from `HEAD`, verifies the
 OCI revision label and records the pre-deploy container image IDs in the owner-only
 `.runtime-cache/local-deploy/rollback.env`. It renders all three AMD profiles before mutation. A missing
-production evaluation artifact, model revision or service key remains a hard preflight failure.
+production evaluation artifact remains a hard preflight failure unless an unexpired owner deadline is present;
+a missing model revision or service key always fails preflight.
 
 ## Multi-user OIDC and Remote MCP
 
