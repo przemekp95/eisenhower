@@ -537,6 +537,8 @@ class LocalProductionContractTest(unittest.TestCase):
     deploy_script = DEPLOY_SCRIPT_PATH.read_text()
     self.assertIn("configure_identity_profile", deploy_script)
     self.assertIn("update users/profile", deploy_script)
+    self.assertIn('test "$attempt" -lt 30', deploy_script)
+    self.assertIn("Keycloak Admin API did not become ready", deploy_script)
 
   def test_rag_worker_health_uses_durable_heartbeat_instead_of_http(self):
     healthcheck = self.services["rag-worker"]["healthcheck"]
