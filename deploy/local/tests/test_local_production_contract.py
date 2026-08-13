@@ -181,6 +181,7 @@ class LocalProductionContractTest(unittest.TestCase):
 
   def test_amd_retrieval_profile_runs_pinned_bge_m3_without_enabling_generation(self):
     ai = self.amd_services["ai-service"]
+    classifier = self.services["ai-service"]
     worker = self.amd_services["rag-worker"]
     self.assertEqual(ai["profiles"], ["retrieval-amd"])
     self.assertEqual(worker["profiles"], ["retrieval-amd"])
@@ -193,8 +194,10 @@ class LocalProductionContractTest(unittest.TestCase):
         service["environment"],
       )
       self.assertIn("EMBEDDING_VERSION=bge-m3-v1", service["environment"])
-    self.assertIn("RAG_GENERATION_ENABLED=${RAG_GENERATION_ENABLED:-false}", ai["environment"])
-    self.assertIn("RAG_RESPONSE_ENABLED=${RAG_RESPONSE_ENABLED:-false}", ai["environment"])
+    self.assertIn("RAG_GENERATION_ENABLED=false", ai["environment"])
+    self.assertIn("RAG_RESPONSE_ENABLED=false", ai["environment"])
+    self.assertIn("RAG_GENERATION_ENABLED=false", classifier["environment"])
+    self.assertIn("RAG_RESPONSE_ENABLED=false", classifier["environment"])
     self.assertIn("RAG_RESPONSE_PROMOTION_POINTER_PATH=/app/promotion/current.json", ai["environment"])
     self.assertIn("RAG_RESPONSE_CANDIDATE_ID=${RAG_RESPONSE_CANDIDATE_ID:-}", ai["environment"])
     self.assertIn("${AI_PROMOTION_ROOT:-./.runtime/promotion}:/app/promotion:ro", ai["volumes"])
