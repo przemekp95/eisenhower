@@ -113,3 +113,4 @@
 
 Add newest entries at the top using `YYYY-MM-DD — TASK-ID: outcome and verification`.
 2026-08-13 — TASK-047 milestone: Fixed the production browser login path by narrowly accepting Chromium's opaque `Origin: null` only on Keycloak login actions, made tenant/project user-profile claims an idempotent deploy step, kept the UI usable when decorative Pixi bootstrap is blocked by CSP, replaced the RAG worker's inherited HTTP probe with its durable heartbeat, and verified authenticated create/trash/delete against the real private HTTPS runtime before promotion.
+2026-08-13 — TASK-047 milestone: Hardened the idempotent Keycloak user-profile deployment against the observed management-health versus Admin API startup race with a bounded 60-second retry, after the first final exact-SHA rollout safely stopped before application-service replacement.
