@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-13 — TASK-047 deploy follow-up: Removed unprovisioned `profile` and `email` scopes from the web authorization request after a live Keycloak browser flow returned `invalid_scope`; identity and authorization continue to use the explicit governed claim and resource scopes.
+
 2026-08-13 — TASK-047 deploy follow-up: Split the CPU classifier from response-generation flags after the exact-master runtime proved that inherited global response settings made its fail-closed PromptSpec validation reject startup; generation and responses remain enabled only in the isolated knowledge service.
 
 2026-08-13 — TASK-047 deploy follow-up: Separated the successful one-shot audit volume initializer from Compose's long-lived `--wait` set after a real exact-master deploy proved that exit 0 was otherwise misclassified as a startup failure.

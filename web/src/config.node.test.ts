@@ -33,7 +33,7 @@ describe('runtimeConfig in a node runtime', () => {
       oidcClientId: undefined,
       oidcRedirectUri: undefined,
       oidcScopes:
-        'openid profile email tasks:read tasks:write calendar:read calendar:write knowledge:read ai:analyze',
+        'openid tasks:read tasks:write calendar:read calendar:write knowledge:read ai:analyze',
     });
   });
 });
