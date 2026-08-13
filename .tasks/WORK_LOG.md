@@ -112,6 +112,8 @@
 2026-08-10 — TASK-007: Recorded reranking, hybrid search, knowledge graph, and agentic or multi-step RAG as deferred decisions with evidence-based revisit and ADR gates; `git diff --check` passed.
 
 Add newest entries at the top using `YYYY-MM-DD — TASK-ID: outcome and verification`.
+2026-08-13 — TASK-047 milestone: Kept Keycloak profile deployment authenticated in the master realm by addressing the Eisenhower user-profile Admin REST endpoint with its full URL; Keycloak 26 rejected the equivalent cross-realm `kcadm -r eisenhower` write despite valid master-admin credentials.
+
 2026-08-13 — TASK-047 milestone: Forwarded the current owner-only Keycloak admin credentials into the idempotent profile step so a long-lived identity container cannot retain stale bootstrap credentials after local secret rotation.
 
 2026-08-13 — TASK-047 milestone: Fixed the final Keycloak rollout by mounting the Admin API user-profile document outside `/opt/keycloak/data/import`; Keycloak otherwise treated the profile JSON as a realm import and restarted before the exact-SHA application replacement.
