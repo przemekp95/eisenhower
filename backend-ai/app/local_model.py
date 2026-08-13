@@ -151,7 +151,10 @@ class LocalMiniLMClassifier:
     if self._status["ready"]:
       self._refresh_if_generation_changed()
     payload = dict(self._status)
-    payload["ready"] = bool(self._status["ready"])
+    approval_active = self._owner_approval_active()
+    payload["ready"] = bool(self._status["ready"] and approval_active)
+    if not approval_active:
+      payload["last_error"] = "Owner approval expired; classifier is fail-closed."
     return payload
 
   def ensure_ready(self, records: list[dict[str, Any]]) -> None:
@@ -640,6 +643,20 @@ class LocalMiniLMClassifier:
     train_indices: list[int],
     validation_indices: list[int],
   ) -> dict[str, Any] | None:
+    if self.settings.local_model_owner_approval_bypass:
+      self._require_active_owner_approval()
+      return {
+        "evaluation_dataset": None,
+        "evaluation_sha256": None,
+        "evaluation_profile": self.settings.local_model_evaluation_profile,
+        "governance_issues": [{"code": "owner_accepted_missing_independent_evaluation"}],
+        "gate": {
+          "passed": True,
+          "mode": "time_bounded_owner_approval",
+          "valid_until": self.settings.local_model_owner_approval_valid_until,
+          "reasons": [],
+        },
+      }
     evaluation_path = self.settings.evaluation_data_path
     if evaluation_path is None or not evaluation_path.exists():
       if self.settings.local_model_require_evaluation:
@@ -901,9 +918,22 @@ class LocalMiniLMClassifier:
     return self._torch
 
   def _require_ready(self) -> None:
+    self._require_active_owner_approval()
     if not self._status["ready"] or self._head is None:
       message = self._status["last_error"] or "Local model is not ready."
       raise ModelNotReadyError(message)
+
+  def _owner_approval_active(self) -> bool:
+    if not self.settings.local_model_owner_approval_bypass:
+      return True
+    valid_until = self.settings.local_model_owner_approval_valid_until
+    if not valid_until:
+      return False
+    return datetime.now(timezone.utc) <= datetime.fromisoformat(valid_until).astimezone(timezone.utc)
+
+  def _require_active_owner_approval(self) -> None:
+    if not self._owner_approval_active():
+      raise ModelNotReadyError("Owner approval expired; classifier is fail-closed.")
 
 
 def split_indices(labels: list[int], seed: int = 7) -> tuple[list[int], list[int], bool]:

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 import math
 import os
@@ -105,6 +106,8 @@ class Settings:
   local_model_require_evaluation: bool = False
   local_model_evaluation_profile: str = "development"
   local_model_approved_evaluation_sha256: str | None = None
+  local_model_owner_approval_bypass: bool = False
+  local_model_owner_approval_valid_until: str | None = None
   local_model_semantic_leakage_threshold: float = 0.92
   local_model_maximum_semantic_leaks: int = 0
   local_model_minimum_language_macro_f1: float = 0.70
@@ -190,6 +193,15 @@ class Settings:
       digest = self.local_model_approved_evaluation_sha256
       if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
         raise ValueError("Approved evaluation SHA-256 must be a lowercase 64-character hexadecimal digest.")
+    if self.local_model_owner_approval_bypass:
+      if not self.local_model_owner_approval_valid_until:
+        raise ValueError("Owner evaluation approval requires a validity deadline.")
+      try:
+        approval_deadline = datetime.fromisoformat(self.local_model_owner_approval_valid_until)
+      except ValueError as issue:
+        raise ValueError("Owner evaluation approval deadline must be ISO-8601.") from issue
+      if approval_deadline.tzinfo is None:
+        raise ValueError("Owner evaluation approval deadline must include a timezone.")
     if len(self.local_model_revision) != 40 or any(
       character not in "0123456789abcdef" for character in self.local_model_revision
     ):
@@ -373,6 +385,12 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     local_model_require_evaluation=source.get("LOCAL_MODEL_REQUIRE_EVALUATION", "true").lower() in ("true", "1", "yes"),
     local_model_evaluation_profile=evaluation_profile,
     local_model_approved_evaluation_sha256=source.get("LOCAL_MODEL_APPROVED_EVALUATION_SHA256") or None,
+    local_model_owner_approval_bypass=source.get(
+      "LOCAL_MODEL_OWNER_APPROVAL_BYPASS", "false"
+    ).lower() in ("true", "1", "yes"),
+    local_model_owner_approval_valid_until=source.get(
+      "LOCAL_MODEL_OWNER_APPROVAL_VALID_UNTIL"
+    ) or None,
     local_model_semantic_leakage_threshold=float(source.get("LOCAL_MODEL_SEMANTIC_LEAKAGE_THRESHOLD", "0.92")),
     local_model_maximum_semantic_leaks=int(source.get("LOCAL_MODEL_MAXIMUM_SEMANTIC_LEAKS", "0")),
     local_model_minimum_language_macro_f1=float(source.get("LOCAL_MODEL_MINIMUM_LANGUAGE_MACRO_F1", "0.77" if production_profile else "0.70")),

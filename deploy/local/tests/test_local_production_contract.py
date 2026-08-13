@@ -153,8 +153,12 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn('docker image inspect', script)
     self.assertIn('deploy-response)', script)
     self.assertIn('compose up --no-deps -d --wait inference reranker', script)
-    self.assertIn('compose up --no-deps -d --wait knowledge-service access-gateway', script)
+    self.assertIn('compose up --no-deps -d --wait knowledge-service', script)
+    self.assertIn('compose_base up --no-deps -d --wait ai-service api-service web mcp-service', script)
+    self.assertIn('compose_base up --no-deps -d --wait access-gateway calendar-gateway', script)
     self.assertIn('validate_response_inputs', script)
+    self.assertIn('validate_classifier_approval', script)
+    self.assertIn('LOCAL_MODEL_OWNER_APPROVAL_BYPASS=true', script)
     self.assertIn('rollback.env', script)
     self.assertIn('docker compose', script)
     self.assertIn('config --quiet', script)
@@ -242,6 +246,14 @@ class LocalProductionContractTest(unittest.TestCase):
       ai_environment,
     )
     self.assertIn("LOCAL_MODEL_REQUIRE_EVALUATION=true", ai_environment)
+    self.assertIn(
+      "LOCAL_MODEL_OWNER_APPROVAL_BYPASS=${LOCAL_MODEL_OWNER_APPROVAL_BYPASS:-false}",
+      ai_environment,
+    )
+    self.assertIn(
+      "LOCAL_MODEL_OWNER_APPROVAL_VALID_UNTIL=${LOCAL_MODEL_OWNER_APPROVAL_VALID_UNTIL:-}",
+      ai_environment,
+    )
     self.assertIn(
       "LOCAL_MODEL_APPROVED_EVALUATION_SHA256=${LOCAL_MODEL_APPROVED_EVALUATION_SHA256:?approved evaluation digest is required}",
       ai_environment,

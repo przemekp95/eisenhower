@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-13 — TASK-023/TASK-047 deploy follow-up: Converted the owner's classifier approval through 2026-08-15 into an explicit auto-expiring runtime gate and made the full local action start CPU classification, API, web, MCP and gateways around the independently bounded AMD answer stack without inventing the missing 240x2 labels.
+
 2026-08-13 — TASK-023 deploy follow-up: Aligned the knowledge-service health start period with the 10-minute GPU model warm-up contract after a cold exact-master build took longer than the previous 30-second grace period; the live probe and retry threshold remain unchanged.
 
 2026-08-13 — TASK-023 deploy follow-up: Made response-only startup dependency-ordered after a clean exact-master redeploy exposed the knowledge bootstrap racing the reranker health gate; inference and reranker now become healthy before knowledge-service and gateway start.
