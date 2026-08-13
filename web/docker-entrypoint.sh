@@ -10,7 +10,7 @@ ai_api_url="$(escape_json "${VITE_AI_API_URL:-http://localhost:8000}")"
 oidc_issuer="$(escape_json "${VITE_OIDC_ISSUER:-}")"
 oidc_client_id="$(escape_json "${VITE_OIDC_CLIENT_ID:-}")"
 oidc_redirect_uri="$(escape_json "${VITE_OIDC_REDIRECT_URI:-}")"
-oidc_scopes="$(escape_json "${VITE_OIDC_SCOPES:-openid profile email tasks:read tasks:write calendar:read calendar:write knowledge:read ai:analyze}")"
+oidc_scopes="$(escape_json "${VITE_OIDC_SCOPES:-openid tasks:read tasks:write calendar:read calendar:write knowledge:read ai:analyze}")"
 config_version="$(date +%s)"
 
 cat > /usr/share/nginx/html/runtime-config.js <<EOF
