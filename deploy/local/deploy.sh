@@ -156,8 +156,11 @@ configure_identity_profile() {
       attempt=$((attempt + 1))
       sleep 2
     done
-    "$kcadm" update users/profile \
-      --realm eisenhower \
+    # Keep authentication in the master realm. With Keycloak 26, `-r
+    # eisenhower` also changes the kcadm authorization context and rejects
+    # this cross-realm profile write even for the master administrator.
+    "$kcadm" update \
+      http://127.0.0.1:8080/identity/admin/realms/eisenhower/users/profile \
       -f /opt/keycloak/conf/eisenhower-user-profile.json
   '
 }
