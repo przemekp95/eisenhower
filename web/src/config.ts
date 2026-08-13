@@ -25,5 +25,5 @@ export const runtimeConfig = {
   oidcScopes:
     browserRuntimeConfig.oidcScopes ??
     process.env.VITE_OIDC_SCOPES ??
-    'openid profile email tasks:read tasks:write calendar:read calendar:write knowledge:read ai:analyze',
+    'openid tasks:read tasks:write calendar:read calendar:write knowledge:read ai:analyze',
 };

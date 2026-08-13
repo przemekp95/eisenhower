@@ -15,7 +15,7 @@ services:
       - VITE_OIDC_ISSUER=${OIDC_ISSUER:?OIDC_ISSUER is required}
       - VITE_OIDC_CLIENT_ID=eisenhower-web
       - VITE_OIDC_REDIRECT_URI=${EISENHOWER_OIDC_REDIRECT_URI:?EISENHOWER_OIDC_REDIRECT_URI is required}
-      - VITE_OIDC_SCOPES=openid profile email tasks:read tasks:write calendar:read calendar:write knowledge:read ai:analyze
+      - VITE_OIDC_SCOPES=openid tasks:read tasks:write calendar:read calendar:write knowledge:read ai:analyze
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/health >/dev/null"]
       interval: 30s
