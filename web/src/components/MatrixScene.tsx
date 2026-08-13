@@ -98,7 +98,15 @@ export default function MatrixScene() {
     let initFrame = 0;
     let resizeObserver: ResizeObserver | null = null;
 
-    const renderer = new WebGLRenderer();
+    let renderer: WebGLRenderer;
+
+    try {
+      renderer = new WebGLRenderer();
+    } catch {
+      // The scene is decorative. Some hardened CSP/browser combinations make
+      // Pixi's renderer bootstrap unavailable; the task UI must remain usable.
+      return;
+    }
     const stage = new Container();
     const ticker = new Ticker();
     const backdrop = new Graphics();
