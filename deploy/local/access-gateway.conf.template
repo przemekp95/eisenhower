@@ -1,10 +1,25 @@
 limit_req_zone $binary_remote_addr zone=access_per_ip:10m rate=30r/s;
 map_hash_bucket_size 128;
 
-map $http_origin $origin_allowed {
+map $http_origin $standard_origin_allowed {
     default 0;
     "" 1;
     "${ACCESS_GATEWAY_ALLOWED_ORIGIN}" 1;
+}
+
+# Keycloak login form navigations are emitted with Origin: null by Chromium.
+# Admit that opaque origin only for Keycloak's state- and cookie-bound login action;
+# API, AI, MCP and every other identity route retain the standard origin policy.
+map "$uri|$http_origin" $keycloak_form_origin_allowed {
+    default 0;
+    ~^/identity/realms/eisenhower/login-actions/.*\|null$ 1;
+}
+
+map "$standard_origin_allowed:$keycloak_form_origin_allowed" $origin_allowed {
+    default 0;
+    "1:0" 1;
+    "1:1" 1;
+    "0:1" 1;
 }
 
 server {
