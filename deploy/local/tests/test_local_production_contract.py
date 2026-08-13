@@ -538,7 +538,12 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn("configure_identity_profile", deploy_script)
     self.assertIn("-e KC_BOOTSTRAP_ADMIN_USERNAME", deploy_script)
     self.assertIn("-e KC_BOOTSTRAP_ADMIN_PASSWORD", deploy_script)
-    self.assertIn("update users/profile", deploy_script)
+    self.assertIn(
+      "http://127.0.0.1:8080/identity/admin/realms/eisenhower/users/profile",
+      deploy_script,
+    )
+    self.assertNotIn('update users/profile \\\n+      --realm eisenhower', deploy_script)
+    self.assertIn("/admin/realms/eisenhower/users/profile", deploy_script)
     self.assertIn('test "$attempt" -lt 30', deploy_script)
     self.assertIn("Keycloak Admin API did not become ready", deploy_script)
 
