@@ -137,11 +137,19 @@ validate_response_inputs() {
 configure_identity_profile() {
   compose_base exec -T identity-service sh -eu -c '
     kcadm=/opt/keycloak/bin/kcadm.sh
-    "$kcadm" config credentials \
-      --server http://127.0.0.1:8080/identity \
-      --realm master \
-      --user "$KC_BOOTSTRAP_ADMIN_USERNAME" \
-      --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null
+    attempt=1
+    until "$kcadm" config credentials \
+        --server http://127.0.0.1:8080/identity \
+        --realm master \
+        --user "$KC_BOOTSTRAP_ADMIN_USERNAME" \
+        --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null 2>&1; do
+      test "$attempt" -lt 30 || {
+        echo "Keycloak Admin API did not become ready" >&2
+        exit 1
+      }
+      attempt=$((attempt + 1))
+      sleep 2
+    done
     "$kcadm" update users/profile \
       --realm eisenhower \
       -f /opt/keycloak/data/import/eisenhower-user-profile.json
