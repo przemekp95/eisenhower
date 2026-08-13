@@ -536,6 +536,8 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertTrue(attributes["project_ids"]["multivalued"])
     deploy_script = DEPLOY_SCRIPT_PATH.read_text()
     self.assertIn("configure_identity_profile", deploy_script)
+    self.assertIn("-e KC_BOOTSTRAP_ADMIN_USERNAME", deploy_script)
+    self.assertIn("-e KC_BOOTSTRAP_ADMIN_PASSWORD", deploy_script)
     self.assertIn("update users/profile", deploy_script)
     self.assertIn('test "$attempt" -lt 30', deploy_script)
     self.assertIn("Keycloak Admin API did not become ready", deploy_script)
