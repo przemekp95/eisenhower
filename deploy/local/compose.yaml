@@ -208,6 +208,19 @@ services:
     <<: *common
     image: ${AI_IMAGE:?AI_IMAGE must be a versioned tag or digest}
     command: ["python", "-m", "app.worker_runtime"]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          from app.config import load_settings; from app.jobs import SqliteJobQueue;
+          age = SqliteJobQueue(load_settings().jobs_database_path).latest_worker_heartbeat_age_seconds();
+          raise SystemExit(0 if age is not None and age < 60 else 1)
+      interval: 30s
+      timeout: 5s
+      start_period: 600s
+      retries: 5
     environment:
       - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/eisenhower?replicaSet=rs0}
       - MONGODB_DATABASE=${MONGODB_DATABASE:-eisenhower}

@@ -538,6 +538,13 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn("configure_identity_profile", deploy_script)
     self.assertIn("update users/profile", deploy_script)
 
+  def test_rag_worker_health_uses_durable_heartbeat_instead_of_http(self):
+    healthcheck = self.services["rag-worker"]["healthcheck"]
+    command = " ".join(healthcheck["test"])
+    self.assertIn("latest_worker_heartbeat_age_seconds", command)
+    self.assertNotIn("/health/", command)
+    self.assertEqual(healthcheck["start_period"], "600s")
+
 
 if __name__ == "__main__":
   unittest.main()
