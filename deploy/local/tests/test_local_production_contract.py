@@ -481,7 +481,7 @@ class LocalProductionContractTest(unittest.TestCase):
       identity["volumes"],
       [
         "./identity/eisenhower-realm.json:/opt/keycloak/data/import/eisenhower-realm.json:ro",
-        "./identity/eisenhower-user-profile.json:/opt/keycloak/data/import/eisenhower-user-profile.json:ro",
+        "./identity/eisenhower-user-profile.json:/opt/keycloak/conf/eisenhower-user-profile.json:ro",
       ],
     )
     self.assertNotIn("e2e", str(identity))
