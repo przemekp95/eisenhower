@@ -135,7 +135,13 @@ validate_response_inputs() {
 }
 
 configure_identity_profile() {
-  compose_base exec -T identity-service sh -eu -c '
+  # Forward the current owner-only environment explicitly. The long-lived
+  # Keycloak container may still carry bootstrap credentials from an older
+  # deployment even though the local .env has been rotated.
+  compose_base exec -T \
+    -e KC_BOOTSTRAP_ADMIN_USERNAME \
+    -e KC_BOOTSTRAP_ADMIN_PASSWORD \
+    identity-service sh -eu -c '
     kcadm=/opt/keycloak/bin/kcadm.sh
     attempt=1
     until "$kcadm" config credentials \
