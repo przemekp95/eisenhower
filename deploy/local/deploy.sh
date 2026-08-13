@@ -152,7 +152,7 @@ configure_identity_profile() {
     done
     "$kcadm" update users/profile \
       --realm eisenhower \
-      -f /opt/keycloak/data/import/eisenhower-user-profile.json
+      -f /opt/keycloak/conf/eisenhower-user-profile.json
   '
 }
 
