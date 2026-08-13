@@ -183,7 +183,8 @@ case "$action" in
     build_images
     render
     record_rollback
-    compose_base up -d --wait mongodb qdrant audit-volume-init identity-db identity-service n8n
+    compose_base up --no-deps audit-volume-init
+    compose_base up -d --wait mongodb qdrant identity-db identity-service n8n
     compose up --no-deps -d --wait inference reranker
     compose up --no-deps -d --wait knowledge-service
     compose_base up --no-deps -d --wait ai-service api-service web mcp-service

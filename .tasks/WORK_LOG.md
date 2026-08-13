@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-13 — TASK-047 deploy follow-up: Separated the successful one-shot audit volume initializer from Compose's long-lived `--wait` set after a real exact-master deploy proved that exit 0 was otherwise misclassified as a startup failure.
+
 2026-08-13 — TASK-023/TASK-047 deploy follow-up: Converted the owner's classifier approval through 2026-08-15 into an explicit auto-expiring runtime gate and made the full local action start CPU classification, API, web, MCP and gateways around the independently bounded AMD answer stack without inventing the missing 240x2 labels.
 
 2026-08-13 — TASK-023 deploy follow-up: Aligned the knowledge-service health start period with the 10-minute GPU model warm-up contract after a cold exact-master build took longer than the previous 30-second grace period; the live probe and retry threshold remain unchanged.
