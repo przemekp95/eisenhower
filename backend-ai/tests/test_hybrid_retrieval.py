@@ -205,6 +205,34 @@ def test_weighted_rrf_can_prioritize_the_lexical_ranking():
   assert ranked[0].score == pytest.approx((1 / 12) + (2 / 11))
 
 
+def test_score_aware_fusion_uses_score_distribution_instead_of_only_rank():
+  dense = [
+    hit("a", "semantic a", score=0.99),
+    hit("b", "semantic b", score=0.98),
+    hit("c", "semantic c", score=0.10),
+  ]
+  lexical = [
+    dense[1].model_copy(update={"score": 100.0}),
+    dense[0].model_copy(update={"score": 1.0}),
+    dense[2].model_copy(update={"score": 0.5}),
+  ]
+
+  rrf = HybridRetrievalCore(
+    fusion_mode="rrf", dense_rrf_weight=1.0, lexical_rrf_weight=1.0,
+  ).rank(query(limit=3), dense, lexical)
+  score_aware = HybridRetrievalCore(
+    fusion_mode="dbsf", dense_rrf_weight=1.0, lexical_rrf_weight=1.0,
+  ).rank(query(limit=3), dense, lexical)
+
+  assert [item.chunk_id for item in rrf][:2] == ["a", "b"]
+  assert [item.chunk_id for item in score_aware][:2] == ["b", "a"]
+
+
+def test_unknown_fusion_mode_fails_closed():
+  with pytest.raises(ValueError, match="fusion_mode"):
+    HybridRetrievalCore(fusion_mode="raw-score-sum")
+
+
 def test_distinct_documents_are_ranked_before_additional_chunks_from_the_same_document():
   first = hit("doc-a-1", "first", score=0.9, document_id="doc-a")
   second = hit("doc-a-2", "second", score=0.8, document_id="doc-a")

@@ -1,5 +1,33 @@
 # In Progress
 
+## TASK-049: Qualify retrieval without a separate reranker
+**Priority:** P1 | **Tags:** ai, rag, retrieval, bge-m3, qdrant, performance
+
+Raise multilingual retrieval quality enough to remove the separately served cross-encoder from the selected
+response topology, while preserving ACL, canonical Mongo/Qdrant projection, sealed evaluation, rollback and
+all public contracts. Evaluate BGE-M3 dense retrieval first, add lightweight score-aware fusion when needed,
+and consider dense+sparse BGE-M3 only if the simpler candidates miss the predeclared quality gate.
+
+### Plan
+
+- Freeze a new PL/EN calibration/validation contract without tuning on the consumed TASK-048 holdout or the
+  earlier unapproved comparison set; predeclare quality, isolation, latency and resource gates.
+- Characterize the current BGE-M3 dense plus weighted-RRF path without a reranker on isolated Mongo/Qdrant.
+- Add a project-owned score-aware/document-aware fusion candidate behind the existing Retriever port using a
+  strict red-green loop; keep HTTP, MCP, jobs, auth and canonical persistence unchanged.
+- Add BGE-M3 sparse retrieval only if the simpler candidate remains below gate, using a separate versioned
+  Qdrant collection and atomic rollback rather than in-place schema mutation.
+- Run focused and broad tests, isolated quality/resource benchmarks, Compose render, SBOM/security checks for
+  any changed image, then select no-reranker only if every predeclared gate is green.
+
+### Progress
+
+Task started from clean isolated source `925db930d20af1cc13624aec2377e8dff92ff461`. The existing reranker remains
+selected until a no-reranker candidate passes independently frozen evidence; no deployment or promotion is
+authorized by this task.
+
+---
+
 ## TASK-047: Deploy the portable local AMD platform with Calendar and Remote MCP
 **Priority:** P0 | **Tags:** calendar, mcp, oauth, n8n, amd, rocm, deployment
 

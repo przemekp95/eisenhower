@@ -153,9 +153,12 @@ class Settings:
       and (self.rag_response_promotion_pointer_path is None or not self.rag_response_candidate_id)
     ):
       raise ValueError("Production RAG responses require a promotion pointer and candidate ID.")
-    if self.rag_retrieval_strategy not in {"dense-v1", "hybrid-rrf-v1", "hybrid-bge-v1"}:
+    if self.rag_retrieval_strategy not in {
+      "dense-v1", "hybrid-rrf-v1", "hybrid-score-v1", "hybrid-bge-v1",
+    }:
       raise ValueError(
-        "RAG_RETRIEVAL_STRATEGY must be 'dense-v1', 'hybrid-rrf-v1' or 'hybrid-bge-v1'."
+        "RAG_RETRIEVAL_STRATEGY must be 'dense-v1', 'hybrid-rrf-v1', "
+        "'hybrid-score-v1' or 'hybrid-bge-v1'."
       )
     timeout_values = (
       self.inference_connect_timeout_seconds,

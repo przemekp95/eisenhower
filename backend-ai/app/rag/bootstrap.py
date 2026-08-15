@@ -102,12 +102,14 @@ def build_rag_service(
         allowed_hosts=settings.reranker_allowed_hosts,
         client=reranker_client,
       )
+    score_aware = settings.rag_retrieval_strategy == "hybrid-score-v1"
     retriever = HybridRetriever(
       dense_retriever,
       lexical_retriever,
       rrf_k=20,
       dense_rrf_weight=1.0,
-      lexical_rrf_weight=2.0,
+      lexical_rrf_weight=1.0 if score_aware else 2.0,
+      fusion_mode="dbsf" if score_aware else "rrf",
       candidate_multiplier=4,
       reranker=reranker,
       reranker_candidate_limit=20,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from math import isfinite, log
+from statistics import fmean, stdev
 import re
 from typing import Protocol, Sequence
 
@@ -144,6 +145,7 @@ class HybridRetrievalCore:
     rrf_k: int = 60,
     dense_rrf_weight: float = _DEFAULT_DENSE_RRF_WEIGHT,
     lexical_rrf_weight: float = _DEFAULT_LEXICAL_RRF_WEIGHT,
+    fusion_mode: str = "rrf",
     title_weight: float = _DEFAULT_TITLE_WEIGHT,
     text_weight: float = _DEFAULT_TEXT_WEIGHT,
     reranker: Reranker | None = None,
@@ -154,6 +156,8 @@ class HybridRetrievalCore:
       raise ValueError("rrf_k must be positive")
     self._validate_weight("dense_rrf_weight", dense_rrf_weight)
     self._validate_weight("lexical_rrf_weight", lexical_rrf_weight)
+    if fusion_mode not in {"rrf", "dbsf"}:
+      raise ValueError("fusion_mode must be 'rrf' or 'dbsf'")
     self._validate_weight("title_weight", title_weight)
     self._validate_weight("text_weight", text_weight)
     if not 1 <= reranker_candidate_limit <= _MAX_RERANKER_CANDIDATES:
@@ -163,6 +167,7 @@ class HybridRetrievalCore:
     self.rrf_k = rrf_k
     self.dense_rrf_weight = float(dense_rrf_weight)
     self.lexical_rrf_weight = float(lexical_rrf_weight)
+    self.fusion_mode = fusion_mode
     self.title_weight = float(title_weight)
     self.text_weight = float(text_weight)
     self.reranker = reranker
@@ -208,6 +213,8 @@ class HybridRetrievalCore:
     dense_order: Sequence[RetrievalHit],
     lexical_order: Sequence[RetrievalHit],
   ) -> list[RetrievalHit]:
+    if self.fusion_mode == "dbsf":
+      return self._fuse_dbsf(dense_order, lexical_order)
     candidates = {item.chunk_id: item for item in lexical_order}
     candidates.update({item.chunk_id: item for item in dense_order})
     scores = {chunk_id: 0.0 for chunk_id in candidates}
@@ -227,6 +234,39 @@ class HybridRetrievalCore:
       fused,
       key=lambda item: (-item.score, item.chunk_id, item.document_id),
     )
+
+  def _fuse_dbsf(
+    self,
+    dense_order: Sequence[RetrievalHit],
+    lexical_order: Sequence[RetrievalHit],
+  ) -> list[RetrievalHit]:
+    candidates = {item.chunk_id: item for item in lexical_order}
+    candidates.update({item.chunk_id: item for item in dense_order})
+    scores = {chunk_id: 0.0 for chunk_id in candidates}
+    for ranking, weight in (
+      (dense_order, self.dense_rrf_weight),
+      (lexical_order, self.lexical_rrf_weight),
+    ):
+      normalized = self._dbsf_scores([item.score for item in ranking])
+      for item, score in zip(ranking, normalized, strict=True):
+        scores[item.chunk_id] += weight * score
+    fused = [
+      item.model_copy(update={"score": scores[item.chunk_id]})
+      for item in candidates.values()
+    ]
+    return sorted(fused, key=lambda item: (-item.score, item.chunk_id, item.document_id))
+
+  @staticmethod
+  def _dbsf_scores(scores: Sequence[float]) -> list[float]:
+    if len(scores) < 2:
+      return [0.5 for _ in scores]
+    deviation = stdev(scores)
+    if deviation == 0:
+      return [0.5 for _ in scores]
+    center = fmean(scores)
+    lower = center - (3 * deviation)
+    span = 6 * deviation
+    return [(score - lower) / span for score in scores]
 
   def _rerank(self, query_text: str, fused: list[RetrievalHit]) -> list[RetrievalHit]:
     reranker = self.reranker
@@ -473,6 +513,7 @@ class HybridRetriever:
     rrf_k: int = 60,
     dense_rrf_weight: float = _DEFAULT_DENSE_RRF_WEIGHT,
     lexical_rrf_weight: float = _DEFAULT_LEXICAL_RRF_WEIGHT,
+    fusion_mode: str = "rrf",
     candidate_multiplier: int = 4,
     reranker: Reranker | None = None,
     reranker_candidate_limit: int = 20,
@@ -487,6 +528,7 @@ class HybridRetriever:
       rrf_k=rrf_k,
       dense_rrf_weight=dense_rrf_weight,
       lexical_rrf_weight=lexical_rrf_weight,
+      fusion_mode=fusion_mode,
       reranker=reranker,
       reranker_candidate_limit=reranker_candidate_limit,
       reranker_weight=reranker_weight,
