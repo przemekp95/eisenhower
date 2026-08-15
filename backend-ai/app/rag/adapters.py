@@ -5,10 +5,8 @@ from ipaddress import ip_address
 from threading import Lock
 from time import monotonic
 from urllib.parse import urlparse
-from uuid import NAMESPACE_URL, uuid5
 
 import httpx
-from qdrant_client import models as qmodels
 
 from ..generation.models import (
   ClassificationOutput,
@@ -25,15 +23,11 @@ from .errors import (
   GenerationProviderError,
   GenerationProviderUnavailable,
   InvalidGenerationOutput,
-  ProjectionUnavailable,
 )
 from .models import (
-  ChunkRecord,
   GenerationRequest,
   KnowledgeAnswerRequest,
   RetrievalHit,
-  RetrievalQuery,
-  SourceDocument,
 )
 from .ports import EmbeddingProvider
 
@@ -83,172 +77,6 @@ class SentenceTransformerEmbeddingProvider:
     )
     rows = encoded.tolist() if hasattr(encoded, "tolist") else encoded
     return [[float(value) for value in row] for row in rows]
-
-
-class QdrantRetriever:
-  def __init__(self, client, embedding_provider: EmbeddingProvider, *, collection_alias: str):
-    self.client = client
-    self.embedding_provider = embedding_provider
-    self.collection_alias = collection_alias
-
-  def retrieve(self, query: RetrievalQuery) -> list[RetrievalHit]:
-    vector = self.embedding_provider.embed([query.text])[0]
-    result = self.client.query_points(
-      collection_name=self.collection_alias,
-      query=vector,
-      query_filter=self._build_filter(query),
-      limit=query.limit,
-      score_threshold=query.score_threshold,
-      with_payload=True,
-      with_vectors=False,
-    )
-    hits: list[RetrievalHit] = []
-    for point in result.points:
-      payload = dict(point.payload or {})
-      hits.append(
-        RetrievalHit(
-          chunk_id=str(payload.get("chunk_id") or point.id),
-          document_id=str(payload["document_id"]),
-          text=str(payload["text"]),
-          score=float(point.score),
-          source_uri=str(payload["source_uri"]),
-          title=str(payload["title"]),
-          tenant_id=str(payload["tenant_id"]),
-          project_id=payload.get("project_id"),
-          owner_id=payload.get("owner_id"),
-          embedding_version=str(payload["embedding_version"]),
-          content_version=str(payload["content_version"]),
-          source_type=str(payload.get("source_type", "knowledge")),
-        )
-      )
-    return hits
-
-  def _build_filter(self, query: RetrievalQuery) -> qmodels.Filter:
-    must = [
-        qmodels.FieldCondition(
-          key="tenant_id",
-          match=qmodels.MatchValue(value=query.scope.tenant_id),
-        ),
-        qmodels.FieldCondition(
-          key="embedding_version",
-          match=qmodels.MatchValue(value=self.embedding_provider.version),
-        ),
-        qmodels.FieldCondition(
-          key="deleted",
-          match=qmodels.MatchValue(value=False),
-        ),
-        qmodels.FieldCondition(
-          key="acl_subjects",
-          match=qmodels.MatchAny(any=query.scope.acl_subjects),
-        ),
-    ]
-    if query.project_id is not None:
-      must.append(
-        qmodels.FieldCondition(
-          key="project_id",
-          match=qmodels.MatchValue(value=query.project_id),
-        )
-      )
-    return qmodels.Filter(must=must)
-
-
-class QdrantIngestionAdapter:
-  def __init__(self, client, *, collection_name: str):
-    self.client = client
-    self.collection_name = collection_name
-
-  def replace_documents(
-    self,
-    documents: list[SourceDocument],
-    chunks: list[ChunkRecord],
-    vectors: list[list[float]],
-  ) -> None:
-    if len(chunks) != len(vectors):
-      raise ValueError("Every chunk must have exactly one embedding vector")
-    document_keys = {(document.tenant_id, document.document_id) for document in documents}
-    if len(document_keys) != len(documents):
-      raise ValueError("Every replacement document must be unique within its tenant")
-    if any((chunk.tenant_id, chunk.document_id) not in document_keys for chunk in chunks):
-      raise ValueError("Every replacement chunk must belong to a supplied document")
-    for document in documents:
-      try:
-        self.client.delete(
-          collection_name=self.collection_name,
-          points_selector=self._document_selector(document.document_id, document.tenant_id),
-          wait=True,
-        )
-      except Exception as error:
-        raise ProjectionUnavailable("Qdrant document replacement failed") from error
-    points = [
-      qmodels.PointStruct(
-        id=str(uuid5(NAMESPACE_URL, chunk.chunk_id)),
-        vector=vector,
-        payload=chunk.model_dump(),
-      )
-      for chunk, vector in zip(chunks, vectors)
-    ]
-    if points:
-      try:
-        self.client.upsert(
-          collection_name=self.collection_name,
-          points=points,
-          wait=True,
-        )
-      except Exception as error:
-        raise ProjectionUnavailable("Qdrant vector upsert failed") from error
-
-  def tombstone(self, document_id: str, tenant_id: str, content_version: str) -> None:
-    del content_version  # The canonical tombstone owns the version; Qdrant retains no private body.
-    try:
-      self.client.delete(
-        collection_name=self.collection_name,
-        points_selector=self._document_selector(document_id, tenant_id),
-        wait=True,
-      )
-    except Exception as error:
-      raise ProjectionUnavailable("Qdrant tombstone failed") from error
-
-  def projected_chunks(self, document_id: str, tenant_id: str) -> set[tuple[str, str, str]]:
-    projected = set()
-    offset = None
-    try:
-      while True:
-        points, next_offset = self.client.scroll(
-          collection_name=self.collection_name,
-          scroll_filter=self._document_selector(document_id, tenant_id).filter,
-          limit=1_000,
-          offset=offset,
-          with_payload=True,
-          with_vectors=False,
-        )
-        projected.update(
-          (str(point.payload["chunk_id"]), str(point.payload["checksum"]), str(point.payload["content_version"]))
-          for point in points
-          if point.payload and point.payload.get("deleted") is False
-        )
-        if next_offset is None:
-          break
-        offset = next_offset
-    except Exception as error:
-      raise ProjectionUnavailable("Qdrant projection inspection failed") from error
-    return projected
-
-  @staticmethod
-  def _document_selector(document_id: str, tenant_id: str) -> qmodels.FilterSelector:
-    return qmodels.FilterSelector(
-      filter=qmodels.Filter(
-        must=[
-          qmodels.FieldCondition(
-            key="tenant_id",
-            match=qmodels.MatchValue(value=tenant_id),
-          ),
-          qmodels.FieldCondition(
-            key="document_id",
-            match=qmodels.MatchValue(value=document_id),
-          ),
-        ]
-      )
-    )
 
 
 def is_private_service_url(base_url: str, *, allowed_hosts: tuple[str, ...] = ()) -> bool:

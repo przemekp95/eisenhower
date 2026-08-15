@@ -570,6 +570,17 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn("access_log off;", config)
     self.assertNotIn("$http_authorization", config)
 
+  def test_response_profile_includes_every_access_gateway_dependency(self):
+    gateway = self.services["access-gateway"]
+
+    self.assertIn("response", gateway["profiles"])
+    for dependency in gateway["depends_on"]:
+      profiles = self.services[dependency].get("profiles", [])
+      self.assertTrue(
+        not profiles or "response" in profiles,
+        f"{dependency} must join the response profile required by access-gateway",
+      )
+
   def test_identity_profile_declares_non_user_editable_tenant_boundaries(self):
     profile = json.loads(KEYCLOAK_USER_PROFILE_PATH.read_text())
     attributes = {item["name"]: item for item in profile["attributes"]}

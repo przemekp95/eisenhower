@@ -6,7 +6,6 @@ from uuid import NAMESPACE_URL, uuid5
 
 from qdrant_client import models as qmodels
 
-from .adapters import QdrantRetriever
 from .errors import ProjectionUnavailable
 from .models import ChunkRecord, RetrievalHit, RetrievalQuery, SourceDocument
 
@@ -78,9 +77,11 @@ class BgeM3SparseEmbeddingProvider:
     return encoded
 
 
-class QdrantSparseRetriever(QdrantRetriever):
+class QdrantSparseRetriever:
   def __init__(self, client, embedding_provider, *, collection_alias: str, vector_name: str):
-    super().__init__(client, embedding_provider, collection_alias=collection_alias)
+    self.client = client
+    self.embedding_provider = embedding_provider
+    self.collection_alias = collection_alias
     self.vector_name = vector_name
 
   def retrieve(self, query: RetrievalQuery) -> list[RetrievalHit]:
@@ -117,6 +118,28 @@ class QdrantSparseRetriever(QdrantRetriever):
       )
       for point in result.points
     ]
+
+  def _build_filter(self, query: RetrievalQuery) -> qmodels.Filter:
+    must = [
+      qmodels.FieldCondition(
+        key="tenant_id",
+        match=qmodels.MatchValue(value=query.scope.tenant_id),
+      ),
+      qmodels.FieldCondition(
+        key="embedding_version",
+        match=qmodels.MatchValue(value=self.embedding_provider.version),
+      ),
+      qmodels.FieldCondition(
+        key="acl_subjects",
+        match=qmodels.MatchAny(any=query.scope.acl_subjects),
+      ),
+    ]
+    if query.project_id is not None:
+      must.append(qmodels.FieldCondition(
+        key="project_id",
+        match=qmodels.MatchValue(value=query.project_id),
+      ))
+    return qmodels.Filter(must=must)
 
 
 class QdrantSparseIngestionAdapter:

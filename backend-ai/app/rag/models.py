@@ -172,7 +172,7 @@ class SourceDocument(StrictModel):
   content_checksum: str | None = None
   source_sequence: int = Field(default=0, ge=0, le=9_223_372_036_854_775_807)
   normalization_version: str = "unicode-nfc-lines-v1"
-  chunking_version: str = "chars-1200-overlap-160-v1"
+  chunking_version: str = "llama-sentence-256-32-v1"
   extraction_contract_version: str | None = None
   extraction_checksum: str | None = None
   extractor_name: str | None = None

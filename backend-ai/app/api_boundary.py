@@ -42,8 +42,8 @@ def _private_upstream(url: str, allowed_hosts: tuple[str, ...]) -> bool:
   if parsed.username or parsed.password or parsed.query or parsed.fragment:
     return False
   hostname = parsed.hostname.lower().rstrip(".")
-  if hostname in {entry.lower().rstrip(".") for entry in allowed_hosts}:
-    return True
+  if hostname not in {entry.lower().rstrip(".") for entry in allowed_hosts}:
+    return False
   if hostname in {"localhost", "127.0.0.1", "::1"}:
     return True
   try:
@@ -62,7 +62,7 @@ def create_boundary_app(
 ) -> FastAPI:
   resolved = settings or load_settings()
   knowledge_url = knowledge_url or classifier_url
-  for upstream in {classifier_url, knowledge_url}:
+  for upstream in (classifier_url, knowledge_url):
     if not _private_upstream(upstream, allowed_upstream_hosts):
       raise ValueError("AI role upstreams must use fixed private-network URLs")
   classifier_url = classifier_url.rstrip("/")

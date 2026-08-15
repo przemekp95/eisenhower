@@ -40,6 +40,11 @@ class Settings:
   rag_allowed_tenants: tuple[str, ...] = ()
   rag_response_allowed_users: tuple[str, ...] = ()
   rag_retrieval_strategy: str = "hybrid-bge-v1"
+  llamaindex_candidate_collection: str = "eisenhower-knowledge-llama-v1-candidate"
+  llamaindex_pipeline_version: str = "llama-sentence-256-32-v1"
+  llamaindex_chunk_size: int = 256
+  llamaindex_chunk_overlap: int = 32
+  llamaindex_cache_path: Path | None = None
   reranker_base_url: str = "http://reranker:8000"
   reranker_api_key: str | None = None
   reranker_allowed_hosts: tuple[str, ...] = ()
@@ -50,7 +55,7 @@ class Settings:
   rag_embedding_model_name: str | None = None
   rag_embedding_model_revision: str | None = None
   rag_embedding_device: str | None = None
-  chunking_version: str = "chars-1200-overlap-160-v1"
+  chunking_version: str = "llama-sentence-256-32-v1"
   inference_base_url: str = "http://inference:8000/v1"
   inference_api_key: str | None = None
   inference_model: str | None = None
@@ -133,6 +138,12 @@ class Settings:
       object.__setattr__(self, "local_model_artifact_dir", self.model_cache_dir)
     if self.audit_database_path is None:
       object.__setattr__(self, "audit_database_path", self.model_cache_dir / "audit.sqlite3")
+    if self.llamaindex_cache_path is None:
+      object.__setattr__(
+        self,
+        "llamaindex_cache_path",
+        self.model_cache_dir / "llamaindex-ingestion-cache.json",
+      )
     retrieval_enabled = self.rag_enabled if self.rag_retrieval_enabled is None else self.rag_retrieval_enabled
     generation_enabled = self.rag_enabled if self.rag_generation_enabled is None else self.rag_generation_enabled
     object.__setattr__(self, "rag_retrieval_enabled", retrieval_enabled)
@@ -153,13 +164,19 @@ class Settings:
       and (self.rag_response_promotion_pointer_path is None or not self.rag_response_candidate_id)
     ):
       raise ValueError("Production RAG responses require a promotion pointer and candidate ID.")
-    if self.rag_retrieval_strategy not in {
-      "dense-v1", "hybrid-rrf-v1", "hybrid-score-v1", "hybrid-bge-v1",
-    }:
-      raise ValueError(
-        "RAG_RETRIEVAL_STRATEGY must be 'dense-v1', 'hybrid-rrf-v1', "
-        "'hybrid-score-v1' or 'hybrid-bge-v1'."
-      )
+    if self.rag_retrieval_strategy not in {"dense-v1", "hybrid-bge-v1"}:
+      raise ValueError("RAG_RETRIEVAL_STRATEGY must be 'dense-v1' or 'hybrid-bge-v1'.")
+    if (
+      self.llamaindex_candidate_collection == self.qdrant_collection_alias
+      or not self.llamaindex_candidate_collection.endswith("-candidate")
+    ):
+      raise ValueError("LlamaIndex backfill must use an isolated physical candidate collection.")
+    if not self.llamaindex_pipeline_version.strip():
+      raise ValueError("LLAMAINDEX_PIPELINE_VERSION is required.")
+    if self.llamaindex_chunk_size < 16:
+      raise ValueError("LLAMAINDEX_CHUNK_SIZE must be at least 16 tokens.")
+    if not 0 <= self.llamaindex_chunk_overlap < self.llamaindex_chunk_size:
+      raise ValueError("LLAMAINDEX_CHUNK_OVERLAP must be smaller than the chunk size.")
     timeout_values = (
       self.inference_connect_timeout_seconds,
       self.inference_read_timeout_seconds,
@@ -226,8 +243,8 @@ class Settings:
       character not in "0123456789abcdef" for character in self.release_sha
     ):
       raise ValueError("RELEASE_SHA must be a lowercase 40-character hexadecimal commit.")
-    if self.chunking_version != "chars-1200-overlap-160-v1":
-      raise ValueError("Unsupported CHUNKING_VERSION for the configured 1200/160 chunker.")
+    if self.chunking_version != self.llamaindex_pipeline_version:
+      raise ValueError("CHUNKING_VERSION must match LLAMAINDEX_PIPELINE_VERSION.")
 
 
 def load_settings(env: dict[str, str] | None = None) -> Settings:
@@ -328,6 +345,19 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     rag_allowed_tenants=parse_csv_list(source.get("RAG_ALLOWED_TENANTS"), ()),
     rag_response_allowed_users=parse_csv_list(source.get("RAG_RESPONSE_ALLOWED_USERS"), ()),
     rag_retrieval_strategy=source.get("RAG_RETRIEVAL_STRATEGY", "hybrid-bge-v1"),
+    llamaindex_candidate_collection=source.get(
+      "LLAMAINDEX_CANDIDATE_COLLECTION", "eisenhower-knowledge-llama-v1-candidate"
+    ),
+    llamaindex_pipeline_version=source.get(
+      "LLAMAINDEX_PIPELINE_VERSION", "llama-sentence-256-32-v1"
+    ),
+    llamaindex_chunk_size=int(source.get("LLAMAINDEX_CHUNK_SIZE", "256")),
+    llamaindex_chunk_overlap=int(source.get("LLAMAINDEX_CHUNK_OVERLAP", "32")),
+    llamaindex_cache_path=(
+      Path(source["LLAMAINDEX_CACHE_PATH"])
+      if source.get("LLAMAINDEX_CACHE_PATH")
+      else None
+    ),
     reranker_base_url=source.get("RERANKER_BASE_URL", "http://reranker:8000"),
     reranker_api_key=source.get("RERANKER_API_KEY") or None,
     reranker_allowed_hosts=parse_csv_list(source.get("RERANKER_ALLOWED_HOSTS"), ()),
@@ -340,7 +370,10 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     rag_embedding_model_name=source.get("RAG_EMBEDDING_MODEL_NAME") or None,
     rag_embedding_model_revision=source.get("RAG_EMBEDDING_MODEL_REVISION") or None,
     rag_embedding_device=source.get("RAG_EMBEDDING_DEVICE") or None,
-    chunking_version=source.get("CHUNKING_VERSION", "chars-1200-overlap-160-v1"),
+    chunking_version=source.get(
+      "CHUNKING_VERSION",
+      source.get("LLAMAINDEX_PIPELINE_VERSION", "llama-sentence-256-32-v1"),
+    ),
     inference_base_url=source.get(
       "INFERENCE_BASE_URL",
       source.get("VLLM_BASE_URL", "http://inference:8000/v1"),

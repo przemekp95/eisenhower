@@ -1,5 +1,5 @@
 from app.rag.canonical import CanonicalDocumentState, CanonicalRetriever
-from app.rag.ingestion import DeterministicChunker, build_chunk_records
+from app.rag.llamaindex_engine import LlamaIndexChunkingEngine
 from app.rag.models import AccessScope, RetrievalHit, RetrievalQuery, SourceDocument
 
 
@@ -11,6 +11,14 @@ class Projection:
   def retrieve(self, query):
     self.queries.append(query)
     return self.hits[:query.limit]
+
+
+def chunking():
+  return LlamaIndexChunkingEngine(
+    chunk_size=64,
+    chunk_overlap=4,
+    pipeline_version="llama-test-v1",
+  )
 
 
 class CanonicalStore:
@@ -39,11 +47,7 @@ def document(document_id, *, text="Canonical content", project_id="project-1", a
 
 
 def hit_for(source, *, score=0.8, **updates):
-  chunk = build_chunk_records(
-    source,
-    DeterministicChunker(),
-    embedding_version="minilm-v1",
-  )[0]
+  chunk = chunking().build(source, embedding_version="minilm-v1")[0]
   values = {
     "chunk_id": chunk.chunk_id,
     "document_id": chunk.document_id,
@@ -107,6 +111,7 @@ def test_retrieval_revalidates_every_projection_candidate_against_canonical_stat
     projection,
     store,
     embedding_version="minilm-v1",
+    chunking_engine=chunking(),
   )
 
   hits = retriever.retrieve(
@@ -138,6 +143,7 @@ def test_retrieval_propagates_canonical_store_failures_instead_of_using_projecti
     Projection([hit_for(source)]),
     UnavailableStore(),
     embedding_version="minilm-v1",
+    chunking_engine=chunking(),
   )
 
   try:

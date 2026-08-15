@@ -23,6 +23,12 @@ torchvision==0.28.0+cpu
 PyJWT[crypto]==2.13.0
 """
 
+SPACY_MODEL_WHEEL = (
+  "https://github.com/explosion/spacy-models/releases/download/"
+  "en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
+  "#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85"
+)
+
 DOCKERFILE = """\
 FROM base AS dependencies-cpu
 RUN pip install --no-cache-dir --upgrade setuptools==84.0.0 wheel==0.46.3
@@ -98,6 +104,25 @@ def test_accepts_only_the_exact_public_pytorch_cpu_audit_blind_spots():
   skipped = validate_audit_report(audit_report(), direct_requirements)
 
   assert skipped == {"torch": "2.13.0+cpu", "torchvision": "0.28.0+cpu"}
+
+
+def test_accepts_only_the_exact_hash_pinned_spacy_model_wheel():
+  requirements = validate_requirements_policy(f"{REQUIREMENTS}{SPACY_MODEL_WHEEL}\n")
+
+  assert requirements["en-core-web-sm"] == ("en_core_web_sm", "3.8.0")
+  with pytest.raises(AuditPolicyError, match="pinned"):
+    validate_requirements_policy(
+      f"{REQUIREMENTS}{SPACY_MODEL_WHEEL.replace('1932429d', '2932429d')}\n"
+    )
+
+  report = audit_report()
+  report["dependencies"].append({
+    "name": "en-core-web-sm",
+    "skip_reason": (
+      "Dependency not found on PyPI and could not be audited: en-core-web-sm (3.8.0)"
+    ),
+  })
+  assert validate_audit_report(report, requirements)["en-core-web-sm"] == "3.8.0"
 
 
 @pytest.mark.parametrize(

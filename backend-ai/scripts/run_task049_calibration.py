@@ -22,17 +22,14 @@ REPOSITORY_ROOT = PROJECT_ROOT.parent
 if str(PROJECT_ROOT) not in sys.path:
   sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.rag.adapters import (
-  QdrantIngestionAdapter,
-  QdrantRetriever,
-  SentenceTransformerEmbeddingProvider,
-)
+from app.rag.adapters import SentenceTransformerEmbeddingProvider
 from app.rag.canonical import CanonicalIngestionApplication, CanonicalRetriever
 from app.rag.collections import QdrantCollectionManager
 from app.rag.golden_runner import RetrievalGoldenRunner
 from app.rag.hybrid import CanonicalBm25Retriever
-from app.rag.ingestion import DeterministicChunker
+from app.rag.llamaindex_engine import LlamaIndexChunkingEngine
 from app.rag.mongo_document_store import MongoCanonicalDocumentStore
+from app.rag.qdrant_llamaindex import LlamaIndexQdrantProjection
 from app.rag.task049_evaluation import (
   assert_no_query_overlap,
   build_candidates,
@@ -144,22 +141,35 @@ def run_calibration(
     manager.ensure_active(collection_name)
     collection_created = True
     store = MongoCanonicalDocumentStore(mongo[database_name].rag_documents)
-    projection = QdrantIngestionAdapter(qdrant, collection_name=alias)
-    chunker = DeterministicChunker(max_chars=1200, overlap_chars=160)
-    ingestion = CanonicalIngestionApplication(embedding, store, projection, chunker)
+    projection = LlamaIndexQdrantProjection(
+      qdrant,
+      embedding,
+      collection_name=alias,
+    )
+    chunking_engine = LlamaIndexChunkingEngine(
+      chunk_size=256,
+      chunk_overlap=32,
+      pipeline_version="llama-sentence-256-32-v1",
+    )
+    ingestion = CanonicalIngestionApplication(
+      embedding,
+      store,
+      projection,
+      chunking_engine,
+    )
     ingestion_result = ingestion.ingest(list(dataset.documents))
     if ingestion_result["accepted"] != len(dataset.documents) or ingestion_result["pending"] != 0:
       raise RuntimeError("TASK-049 synthetic corpus did not reach both stores")
     dense = CanonicalRetriever(
-      QdrantRetriever(qdrant, embedding, collection_alias=alias),
+      projection,
       store,
       embedding_version=embedding.version,
-      chunker=chunker,
+      chunking_engine=chunking_engine,
     )
     lexical = CanonicalBm25Retriever(
       store,
       embedding_version=embedding.version,
-      chunker=chunker,
+      chunking_engine=chunking_engine,
       title_weight=2.0,
       text_weight=1.0,
     )

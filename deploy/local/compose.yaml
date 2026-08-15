@@ -8,7 +8,7 @@ x-common: &common
 services:
   web:
     <<: *common
-    profiles: [access, full]
+    profiles: [access, response, full]
     image: ${WEB_IMAGE:?WEB_IMAGE must be a versioned tag or digest}
     environment:
       - VITE_API_URL=/api
@@ -227,6 +227,12 @@ services:
       - RAG_ALLOWED_TENANTS=${RAG_ALLOWED_TENANTS:?RAG_ALLOWED_TENANTS is required}
       - RAG_RESPONSE_ALLOWED_USERS=${RAG_RESPONSE_ALLOWED_USERS:-}
       - RAG_RETRIEVAL_STRATEGY=${RAG_RETRIEVAL_STRATEGY:-hybrid-bge-v1}
+      - LLAMAINDEX_CANDIDATE_COLLECTION=${LLAMAINDEX_CANDIDATE_COLLECTION:-eisenhower-knowledge-llama-v1-candidate}
+      - LLAMAINDEX_PIPELINE_VERSION=${LLAMAINDEX_PIPELINE_VERSION:-llama-sentence-256-32-v1}
+      - LLAMAINDEX_CHUNK_SIZE=${LLAMAINDEX_CHUNK_SIZE:-256}
+      - LLAMAINDEX_CHUNK_OVERLAP=${LLAMAINDEX_CHUNK_OVERLAP:-32}
+      - LLAMAINDEX_CACHE_PATH=/app/runtime/llamaindex-ingestion-cache.json
+      - CHUNKING_VERSION=${LLAMAINDEX_PIPELINE_VERSION:-llama-sentence-256-32-v1}
       - RAG_EMBEDDING_MODEL_NAME=BAAI/bge-m3
       - RAG_EMBEDDING_MODEL_REVISION=5617a9f61b028005a4858fdac845db406aefb181
       - RAG_EMBEDDING_DEVICE=cpu
@@ -256,6 +262,7 @@ services:
       - TRANSFORMERS_OFFLINE=1
     volumes:
       - model_cache:/home/app/.cache/huggingface
+      - knowledge_runtime:/app/runtime
       - audit_data:/app/audit
       - ${AI_PROMOTION_ROOT:-./.runtime/promotion}:/app/promotion:ro
     mem_limit: ${AI_KNOWLEDGE_MEMORY_LIMIT:?calibrated knowledge memory limit is required}
@@ -290,6 +297,12 @@ services:
       - RAG_GENERATION_ENABLED=false
       - RAG_RESPONSE_ENABLED=false
       - RAG_RETRIEVAL_STRATEGY=dense-v1
+      - LLAMAINDEX_CANDIDATE_COLLECTION=${LLAMAINDEX_CANDIDATE_COLLECTION:-eisenhower-knowledge-llama-v1-candidate}
+      - LLAMAINDEX_PIPELINE_VERSION=${LLAMAINDEX_PIPELINE_VERSION:-llama-sentence-256-32-v1}
+      - LLAMAINDEX_CHUNK_SIZE=${LLAMAINDEX_CHUNK_SIZE:-256}
+      - LLAMAINDEX_CHUNK_OVERLAP=${LLAMAINDEX_CHUNK_OVERLAP:-32}
+      - LLAMAINDEX_CACHE_PATH=/app/runtime/llamaindex-ingestion-cache.json
+      - CHUNKING_VERSION=${LLAMAINDEX_PIPELINE_VERSION:-llama-sentence-256-32-v1}
       - RAG_EMBEDDING_MODEL_NAME=BAAI/bge-m3
       - RAG_EMBEDDING_MODEL_REVISION=5617a9f61b028005a4858fdac845db406aefb181
       - RAG_EMBEDDING_DEVICE=cpu
@@ -388,7 +401,7 @@ services:
 
   identity-db:
     <<: *common
-    profiles: [identity, access, full]
+    profiles: [identity, access, response, full]
     image: ${IDENTITY_DB_IMAGE:-postgres:17.6-alpine}
     environment:
       - POSTGRES_DB=keycloak
@@ -404,7 +417,7 @@ services:
 
   identity-service:
     <<: *common
-    profiles: [identity, access, full]
+    profiles: [identity, access, response, full]
     image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.7.0}
     command: ["start", "--import-realm"]
     depends_on:
@@ -435,7 +448,7 @@ services:
 
   mcp-service:
     <<: *common
-    profiles: [access, full]
+    profiles: [access, response, full]
     image: ${MCP_IMAGE:?MCP_IMAGE must be a versioned tag or digest}
     depends_on:
       api-service:
@@ -519,6 +532,7 @@ volumes:
   rag_jobs:
   model_cache:
   classifier_runtime:
+  knowledge_runtime:
   ingest_runtime:
   audit_data:
   identity_db_data:

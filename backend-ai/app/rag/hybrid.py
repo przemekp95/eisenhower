@@ -12,7 +12,7 @@ import httpx
 from .adapters import is_private_service_url
 from .canonical import CanonicalDocumentStore, canonical_document_is_visible
 from .errors import RerankerUnavailable
-from .ingestion import DeterministicChunker, build_chunk_records
+from .ports import ChunkingEngine
 from .models import RetrievalHit, RetrievalQuery
 from .ports import Retriever
 
@@ -432,7 +432,7 @@ class CanonicalBm25Retriever:
     document_store: CanonicalDocumentStore,
     *,
     embedding_version: str,
-    chunker: DeterministicChunker | None = None,
+    chunking_engine: ChunkingEngine,
     title_weight: float = _DEFAULT_TITLE_WEIGHT,
     text_weight: float = _DEFAULT_TEXT_WEIGHT,
   ):
@@ -440,7 +440,7 @@ class CanonicalBm25Retriever:
     HybridRetrievalCore._validate_weight("text_weight", text_weight)
     self.document_store = document_store
     self.embedding_version = embedding_version
-    self.chunker = chunker or DeterministicChunker()
+    self.chunking_engine = chunking_engine
     self.title_weight = float(title_weight)
     self.text_weight = float(text_weight)
 
@@ -464,11 +464,7 @@ class CanonicalBm25Retriever:
       document = state.document
       if not canonical_document_is_visible(document, query):
         continue
-      for chunk in build_chunk_records(
-        document,
-        self.chunker,
-        embedding_version=self.embedding_version,
-      ):
+      for chunk in self.chunking_engine.build(document, embedding_version=self.embedding_version):
         candidates.append(RetrievalHit(
           chunk_id=chunk.chunk_id,
           document_id=chunk.document_id,

@@ -21,6 +21,14 @@ ALLOWED_UNAUDITED = {
   "torch": "2.13.0+cpu",
   "torchvision": "0.28.0+cpu",
 }
+ALLOWED_HASHED_WHEEL_REQUIREMENTS = {
+  (
+    "https://github.com/explosion/spacy-models/releases/download/"
+    "en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
+    "#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85"
+  ): ("en_core_web_sm", "3.8.0"),
+}
+ALLOWED_HASHED_WHEEL_UNAUDITED = {"en-core-web-sm": "3.8.0"}
 REQUIREMENT_PATTERN = re.compile(
   r"^(?P<name>[A-Za-z0-9_.-]+)(?:\[[A-Za-z0-9_,.-]+\])?==(?P<version>[^\s;]+)$"
 )
@@ -45,6 +53,13 @@ def validate_requirements_policy(requirements_text: str) -> dict[str, tuple[str,
       continue
     if line.startswith("--index-url") or line.startswith("--extra-index-url"):
       indexes.append(line)
+      continue
+    if line in ALLOWED_HASHED_WHEEL_REQUIREMENTS:
+      display_name, wheel_version = ALLOWED_HASHED_WHEEL_REQUIREMENTS[line]
+      name = canonical_name(display_name)
+      if name in requirements:
+        raise AuditPolicyError(f"Duplicate production dependency pin: {display_name}")
+      requirements[name] = (display_name, wheel_version)
       continue
     if line.startswith("-"):
       raise AuditPolicyError(f"Unsupported production requirement directive: {line}")
@@ -182,7 +197,7 @@ def validate_audit_report(
         raise AuditPolicyError(
           f"pip-audit returned a malformed unaudited record for {display_name}."
         )
-      expected_version = ALLOWED_UNAUDITED.get(name)
+      expected_version = ALLOWED_UNAUDITED.get(name) or ALLOWED_HASHED_WHEEL_UNAUDITED.get(name)
       expected_reason = (
         "Dependency not found on PyPI and could not be audited: "
         f"{name} ({expected_version})"
@@ -384,8 +399,8 @@ def main() -> int:
     blind_spots = ", ".join(f"{name}=={version}" for name, version in sorted(skipped.items()))
     print(
       f"pip-audit checked {dependency_count - len(skipped)} dependencies; known audit "
-      f"blind spots remain for {blind_spots}. Official PyTorch CPU wheel source and "
-      "SHA-256 resolution were verified. This is not vulnerability evidence for the "
+      f"blind spots remain for {blind_spots}. Every allowlisted direct wheel source and "
+      "SHA-256 resolution was verified. This is not vulnerability evidence for the "
       "skipped wheels; the repository Trivy source scan remains a separate gate."
     )
   else:

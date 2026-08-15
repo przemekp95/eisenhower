@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from hmac import compare_digest
-from time import monotonic, sleep
+from time import monotonic, sleep as sleep_for
 
 
 class InferenceLifecycleUnauthorized(PermissionError):
@@ -31,7 +31,7 @@ class ScaleToZeroController:
     wake_timeout_seconds: float,
     poll_interval_seconds: float = 1.0,
     monotonic_clock: Callable[[], float] = monotonic,
-    sleeper: Callable[[float], None] = sleep,
+    sleeper: Callable[[float], None] = sleep_for,
   ):
     if not operator_token:
       raise ValueError("A lifecycle operator token is required")
