@@ -58,6 +58,9 @@ def test_local_compose_defaults_to_core_and_keeps_heavy_roles_explicit():
     "${AI_DOCLING_ARTIFACT_ROOT:?approved Docling artifact directory is required}:"
     "/app/docling-artifacts:ro"
   ) in worker["volumes"]
+  assert "NUMBA_CACHE_DIR=/app/runtime/numba" in worker["environment"]
+  assert "MPLCONFIGDIR=/app/runtime/matplotlib" in worker["environment"]
+  assert "XDG_CACHE_HOME=/app/runtime/cache" in worker["environment"]
 
   deploy_script = (ROOT / "deploy" / "local" / "deploy.sh").read_text(encoding="utf-8")
   for action in ("deploy-core", "deploy-retrieval", "deploy-response", "deploy-full"):

@@ -299,6 +299,9 @@ services:
       - LOCAL_MODEL_APPROVED_EVALUATION_SHA256=${LOCAL_MODEL_APPROVED_EVALUATION_SHA256:?approved evaluation digest is required}
       - EVALUATION_DATA_PATH=/app/evaluation/production.json
       - MODEL_CACHE_DIR=/app/runtime
+      - NUMBA_CACHE_DIR=/app/runtime/numba
+      - MPLCONFIGDIR=/app/runtime/matplotlib
+      - XDG_CACHE_HOME=/app/runtime/cache
       - DOCLING_ARTIFACTS_PATH=/app/docling-artifacts
       - DOCLING_ARTIFACTS_MANIFEST_SHA256=${DOCLING_ARTIFACTS_MANIFEST_SHA256:?approved Docling artifact manifest digest is required}
       - JOBS_DATABASE_PATH=/app/data/jobs.sqlite3

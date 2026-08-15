@@ -43,3 +43,11 @@ def test_summarizes_peak_memory_pids_and_cpu_without_claiming_an_idle_baseline()
 def test_rejects_missing_or_unbounded_benchmark_limits(name, value):
   with pytest.raises(ValueError, match=name):
     validate_limit(name, value)
+
+
+def test_container_benchmark_routes_library_caches_to_its_bounded_tmpfs():
+  script = (Path(__file__).resolve().parents[1] / "scripts" / "benchmark_ingest_container.py").read_text()
+
+  assert '"NUMBA_CACHE_DIR=/tmp/numba"' in script
+  assert '"MPLCONFIGDIR=/tmp/matplotlib"' in script
+  assert '"XDG_CACHE_HOME=/tmp/cache"' in script
