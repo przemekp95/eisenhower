@@ -1,0 +1,1247 @@
+{
+  "container_id": "60fd827a5a9d004c3ff49654bb9f87e48e20f4980b1bfab2fae54b87e76e972a",
+  "deployment_proven": false,
+  "evidence_level": "local-isolated-container",
+  "image": {
+    "id": "sha256:7d2a67b43af8d2ba311fe3b9695913b266269268438e8129263b36162cb4bec4",
+    "reference": "local/eisenhower-ai-ingest:280b893dadaf7c7dcb3bbec54ee78c7955074a85",
+    "runtime_role": "ingest",
+    "source_revision": "280b893dadaf7c7dcb3bbec54ee78c7955074a85"
+  },
+  "limits": {
+    "cpus": "2.0",
+    "memory": "2g",
+    "pids": "256"
+  },
+  "production_proven": false,
+  "recorded_at": "2026-08-15T17:19:20.289332+00:00",
+  "result": {
+    "cgroup": {
+      "average_cpu_cores": 0.993789,
+      "cgroup_memory_peak_bytes": 2147483648,
+      "cpu_seconds": 15.326619,
+      "first_memory_current_bytes": 9216000,
+      "last_memory_current_bytes": 625496064,
+      "peak_memory_current_bytes": 2147479552,
+      "peak_pids": 9,
+      "samples": 137,
+      "wall_seconds_sampled": 15.4224
+    },
+    "exit_code": 0,
+    "oom_killed": false,
+    "state_error": null,
+    "stderr_tail": "No languages specified, defaulting to English.\n",
+    "timed_out": false,
+    "wall_seconds": 15.83139
+  },
+  "role": "ingest-document-extraction",
+  "samples": [
+    {
+      "cpu_usec": 41793,
+      "elapsed_seconds": 0.146573,
+      "memory_current": 9216000,
+      "memory_peak": 9216000,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 148946,
+      "elapsed_seconds": 0.259442,
+      "memory_current": 18812928,
+      "memory_peak": 18817024,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 248757,
+      "elapsed_seconds": 0.371694,
+      "memory_current": 29896704,
+      "memory_peak": 29970432,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 350696,
+      "elapsed_seconds": 0.486138,
+      "memory_current": 41570304,
+      "memory_peak": 41578496,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 451981,
+      "elapsed_seconds": 0.600553,
+      "memory_current": 48205824,
+      "memory_peak": 48205824,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 549219,
+      "elapsed_seconds": 0.715777,
+      "memory_current": 72593408,
+      "memory_peak": 72593408,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 636585,
+      "elapsed_seconds": 0.830842,
+      "memory_current": 95006720,
+      "memory_peak": 95133696,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 707179,
+      "elapsed_seconds": 0.944599,
+      "memory_current": 144228352,
+      "memory_peak": 144228352,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 810733,
+      "elapsed_seconds": 1.058723,
+      "memory_current": 164270080,
+      "memory_peak": 164270080,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 912307,
+      "elapsed_seconds": 1.172933,
+      "memory_current": 176779264,
+      "memory_peak": 176779264,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1014558,
+      "elapsed_seconds": 1.287685,
+      "memory_current": 195637248,
+      "memory_peak": 195891200,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1111259,
+      "elapsed_seconds": 1.402573,
+      "memory_current": 207556608,
+      "memory_peak": 207556608,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1212668,
+      "elapsed_seconds": 1.513869,
+      "memory_current": 211693568,
+      "memory_peak": 211779584,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1295241,
+      "elapsed_seconds": 1.626128,
+      "memory_current": 222117888,
+      "memory_peak": 222117888,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1364798,
+      "elapsed_seconds": 1.739223,
+      "memory_current": 238555136,
+      "memory_peak": 238555136,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1436373,
+      "elapsed_seconds": 1.850512,
+      "memory_current": 254038016,
+      "memory_peak": 254234624,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1511215,
+      "elapsed_seconds": 1.965503,
+      "memory_current": 316575744,
+      "memory_peak": 316579840,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1600079,
+      "elapsed_seconds": 2.080231,
+      "memory_current": 368599040,
+      "memory_peak": 368861184,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1696236,
+      "elapsed_seconds": 2.1942,
+      "memory_current": 387915776,
+      "memory_peak": 388034560,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1791666,
+      "elapsed_seconds": 2.307292,
+      "memory_current": 413687808,
+      "memory_peak": 413687808,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1890461,
+      "elapsed_seconds": 2.421786,
+      "memory_current": 437915648,
+      "memory_peak": 437952512,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1997772,
+      "elapsed_seconds": 2.533762,
+      "memory_current": 438435840,
+      "memory_peak": 438923264,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2092879,
+      "elapsed_seconds": 2.648238,
+      "memory_current": 449974272,
+      "memory_peak": 449974272,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2199379,
+      "elapsed_seconds": 2.760196,
+      "memory_current": 463618048,
+      "memory_peak": 463618048,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2307725,
+      "elapsed_seconds": 2.870724,
+      "memory_current": 468336640,
+      "memory_peak": 468336640,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2411829,
+      "elapsed_seconds": 2.983767,
+      "memory_current": 474480640,
+      "memory_peak": 474480640,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2510693,
+      "elapsed_seconds": 3.096895,
+      "memory_current": 490520576,
+      "memory_peak": 490520576,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2607141,
+      "elapsed_seconds": 3.21297,
+      "memory_current": 516571136,
+      "memory_peak": 516571136,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2712451,
+      "elapsed_seconds": 3.32789,
+      "memory_current": 529264640,
+      "memory_peak": 529375232,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2824404,
+      "elapsed_seconds": 3.43978,
+      "memory_current": 528826368,
+      "memory_peak": 529375232,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2912659,
+      "elapsed_seconds": 3.550689,
+      "memory_current": 552751104,
+      "memory_peak": 552767488,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3015882,
+      "elapsed_seconds": 3.662721,
+      "memory_current": 560611328,
+      "memory_peak": 560799744,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3127895,
+      "elapsed_seconds": 3.774441,
+      "memory_current": 560611328,
+      "memory_peak": 560799744,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3238893,
+      "elapsed_seconds": 3.885635,
+      "memory_current": 560082944,
+      "memory_peak": 560799744,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3321037,
+      "elapsed_seconds": 3.997379,
+      "memory_current": 581750784,
+      "memory_peak": 581750784,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3436042,
+      "elapsed_seconds": 4.112516,
+      "memory_current": 583565312,
+      "memory_peak": 583585792,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3533707,
+      "elapsed_seconds": 4.225196,
+      "memory_current": 591831040,
+      "memory_peak": 592093184,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3628114,
+      "elapsed_seconds": 4.339442,
+      "memory_current": 627605504,
+      "memory_peak": 627605504,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3724613,
+      "elapsed_seconds": 4.453376,
+      "memory_current": 651587584,
+      "memory_peak": 651587584,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3837599,
+      "elapsed_seconds": 4.566036,
+      "memory_current": 651517952,
+      "memory_peak": 651587584,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3948640,
+      "elapsed_seconds": 4.680711,
+      "memory_current": 655974400,
+      "memory_peak": 655974400,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4052358,
+      "elapsed_seconds": 4.795152,
+      "memory_current": 671784960,
+      "memory_peak": 671784960,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4157127,
+      "elapsed_seconds": 4.90733,
+      "memory_current": 686780416,
+      "memory_peak": 686780416,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4258833,
+      "elapsed_seconds": 5.018963,
+      "memory_current": 704892928,
+      "memory_peak": 704892928,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4336896,
+      "elapsed_seconds": 5.13201,
+      "memory_current": 738226176,
+      "memory_peak": 738369536,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4525732,
+      "elapsed_seconds": 5.245572,
+      "memory_current": 765677568,
+      "memory_peak": 765677568,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 4755611,
+      "elapsed_seconds": 5.360062,
+      "memory_current": 774197248,
+      "memory_peak": 774197248,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 4987592,
+      "elapsed_seconds": 5.47676,
+      "memory_current": 781672448,
+      "memory_peak": 781881344,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 5196734,
+      "elapsed_seconds": 5.591644,
+      "memory_current": 806047744,
+      "memory_peak": 806047744,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 5352272,
+      "elapsed_seconds": 5.705887,
+      "memory_current": 787406848,
+      "memory_peak": 815452160,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 5452660,
+      "elapsed_seconds": 5.819912,
+      "memory_current": 805273600,
+      "memory_peak": 815452160,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 5556606,
+      "elapsed_seconds": 5.934866,
+      "memory_current": 1024622592,
+      "memory_peak": 1024884736,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 5667078,
+      "elapsed_seconds": 6.048096,
+      "memory_current": 1168846848,
+      "memory_peak": 1177554944,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 5768938,
+      "elapsed_seconds": 6.161827,
+      "memory_current": 1192226816,
+      "memory_peak": 1192230912,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 5875455,
+      "elapsed_seconds": 6.276258,
+      "memory_current": 1260068864,
+      "memory_peak": 1260068864,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 5982156,
+      "elapsed_seconds": 6.391027,
+      "memory_current": 1360379904,
+      "memory_peak": 1360642048,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 6099195,
+      "elapsed_seconds": 6.508905,
+      "memory_current": 1383624704,
+      "memory_peak": 1383862272,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 6213345,
+      "elapsed_seconds": 6.622043,
+      "memory_current": 1383411712,
+      "memory_peak": 1383862272,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 6323531,
+      "elapsed_seconds": 6.735492,
+      "memory_current": 1383768064,
+      "memory_peak": 1383915520,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 6435819,
+      "elapsed_seconds": 6.847077,
+      "memory_current": 1383010304,
+      "memory_peak": 1383915520,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 6539635,
+      "elapsed_seconds": 6.959533,
+      "memory_current": 1384116224,
+      "memory_peak": 1384120320,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 6648054,
+      "elapsed_seconds": 7.070852,
+      "memory_current": 1390432256,
+      "memory_peak": 1390432256,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 6755009,
+      "elapsed_seconds": 7.183832,
+      "memory_current": 1404739584,
+      "memory_peak": 1404739584,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 6858730,
+      "elapsed_seconds": 7.298172,
+      "memory_current": 1415581696,
+      "memory_peak": 1415614464,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 6957067,
+      "elapsed_seconds": 7.408642,
+      "memory_current": 1433497600,
+      "memory_peak": 1433497600,
+      "pids": 2
+    },
+    {
+      "cpu_usec": 7058981,
+      "elapsed_seconds": 7.523107,
+      "memory_current": 1443069952,
+      "memory_peak": 1443069952,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7167440,
+      "elapsed_seconds": 7.633113,
+      "memory_current": 1444306944,
+      "memory_peak": 1444663296,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7278431,
+      "elapsed_seconds": 7.744093,
+      "memory_current": 1444306944,
+      "memory_peak": 1444663296,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7390427,
+      "elapsed_seconds": 7.856112,
+      "memory_current": 1444306944,
+      "memory_peak": 1444663296,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7446691,
+      "elapsed_seconds": 7.969414,
+      "memory_current": 1500991488,
+      "memory_peak": 1500995584,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7527490,
+      "elapsed_seconds": 8.08224,
+      "memory_current": 1548152832,
+      "memory_peak": 1548152832,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7631881,
+      "elapsed_seconds": 8.194828,
+      "memory_current": 1588858880,
+      "memory_peak": 1588858880,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7731332,
+      "elapsed_seconds": 8.308919,
+      "memory_current": 1606692864,
+      "memory_peak": 1606692864,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7833103,
+      "elapsed_seconds": 8.422621,
+      "memory_current": 1620955136,
+      "memory_peak": 1620955136,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7943842,
+      "elapsed_seconds": 8.535222,
+      "memory_current": 1631895552,
+      "memory_peak": 1634844672,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8017466,
+      "elapsed_seconds": 8.649265,
+      "memory_current": 1676685312,
+      "memory_peak": 1676820480,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8122555,
+      "elapsed_seconds": 8.760477,
+      "memory_current": 1689960448,
+      "memory_peak": 1690066944,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8224416,
+      "elapsed_seconds": 8.8721,
+      "memory_current": 1694765056,
+      "memory_peak": 1695088640,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8335636,
+      "elapsed_seconds": 8.987114,
+      "memory_current": 1695830016,
+      "memory_peak": 1695838208,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8446639,
+      "elapsed_seconds": 9.098627,
+      "memory_current": 1696714752,
+      "memory_peak": 1696817152,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8557638,
+      "elapsed_seconds": 9.21206,
+      "memory_current": 1700855808,
+      "memory_peak": 1700855808,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8665359,
+      "elapsed_seconds": 9.324566,
+      "memory_current": 1703530496,
+      "memory_peak": 1703755776,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8779270,
+      "elapsed_seconds": 9.439004,
+      "memory_current": 1704251392,
+      "memory_peak": 1705037824,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8892967,
+      "elapsed_seconds": 9.552034,
+      "memory_current": 1704161280,
+      "memory_peak": 1705037824,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9006893,
+      "elapsed_seconds": 9.665994,
+      "memory_current": 1704161280,
+      "memory_peak": 1705037824,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9119833,
+      "elapsed_seconds": 9.779764,
+      "memory_current": 1704161280,
+      "memory_peak": 1705037824,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9224833,
+      "elapsed_seconds": 9.892923,
+      "memory_current": 1705385984,
+      "memory_peak": 1705385984,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9333450,
+      "elapsed_seconds": 10.006157,
+      "memory_current": 1706348544,
+      "memory_peak": 1706418176,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9447205,
+      "elapsed_seconds": 10.120527,
+      "memory_current": 1710190592,
+      "memory_peak": 1710190592,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9553608,
+      "elapsed_seconds": 10.232442,
+      "memory_current": 1712291840,
+      "memory_peak": 1712291840,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9658781,
+      "elapsed_seconds": 10.343581,
+      "memory_current": 1739177984,
+      "memory_peak": 1739177984,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9766725,
+      "elapsed_seconds": 10.455625,
+      "memory_current": 1785491456,
+      "memory_peak": 1790029824,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9880728,
+      "elapsed_seconds": 10.568974,
+      "memory_current": 1785491456,
+      "memory_peak": 1790029824,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9999325,
+      "elapsed_seconds": 10.682607,
+      "memory_current": 1787326464,
+      "memory_peak": 1790029824,
+      "pids": 7
+    },
+    {
+      "cpu_usec": 10220756,
+      "elapsed_seconds": 10.79761,
+      "memory_current": 1807155200,
+      "memory_peak": 1807155200,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 10448749,
+      "elapsed_seconds": 10.911062,
+      "memory_current": 1814728704,
+      "memory_peak": 1814900736,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 10676638,
+      "elapsed_seconds": 11.025661,
+      "memory_current": 1820950528,
+      "memory_peak": 1822224384,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 10905157,
+      "elapsed_seconds": 11.140028,
+      "memory_current": 1827143680,
+      "memory_peak": 1827143680,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 11072557,
+      "elapsed_seconds": 11.255165,
+      "memory_current": 1793421312,
+      "memory_peak": 1827143680,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 11183570,
+      "elapsed_seconds": 11.366878,
+      "memory_current": 1792782336,
+      "memory_peak": 1827143680,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 11288597,
+      "elapsed_seconds": 11.481263,
+      "memory_current": 1794789376,
+      "memory_peak": 1827143680,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 11403601,
+      "elapsed_seconds": 11.596737,
+      "memory_current": 1794732032,
+      "memory_peak": 1827143680,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 11515604,
+      "elapsed_seconds": 11.708698,
+      "memory_current": 1794732032,
+      "memory_peak": 1827143680,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 11630607,
+      "elapsed_seconds": 11.823222,
+      "memory_current": 1794732032,
+      "memory_peak": 1827143680,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 11744615,
+      "elapsed_seconds": 11.937157,
+      "memory_current": 1794469888,
+      "memory_peak": 1827143680,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 11855619,
+      "elapsed_seconds": 12.048786,
+      "memory_current": 1794392064,
+      "memory_peak": 1827143680,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 11967711,
+      "elapsed_seconds": 12.163537,
+      "memory_current": 2030665728,
+      "memory_peak": 2030927872,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 12082535,
+      "elapsed_seconds": 12.278272,
+      "memory_current": 2147237888,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 12194085,
+      "elapsed_seconds": 12.389833,
+      "memory_current": 2147389440,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 12297755,
+      "elapsed_seconds": 12.503028,
+      "memory_current": 2147479552,
+      "memory_peak": 2147483648,
+      "pids": 7
+    },
+    {
+      "cpu_usec": 12411362,
+      "elapsed_seconds": 12.617191,
+      "memory_current": 2147225600,
+      "memory_peak": 2147483648,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 12522563,
+      "elapsed_seconds": 12.728855,
+      "memory_current": 2147209216,
+      "memory_peak": 2147483648,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 12635710,
+      "elapsed_seconds": 12.841259,
+      "memory_current": 2147155968,
+      "memory_peak": 2147483648,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 12747842,
+      "elapsed_seconds": 12.953188,
+      "memory_current": 2146926592,
+      "memory_peak": 2147483648,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 12862107,
+      "elapsed_seconds": 13.067673,
+      "memory_current": 2147065856,
+      "memory_peak": 2147483648,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 12963695,
+      "elapsed_seconds": 13.180733,
+      "memory_current": 2147225600,
+      "memory_peak": 2147483648,
+      "pids": 5
+    },
+    {
+      "cpu_usec": 13075916,
+      "elapsed_seconds": 13.292371,
+      "memory_current": 2139881472,
+      "memory_peak": 2147483648,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 13244759,
+      "elapsed_seconds": 13.40622,
+      "memory_current": 2126290944,
+      "memory_peak": 2147483648,
+      "pids": 9
+    },
+    {
+      "cpu_usec": 13364988,
+      "elapsed_seconds": 13.519604,
+      "memory_current": 1933377536,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 13477685,
+      "elapsed_seconds": 13.633764,
+      "memory_current": 1933598720,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 13589653,
+      "elapsed_seconds": 13.745934,
+      "memory_current": 1933455360,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 13703642,
+      "elapsed_seconds": 13.859935,
+      "memory_current": 1933209600,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 13809001,
+      "elapsed_seconds": 13.973322,
+      "memory_current": 1932890112,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 13921917,
+      "elapsed_seconds": 14.086885,
+      "memory_current": 1932890112,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 14036833,
+      "elapsed_seconds": 14.20121,
+      "memory_current": 1932632064,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 14150717,
+      "elapsed_seconds": 14.315202,
+      "memory_current": 1932529664,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 14265711,
+      "elapsed_seconds": 14.430764,
+      "memory_current": 1932529664,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 14373581,
+      "elapsed_seconds": 14.542647,
+      "memory_current": 1932525568,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 14483195,
+      "elapsed_seconds": 14.65693,
+      "memory_current": 1765593088,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 14597188,
+      "elapsed_seconds": 14.770759,
+      "memory_current": 1765384192,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 14710177,
+      "elapsed_seconds": 14.883932,
+      "memory_current": 1765380096,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 14826132,
+      "elapsed_seconds": 14.999072,
+      "memory_current": 1765122048,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 14937944,
+      "elapsed_seconds": 15.111621,
+      "memory_current": 1765122048,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 15044194,
+      "elapsed_seconds": 15.225969,
+      "memory_current": 1763299328,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 15160139,
+      "elapsed_seconds": 15.341588,
+      "memory_current": 1760452608,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 15267450,
+      "elapsed_seconds": 15.454711,
+      "memory_current": 1753399296,
+      "memory_peak": 2147483648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 15368412,
+      "elapsed_seconds": 15.568973,
+      "memory_current": 625496064,
+      "memory_peak": 2147483648,
+      "pids": 1
+    }
+  ],
+  "schema_version": "runtime-role-container-benchmark-v1",
+  "source_git_dirty": false,
+  "source_git_sha": "280b893dadaf7c7dcb3bbec54ee78c7955074a85",
+  "workload": {
+    "command": "scripts/benchmark_document_extraction.py",
+    "docling_artifacts_read_only": true,
+    "docling_manifest_sha256": "5cf47966d872e55c9c2c43a73a1369361e7f2c6a358c2c2fbc3dd16350b56300",
+    "fixture_scope": "repository-approved synthetic extraction fixtures",
+    "model_cache_read_only": true,
+    "network_expected": false,
+    "workspace_read_only": true
+  },
+  "workload_report": {
+    "cases": [
+      {
+        "elapsed_seconds": 6.292619,
+        "element_kinds": [
+          "heading",
+          "paragraph"
+        ],
+        "elements": 2,
+        "extraction_sha256": "0212d212dac323aec2aaf5f77d6021d81e4f90e518fd435fafe11d5848620443",
+        "extractor_name": "docling",
+        "extractor_version": "2.119.0",
+        "ocr_performed": false,
+        "parser_role": "docling-primary",
+        "process_peak_rss_after_bytes": 1263472640,
+        "process_peak_rss_before_bytes": 67862528,
+        "required_phrases_present": true,
+        "source": "extraction-golden-pdf.pdf",
+        "source_sha256": "9f796cf2f08571cecb59a50e412e2d7f4a6ac81ab0aa7d47ded5733e8380a8ad"
+      },
+      {
+        "elapsed_seconds": 3.39501,
+        "element_kinds": [
+          "heading",
+          "paragraph"
+        ],
+        "elements": 2,
+        "extraction_sha256": "dbc571eda912233085be06d9cf97c7beeae160dca91089ba966e04095d8f5dc3",
+        "extractor_name": "unstructured",
+        "extractor_version": "0.25.2",
+        "ocr_performed": false,
+        "parser_role": "unstructured-controlled-fallback",
+        "process_peak_rss_after_bytes": 1494196224,
+        "process_peak_rss_before_bytes": 1263472640,
+        "required_phrases_present": true,
+        "source": "extraction-golden-pdf.pdf",
+        "source_sha256": "9f796cf2f08571cecb59a50e412e2d7f4a6ac81ab0aa7d47ded5733e8380a8ad"
+      },
+      {
+        "elapsed_seconds": 0.307695,
+        "element_kinds": [
+          "heading",
+          "list_item",
+          "paragraph",
+          "table"
+        ],
+        "elements": 4,
+        "extraction_sha256": "3fd8b783b7e30a16783726dcfc81b7e84231710e5ee4526f114da539fe38e932",
+        "extractor_name": "docling",
+        "extractor_version": "2.119.0",
+        "ocr_performed": false,
+        "parser_role": "docling-primary",
+        "process_peak_rss_after_bytes": 1505472512,
+        "process_peak_rss_before_bytes": 1505472512,
+        "required_phrases_present": true,
+        "source": "extraction-golden-docx.docx",
+        "source_sha256": "dfa9c6f493d5d7e793e01e3e49b8075b6c9f7d06eac8fe3eeefd1e118c9fcef2"
+      },
+      {
+        "elapsed_seconds": 0.014857,
+        "element_kinds": [
+          "heading",
+          "list_item",
+          "paragraph",
+          "table"
+        ],
+        "elements": 4,
+        "extraction_sha256": "fce5d319b0efa4a003416bd6efed9819935b3fd0395b72b6ddf1bb728bd25fbe",
+        "extractor_name": "unstructured",
+        "extractor_version": "0.25.2",
+        "ocr_performed": false,
+        "parser_role": "unstructured-controlled-fallback",
+        "process_peak_rss_after_bytes": 1506824192,
+        "process_peak_rss_before_bytes": 1505472512,
+        "required_phrases_present": true,
+        "source": "extraction-golden-docx.docx",
+        "source_sha256": "dfa9c6f493d5d7e793e01e3e49b8075b6c9f7d06eac8fe3eeefd1e118c9fcef2"
+      },
+      {
+        "elapsed_seconds": 0.296144,
+        "element_kinds": [
+          "heading",
+          "paragraph",
+          "table"
+        ],
+        "elements": 3,
+        "extraction_sha256": "96ab92f9f688c5b3fdb462c105b7d8353d75abdcac2247914ae43704f64844fe",
+        "extractor_name": "docling",
+        "extractor_version": "2.119.0",
+        "ocr_performed": false,
+        "parser_role": "docling-primary",
+        "process_peak_rss_after_bytes": 1508921344,
+        "process_peak_rss_before_bytes": 1506824192,
+        "required_phrases_present": true,
+        "source": "extraction-golden-pptx.pptx",
+        "source_sha256": "800e0a9a9d16c2c5355cf721b82adbfb31d25b58d0993153a2663dcbbea085b3"
+      },
+      {
+        "elapsed_seconds": 0.013172,
+        "element_kinds": [
+          "heading",
+          "paragraph",
+          "table"
+        ],
+        "elements": 3,
+        "extraction_sha256": "7442a87b1494f8567580fed38ec3c8758f06aa3b293f410f600af30292c5b2ab",
+        "extractor_name": "unstructured",
+        "extractor_version": "0.25.2",
+        "ocr_performed": false,
+        "parser_role": "unstructured-controlled-fallback",
+        "process_peak_rss_after_bytes": 1508921344,
+        "process_peak_rss_before_bytes": 1508921344,
+        "required_phrases_present": true,
+        "source": "extraction-golden-pptx.pptx",
+        "source_sha256": "800e0a9a9d16c2c5355cf721b82adbfb31d25b58d0993153a2663dcbbea085b3"
+      },
+      {
+        "elapsed_seconds": 0.303694,
+        "element_kinds": [
+          "heading",
+          "list_item",
+          "paragraph",
+          "table"
+        ],
+        "elements": 8,
+        "extraction_sha256": "6e7ebf9b3112edefa4d912917da73d49f7ee036334cb8e77bc00fed8f62a3eff",
+        "extractor_name": "docling",
+        "extractor_version": "2.119.0",
+        "ocr_performed": false,
+        "parser_role": "docling-primary",
+        "process_peak_rss_after_bytes": 1514201088,
+        "process_peak_rss_before_bytes": 1514201088,
+        "required_phrases_present": true,
+        "source": "extraction-golden-pl.html",
+        "source_sha256": "797acbd5f4d1b652791515dc21213bc35d5e9d2aec6e3815590b10d7e908591d"
+      },
+      {
+        "elapsed_seconds": 0.082734,
+        "element_kinds": [
+          "heading",
+          "list_item",
+          "paragraph",
+          "table"
+        ],
+        "elements": 8,
+        "extraction_sha256": "2872c72879589d5c4955ddf3f36432767aab69594909dc2ec03d4f7ca24b5081",
+        "extractor_name": "unstructured",
+        "extractor_version": "0.25.2",
+        "ocr_performed": false,
+        "parser_role": "unstructured-controlled-fallback",
+        "process_peak_rss_after_bytes": 1515347968,
+        "process_peak_rss_before_bytes": 1514201088,
+        "required_phrases_present": true,
+        "source": "extraction-golden-pl.html",
+        "source_sha256": "797acbd5f4d1b652791515dc21213bc35d5e9d2aec6e3815590b10d7e908591d"
+      },
+      {
+        "elapsed_seconds": 0.287021,
+        "element_kinds": [
+          "heading",
+          "list_item",
+          "paragraph",
+          "table"
+        ],
+        "elements": 8,
+        "extraction_sha256": "312d7994deacbbeee3518fef6d15e8c23eabb47439c757f2cbda158acfcc5ead",
+        "extractor_name": "docling",
+        "extractor_version": "2.119.0",
+        "ocr_performed": false,
+        "parser_role": "docling-primary",
+        "process_peak_rss_after_bytes": 1515347968,
+        "process_peak_rss_before_bytes": 1515347968,
+        "required_phrases_present": true,
+        "source": "extraction-golden-en.html",
+        "source_sha256": "6878f20c21ef61e6f86c8eb263fbbd9ebf2fdd8db195089b79771dabce04b23a"
+      },
+      {
+        "elapsed_seconds": 0.014397,
+        "element_kinds": [
+          "heading",
+          "list_item",
+          "paragraph",
+          "table"
+        ],
+        "elements": 8,
+        "extraction_sha256": "0e61b8af7be65a53135732950c897c696224d61d2d342aa483ec90c267b05e1f",
+        "extractor_name": "unstructured",
+        "extractor_version": "0.25.2",
+        "ocr_performed": false,
+        "parser_role": "unstructured-controlled-fallback",
+        "process_peak_rss_after_bytes": 1515347968,
+        "process_peak_rss_before_bytes": 1515347968,
+        "required_phrases_present": true,
+        "source": "extraction-golden-en.html",
+        "source_sha256": "6878f20c21ef61e6f86c8eb263fbbd9ebf2fdd8db195089b79771dabce04b23a"
+      },
+      {
+        "elapsed_seconds": 1.669355,
+        "element_kinds": [
+          "heading"
+        ],
+        "elements": 1,
+        "extraction_sha256": "1159f8269eb6b0ba254340c7e2fa62e9ea1f87643b7ad42347654be51bf2a7e2",
+        "extractor_name": "docling",
+        "extractor_version": "2.119.0",
+        "ocr_approval_id": "task018-synthetic-ocr-owner-approval-2026-08-10",
+        "ocr_engine": "tesseract-cli",
+        "ocr_engine_version": "5.3.4",
+        "ocr_performed": true,
+        "parser_role": "docling-primary-approved-ocr",
+        "process_peak_rss_after_bytes": 2156355584,
+        "process_peak_rss_before_bytes": 1515347968,
+        "required_phrases_present": true,
+        "source": "extraction-golden-ocr.pdf",
+        "source_sha256": "e592a5a9da2abbc47f95ec5868754f84d0c6fa584af3a289ef16763343bc9f79"
+      }
+    ],
+    "dependency_versions": {
+      "docling": "2.119.0",
+      "onnxruntime": "1.27.0",
+      "torch": "2.13.0+cpu",
+      "torchvision": "0.28.0+cpu",
+      "unstructured": "0.25.2",
+      "unstructured-inference": "1.6.13"
+    },
+    "docling_layout_model": {
+      "repository": "docling-project/docling-layout-heron-onnx",
+      "revision": "40bde044036bb181c130ddf6c51792187268748f"
+    },
+    "manifest_sha256": "a5fa40a4a6ffadb784533eb4b5bff63035b51672c83bb86757d9c098535d1111",
+    "manifest_version": "eisenhower-corpus-v1",
+    "ocr_without_frozen_receipt_rejection": "ocr_human_approval_required",
+    "offline": true,
+    "schema_version": "document-extraction-benchmark-v1",
+    "synthetic_fixture_notice": "Smoke benchmark only; representative human review remains a separate gate."
+  }
+}
