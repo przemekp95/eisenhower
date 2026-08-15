@@ -12,15 +12,20 @@ from app.document_extraction.artifacts import (
 
 
 def test_builds_and_verifies_an_exact_regular_file_bundle(tmp_path):
-  model = tmp_path / "docling-project--docling-layout-heron-onnx"
-  model.mkdir()
-  (model / "config.json").write_text("{}", encoding="utf-8")
-  (model / "model.onnx").write_bytes(b"onnx")
+  layout = tmp_path / "docling-project--docling-layout-heron-onnx"
+  layout.mkdir()
+  (layout / "config.json").write_text("{}", encoding="utf-8")
+  (layout / "model.onnx").write_bytes(b"onnx")
+  table = tmp_path / "docling-project--docling-models" / "model_artifacts" / "tableformer"
+  table.mkdir(parents=True)
+  (table / "tm_config.json").write_text("{}", encoding="utf-8")
 
   manifest = build_artifact_manifest(
     tmp_path,
-    repository="docling-project/docling-layout-heron-onnx",
-    revision="40bde044036bb181c130ddf6c51792187268748f",
+    repositories={
+      "docling-project/docling-layout-heron-onnx": "40bde044036bb181c130ddf6c51792187268748f",
+      "docling-project/docling-models": "fc0f2d45e2218ea24bce5045f58a389aed16dc23",
+    },
   )
   manifest_path = tmp_path / "manifest.json"
   manifest_path.write_text(
@@ -32,8 +37,10 @@ def test_builds_and_verifies_an_exact_regular_file_bundle(tmp_path):
   assert verify_artifact_bundle(
     tmp_path,
     expected_manifest_sha256=digest,
-    expected_repository="docling-project/docling-layout-heron-onnx",
-    expected_revision="40bde044036bb181c130ddf6c51792187268748f",
+    expected_repositories={
+      "docling-project/docling-layout-heron-onnx": "40bde044036bb181c130ddf6c51792187268748f",
+      "docling-project/docling-models": "fc0f2d45e2218ea24bce5045f58a389aed16dc23",
+    },
   ) == tmp_path
 
 
@@ -41,7 +48,8 @@ def test_rejects_manifest_tampering_missing_files_and_unlisted_files(tmp_path):
   model = tmp_path / "repo--model"
   model.mkdir()
   (model / "model.onnx").write_bytes(b"onnx")
-  manifest = build_artifact_manifest(tmp_path, repository="repo/model", revision="abc123")
+  revision = "a" * 40
+  manifest = build_artifact_manifest(tmp_path, repositories={"repo/model": revision})
   manifest_path = tmp_path / "manifest.json"
   manifest_path.write_text(
     json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n",
@@ -54,8 +62,7 @@ def test_rejects_manifest_tampering_missing_files_and_unlisted_files(tmp_path):
     verify_artifact_bundle(
       tmp_path,
       expected_manifest_sha256=digest,
-      expected_repository="repo/model",
-      expected_revision="abc123",
+      expected_repositories={"repo/model": revision},
     )
 
   (model / "model.onnx").write_bytes(b"onnx")
@@ -64,8 +71,7 @@ def test_rejects_manifest_tampering_missing_files_and_unlisted_files(tmp_path):
     verify_artifact_bundle(
       tmp_path,
       expected_manifest_sha256=digest,
-      expected_repository="repo/model",
-      expected_revision="abc123",
+      expected_repositories={"repo/model": revision},
     )
 
 
@@ -77,7 +83,7 @@ def test_rejects_symlinks_from_the_offline_bundle(tmp_path):
   (model / "alias.onnx").symlink_to(target)
 
   with pytest.raises(ArtifactBundleRejected, match="regular files"):
-    build_artifact_manifest(tmp_path, repository="repo/model", revision="abc123")
+    build_artifact_manifest(tmp_path, repositories={"repo/model": "a" * 40})
 
 
 def test_production_requires_the_verified_offline_bundle(tmp_path):
@@ -89,10 +95,15 @@ def test_production_requires_the_verified_offline_bundle(tmp_path):
   model = tmp_path / "docling-project--docling-layout-heron-onnx"
   model.mkdir()
   (model / "model.onnx").write_bytes(b"onnx")
+  table = tmp_path / "docling-project--docling-models" / "model_artifacts" / "tableformer"
+  table.mkdir(parents=True)
+  (table / "tm_config.json").write_text("{}", encoding="utf-8")
   manifest = build_artifact_manifest(
     tmp_path,
-    repository="docling-project/docling-layout-heron-onnx",
-    revision="40bde044036bb181c130ddf6c51792187268748f",
+    repositories={
+      "docling-project/docling-layout-heron-onnx": "40bde044036bb181c130ddf6c51792187268748f",
+      "docling-project/docling-models": "fc0f2d45e2218ea24bce5045f58a389aed16dc23",
+    },
   )
   manifest_path = tmp_path / "manifest.json"
   manifest_path.write_text(

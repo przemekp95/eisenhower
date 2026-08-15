@@ -14,23 +14,28 @@ from huggingface_hub import snapshot_download
 from app.document_extraction.adapters import (
   DOCLING_LAYOUT_MODEL_REPOSITORY,
   DOCLING_LAYOUT_MODEL_REVISION,
+  DOCLING_TABLE_MODEL_REPOSITORY,
+  DOCLING_TABLE_MODEL_REVISION,
 )
 from app.document_extraction.artifacts import build_artifact_manifest
 
 
-def prepare(output: Path) -> dict:
-  resolved = output.resolve()
-  if resolved.exists() and any(resolved.iterdir()):
-    raise RuntimeError("Refusing to overwrite a non-empty Docling artifact directory")
-  resolved.mkdir(parents=True, exist_ok=True)
+def _copy_snapshot(
+  output: Path,
+  *,
+  repository: str,
+  revision: str,
+  allow_patterns: list[str] | None = None,
+) -> None:
   snapshot = Path(snapshot_download(
-    repo_id=DOCLING_LAYOUT_MODEL_REPOSITORY,
-    revision=DOCLING_LAYOUT_MODEL_REVISION,
+    repo_id=repository,
+    revision=revision,
+    allow_patterns=allow_patterns,
   )).resolve()
-  if snapshot.name != DOCLING_LAYOUT_MODEL_REVISION:
+  if snapshot.name != revision:
     raise RuntimeError("Hugging Face did not resolve the exact pinned Docling revision")
 
-  model_directory = resolved / DOCLING_LAYOUT_MODEL_REPOSITORY.replace("/", "--")
+  model_directory = output / repository.replace("/", "--")
   model_directory.mkdir()
   for source in sorted(snapshot.rglob("*")):
     if not source.is_file():
@@ -40,10 +45,31 @@ def prepare(output: Path) -> dict:
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source.resolve(strict=True), destination)
 
-  manifest = build_artifact_manifest(
+
+def prepare(output: Path) -> dict:
+  resolved = output.resolve()
+  if resolved.exists() and any(resolved.iterdir()):
+    raise RuntimeError("Refusing to overwrite a non-empty Docling artifact directory")
+  resolved.mkdir(parents=True, exist_ok=True)
+  repositories = {
+    DOCLING_LAYOUT_MODEL_REPOSITORY: DOCLING_LAYOUT_MODEL_REVISION,
+    DOCLING_TABLE_MODEL_REPOSITORY: DOCLING_TABLE_MODEL_REVISION,
+  }
+  _copy_snapshot(
     resolved,
     repository=DOCLING_LAYOUT_MODEL_REPOSITORY,
     revision=DOCLING_LAYOUT_MODEL_REVISION,
+  )
+  _copy_snapshot(
+    resolved,
+    repository=DOCLING_TABLE_MODEL_REPOSITORY,
+    revision=DOCLING_TABLE_MODEL_REVISION,
+    allow_patterns=["model_artifacts/tableformer/**"],
+  )
+
+  manifest = build_artifact_manifest(
+    resolved,
+    repositories=repositories,
   )
   manifest_path = resolved / "manifest.json"
   with tempfile.NamedTemporaryFile(
@@ -59,8 +85,7 @@ def prepare(output: Path) -> dict:
   temporary.replace(manifest_path)
   return {
     "path": str(resolved),
-    "repository": DOCLING_LAYOUT_MODEL_REPOSITORY,
-    "revision": DOCLING_LAYOUT_MODEL_REVISION,
+    "repositories": repositories,
     "manifest_sha256": sha256(manifest_path.read_bytes()).hexdigest(),
     "files": len(manifest["files"]),
     "size_bytes": sum(record["size_bytes"] for record in manifest["files"].values()),

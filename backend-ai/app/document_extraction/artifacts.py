@@ -4,11 +4,12 @@ from hashlib import sha256
 import json
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Mapping
 
 
-SCHEMA_VERSION = "docling-offline-artifact-v1"
+SCHEMA_VERSION = "docling-offline-artifact-v2"
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+COMMIT_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 
 
 class ArtifactBundleRejected(RuntimeError):
@@ -29,7 +30,8 @@ def _model_directory(root: Path, repository: str) -> Path:
   return root / repository.replace("/", "--")
 
 
-def _regular_files(root: Path, model_directory: Path) -> dict[str, Path]:
+def _repository_files(root: Path, repository: str) -> dict[str, Path]:
+  model_directory = _model_directory(root, repository)
   if not model_directory.is_dir():
     raise ArtifactBundleRejected(f"artifact model directory is missing: {model_directory.name}")
   files: dict[str, Path] = {}
@@ -43,20 +45,40 @@ def _regular_files(root: Path, model_directory: Path) -> dict[str, Path]:
   return files
 
 
+def _regular_files(root: Path, repositories: Mapping[str, str]) -> dict[str, Path]:
+  files: dict[str, Path] = {}
+  for repository in sorted(repositories):
+    repository_files = _repository_files(root, repository)
+    overlap = set(files).intersection(repository_files)
+    if overlap:
+      raise ArtifactBundleRejected("artifact repositories contain overlapping paths")
+    files.update(repository_files)
+  return files
+
+
+def _validate_repositories(repositories: Mapping[str, str]) -> dict[str, str]:
+  if not repositories:
+    raise ArtifactBundleRejected("artifact repository set is empty")
+  normalized: dict[str, str] = {}
+  for repository, revision in repositories.items():
+    _model_directory(Path("/"), repository)
+    if COMMIT_PATTERN.fullmatch(revision) is None:
+      raise ArtifactBundleRejected("artifact revision must be an immutable commit SHA")
+    normalized[repository] = revision
+  return dict(sorted(normalized.items()))
+
+
 def build_artifact_manifest(
   root: Path,
   *,
-  repository: str,
-  revision: str,
+  repositories: Mapping[str, str],
 ) -> dict[str, Any]:
   resolved = root.resolve()
-  if not revision or any(character.isspace() for character in revision):
-    raise ArtifactBundleRejected("artifact revision is malformed")
-  files = _regular_files(resolved, _model_directory(resolved, repository))
+  approved = _validate_repositories(repositories)
+  files = _regular_files(resolved, approved)
   return {
     "schema_version": SCHEMA_VERSION,
-    "repository": repository,
-    "revision": revision,
+    "repositories": approved,
     "files": {
       relative: {
         "sha256": _file_sha256(path),
@@ -71,10 +93,10 @@ def verify_artifact_bundle(
   root: Path,
   *,
   expected_manifest_sha256: str,
-  expected_repository: str,
-  expected_revision: str,
+  expected_repositories: Mapping[str, str],
 ) -> Path:
   resolved = root.resolve()
+  approved = _validate_repositories(expected_repositories)
   if SHA256_PATTERN.fullmatch(expected_manifest_sha256) is None:
     raise ArtifactBundleRejected("expected artifact manifest digest is malformed")
   manifest_path = resolved / "manifest.json"
@@ -87,13 +109,12 @@ def verify_artifact_bundle(
     raise ArtifactBundleRejected("artifact manifest digest does not match approval")
   if not isinstance(manifest, dict) or any((
     manifest.get("schema_version") != SCHEMA_VERSION,
-    manifest.get("repository") != expected_repository,
-    manifest.get("revision") != expected_revision,
+    manifest.get("repositories") != approved,
     not isinstance(manifest.get("files"), dict),
   )):
     raise ArtifactBundleRejected("artifact manifest identity does not match runtime")
 
-  actual = _regular_files(resolved, _model_directory(resolved, expected_repository))
+  actual = _regular_files(resolved, approved)
   declared = manifest["files"]
   if set(actual) != set(declared):
     raise ArtifactBundleRejected("artifact file set does not match the approved manifest")

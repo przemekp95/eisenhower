@@ -28,6 +28,8 @@ from .models import (
 CONTRACT_VERSION = "document-extraction-v1"
 DOCLING_LAYOUT_MODEL_REPOSITORY = "docling-project/docling-layout-heron-onnx"
 DOCLING_LAYOUT_MODEL_REVISION = "40bde044036bb181c130ddf6c51792187268748f"
+DOCLING_TABLE_MODEL_REPOSITORY = "docling-project/docling-models"
+DOCLING_TABLE_MODEL_REVISION = "fc0f2d45e2218ea24bce5045f58a389aed16dc23"
 TESSERACT_CLI_VERSION = "5.3.4"
 
 
@@ -46,8 +48,10 @@ def resolve_docling_artifacts(
   return verify_artifact_bundle(
     Path(raw_path),
     expected_manifest_sha256=digest,
-    expected_repository=DOCLING_LAYOUT_MODEL_REPOSITORY,
-    expected_revision=DOCLING_LAYOUT_MODEL_REVISION,
+    expected_repositories={
+      DOCLING_LAYOUT_MODEL_REPOSITORY: DOCLING_LAYOUT_MODEL_REVISION,
+      DOCLING_TABLE_MODEL_REPOSITORY: DOCLING_TABLE_MODEL_REVISION,
+    },
   )
 
 
