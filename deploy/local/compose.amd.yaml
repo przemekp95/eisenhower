@@ -15,7 +15,6 @@ services:
     ipc: host
     group_add:
       - video
-      - render
       - "110"
     devices:
       - /dev/kfd:/dev/kfd

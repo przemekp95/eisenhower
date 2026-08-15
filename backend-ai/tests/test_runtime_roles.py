@@ -110,5 +110,7 @@ def test_amd_vllm_lifecycle_is_private_bounded_and_opt_in():
     "compose_response up --no-deps -d inference reranker"
   )
   assert compose["services"]["knowledge-service"]["image"].startswith("${AI_KNOWLEDGE_ROCM_IMAGE")
+  assert "render" not in compose["services"]["knowledge-service"]["group_add"]
+  assert "110" in compose["services"]["knowledge-service"]["group_add"]
   assert "rag-worker" not in compose["services"]
   assert 'AI_KNOWLEDGE_ROCM_IMAGE="local/eisenhower-ai-knowledge-rocm:${release_sha}"' in deploy_script
