@@ -329,23 +329,24 @@ smoke() {
     -H "Authorization: Bearer ${INFERENCE_API_KEY}" >/dev/null
 }
 
-smoke_response() {
-  compose_response ps knowledge-service access-gateway
-  compose_response exec -T knowledge-service curl -fsS http://127.0.0.1:8000/health/live >/dev/null
-}
-
 smoke_core() {
-  compose_base ps ai-service classifier-service api-service
+  compose_base ps mongodb ai-service classifier-service api-service
   curl -fsS "http://127.0.0.1:${NODE_BIND_PORT:-3001}/health/ready" >/dev/null
   curl -fsS "http://127.0.0.1:${AI_BIND_PORT:-8000}/health/ready" >/dev/null
 }
 
 smoke_retrieval() {
-  compose_retrieval ps knowledge-service rag-worker reranker
+  smoke_core
+  compose_retrieval ps qdrant knowledge-service rag-worker reranker
   compose_retrieval exec -T knowledge-service \
     curl -fsS http://127.0.0.1:8000/health/ready >/dev/null
   compose_retrieval exec -T reranker sh -c \
     'curl -fsS -H "Authorization: Bearer $VLLM_API_KEY" http://127.0.0.1:8000/v1/models >/dev/null'
+}
+
+smoke_response() {
+  compose_response ps knowledge-service access-gateway
+  compose_response exec -T knowledge-service curl -fsS http://127.0.0.1:8000/health/live >/dev/null
 }
 
 deploy_core() {
@@ -365,12 +366,12 @@ deploy_retrieval() {
   build_retrieval_images
   compose_retrieval config --quiet
   record_rollback retrieval
-  compose_base up --no-deps audit-volume-init
-  compose_retrieval up -d --wait mongodb qdrant reranker
-  compose_retrieval up --no-deps -d --wait classifier-service knowledge-service
+  compose_retrieval up --no-deps audit-volume-init
+  compose_retrieval up -d --wait mongodb qdrant
+  compose_retrieval up --no-deps -d --wait reranker
+  compose_retrieval up --no-deps -d --wait knowledge-service classifier-service
   compose_retrieval up --no-deps -d --wait ai-service api-service
   compose_retrieval up --no-deps -d rag-worker
-  smoke_core
   smoke_retrieval
 }
 
@@ -379,15 +380,14 @@ deploy_response() {
   build_response_images
   compose_response config --quiet
   record_rollback response
-  compose_base up --no-deps audit-volume-init
+  compose_response up --no-deps audit-volume-init
   compose_response up -d --wait mongodb qdrant identity-db identity-service
   configure_identity_profile
   compose_response up --no-deps -d --wait inference reranker
-  compose_response up --no-deps -d --wait classifier-service knowledge-service
+  compose_response up --no-deps -d --wait knowledge-service classifier-service
   compose_response up --no-deps -d --wait ai-service api-service web mcp-service
   compose_response up --no-deps -d rag-worker
   compose_response up --no-deps -d --wait access-gateway
-  smoke_core
   smoke_response
 }
 
@@ -421,14 +421,40 @@ rollback() {
   export API_IMAGE="${ROLLBACK_API_SERVICE_IMAGE_ID:?missing API rollback image}"
   export AI_BOUNDARY_IMAGE="${ROLLBACK_AI_SERVICE_IMAGE_ID:?missing AI boundary rollback image}"
   export AI_CLASSIFIER_IMAGE="${ROLLBACK_CLASSIFIER_SERVICE_IMAGE_ID:?missing classifier rollback image}"
-  export AI_KNOWLEDGE_IMAGE="${ROLLBACK_KNOWLEDGE_SERVICE_IMAGE_ID:?missing knowledge rollback image}"
-  export AI_INGEST_IMAGE="${ROLLBACK_RAG_WORKER_IMAGE_ID:?missing ingest rollback image}"
-  export AI_ROCM_IMAGE="$AI_KNOWLEDGE_IMAGE"
-  export MCP_IMAGE="${ROLLBACK_MCP_SERVICE_IMAGE_ID:?missing MCP rollback image}"
-  export WEB_IMAGE="${ROLLBACK_WEB_IMAGE_ID:?missing web rollback image}"
-  compose config --quiet
-  compose up -d --wait
-  smoke
+  case "${ROLLBACK_TOPOLOGY:?missing rollback topology}" in
+    core)
+      compose_base config --quiet
+      compose_base up -d --wait
+      smoke_core
+      ;;
+    retrieval)
+      export AI_KNOWLEDGE_IMAGE="${ROLLBACK_KNOWLEDGE_SERVICE_IMAGE_ID:?missing knowledge rollback image}"
+      export AI_INGEST_IMAGE="${ROLLBACK_RAG_WORKER_IMAGE_ID:?missing ingest rollback image}"
+      export AI_ROCM_IMAGE="$AI_KNOWLEDGE_IMAGE"
+      compose_retrieval config --quiet
+      compose_retrieval up -d --wait
+      smoke_retrieval
+      ;;
+    response|full)
+      export AI_KNOWLEDGE_IMAGE="${ROLLBACK_KNOWLEDGE_SERVICE_IMAGE_ID:?missing knowledge rollback image}"
+      export AI_INGEST_IMAGE="${ROLLBACK_RAG_WORKER_IMAGE_ID:?missing ingest rollback image}"
+      export AI_ROCM_IMAGE="$AI_KNOWLEDGE_IMAGE"
+      export MCP_IMAGE="${ROLLBACK_MCP_SERVICE_IMAGE_ID:?missing MCP rollback image}"
+      export WEB_IMAGE="${ROLLBACK_WEB_IMAGE_ID:?missing web rollback image}"
+      if test "$ROLLBACK_TOPOLOGY" = response; then
+        compose_response config --quiet
+        compose_response up -d --wait
+        configure_identity_profile
+        smoke_response
+      else
+        compose_full config --quiet
+        compose_full up -d --wait
+        configure_identity_profile
+        smoke
+      fi
+      ;;
+    *) echo "Unknown rollback topology: $ROLLBACK_TOPOLOGY" >&2; exit 1 ;;
+  esac
 }
 
 case "$action" in
