@@ -156,6 +156,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     "--env", "OMP_NUM_THREADS=1",
     "--env", "TORCH_NUM_THREADS=1",
     "--env", "HOME=/tmp/home",
+    "--env", "PYTHONPATH=/workspace/backend-ai",
     "--volume", f"{workspace}:/workspace:ro",
     "--volume", f"{args.model_cache_volume}:/home/app/.cache/huggingface:ro",
     "--workdir", "/workspace/backend-ai",
