@@ -109,7 +109,7 @@ and [sleep-mode documentation](https://docs.vllm.ai/en/v0.20.0/features/sleep_mo
 ## Verification
 
 - focused red/green tests for each implementation slice;
-- final backend AI and local deployment suite after the Docling follow-up: 689 passed, 11 skipped, coverage
+- final backend AI and local deployment suite after the repetition follow-up: 695 passed, 11 skipped, coverage
   85.50%;
 - production dependency audit: 171 dependencies; exact official PyTorch CPU wheel sources and SHA-256 values
   verified for the two explicit audit blind spots;
