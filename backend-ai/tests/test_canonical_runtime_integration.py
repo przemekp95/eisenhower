@@ -3,12 +3,11 @@ from uuid import uuid4
 
 import pytest
 
-from app.rag.adapters import QdrantIngestionAdapter
 from app.rag.canonical import CanonicalIngestionApplication
-from app.rag.collections import QdrantCollectionManager
-from app.rag.ingestion import DeterministicChunker
+from app.rag.llamaindex_engine import LlamaIndexChunkingEngine
 from app.rag.models import SourceDocument
 from app.rag.mongo_document_store import MongoCanonicalDocumentStore
+from app.rag.qdrant_llamaindex import LlamaIndexQdrantProjection
 
 
 pytestmark = pytest.mark.skipif(
@@ -32,20 +31,25 @@ def test_mongo_canonical_store_rebuilds_a_lost_qdrant_collection():
   suffix = uuid4().hex
   database_name = f"eisenhower_task011_verify_{suffix}"
   collection_name = f"task011_verify_{suffix}"
-  alias = f"task011_verify_active_{suffix}"
   mongo = MongoClient("mongodb://127.0.0.1:27017", serverSelectionTimeoutMS=3_000)
   qdrant = QdrantClient(url="http://127.0.0.1:6333", timeout=5)
-  manager = QdrantCollectionManager(qdrant, alias=alias, vector_size=3)
   try:
     assert mongo.admin.command("ping")["ok"] == 1.0
-    manager.ensure_active(collection_name)
     store = MongoCanonicalDocumentStore(mongo[database_name].rag_documents)
-    adapter = QdrantIngestionAdapter(qdrant, collection_name=alias)
+    adapter = LlamaIndexQdrantProjection(
+      qdrant,
+      DeterministicEmbedding(),
+      collection_name=collection_name,
+    )
     application = CanonicalIngestionApplication(
       DeterministicEmbedding(),
       store,
       adapter,
-      DeterministicChunker(max_chars=1200, overlap_chars=160),
+      LlamaIndexChunkingEngine(
+        chunk_size=512,
+        chunk_overlap=64,
+        pipeline_version="llama-runtime-proof-v1",
+      ),
     )
     document = SourceDocument(
       document_id="runtime-doc-1",
@@ -72,7 +76,12 @@ def test_mongo_canonical_store_rebuilds_a_lost_qdrant_collection():
     assert len(adapter.projected_chunks(document.document_id, document.tenant_id)) == 1
 
     qdrant.delete_collection(collection_name=collection_name)
-    manager.ensure_active(collection_name)
+    adapter = LlamaIndexQdrantProjection(
+      qdrant,
+      DeterministicEmbedding(),
+      collection_name=collection_name,
+    )
+    application.projection = adapter
     assert adapter.projected_chunks(document.document_id, document.tenant_id) == set()
 
     rebuilt = application.reindex_project(document.tenant_id, document.project_id)

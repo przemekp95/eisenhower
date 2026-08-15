@@ -1,0 +1,6 @@
+# Minimal framework set for the private knowledge runtime. Do not install the
+# umbrella llama-index starter or any local embedding integration here.
+llama-index-core==0.14.23
+llama-index-vector-stores-qdrant==0.10.3
+# Docling/Unstructured pull Numba, whose current runtime rejects NumPy 2.5.
+numpy==2.4.4

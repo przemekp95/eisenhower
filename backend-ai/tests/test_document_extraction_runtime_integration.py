@@ -14,12 +14,11 @@ from app.document_extraction.application import ApprovedDocumentIngestionApplica
 from app.document_extraction.inspection import LocalDocumentInspector
 from app.document_extraction.models import OCRApproval, OCRRequest
 from app.document_extraction.policy import FrozenManifestExtractionPolicy
-from app.rag.adapters import QdrantIngestionAdapter
 from app.rag.canonical import CanonicalIngestionApplication
-from app.rag.collections import QdrantCollectionManager
-from app.rag.ingestion import DeterministicChunker
+from app.rag.llamaindex_engine import LlamaIndexChunkingEngine
 from app.rag.models import AccessScope
 from app.rag.mongo_document_store import MongoCanonicalDocumentStore
+from app.rag.qdrant_llamaindex import LlamaIndexQdrantProjection
 
 
 pytestmark = pytest.mark.skipif(
@@ -49,20 +48,25 @@ def test_approved_formats_and_owner_approved_ocr_reach_canonical_mongo_and_qdran
   suffix = uuid4().hex
   database_name = f"eisenhower_task018_verify_{suffix}"
   collection_name = f"task018_verify_{suffix}"
-  alias = f"task018_verify_active_{suffix}"
   mongo = MongoClient("mongodb://127.0.0.1:27017", serverSelectionTimeoutMS=3_000)
   qdrant = QdrantClient(url="http://127.0.0.1:6333", timeout=10)
-  manager = QdrantCollectionManager(qdrant, alias=alias, vector_size=3)
   try:
     assert mongo.admin.command("ping")["ok"] == 1.0
-    manager.ensure_active(collection_name)
     store = MongoCanonicalDocumentStore(mongo[database_name].rag_documents)
-    projection = QdrantIngestionAdapter(qdrant, collection_name=alias)
+    projection = LlamaIndexQdrantProjection(
+      qdrant,
+      DeterministicEmbedding(),
+      collection_name=collection_name,
+    )
     canonical = CanonicalIngestionApplication(
       DeterministicEmbedding(),
       store,
       projection,
-      DeterministicChunker(max_chars=1200, overlap_chars=160),
+      LlamaIndexChunkingEngine(
+        chunk_size=512,
+        chunk_overlap=64,
+        pipeline_version="llama-document-extraction-v1",
+      ),
     )
     application = ApprovedDocumentIngestionApplication(
       LocalDocumentInspector(),

@@ -24,6 +24,7 @@ set +a
 export RELEASE_SHA="$release_sha"
 export AI_ROCM_RELEASE_SHA="$release_sha"
 export API_IMAGE="local/eisenhower-api:${release_sha}"
+export AI_BOUNDARY_IMAGE="local/eisenhower-ai-boundary:${release_sha}"
 export AI_IMAGE="local/eisenhower-ai:${release_sha}"
 export AI_ROCM_IMAGE="local/eisenhower-ai-rocm:${release_sha}"
 export MCP_IMAGE="local/eisenhower-mcp:${release_sha}"
@@ -53,15 +54,17 @@ verify_image() {
 build_images() {
   docker build --build-arg RELEASE_SHA="$release_sha" --target production \
     -f backend-node/Dockerfile -t "$API_IMAGE" .
-  docker build --build-arg RELEASE_SHA="$release_sha" --target production \
+  docker build --build-arg RELEASE_SHA="$release_sha" --target knowledge-production \
     -f backend-ai/Dockerfile -t "$AI_IMAGE" backend-ai
+  docker build --build-arg RELEASE_SHA="$release_sha" --target api-boundary \
+    -f backend-ai/Dockerfile -t "$AI_BOUNDARY_IMAGE" backend-ai
   docker build --build-arg RELEASE_SHA="$release_sha" \
     -f backend-ai/Dockerfile.rocm -t "$AI_ROCM_IMAGE" backend-ai
   docker build --build-arg RELEASE_SHA="$release_sha" \
     -f mcp/eisenhower_adapter/Dockerfile -t "$MCP_IMAGE" .
   docker build --build-arg RELEASE_SHA="$release_sha" --target production \
     -f web/Dockerfile -t "$WEB_IMAGE" .
-  for image_ref in "$API_IMAGE" "$AI_IMAGE" "$AI_ROCM_IMAGE" "$MCP_IMAGE" "$WEB_IMAGE"; do
+  for image_ref in "$API_IMAGE" "$AI_BOUNDARY_IMAGE" "$AI_IMAGE" "$AI_ROCM_IMAGE" "$MCP_IMAGE" "$WEB_IMAGE"; do
     verify_image "$image_ref"
   done
 }
@@ -197,7 +200,8 @@ rollback() {
   . "$rollback_file"
   set +a
   export API_IMAGE="${ROLLBACK_API_SERVICE_IMAGE_ID:?missing API rollback image}"
-  export AI_IMAGE="${ROLLBACK_AI_SERVICE_IMAGE_ID:?missing AI rollback image}"
+  export AI_BOUNDARY_IMAGE="${ROLLBACK_AI_SERVICE_IMAGE_ID:?missing AI boundary rollback image}"
+  export AI_IMAGE="${ROLLBACK_KNOWLEDGE_SERVICE_IMAGE_ID:?missing knowledge rollback image}"
   export AI_ROCM_IMAGE="$AI_IMAGE"
   export MCP_IMAGE="${ROLLBACK_MCP_SERVICE_IMAGE_ID:?missing MCP rollback image}"
   export WEB_IMAGE="${ROLLBACK_WEB_IMAGE_ID:?missing web rollback image}"

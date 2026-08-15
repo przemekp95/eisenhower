@@ -5,10 +5,9 @@ from enum import Enum
 from hashlib import sha256
 from typing import Protocol
 
-from .ingestion import DeterministicChunker, build_chunk_records
 from .errors import ProjectionUnavailable
 from .models import RetrievalHit, RetrievalQuery, SourceDocument
-from .ports import EmbeddingProvider, IngestionPort, Retriever
+from .ports import ChunkingEngine, EmbeddingProvider, IngestionPort, Retriever
 
 
 class CanonicalWriteStatus(str, Enum):
@@ -53,7 +52,7 @@ class CanonicalRetriever:
     document_store: CanonicalDocumentStore,
     *,
     embedding_version: str,
-    chunker: DeterministicChunker | None = None,
+    chunking_engine: ChunkingEngine,
     candidate_multiplier: int = 4,
   ):
     if candidate_multiplier < 1:
@@ -61,7 +60,7 @@ class CanonicalRetriever:
     self.projection = projection
     self.document_store = document_store
     self.embedding_version = embedding_version
-    self.chunker = chunker or DeterministicChunker()
+    self.chunking_engine = chunking_engine
     self.candidate_multiplier = candidate_multiplier
 
   def retrieve(self, query: RetrievalQuery) -> list[RetrievalHit]:
@@ -79,11 +78,7 @@ class CanonicalRetriever:
       expected = next(
         (
           chunk
-          for chunk in build_chunk_records(
-            canonical,
-            self.chunker,
-            embedding_version=self.embedding_version,
-          )
+          for chunk in self.chunking_engine.build(canonical, embedding_version=self.embedding_version)
           if chunk.chunk_id == candidate.chunk_id
         ),
         None,
@@ -135,12 +130,12 @@ class CanonicalIngestionApplication:
     embedding_provider: EmbeddingProvider,
     document_store: CanonicalDocumentStore,
     projection: IngestionPort,
-    chunker: DeterministicChunker | None = None,
+    chunking_engine: ChunkingEngine,
   ):
     self.embedding_provider = embedding_provider
     self.document_store = document_store
     self.projection = projection
-    self.chunker = chunker or DeterministicChunker()
+    self.chunking_engine = chunking_engine
 
   def ingest(self, documents: list[SourceDocument]) -> dict:
     counts = {status.value: 0 for status in CanonicalWriteStatus}
@@ -259,9 +254,14 @@ class CanonicalIngestionApplication:
   def _project(self, document: SourceDocument) -> bool:
     try:
       if document.deleted:
-        self.projection.tombstone(document.document_id, document.tenant_id, document.content_version)
+        self.projection.tombstone(
+          document.document_id,
+          document.tenant_id,
+          document.content_version,
+          source_sequence=document.source_sequence,
+        )
       else:
-        chunks = build_chunk_records(document, self.chunker, embedding_version=self.embedding_provider.version)
+        chunks = self.chunking_engine.build(document, embedding_version=self.embedding_provider.version)
         vectors = self.embedding_provider.embed([chunk.text for chunk in chunks]) if chunks else []
         self.projection.replace_documents([document], chunks, vectors)
     except ProjectionUnavailable:
@@ -274,10 +274,6 @@ class CanonicalIngestionApplication:
       return not actual
     expected = {
       (chunk.chunk_id, chunk.checksum, chunk.content_version)
-      for chunk in build_chunk_records(
-        document,
-        self.chunker,
-        embedding_version=self.embedding_provider.version,
-      )
+      for chunk in self.chunking_engine.build(document, embedding_version=self.embedding_provider.version)
     }
     return actual == expected

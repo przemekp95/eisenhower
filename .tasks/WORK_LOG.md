@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-15 — TASK-048: Completed the local LlamaIndex code cutover, removed the superseded legacy RAG mechanics, exercised guarded Qdrant 1.18.2 alias cutover/rollback, preserved canonical fail-closed policy, split and scanned 51.1 MB boundary versus 935.5 MB knowledge images, and passed broad local tests/audits without claiming deployment, human acceptance or production.
+
 2026-08-13 — TASK-047 deploy follow-up: Removed unprovisioned `profile` and `email` scopes from the web authorization request after a live Keycloak browser flow returned `invalid_scope`; identity and authorization continue to use the explicit governed claim and resource scopes.
 
 2026-08-13 — TASK-047 deploy follow-up: Split the CPU classifier from response-generation flags after the exact-master runtime proved that inherited global response settings made its fail-closed PromptSpec validation reject startup; generation and responses remain enabled only in the isolated knowledge service.

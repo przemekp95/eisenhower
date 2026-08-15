@@ -51,10 +51,8 @@ class LocalProductionContractTest(unittest.TestCase):
         "AI_SERVICE_URL=${AI_SERVICE_URL:-http://ai-service:8000}",
       ],
       "ai-service": [
-        "QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}",
-        "INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}",
-        "RAG_RETRIEVAL_STRATEGY=${RAG_RETRIEVAL_STRATEGY:-hybrid-bge-v1}",
-        "RERANKER_BASE_URL=${RERANKER_BASE_URL:-http://reranker:8000}",
+        "KNOWLEDGE_SERVICE_BASE_URL=http://knowledge-service:8000",
+        "KNOWLEDGE_SERVICE_ALLOWED_HOSTS=knowledge-service",
       ],
       "knowledge-service": [
         "QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}",
@@ -65,7 +63,7 @@ class LocalProductionContractTest(unittest.TestCase):
         "MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/eisenhower?replicaSet=rs0}",
         "QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}",
       ],
-      "n8n": ["EISENHOWER_INTERNAL_API_URL=${EISENHOWER_INTERNAL_API_URL:-http://api-service:3001}"],
+      "n8n": ["EISENHOWER_INTERNAL_API_URL=${EISENHOWER_INTERNAL_API_URL:-http://knowledge-service:8000}"],
     }
     for service_name, entries in required_defaults.items():
       environment = self._service(service_name)["environment"]
@@ -86,7 +84,7 @@ class LocalProductionContractTest(unittest.TestCase):
     expected_image_inputs = {
       "api-service": "API_IMAGE",
       "mongodb": "MONGODB_IMAGE",
-      "ai-service": "AI_IMAGE",
+      "ai-service": "AI_BOUNDARY_IMAGE",
       "rag-worker": "AI_IMAGE",
       "qdrant": "QDRANT_IMAGE",
       "n8n": "N8N_IMAGE",
@@ -149,6 +147,7 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn('git diff --cached --quiet', script)
     self.assertIn('release_sha="$(git rev-parse HEAD)"', script)
     self.assertIn('API_IMAGE="local/eisenhower-api:${release_sha}"', script)
+    self.assertIn('AI_BOUNDARY_IMAGE="local/eisenhower-ai-boundary:${release_sha}"', script)
     self.assertIn('AI_IMAGE="local/eisenhower-ai:${release_sha}"', script)
     self.assertIn('AI_ROCM_IMAGE="local/eisenhower-ai-rocm:${release_sha}"', script)
     self.assertIn('MCP_IMAGE="local/eisenhower-mcp:${release_sha}"', script)
@@ -182,13 +181,14 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn("--max-num-seqs", inference["command"])
     self.assertIn("model_cache:/root/.cache/huggingface", inference["volumes"])
 
-  def test_amd_retrieval_profile_runs_pinned_bge_m3_without_enabling_generation(self):
-    ai = self.amd_services["ai-service"]
-    classifier = self.services["ai-service"]
+  def test_amd_profiles_keep_gpu_mechanics_out_of_the_api_boundary(self):
+    knowledge = self.amd_services["knowledge-service"]
+    boundary = self.services["ai-service"]
     worker = self.amd_services["rag-worker"]
-    self.assertEqual(ai["profiles"], ["retrieval-amd"])
+    self.assertNotIn("ai-service", self.amd_services)
+    self.assertEqual(knowledge["profiles"], ["response-amd"])
     self.assertEqual(worker["profiles"], ["retrieval-amd"])
-    for service in (ai, worker):
+    for service in (knowledge, worker):
       self.assertIn("/dev/kfd:/dev/kfd", service["devices"])
       self.assertIn("/dev/dri:/dev/dri", service["devices"])
       self.assertIn("RAG_EMBEDDING_MODEL_NAME=BAAI/bge-m3", service["environment"])
@@ -197,13 +197,10 @@ class LocalProductionContractTest(unittest.TestCase):
         service["environment"],
       )
       self.assertIn("EMBEDDING_VERSION=bge-m3-v1", service["environment"])
-    self.assertIn("RAG_GENERATION_ENABLED=false", ai["environment"])
-    self.assertIn("RAG_RESPONSE_ENABLED=false", ai["environment"])
-    self.assertIn("RAG_GENERATION_ENABLED=false", classifier["environment"])
-    self.assertIn("RAG_RESPONSE_ENABLED=false", classifier["environment"])
-    self.assertIn("RAG_RESPONSE_PROMOTION_POINTER_PATH=/app/promotion/current.json", ai["environment"])
-    self.assertIn("RAG_RESPONSE_CANDIDATE_ID=${RAG_RESPONSE_CANDIDATE_ID:-}", ai["environment"])
-    self.assertIn("${AI_PROMOTION_ROOT:-./.runtime/promotion}:/app/promotion:ro", ai["volumes"])
+    serialized_boundary = yaml.safe_dump(boundary).lower()
+    self.assertNotIn("rag_embedding", serialized_boundary)
+    self.assertNotIn("local_model", serialized_boundary)
+    self.assertNotIn("/dev/kfd", serialized_boundary)
     rocm_dockerfile = (ROOT / "backend-ai" / "Dockerfile.rocm").read_text(encoding="utf-8")
     self.assertIn("ENTRYPOINT []", rocm_dockerfile)
     self.assertIn("grpcio==1.78.0", rocm_dockerfile)
@@ -233,13 +230,13 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn("RERANKER_API_KEY is required", self.amd_compose_text)
 
   def test_application_images_receive_required_production_identity_and_audit_config(self):
-    for name in ("api-service", "ai-service"):
+    for name in ("api-service", "knowledge-service"):
       environment = self.services[name]["environment"]
       self.assertIn("RELEASE_SHA=${RELEASE_SHA:?RELEASE_SHA is required}", environment)
       self.assertIn("AUDIT_HMAC_KEY=${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY is required}", environment)
 
-    ai_environment = self.services["ai-service"]["environment"]
-    self.assertEqual(self.services["ai-service"]["group_add"], ["1001"])
+    ai_environment = self.services["knowledge-service"]["environment"]
+    self.assertEqual(self.services["knowledge-service"]["group_add"], ["1001"])
     self.assertEqual(
       self.services["audit-volume-init"]["command"],
       [
@@ -267,7 +264,7 @@ class LocalProductionContractTest(unittest.TestCase):
       "LOCAL_MODEL_APPROVED_EVALUATION_SHA256=${LOCAL_MODEL_APPROVED_EVALUATION_SHA256:?approved evaluation digest is required}",
       ai_environment,
     )
-    self.assertTrue(any(volume.endswith(":/app/evaluation/production.json:ro") for volume in self.services["ai-service"]["volumes"]))
+    self.assertTrue(any(volume.endswith(":/app/evaluation/production.json:ro") for volume in self.services["knowledge-service"]["volumes"]))
     self.assertIn(
       "CALENDAR_INTERNAL_HMAC_KEY=${CALENDAR_INTERNAL_HMAC_KEY:?CALENDAR_INTERNAL_HMAC_KEY is required}",
       self.services["api-service"]["environment"],
@@ -467,7 +464,7 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertNotIn("clientSecret", realm_text)
 
   def test_oidc_and_remote_mcp_are_fail_closed_in_the_production_topology(self):
-    for name in ("api-service", "ai-service"):
+    for name in ("api-service", "knowledge-service"):
       environment = self.services[name]["environment"]
       self.assertIn("AUTH_MODE=oidc", environment)
       self.assertNotIn("AUTH_MODE=${AUTH_MODE:-static}", environment)
