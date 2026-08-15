@@ -36,7 +36,7 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertEqual(
       set(self.services) | set(self.amd_services),
       {
-        "api-service", "mongodb", "ai-service", "rag-worker", "qdrant", "n8n",
+        "api-service", "mongodb", "ai-service", "classifier-service", "rag-worker", "qdrant", "n8n",
         "knowledge-service",
         "calendar-gateway", "audit-volume-init", "identity-db", "identity-service",
         "mcp-service", "access-gateway", "web", "inference", "reranker",
@@ -51,14 +51,14 @@ class LocalProductionContractTest(unittest.TestCase):
         "AI_SERVICE_URL=${AI_SERVICE_URL:-http://ai-service:8000}",
       ],
       "ai-service": [
-        "QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}",
-        "INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}",
-        "RAG_RETRIEVAL_STRATEGY=${RAG_RETRIEVAL_STRATEGY:-hybrid-bge-v1}",
-        "RERANKER_BASE_URL=${RERANKER_BASE_URL:-http://reranker:8000}",
+        "CLASSIFIER_SERVICE_URL=http://classifier-service:8000",
+        "KNOWLEDGE_SERVICE_URL=${KNOWLEDGE_SERVICE_URL:-http://classifier-service:8000}",
       ],
       "knowledge-service": [
         "QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}",
         "INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}",
+        "RAG_RETRIEVAL_STRATEGY=${RAG_RETRIEVAL_STRATEGY:-hybrid-bge-v1}",
+        "RERANKER_BASE_URL=${RERANKER_BASE_URL:-http://reranker:8000}",
         "RAG_RESPONSE_PROMOTION_POINTER_PATH=/app/promotion/current.json",
       ],
       "rag-worker": [
@@ -86,8 +86,10 @@ class LocalProductionContractTest(unittest.TestCase):
     expected_image_inputs = {
       "api-service": "API_IMAGE",
       "mongodb": "MONGODB_IMAGE",
-      "ai-service": "AI_IMAGE",
-      "rag-worker": "AI_IMAGE",
+      "ai-service": "AI_BOUNDARY_IMAGE",
+      "classifier-service": "AI_CLASSIFIER_IMAGE",
+      "knowledge-service": "AI_KNOWLEDGE_IMAGE",
+      "rag-worker": "AI_INGEST_IMAGE",
       "qdrant": "QDRANT_IMAGE",
       "n8n": "N8N_IMAGE",
       "calendar-gateway": "CALENDAR_GATEWAY_IMAGE",
@@ -149,7 +151,10 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn('git diff --cached --quiet', script)
     self.assertIn('release_sha="$(git rev-parse HEAD)"', script)
     self.assertIn('API_IMAGE="local/eisenhower-api:${release_sha}"', script)
-    self.assertIn('AI_IMAGE="local/eisenhower-ai:${release_sha}"', script)
+    self.assertIn('AI_BOUNDARY_IMAGE="local/eisenhower-ai-boundary:${release_sha}"', script)
+    self.assertIn('AI_CLASSIFIER_IMAGE="local/eisenhower-ai-classifier:${release_sha}"', script)
+    self.assertIn('AI_KNOWLEDGE_IMAGE="local/eisenhower-ai-knowledge:${release_sha}"', script)
+    self.assertIn('AI_INGEST_IMAGE="local/eisenhower-ai-ingest:${release_sha}"', script)
     self.assertIn('AI_ROCM_IMAGE="local/eisenhower-ai-rocm:${release_sha}"', script)
     self.assertIn('MCP_IMAGE="local/eisenhower-mcp:${release_sha}"', script)
     self.assertIn('WEB_IMAGE="local/eisenhower-web:${release_sha}"', script)
@@ -160,8 +165,8 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn('compose_base up --no-deps audit-volume-init', script)
     self.assertNotIn('compose_base up -d --wait mongodb qdrant audit-volume-init', script)
     self.assertIn('compose_base up -d --wait mongodb qdrant identity-db identity-service n8n', script)
-    self.assertIn('compose_base up --no-deps -d --wait ai-service api-service web mcp-service', script)
-    self.assertIn('compose_base up --no-deps -d --wait access-gateway calendar-gateway', script)
+    self.assertIn('compose_full up --no-deps -d --wait ai-service classifier-service api-service web mcp-service', script)
+    self.assertIn('compose_full up --no-deps -d --wait access-gateway calendar-gateway', script)
     self.assertIn('validate_response_inputs', script)
     self.assertIn('validate_classifier_approval', script)
     self.assertIn('LOCAL_MODEL_OWNER_APPROVAL_BYPASS=true', script)
@@ -183,10 +188,10 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn("model_cache:/root/.cache/huggingface", inference["volumes"])
 
   def test_amd_retrieval_profile_runs_pinned_bge_m3_without_enabling_generation(self):
-    ai = self.amd_services["ai-service"]
-    classifier = self.services["ai-service"]
+    ai = self.amd_services["knowledge-service"]
+    classifier = self.services["classifier-service"]
     worker = self.amd_services["rag-worker"]
-    self.assertEqual(ai["profiles"], ["retrieval-amd"])
+    self.assertEqual(ai["profiles"], ["retrieval-amd", "response-amd"])
     self.assertEqual(worker["profiles"], ["retrieval-amd"])
     for service in (ai, worker):
       self.assertIn("/dev/kfd:/dev/kfd", service["devices"])
@@ -197,13 +202,12 @@ class LocalProductionContractTest(unittest.TestCase):
         service["environment"],
       )
       self.assertIn("EMBEDDING_VERSION=bge-m3-v1", service["environment"])
-    self.assertIn("RAG_GENERATION_ENABLED=false", ai["environment"])
-    self.assertIn("RAG_RESPONSE_ENABLED=false", ai["environment"])
+    self.assertIn("RAG_GENERATION_ENABLED=${RAG_GENERATION_ENABLED:-false}", self.services["knowledge-service"]["environment"])
+    self.assertIn("RAG_RESPONSE_ENABLED=${RAG_RESPONSE_ENABLED:-false}", self.services["knowledge-service"]["environment"])
     self.assertIn("RAG_GENERATION_ENABLED=false", classifier["environment"])
     self.assertIn("RAG_RESPONSE_ENABLED=false", classifier["environment"])
-    self.assertIn("RAG_RESPONSE_PROMOTION_POINTER_PATH=/app/promotion/current.json", ai["environment"])
-    self.assertIn("RAG_RESPONSE_CANDIDATE_ID=${RAG_RESPONSE_CANDIDATE_ID:-}", ai["environment"])
-    self.assertIn("${AI_PROMOTION_ROOT:-./.runtime/promotion}:/app/promotion:ro", ai["volumes"])
+    self.assertIn("RAG_RESPONSE_PROMOTION_POINTER_PATH=/app/promotion/current.json", self.services["knowledge-service"]["environment"])
+    self.assertIn("${AI_PROMOTION_ROOT:-./.runtime/promotion}:/app/promotion:ro", self.services["knowledge-service"]["volumes"])
     rocm_dockerfile = (ROOT / "backend-ai" / "Dockerfile.rocm").read_text(encoding="utf-8")
     self.assertIn("ENTRYPOINT []", rocm_dockerfile)
     self.assertIn("grpcio==1.78.0", rocm_dockerfile)
@@ -238,7 +242,7 @@ class LocalProductionContractTest(unittest.TestCase):
       self.assertIn("RELEASE_SHA=${RELEASE_SHA:?RELEASE_SHA is required}", environment)
       self.assertIn("AUDIT_HMAC_KEY=${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY is required}", environment)
 
-    ai_environment = self.services["ai-service"]["environment"]
+    ai_environment = self.services["classifier-service"]["environment"]
     self.assertEqual(self.services["ai-service"]["group_add"], ["1001"])
     self.assertEqual(
       self.services["audit-volume-init"]["command"],
@@ -267,7 +271,7 @@ class LocalProductionContractTest(unittest.TestCase):
       "LOCAL_MODEL_APPROVED_EVALUATION_SHA256=${LOCAL_MODEL_APPROVED_EVALUATION_SHA256:?approved evaluation digest is required}",
       ai_environment,
     )
-    self.assertTrue(any(volume.endswith(":/app/evaluation/production.json:ro") for volume in self.services["ai-service"]["volumes"]))
+    self.assertTrue(any(volume.endswith(":/app/evaluation/production.json:ro") for volume in self.services["classifier-service"]["volumes"]))
     self.assertIn(
       "CALENDAR_INTERNAL_HMAC_KEY=${CALENDAR_INTERNAL_HMAC_KEY:?CALENDAR_INTERNAL_HMAC_KEY is required}",
       self.services["api-service"]["environment"],
@@ -338,7 +342,10 @@ class LocalProductionContractTest(unittest.TestCase):
   def test_example_environment_has_no_operational_secrets(self):
     env_text = ENV_PATH.read_text()
     self.assertIn("API_IMAGE=", env_text)
-    self.assertIn("AI_IMAGE=", env_text)
+    self.assertIn("AI_BOUNDARY_IMAGE=", env_text)
+    self.assertIn("AI_CLASSIFIER_IMAGE=", env_text)
+    self.assertIn("AI_KNOWLEDGE_IMAGE=", env_text)
+    self.assertIn("AI_INGEST_IMAGE=", env_text)
     self.assertIn("EISENHOWER_API_TOKEN=", env_text)
     self.assertIn("AUTH_MODE=oidc", env_text)
     self.assertIn("OIDC_ISSUER=https://identity.example.invalid/realms/eisenhower", env_text)

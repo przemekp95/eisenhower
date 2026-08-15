@@ -24,7 +24,10 @@ set +a
 export RELEASE_SHA="$release_sha"
 export AI_ROCM_RELEASE_SHA="$release_sha"
 export API_IMAGE="local/eisenhower-api:${release_sha}"
-export AI_IMAGE="local/eisenhower-ai:${release_sha}"
+export AI_BOUNDARY_IMAGE="local/eisenhower-ai-boundary:${release_sha}"
+export AI_CLASSIFIER_IMAGE="local/eisenhower-ai-classifier:${release_sha}"
+export AI_KNOWLEDGE_IMAGE="local/eisenhower-ai-knowledge:${release_sha}"
+export AI_INGEST_IMAGE="local/eisenhower-ai-ingest:${release_sha}"
 export AI_ROCM_IMAGE="local/eisenhower-ai-rocm:${release_sha}"
 export MCP_IMAGE="local/eisenhower-mcp:${release_sha}"
 export WEB_IMAGE="local/eisenhower-web:${release_sha}"
@@ -35,9 +38,32 @@ compose_base() {
 }
 
 compose() {
+  compose_full "$@"
+}
+
+compose_retrieval() {
+  KNOWLEDGE_SERVICE_URL=http://knowledge-service:8000 \
   docker compose --env-file "$env_file" \
     -f "$compose_base" -f "$compose_amd" \
-    --profile retrieval-amd --profile response-amd --profile inference-amd --profile reranker-amd "$@"
+    --profile retrieval --profile retrieval-amd --profile reranker-amd "$@"
+}
+
+compose_response() {
+  KNOWLEDGE_SERVICE_URL=http://knowledge-service:8000 \
+  RAG_GENERATION_ENABLED=true RAG_RESPONSE_ENABLED=true \
+  docker compose --env-file "$env_file" \
+    -f "$compose_base" -f "$compose_amd" \
+    --profile retrieval --profile response --profile access --profile identity --profile response-amd \
+    --profile inference-amd --profile reranker-amd "$@"
+}
+
+compose_full() {
+  KNOWLEDGE_SERVICE_URL=http://knowledge-service:8000 \
+  RAG_GENERATION_ENABLED=true RAG_RESPONSE_ENABLED=true \
+  docker compose --env-file "$env_file" \
+    -f "$compose_base" -f "$compose_amd" \
+    --profile full --profile retrieval-amd --profile response-amd \
+    --profile inference-amd --profile reranker-amd "$@"
 }
 
 verify_image() {
@@ -50,23 +76,67 @@ verify_image() {
   }
 }
 
-build_images() {
+build_core_images() {
   docker build --build-arg RELEASE_SHA="$release_sha" --target production \
     -f backend-node/Dockerfile -t "$API_IMAGE" .
-  docker build --build-arg RELEASE_SHA="$release_sha" --target production \
-    -f backend-ai/Dockerfile -t "$AI_IMAGE" backend-ai
-  docker build --build-arg RELEASE_SHA="$release_sha" \
-    -f backend-ai/Dockerfile.rocm -t "$AI_ROCM_IMAGE" backend-ai
-  docker build --build-arg RELEASE_SHA="$release_sha" \
-    -f mcp/eisenhower_adapter/Dockerfile -t "$MCP_IMAGE" .
-  docker build --build-arg RELEASE_SHA="$release_sha" --target production \
-    -f web/Dockerfile -t "$WEB_IMAGE" .
-  for image_ref in "$API_IMAGE" "$AI_IMAGE" "$AI_ROCM_IMAGE" "$MCP_IMAGE" "$WEB_IMAGE"; do
+  docker build --build-arg RELEASE_SHA="$release_sha" --target boundary \
+    -f backend-ai/Dockerfile -t "$AI_BOUNDARY_IMAGE" backend-ai
+  docker build --build-arg RELEASE_SHA="$release_sha" --target classifier \
+    -f backend-ai/Dockerfile -t "$AI_CLASSIFIER_IMAGE" backend-ai
+  for image_ref in "$API_IMAGE" "$AI_BOUNDARY_IMAGE" "$AI_CLASSIFIER_IMAGE"; do
     verify_image "$image_ref"
   done
 }
 
+build_retrieval_images() {
+  build_core_images
+  docker build --build-arg RELEASE_SHA="$release_sha" --target knowledge \
+    -f backend-ai/Dockerfile -t "$AI_KNOWLEDGE_IMAGE" backend-ai
+  docker build --build-arg RELEASE_SHA="$release_sha" --target ingest \
+    -f backend-ai/Dockerfile -t "$AI_INGEST_IMAGE" backend-ai
+  docker build --build-arg RELEASE_SHA="$release_sha" \
+    -f backend-ai/Dockerfile.rocm -t "$AI_ROCM_IMAGE" backend-ai
+  for image_ref in "$AI_KNOWLEDGE_IMAGE" "$AI_INGEST_IMAGE" "$AI_ROCM_IMAGE"; do
+    verify_image "$image_ref"
+  done
+}
+
+build_response_images() {
+  build_retrieval_images
+  docker build --build-arg RELEASE_SHA="$release_sha" \
+    -f mcp/eisenhower_adapter/Dockerfile -t "$MCP_IMAGE" .
+  docker build --build-arg RELEASE_SHA="$release_sha" --target production \
+    -f web/Dockerfile -t "$WEB_IMAGE" .
+  for image_ref in "$MCP_IMAGE" "$WEB_IMAGE"; do
+    verify_image "$image_ref"
+  done
+}
+
+build_images() {
+  build_response_images
+}
+
 record_rollback() {
+  rollback_topology="${1:-full}"
+  case "$rollback_topology" in
+    core)
+      rollback_compose=compose_base
+      rollback_services="api-service ai-service classifier-service"
+      ;;
+    retrieval)
+      rollback_compose=compose_retrieval
+      rollback_services="api-service ai-service classifier-service knowledge-service rag-worker"
+      ;;
+    response)
+      rollback_compose=compose_response
+      rollback_services="api-service ai-service classifier-service knowledge-service rag-worker mcp-service web"
+      ;;
+    full)
+      rollback_compose=compose_full
+      rollback_services="api-service ai-service classifier-service knowledge-service rag-worker mcp-service web"
+      ;;
+    *) echo "Unknown rollback topology: $rollback_topology" >&2; exit 1 ;;
+  esac
   mkdir -p "$state_dir"
   chmod 700 "$state_dir"
   rollback_file="$state_dir/rollback.env"
@@ -75,8 +145,9 @@ record_rollback() {
   chmod 600 "$state_dir/rollback.config.env"
   {
     echo "ROLLBACK_RECORDED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    for service in api-service ai-service knowledge-service rag-worker mcp-service web; do
-      container_id="$(compose ps -q "$service" 2>/dev/null || true)"
+    echo "ROLLBACK_TOPOLOGY=$rollback_topology"
+    for service in $rollback_services; do
+      container_id="$($rollback_compose ps -q "$service" 2>/dev/null || true)"
       if test -n "$container_id"; then
         image_id="$(docker inspect "$container_id" --format '{{.Image}}')"
         key="$(echo "$service" | tr 'a-z-' 'A-Z_')"
@@ -95,6 +166,16 @@ validate_runtime_inputs() {
 }
 
 validate_classifier_approval() {
+  artifact_pointer="${AI_CLASSIFIER_ARTIFACT_ROOT:-}/local_minilm_current.json"
+  test -f "$artifact_pointer" || {
+    echo "Approved classifier generation pointer is required" >&2
+    exit 1
+  }
+  artifact_digest="$(sha256sum "$artifact_pointer" | awk '{print $1}')"
+  test "$artifact_digest" = "${LOCAL_MODEL_APPROVED_ARTIFACT_SHA256:-}" || {
+    echo "Classifier generation pointer digest mismatch" >&2
+    exit 1
+  }
   if test "${AI_EVALUATION_FILE:-}" != "/dev/null" && test -f "${AI_EVALUATION_FILE:-}"; then
     actual_digest="$(sha256sum "$AI_EVALUATION_FILE" | awk '{print $1}')"
     test "$actual_digest" = "${LOCAL_MODEL_APPROVED_EVALUATION_SHA256:-}" || {
@@ -121,9 +202,20 @@ validate_classifier_approval() {
   export LOCAL_MODEL_OWNER_APPROVAL_BYPASS=true
 }
 
+validate_core_inputs() {
+  validate_classifier_approval
+}
+
+validate_retrieval_inputs() {
+  validate_core_inputs
+  test -n "${RERANKER_API_KEY:-}" || { echo "RERANKER_API_KEY is required" >&2; exit 1; }
+  test -n "${RAG_ALLOWED_TENANTS:-}" || { echo "RAG_ALLOWED_TENANTS is required" >&2; exit 1; }
+}
+
 validate_response_inputs() {
   test -n "${INFERENCE_API_KEY:-}" || { echo "INFERENCE_API_KEY is required" >&2; exit 1; }
   test -n "${INFERENCE_MODEL:-}" || { echo "INFERENCE_MODEL is required" >&2; exit 1; }
+  test -n "${INFERENCE_MODEL_REVISION:-}" || { echo "INFERENCE_MODEL_REVISION is required" >&2; exit 1; }
   test -n "${RERANKER_API_KEY:-}" || { echo "RERANKER_API_KEY is required" >&2; exit 1; }
   test -n "${RAG_RESPONSE_CANDIDATE_ID:-}" || { echo "RAG_RESPONSE_CANDIDATE_ID is required" >&2; exit 1; }
   test -n "${RAG_ALLOWED_TENANTS:-}" || { echo "RAG_ALLOWED_TENANTS is required" >&2; exit 1; }
@@ -132,6 +224,11 @@ validate_response_inputs() {
     echo "AI promotion pointer is required" >&2
     exit 1
   }
+}
+
+validate_response_stack_inputs() {
+  validate_retrieval_inputs
+  validate_response_inputs
 }
 
 configure_identity_profile() {
@@ -167,7 +264,59 @@ configure_identity_profile() {
 
 render() {
   compose_base config --quiet
-  compose config --quiet
+  compose_retrieval config --quiet
+  compose_response config --quiet
+  compose_full config --quiet
+}
+
+validate_lifecycle_auth() {
+  test -n "${LIFECYCLE_OPERATOR_TOKEN:-}" || {
+    echo "LIFECYCLE_OPERATOR_TOKEN is required" >&2
+    exit 1
+  }
+  test -n "${EISENHOWER_LIFECYCLE_TOKEN:-}" || {
+    echo "EISENHOWER_LIFECYCLE_TOKEN is required" >&2
+    exit 1
+  }
+  export LIFECYCLE_OPERATOR_TOKEN EISENHOWER_LIFECYCLE_TOKEN
+  python3 - <<'PY'
+import hmac
+import os
+import sys
+
+if not hmac.compare_digest(
+    os.environ["LIFECYCLE_OPERATOR_TOKEN"],
+    os.environ["EISENHOWER_LIFECYCLE_TOKEN"],
+):
+    sys.exit("Lifecycle authorization failed")
+PY
+}
+
+sleep_response() {
+  validate_lifecycle_auth
+  compose_response stop inference reranker
+}
+
+wake_response() {
+  validate_lifecycle_auth
+  validate_response_inputs
+  timeout_seconds="${INFERENCE_WAKE_TIMEOUT_SECONDS:?INFERENCE_WAKE_TIMEOUT_SECONDS is required}"
+  case "$timeout_seconds" in *[!0-9]*|'') echo "Wake timeout must be a positive integer" >&2; exit 1 ;; esac
+  test "$timeout_seconds" -gt 0 || { echo "Wake timeout must be positive" >&2; exit 1; }
+  compose_response up --no-deps -d inference reranker
+  deadline=$(( $(date +%s) + timeout_seconds ))
+  while test "$(date +%s)" -lt "$deadline"; do
+    if compose_response exec -T inference sh -c \
+      'curl -fsS -H "Authorization: Bearer $VLLM_API_KEY" http://127.0.0.1:8000/v1/models >/dev/null' \
+      && compose_response exec -T reranker sh -c \
+      'curl -fsS -H "Authorization: Bearer $VLLM_API_KEY" http://127.0.0.1:8000/v1/models >/dev/null'; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "Response runtime cold wake timed out; stopping partial runtime" >&2
+  compose_response stop inference reranker
+  return 1
 }
 
 smoke() {
@@ -181,8 +330,81 @@ smoke() {
 }
 
 smoke_response() {
-  compose ps knowledge-service access-gateway
-  compose exec -T knowledge-service curl -fsS http://127.0.0.1:8000/health/live >/dev/null
+  compose_response ps knowledge-service access-gateway
+  compose_response exec -T knowledge-service curl -fsS http://127.0.0.1:8000/health/live >/dev/null
+}
+
+smoke_core() {
+  compose_base ps ai-service classifier-service api-service
+  curl -fsS "http://127.0.0.1:${NODE_BIND_PORT:-3001}/health/ready" >/dev/null
+  curl -fsS "http://127.0.0.1:${AI_BIND_PORT:-8000}/health/ready" >/dev/null
+}
+
+smoke_retrieval() {
+  compose_retrieval ps knowledge-service rag-worker reranker
+  compose_retrieval exec -T knowledge-service \
+    curl -fsS http://127.0.0.1:8000/health/ready >/dev/null
+  compose_retrieval exec -T reranker sh -c \
+    'curl -fsS -H "Authorization: Bearer $VLLM_API_KEY" http://127.0.0.1:8000/v1/models >/dev/null'
+}
+
+deploy_core() {
+  validate_core_inputs
+  build_core_images
+  compose_base config --quiet
+  record_rollback core
+  compose_base up --no-deps audit-volume-init
+  compose_base up -d --wait mongodb
+  compose_base up --no-deps -d --wait classifier-service
+  compose_base up --no-deps -d --wait ai-service api-service
+  smoke_core
+}
+
+deploy_retrieval() {
+  validate_retrieval_inputs
+  build_retrieval_images
+  compose_retrieval config --quiet
+  record_rollback retrieval
+  compose_base up --no-deps audit-volume-init
+  compose_retrieval up -d --wait mongodb qdrant reranker
+  compose_retrieval up --no-deps -d --wait classifier-service knowledge-service
+  compose_retrieval up --no-deps -d --wait ai-service api-service
+  compose_retrieval up --no-deps -d rag-worker
+  smoke_core
+  smoke_retrieval
+}
+
+deploy_response() {
+  validate_response_stack_inputs
+  build_response_images
+  compose_response config --quiet
+  record_rollback response
+  compose_base up --no-deps audit-volume-init
+  compose_response up -d --wait mongodb qdrant identity-db identity-service
+  configure_identity_profile
+  compose_response up --no-deps -d --wait inference reranker
+  compose_response up --no-deps -d --wait classifier-service knowledge-service
+  compose_response up --no-deps -d --wait ai-service api-service web mcp-service
+  compose_response up --no-deps -d rag-worker
+  compose_response up --no-deps -d --wait access-gateway
+  smoke_core
+  smoke_response
+}
+
+deploy_full() {
+  validate_runtime_inputs
+  build_images
+  render
+  record_rollback full
+  compose_base up --no-deps audit-volume-init
+  compose_base up -d --wait mongodb qdrant identity-db identity-service n8n
+  configure_identity_profile
+  compose up --no-deps -d --wait inference reranker
+  compose up --no-deps -d --wait knowledge-service
+  compose_full up --no-deps -d --wait ai-service classifier-service api-service web mcp-service
+  compose_full up --no-deps -d rag-worker
+  compose_full up --no-deps -d --wait access-gateway calendar-gateway
+  smoke
 }
 
 rollback() {
@@ -197,8 +419,11 @@ rollback() {
   . "$rollback_file"
   set +a
   export API_IMAGE="${ROLLBACK_API_SERVICE_IMAGE_ID:?missing API rollback image}"
-  export AI_IMAGE="${ROLLBACK_AI_SERVICE_IMAGE_ID:?missing AI rollback image}"
-  export AI_ROCM_IMAGE="$AI_IMAGE"
+  export AI_BOUNDARY_IMAGE="${ROLLBACK_AI_SERVICE_IMAGE_ID:?missing AI boundary rollback image}"
+  export AI_CLASSIFIER_IMAGE="${ROLLBACK_CLASSIFIER_SERVICE_IMAGE_ID:?missing classifier rollback image}"
+  export AI_KNOWLEDGE_IMAGE="${ROLLBACK_KNOWLEDGE_SERVICE_IMAGE_ID:?missing knowledge rollback image}"
+  export AI_INGEST_IMAGE="${ROLLBACK_RAG_WORKER_IMAGE_ID:?missing ingest rollback image}"
+  export AI_ROCM_IMAGE="$AI_KNOWLEDGE_IMAGE"
   export MCP_IMAGE="${ROLLBACK_MCP_SERVICE_IMAGE_ID:?missing MCP rollback image}"
   export WEB_IMAGE="${ROLLBACK_WEB_IMAGE_ID:?missing web rollback image}"
   compose config --quiet
@@ -209,40 +434,25 @@ rollback() {
 case "$action" in
   build) build_images ;;
   render) render ;;
-  deploy)
-    validate_runtime_inputs
-    build_images
-    render
-    record_rollback
-    compose_base up --no-deps audit-volume-init
-    compose_base up -d --wait mongodb qdrant identity-db identity-service n8n
-    configure_identity_profile
-    compose up --no-deps -d --wait inference reranker
-    compose up --no-deps -d --wait knowledge-service
-    compose_base up --no-deps -d --wait ai-service api-service web mcp-service
-    compose_base up --no-deps -d rag-worker
-    compose_base up --no-deps -d --wait access-gateway calendar-gateway
-    smoke
-    ;;
-  deploy-response)
-    validate_response_inputs
-    docker build --build-arg RELEASE_SHA="$release_sha" \
-      -f backend-ai/Dockerfile.rocm -t "$AI_ROCM_IMAGE" backend-ai
-    verify_image "$AI_ROCM_IMAGE"
-    render
-    record_rollback
-    compose up --no-deps -d --wait inference reranker
-    compose up --no-deps -d --wait knowledge-service access-gateway
-    smoke_response
-    ;;
+  render-core) compose_base config --quiet ;;
+  render-retrieval) compose_retrieval config --quiet ;;
+  render-response) compose_response config --quiet ;;
+  render-full) compose_full config --quiet ;;
+  deploy) deploy_core ;;
+  deploy-core) deploy_core ;;
+  deploy-retrieval) deploy_retrieval ;;
+  deploy-response) deploy_response ;;
+  deploy-full) deploy_full ;;
   smoke)
     validate_runtime_inputs
     render
     smoke
     ;;
+  sleep-response) sleep_response ;;
+  wake-response) wake_response ;;
   rollback) rollback ;;
   *)
-    echo "Usage: $0 {build|render|deploy|deploy-response|smoke|rollback}" >&2
+    echo "Usage: $0 {build|render|render-core|render-retrieval|render-response|render-full|deploy|deploy-core|deploy-retrieval|deploy-response|deploy-full|sleep-response|wake-response|smoke|rollback}" >&2
     exit 2
     ;;
 esac

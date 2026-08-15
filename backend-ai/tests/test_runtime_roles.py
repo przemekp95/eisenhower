@@ -40,6 +40,15 @@ def test_local_compose_defaults_to_core_and_keeps_heavy_roles_explicit():
   assert services["ai-service"]["mem_limit"]
   assert services["ai-service"]["cpus"]
   assert services["ai-service"]["pids_limit"]
+  for service in ("classifier-service", "knowledge-service", "rag-worker"):
+    environment = services[service]["environment"]
+    assert "HF_HUB_OFFLINE=1" in environment
+    assert "TRANSFORMERS_OFFLINE=1" in environment
+
+  deploy_script = (ROOT / "deploy" / "local" / "deploy.sh").read_text(encoding="utf-8")
+  for action in ("deploy-core", "deploy-retrieval", "deploy-response", "deploy-full"):
+    assert f"{action})" in deploy_script
+  assert "deploy) deploy_core" in deploy_script
 
 
 def test_amd_vllm_lifecycle_is_private_bounded_and_opt_in():
@@ -53,6 +62,9 @@ def test_amd_vllm_lifecycle_is_private_bounded_and_opt_in():
   assert inference["pids_limit"]
   assert inference["mem_limit"]
   assert inference["cpus"]
+  assert "HF_HUB_OFFLINE=1" in inference["environment"]
+  assert "TRANSFORMERS_OFFLINE=1" in inference["environment"]
+  assert "HF_HUB_OFFLINE=1" in compose["services"]["reranker"]["environment"]
   assert "sleep-response" in deploy_script
   assert "wake-response" in deploy_script
   assert "/v1/models" in deploy_script

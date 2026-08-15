@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-15 — TASK-048 milestone: Split AI runtime dependencies and images into boundary/classifier/knowledge/ingest roles, made core the default and retrieval/response/full explicit, required hash-approved offline classifier artifacts, added bounded shared jobs and private authenticated vLLM lifecycle controls, and produced exact-SHA image/SBOM/scan plus local CPU measurements; physical ROCm/OOM/wake, ingest, governed holdout and deployment/rollback gates remain open, with no promotion or deployment performed.
+
 2026-08-13 — TASK-047 deploy follow-up: Removed unprovisioned `profile` and `email` scopes from the web authorization request after a live Keycloak browser flow returned `invalid_scope`; identity and authorization continue to use the explicit governed claim and resource scopes.
 
 2026-08-13 — TASK-047 deploy follow-up: Split the CPU classifier from response-generation flags after the exact-master runtime proved that inherited global response settings made its fail-closed PromptSpec validation reject startup; generation and responses remain enabled only in the isolated knowledge service.

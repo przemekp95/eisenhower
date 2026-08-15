@@ -4,6 +4,7 @@ services:
   knowledge-service:
     image: ${AI_ROCM_IMAGE:?AI_ROCM_IMAGE must be an immutable local tag or digest}
     profiles:
+      - retrieval-amd
       - response-amd
     environment:
       - RELEASE_SHA=${AI_ROCM_RELEASE_SHA:?AI_ROCM_RELEASE_SHA must match the immutable image source SHA}
@@ -11,34 +12,6 @@ services:
       - RAG_EMBEDDING_MODEL_REVISION=5617a9f61b028005a4858fdac845db406aefb181
       - RAG_EMBEDDING_DEVICE=cuda
       - EMBEDDING_VERSION=bge-m3-v1
-    ipc: host
-    group_add:
-      - video
-      - render
-      - "110"
-    devices:
-      - /dev/kfd:/dev/kfd
-      - /dev/dri:/dev/dri
-    security_opt:
-      - seccomp=unconfined
-
-  ai-service:
-    image: ${AI_ROCM_IMAGE:?AI_ROCM_IMAGE must be an immutable local tag or digest}
-    profiles:
-      - retrieval-amd
-    environment:
-      - RELEASE_SHA=${AI_ROCM_RELEASE_SHA:?AI_ROCM_RELEASE_SHA must match the immutable image source SHA}
-      - RAG_RETRIEVAL_ENABLED=true
-      - RAG_GENERATION_ENABLED=false
-      - RAG_RESPONSE_ENABLED=false
-      - RAG_RESPONSE_PROMOTION_POINTER_PATH=/app/promotion/current.json
-      - RAG_RESPONSE_CANDIDATE_ID=${RAG_RESPONSE_CANDIDATE_ID:-}
-      - RAG_EMBEDDING_MODEL_NAME=BAAI/bge-m3
-      - RAG_EMBEDDING_MODEL_REVISION=5617a9f61b028005a4858fdac845db406aefb181
-      - RAG_EMBEDDING_DEVICE=cuda
-      - EMBEDDING_VERSION=bge-m3-v1
-    volumes:
-      - ${AI_PROMOTION_ROOT:-./.runtime/promotion}:/app/promotion:ro
     ipc: host
     group_add:
       - video
@@ -84,6 +57,10 @@ services:
       - "${INFERENCE_BIND_ADDRESS:-127.0.0.1}:${INFERENCE_BIND_PORT:-8010}:8000"
     environment:
       - VLLM_API_KEY=${INFERENCE_API_KEY:?INFERENCE_API_KEY is required}
+      - OMP_NUM_THREADS=${INFERENCE_OMP_THREADS:?measured inference OMP thread limit is required}
+      - TOKENIZERS_PARALLELISM=false
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
     command:
       - --model
       - ${INFERENCE_MODEL:?INFERENCE_MODEL is required}
@@ -129,6 +106,9 @@ services:
     restart: unless-stopped
     networks:
       - private
+    mem_limit: ${INFERENCE_MEMORY_LIMIT:?calibrated inference memory limit is required}
+    cpus: ${INFERENCE_CPU_LIMIT:?calibrated inference CPU limit is required}
+    pids_limit: ${INFERENCE_PID_LIMIT:?calibrated inference PID limit is required}
 
   reranker:
     image: ${AMD_RERANKER_IMAGE:-vllm/vllm-openai-rocm@sha256:3be0d8f3ec3ebcc99203e08d895392a8d749ed8a132f41574a8018cdaf525a22}
@@ -139,6 +119,10 @@ services:
     environment:
       - TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
       - VLLM_API_KEY=${RERANKER_API_KEY:?RERANKER_API_KEY is required}
+      - OMP_NUM_THREADS=${RERANKER_OMP_THREADS:?measured reranker OMP thread limit is required}
+      - TOKENIZERS_PARALLELISM=false
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
     command:
       - --model
       - BAAI/bge-reranker-v2-m3
@@ -180,6 +164,9 @@ services:
     restart: unless-stopped
     networks:
       - private
+    mem_limit: ${RERANKER_MEMORY_LIMIT:?calibrated reranker memory limit is required}
+    cpus: ${RERANKER_CPU_LIMIT:?calibrated reranker CPU limit is required}
+    pids_limit: ${RERANKER_PID_LIMIT:?calibrated reranker PID limit is required}
 
 networks:
   private:

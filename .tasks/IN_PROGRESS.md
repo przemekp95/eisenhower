@@ -1,5 +1,32 @@
 # In Progress
 
+## TASK-048: Split and bound the AI runtime by operational role
+**Priority:** P1 | **Tags:** ai, runtime, docker, rocm, retrieval, reliability
+
+Reduce the backend AI footprint without changing public contracts: separate lightweight online boundaries, classification, knowledge retrieval/response and offline ingest dependencies; require an approved classifier artifact; make heavy runtime profiles explicit; and add measured resource, queue and vLLM lifecycle controls with rollback.
+
+### Plan
+
+- Characterize current images, dependencies, startup training, Compose actions, private HTTP/auth, jobs and retrieval quality gates before changing behavior.
+- Split role-specific dependency sets and image targets while keeping framework types behind project-owned ports and keeping Mongo canonical with Qdrant rebuildable.
+- Require an approved hash-verified classifier artifact at production startup and move training to an explicit offline command.
+- Add explicit core, retrieval, response and full profiles plus private authorized vLLM sleep/wake orchestration with bounded timeouts, readiness, cold-wake and fallback.
+- Add measured CPU/RAM/PID/thread/worker/queue limits, deterministic model/cache handling and benchmark tooling for latency, resources, failures and frozen retrieval quality.
+- Run test-first focused and broad verification, Compose rendering, image/SBOM/security checks and available local measurements; report hardware/deployment/production gaps separately.
+
+### Progress
+
+Implemented four role-specific CPU targets with a 248 MB public boundary, fail-closed hash-approved
+classification, explicit core/retrieval/response/full actions, shared bounded SQLite jobs, mandatory measured
+resource inputs, offline revision-pinned caches and private authenticated vLLM scale-to-zero orchestration.
+Exact-SHA role builds, SBOMs, vulnerability scans, CPU boundary/classifier/knowledge benchmarks and Compose
+renders are green; the detailed evidence and methodology assessment are in
+`docs/ai-rebuild/runtime-footprint-task048.md`. The task remains in progress because physical gfx1151/ROCm
+resource/OOM/wake qualification, ingest calibration, governed frozen-holdout no-reranker comparison and the
+first monolith-to-role rollback rehearsal are still open. No deployment, promotion or publication occurred.
+
+---
+
 ## TASK-047: Deploy the portable local AMD platform with Calendar and Remote MCP
 **Priority:** P0 | **Tags:** calendar, mcp, oauth, n8n, amd, rocm, deployment
 
