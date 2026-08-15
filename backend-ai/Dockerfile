@@ -88,7 +88,7 @@ LABEL org.opencontainers.image.revision=$RELEASE_SHA \
       eisenhower.runtime.role=ingest
 USER root
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgomp1 libmagic1 poppler-utils tesseract-ocr tesseract-ocr-pol \
+    && apt-get install -y --no-install-recommends libgl1 libgomp1 libmagic1 poppler-utils tesseract-ocr tesseract-ocr-pol \
     && rm -rf /var/lib/apt/lists/*
 ENV PATH=/home/app/.local/bin:$PATH
 COPY --chown=app:app . .

@@ -22,6 +22,8 @@ def test_ai_images_install_role_specific_dependencies_without_model_prefetch():
   assert "docling" not in requirements["classifier"]
   assert "unstructured" not in requirements["knowledge"]
   assert "docling" in requirements["ingest"]
+  ingest_stage = dockerfile.split("FROM dependencies-ingest AS ingest", maxsplit=1)[1]
+  assert "libgl1" in ingest_stage
 
 
 def test_local_compose_defaults_to_core_and_keeps_heavy_roles_explicit():
