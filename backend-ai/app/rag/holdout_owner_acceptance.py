@@ -210,6 +210,7 @@ def run_owner_accepted_holdout(
   *,
   inputs: HoldoutAcceptanceInputs,
   output: Path,
+  use_state_dir: Path,
   evaluator: Callable[[], dict],
   now: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> dict:
@@ -218,7 +219,7 @@ def run_owner_accepted_holdout(
   started_at = now()
   acceptance = validate_owner_acceptance(receipt_path, inputs=inputs, now=started_at)
   receipt_digest = _digest(receipt_path)
-  use_marker = receipt_path.with_name(f"{receipt_path.name}.{receipt_digest}.used")
+  use_marker = use_state_dir.resolve() / f"{receipt_digest}.used"
   _write_once(use_marker, {
     "schema_version": "retrieval-holdout-owner-acceptance-use-v1",
     "approval_receipt_sha256": receipt_digest,

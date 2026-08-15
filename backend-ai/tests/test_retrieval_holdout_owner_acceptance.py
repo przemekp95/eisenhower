@@ -177,6 +177,7 @@ def test_single_use_runner_rechecks_expiry_and_writes_truthful_report(tmp_path):
     receipt,
     inputs=inputs,
     output=output,
+    use_state_dir=tmp_path / "uses",
     evaluator=_comparison,
     now=lambda: next(times),
   )
@@ -191,12 +192,16 @@ def test_single_use_runner_rechecks_expiry_and_writes_truthful_report(tmp_path):
   with pytest.raises(HoldoutAcceptanceBlocked, match="already exists"):
     run_owner_accepted_holdout(
       receipt, inputs=inputs, output=output, evaluator=_comparison, now=lambda: NOW,
+      use_state_dir=tmp_path / "uses",
     )
 
+  copied_receipt = tmp_path / "copied-receipt.json"
+  copied_receipt.write_bytes(receipt.read_bytes())
   with pytest.raises(HoldoutAcceptanceBlocked, match="already exists"):
     run_owner_accepted_holdout(
-      receipt, inputs=inputs, output=tmp_path / "different.json",
+      copied_receipt, inputs=inputs, output=tmp_path / "different.json",
       evaluator=_comparison, now=lambda: NOW,
+      use_state_dir=tmp_path / "uses",
     )
 
 
@@ -211,6 +216,7 @@ def test_single_use_runner_refuses_to_commit_if_acceptance_expires_during_run(tm
       receipt,
       inputs=inputs,
       output=output,
+      use_state_dir=tmp_path / "uses",
       evaluator=_comparison,
       now=lambda: next(times),
     )
@@ -222,6 +228,7 @@ def test_quality_gate_rejects_simplification_and_selects_reranker_rollback(tmp_p
   inputs = _inputs(tmp_path)
   report = run_owner_accepted_holdout(
     _receipt_path(tmp_path, inputs), inputs=inputs, output=tmp_path / "report.json",
+    use_state_dir=tmp_path / "uses",
     evaluator=lambda: _comparison(cheap_recall=0.5), now=lambda: NOW,
   )
 
@@ -249,6 +256,7 @@ def test_single_use_runner_rejects_wrong_split_tuning_or_strategy_set(tmp_path, 
       _receipt_path(tmp_path, inputs),
       inputs=inputs,
       output=tmp_path / "report.json",
+      use_state_dir=tmp_path / "uses",
       evaluator=lambda: result,
       now=lambda: NOW,
     )

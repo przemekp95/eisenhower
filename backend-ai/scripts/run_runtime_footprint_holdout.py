@@ -263,12 +263,15 @@ def main() -> int:
   source_git_sha = subprocess.check_output(
     ["git", "rev-parse", "HEAD"], cwd=args.repository_root, text=True,
   ).strip()
+  git_common_dir = Path(subprocess.check_output(
+    ["git", "rev-parse", "--git-common-dir"], cwd=args.repository_root, text=True,
+  ).strip())
+  if not git_common_dir.is_absolute():
+    git_common_dir = (args.repository_root / git_common_dir).resolve()
+  use_state_dir = git_common_dir / "eisenhower" / "holdout-uses"
   allowed_untracked = {
     args.acceptance.resolve(),
     args.output.resolve(),
-    args.acceptance.with_name(
-      f"{args.acceptance.name}.{sha256(args.acceptance.read_bytes()).hexdigest()}.used"
-    ).resolve(),
   }
   status = subprocess.check_output(
     ["git", "status", "--porcelain", "--untracked-files=all"],
@@ -301,6 +304,7 @@ def main() -> int:
       args.acceptance,
       inputs=inputs,
       output=args.output,
+      use_state_dir=use_state_dir,
       evaluator=lambda: run_frozen_holdout(
         inputs=inputs,
         repository_root=args.repository_root.resolve(),
