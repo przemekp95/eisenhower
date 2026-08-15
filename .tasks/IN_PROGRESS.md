@@ -29,8 +29,10 @@ memory pressure events, while a clean 512 MiB run was OOM-killed as expected. An
 response lifecycle run reduced GTT by about 44.1 GB and board power by about 38 W, then restored authenticated
 reranker readiness in 29.581 s and inference readiness in 116.086 s. A pinned official PyTorch/ROCm knowledge
 candidate passed gfx1151, dependency, SBOM and zero-fixed-vulnerability gates at every severity and matched
-baseline embeddings, but was rejected because warm latency regressed 44.73% and aggregate unique layers rose
-from 28 to 39. Legacy monolith rollback now preserves SHA-verified source Compose snapshots and exact image IDs.
+baseline embeddings. It is selected for knowledge after the vLLM-derived alternative failed a fresh full
+severity scan; the measured 44.73% warm-latency regression and aggregate unique-layer growth from 28 to 39
+remain explicit tradeoffs. vLLM 0.20.x remains isolated to inference and reranking, whose pinned upstream image
+has a separate red all-severity release gate. Legacy monolith rollback now preserves SHA-verified source Compose snapshots and exact image IDs.
 The task remains in progress because production-shaped/cold-host ingest calibration, independent human review
 and the governed frozen holdout, forced response failure/OOM cleanup, and the separately authorized mutating
 monolith-to-role deployment/rollback rehearsal are still open. No deployment, promotion or publication occurred.

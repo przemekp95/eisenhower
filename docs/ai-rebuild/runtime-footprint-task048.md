@@ -1,7 +1,7 @@
 # TASK-048 runtime footprint evidence
 
 Status: implementation and local CPU/image evidence complete; physical response lifecycle is characterized
-and the first dedicated knowledge ROCm candidate is measured and rejected. Governed holdout and deployment
+and the dedicated knowledge ROCm runtime is selected after physical and all-severity security measurement. Governed holdout and deployment
 gates remain open. Nothing in this report proves deployment, Mikrus capacity, production behavior or human
 acceptance.
 
@@ -31,13 +31,13 @@ All memory figures distinguish Docker working set from cgroup `memory.peak`. CPU
 not proposed limits. The active baseline was not redeployed or recreated; only its two existing response
 containers were later stopped and started for the explicitly recorded lifecycle characterization.
 
-| Axis | Before, active `a018f986…` stack | After, isolated candidate | Evidence boundary |
+| Axis | Before, active `a018f986…` stack | After, isolated role split | Evidence boundary |
 | --- | --- | --- | --- |
 | CPU images | one 3.88 GB monolith, 10 layers | boundary 248 MB/10 layers; classifier 2.19 GB/13; knowledge 2.06 GB/13; ingest initially 3.86 GB/14, operational image 4.14 GB after required OpenCV GL runtime and pinned spaCy model | local Docker images; ingest growth is reported, not hidden |
 | Layer sharing | one image | 50 layer references, 18 unique layers across four roles | local image metadata |
 | Public AI dependency surface | full ML/OCR/Docling environment | boundary SBOM 124 components; no Torch, transformers, OCR or Docling | Trivy CycloneDX |
 | Role SBOMs | not split | classifier 228, knowledge 166, initial ingest 373; operational ingest 403 components | Trivy CycloneDX |
-| Fixed image findings | not freshly gated per role | 0 LOW/MEDIUM/HIGH/CRITICAL for the dedicated PyTorch/ROCm experiment; 0 HIGH/CRITICAL for every selected exact-SHA role | Trivy 0.71.1 DB from 2026-08-15, `--ignore-unfixed` |
+| Fixed image findings | not freshly gated per role | selected knowledge PyTorch/ROCm: 0 LOW/MEDIUM/HIGH/CRITICAL; pinned upstream response vLLM: 181 LOW, 1,098 MEDIUM, 174 HIGH, 19 CRITICAL | Trivy 0.71.1 DB from 2026-08-15, `--ignore-unfixed`; response gate remains red |
 | Hugging Face runtime cache | about 14.3 GiB | 14.3 GiB; no revision deleted | read-only mounted volume, `du` |
 | BuildKit cache | 39.98 GB, 16.73 GB reclaimable | 50.11 GB, 26.85 GB reclaimable after candidate and exact-SHA builds | local builder; deliberately not pruned |
 | AI boundary RAM | old monolith 136.1 MiB working set, 315 MiB cgroup peak | 42.22 MiB working set, 57.94 MiB cgroup peak | isolated liveness benchmark |
@@ -53,7 +53,7 @@ containers were later stopped and started for the explicitly recorded lifecycle 
 | Ingest container-cold workload | no comparable frozen-container baseline | three 2 GiB runs: wall median 14.864 s/p95 15.482 s, CPU median 15.032 s, PID max 9; all 33 case executions passed | new process/container each run; host storage/page cache was not cold |
 | Queue | unbounded producer/worker DB topology was inconsistent | capacity 128: enqueue p50 3.637 ms, p95 4.086 ms; overflow rejected in 0.122 ms; replay 0.074 ms | isolated SQLite microbenchmark |
 | Physical response lifecycle | loaded: 100% GPU, 2.968 GB VRAM, 46.847 GB GTT, 64.024 W; stopped after 10 s: 5%, 2.983 GB, 2.775 GB, 26.049 W | stop 11.846 s; reranker ready 29.581 s; inference ready 116.086 s; both restored healthy | exact existing baseline containers, authenticated `/v1/models`, kernel sysfs and Docker stats; no recreate/deploy |
-| Knowledge ROCm image | vLLM-derived: 10.684 GB OCI/33 layer refs; 26 layer digests shared with response vLLM | dedicated PyTorch: 10.614 GB/13 refs, 0 shared; aggregate unique digests rise 28 → 39; warm median regresses 44.73%; rejected | one process-cold alternating physical pair; min embedding cosine 0.99999988; not a capacity qualification |
+| Knowledge ROCm image | vLLM-derived: 10.684 GB OCI/33 layer refs; 26 layer digests shared with response vLLM | selected dedicated PyTorch: 10.614 GB/13 refs, 0 shared; aggregate unique digests rise 28 → 39; warm median regresses 44.73%; observed working set falls 5.017 → 3.417 GiB | one process-cold alternating physical pair; min embedding cosine 0.99999988; selection favors role isolation/security and is not a capacity qualification |
 | Retrieval quality | dense recall@5 0.6964/MRR 0.5774/p95 25.93 ms; selected hybrid+reranker 0.9107/0.8048/266.83 ms | no-reranker 0.9107/0.7095/48.59 ms; rejected because global and PL MRR miss policy | fresh isolated 36-case non-holdout run; frozen holdout remains closed |
 
 The classifier initially took 121.313 s because `sentence-transformers` performed unsuccessful Hugging Face
@@ -141,18 +141,25 @@ cleanup, timeout cleanup or production behavior.
   116.086 s for inference, both restored healthy; no image or Compose recreation occurred.
 - the pinned official PyTorch/ROCm knowledge experiment built on gfx1151, passed `pip check`, emitted a
   772-component SBOM and had zero fixed LOW/MEDIUM/HIGH/CRITICAL findings after package updates. Its embeddings
-  matched the vLLM-derived baseline (minimum cosine 0.99999988), but warm median regressed 44.73% and aggregate
-  unique image layer digests increased from 28 to 39, so it is not selected by Compose.
+  matched the vLLM-derived baseline (minimum cosine 0.99999988). The exact selected build at source
+  `7117a5d1…` repeated `pip check`, the 772-component SBOM and the zero-fixed-finding all-severity gate. It is
+  selected for knowledge despite a 44.73% warm-median regression and aggregate unique layer growth from 28 to
+  39, because the alternative carried vulnerable vLLM code that this role does not use.
+- the separately pinned upstream vLLM 0.20.x response image remains selected for inference and reranking only.
+  Its fresh all-severity scan found 1,472 fixed findings (181 LOW, 1,098 MEDIUM, 174 HIGH, 19 CRITICAL), so it
+  remains an explicit red release gate; no deployment or risk acceptance occurred.
 - legacy monolith Compose snapshots from source `a018f986…` render successfully with their exact image IDs;
   the role-split rollback contract now stores and SHA-verifies those source-revision configs. The mutating
   migration/rollback rehearsal remains separately authorized work.
 
 ## Open gates and risks
 
-1. The first dedicated pinned PyTorch/ROCm candidate is rejected: it barely changes individual OCI size,
-   increases aggregate unique layers/cache and regresses warm latency despite matching embeddings. It remains
-   an explicit non-deployed experiment. Reconsider only with a smaller supported base and a repeated physical
-   capacity/quality packet; no disk or power saving is claimed.
+1. The dedicated pinned PyTorch/ROCm image is selected for knowledge after the full severity scan. It does not
+   eliminate vLLM: generation and reranking still use the pinned private vLLM 0.20.x response image. That
+   upstream image currently fails the fixed LOW/MEDIUM/HIGH/CRITICAL gate, including 19 CRITICAL findings.
+   Do not publish or deploy it without a patched compatible image or an explicit, evidence-backed exception.
+   The knowledge selection also adds unique cache layers and regresses warm latency; no disk or power saving is
+   claimed until repeated capacity measurements exist.
 2. Calibrate every mandatory CPU/RAM/PID/thread value, especially both vLLM services, using repeated
    representative workloads. Ingest now has one clean success and one deliberate OOM boundary, but not enough
    repetitions or production-shaped documents to set a deployment limit. `.env.example` remains blank.

@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-15 — TASK-048 all-severity follow-up: Promoted the physically measured pinned PyTorch/ROCm image to the selected knowledge runtime after its exact-SHA build passed `pip check`, a 772-component SBOM and zero fixed LOW/MEDIUM/HIGH/CRITICAL findings; retained vLLM 0.20.x only for private inference/reranking and recorded its pinned upstream image as a red release gate with 1,472 fixed findings, with no deployment, promotion, publication or risk acceptance.
+
 2026-08-15 — TASK-048 ROCm/lifecycle follow-up: Physically stopped and cold-started the exact local inference/reranker containers with authenticated readiness and full restoration, added SHA-verified legacy-monolith rollback snapshots, fixed effective AMD role entrypoints, and measured then rejected a dedicated PyTorch/ROCm knowledge candidate because warm latency regressed 44.73% and aggregate unique layers rose despite zero fixed LOW/MEDIUM/HIGH/CRITICAL findings; no deployment, holdout, promotion or publication occurred.
 
 2026-08-15 — TASK-048 ingest repetition follow-up: Added a fail-closed comparable-run aggregator and ran six clean exact-image container-cold extraction repetitions at 2 GiB and 2.5 GiB; all 66 case executions passed without pressure/OOM, but the 2 GiB maximum left only 32.5 MB headroom and the later 2.5 GiB set had a warm host page-cache confounder, so no deployment limit was guessed or filled in.

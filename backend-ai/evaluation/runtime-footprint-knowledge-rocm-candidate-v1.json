@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "recorded_at": "2026-08-15T21:10:00+02:00",
-  "decision": "rejected_for_default_runtime",
-  "reason": "The dedicated PyTorch image preserved embedding values but regressed warm latency and increased aggregate unique image layers/cache while barely changing the individual OCI size.",
+  "decision": "selected_for_knowledge_runtime_after_full_severity_scan",
+  "reason": "The dedicated PyTorch image preserved embedding values, reduced observed working set and passed the fixed LOW/MEDIUM/HIGH/CRITICAL gate. Its measured warm-latency and aggregate-cache regressions remain explicit tradeoffs. The vLLM-derived knowledge image was rejected after a fresh all-severity scan found vulnerable packages that are not needed by this role.",
   "hardware": "physical gfx1151 Radeon 8060S Graphics",
   "model": "BAAI/bge-m3",
   "model_revision": "5617a9f61b028005a4858fdac845db406aefb181",
@@ -23,7 +23,8 @@
     "exit_code": 0
   },
   "candidate": {
-    "dockerfile": "backend-ai/Dockerfile.knowledge-rocm-candidate",
+    "benchmarked_dockerfile": "backend-ai/Dockerfile.knowledge-rocm-candidate",
+    "selected_dockerfile": "backend-ai/Dockerfile.rocm",
     "source_revision": "6bf9b6522f7a7881eaccf7facf8f27471ea2a8f9",
     "base": "rocm/pytorch@sha256:4449f856653602317e4101a76fce599c7fcd58ccec2e539951fce5f73083179e",
     "image": "local/eisenhower-ai-knowledge-rocm:6bf9b6522f7a7881eaccf7facf8f27471ea2a8f9",
@@ -51,11 +52,24 @@
     "baseline_layers_shared_with_vllm": 26,
     "candidate_layers_shared_with_vllm": 0
   },
+  "selection_follow_up": {
+    "selected_source_revision": "7117a5d19388f2c1bfd7ae6b995f5212dd1628b7",
+    "selected_image": "local/eisenhower-ai-rocm:7117a5d19388f2c1bfd7ae6b995f5212dd1628b7",
+    "selected_image_id": "sha256:2e824d65029ad7fc307479e2066e689cef2bfb2d4d953a2ec2fe957ddfccfd60",
+    "selected_oci_size_bytes": 10613987777,
+    "selected_pip_check": "pass",
+    "selected_sbom_components": 772,
+    "selected_fixed_vulnerabilities": {"LOW": 0, "MEDIUM": 0, "HIGH": 0, "CRITICAL": 0},
+    "selected_scan_sha256": "c6cbaddf1e3e1fd2f29e03debaca1bd13f0e9265d470fb74cd6df3dcda93de4b",
+    "selected_sbom_sha256": "08a23c374ebba7eef6d8083c3945ef1dd7650f7bd508433151cfd3800966a5d4",
+    "rejected_vllm_derived_knowledge_fixed_vulnerabilities": {"LOW": 17, "MEDIUM": 39, "HIGH": 37, "CRITICAL": 1}
+  },
   "scope_limits": [
     "This is one alternating physical pair after a process-cold start, not a three-run production capacity qualification.",
     "The working-set figures are spot observations, not cgroup memory.peak values.",
     "The frozen governed holdout was not opened and active MongoDB/Qdrant data was not used.",
-    "The candidate is retained as an explicit experiment and is not selected by deploy/local Compose."
+    "The measured dedicated runtime is now selected for knowledge only; inference and reranking continue to use the separately pinned vLLM 0.20.x response image.",
+    "The pinned upstream vLLM response image has a separate open vulnerability gate and is not made green by the knowledge-image result."
   ],
   "raw_evidence_root": "/mnt/data/cache/codex/eisenhower-task048-knowledge-rocm-6bf9b652"
 }
