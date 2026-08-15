@@ -1,44 +1,5 @@
 # In Progress
 
-## TASK-048: Split and bound the AI runtime by operational role
-**Priority:** P1 | **Tags:** ai, runtime, docker, rocm, retrieval, reliability
-
-Reduce the backend AI footprint without changing public contracts: separate lightweight online boundaries, classification, knowledge retrieval/response and offline ingest dependencies; require an approved classifier artifact; make heavy runtime profiles explicit; and add measured resource, queue and vLLM lifecycle controls with rollback.
-
-### Plan
-
-- Characterize current images, dependencies, startup training, Compose actions, private HTTP/auth, jobs and retrieval quality gates before changing behavior.
-- Split role-specific dependency sets and image targets while keeping framework types behind project-owned ports and keeping Mongo canonical with Qdrant rebuildable.
-- Require an approved hash-verified classifier artifact at production startup and move training to an explicit offline command.
-- Add explicit core, retrieval, response and full profiles plus private authorized vLLM sleep/wake orchestration with bounded timeouts, readiness, cold-wake and fallback.
-- Add measured CPU/RAM/PID/thread/worker/queue limits, deterministic model/cache handling and benchmark tooling for latency, resources, failures and frozen retrieval quality.
-- Run test-first focused and broad verification, Compose rendering, image/SBOM/security checks and available local measurements; report hardware/deployment/production gaps separately.
-
-### Progress
-
-Implemented four role-specific CPU targets with a 248 MB public boundary, fail-closed hash-approved
-classification, explicit core/retrieval/response/full actions, shared bounded SQLite jobs, mandatory measured
-resource inputs, offline revision-pinned caches and private authenticated vLLM scale-to-zero orchestration.
-Exact-SHA role builds, SBOMs, CPU-role vulnerability scans, boundary/classifier/knowledge benchmarks and
-Compose renders are green; the pinned upstream vLLM response image remains a red security gate. The detailed evidence and methodology assessment are in
-`docs/ai-rebuild/runtime-footprint-task048.md`. A fresh isolated 36-case non-holdout comparison rejected the
-no-reranker candidate because global and Polish MRR missed the declared policy despite lower latency; the
-governed frozen holdout remains unopened. Ingest now requires a complete hash-verified read-only Docling
-layout/TableFormer bundle and a pinned spaCy dependency; an isolated 11-case run passed at 2 GiB with zero
-memory pressure events, while a clean 512 MiB run was OOM-killed as expected. An exact-container physical
-response lifecycle run reduced GTT by about 44.1 GB and board power by about 38 W, then restored authenticated
-reranker readiness in 29.581 s and inference readiness in 116.086 s. A pinned official PyTorch/ROCm knowledge
-candidate passed gfx1151, dependency, SBOM and zero-fixed-vulnerability gates at every severity and matched
-baseline embeddings. It is selected for knowledge after the vLLM-derived alternative failed a fresh full
-severity scan; the measured 44.73% warm-latency regression and aggregate unique-layer growth from 28 to 39
-remain explicit tradeoffs. vLLM 0.20.x remains isolated to inference and reranking, whose pinned upstream image
-has a separate red all-severity release gate. Legacy monolith rollback now preserves SHA-verified source Compose snapshots and exact image IDs.
-The task remains in progress because production-shaped/cold-host ingest calibration, independent human review
-and the governed frozen holdout, forced response failure/OOM cleanup, and the separately authorized mutating
-monolith-to-role deployment/rollback rehearsal are still open. No deployment, promotion or publication occurred.
-
----
-
 ## TASK-047: Deploy the portable local AMD platform with Calendar and Remote MCP
 **Priority:** P0 | **Tags:** calendar, mcp, oauth, n8n, amd, rocm, deployment
 
@@ -89,7 +50,7 @@ After retrieval proves useful, qualify a licensed model on the exact physical NV
 
 ### Progress
 
-Digest-pinned vLLM ROCm 0.20.0 serves revision-pinned Qwen3-4B-Instruct-2507 in BF16 on physical `gfx1151`. Live PL/EN structured output, authentication, exact model identity and grounded citations passed; adversarial task/context injection now produces a schema-valid abstention with null classification and empty citations/evidence. Two concurrent requests completed deterministically with configured `max-num-seqs=1`; an oversized request was rejected with HTTP 400, `OOMKilled=false`, no restart. A physical application drill proved RAG before disconnect, `generation_connection_error` classifier fallback with zero citations while vLLM was stopped, and RAG after healthy restart. Post-load use was about 2.98 GiB visible VRAM plus 45.09 GiB GTT. The selected model/runtime machine qualification is green for the bounded single-user local capacity; production response quality remains a separate TASK-023 gate.
+Exact-image vLLM ROCm 0.26.0 now serves revision-pinned Qwen3-4B-Instruct-2507 in BF16 on physical `gfx1151`; exact v0.20.0 remains the rehearsed rollback. Live PL/EN structured output, authentication, exact model identity, grounded citations and BGE scoring passed. Two concurrent requests serialized at configured `max-num-seqs=1`; an oversized request returned HTTP 400 without OOM/restart. Private mutex-protected stop/wake is bounded and fail-closed, with measured 16 GiB/3 CPU/320 PID inference limits and exact v0.26 → v0.20 → v0.26 restoration. The selected model/runtime machine qualification is green for bounded single-user local capacity; production response quality remains a separate TASK-023 gate.
 
 ---
 

@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-15 — TASK-048 completion: Closed the role-split runtime locally with official exact-image vLLM 0.26 for private generation/reranking, dedicated PyTorch/ROCm knowledge, measured response limits, mutex-protected bounded wake/cleanup, a single-use frozen holdout that rejected no-reranker, all-severity SBOM/scan/VEX and a physical gfx1151 v0.26 → v0.20 → v0.26 rollback rehearsal; 700 backend tests/11 skips, 24 deploy contracts, four Compose renders and independent security review passed, with no push, merge, branch deployment or production change.
+
 2026-08-15 — TASK-048 all-severity follow-up: Promoted the physically measured pinned PyTorch/ROCm image to the selected knowledge runtime after its exact-SHA build passed `pip check`, a 772-component SBOM and zero fixed LOW/MEDIUM/HIGH/CRITICAL findings; retained vLLM 0.20.x only for private inference/reranking and recorded its pinned upstream image as a red release gate with 1,472 fixed findings, with no deployment, promotion, publication or risk acceptance.
 
 2026-08-15 — TASK-048 ROCm/lifecycle follow-up: Physically stopped and cold-started the exact local inference/reranker containers with authenticated readiness and full restoration, added SHA-verified legacy-monolith rollback snapshots, fixed effective AMD role entrypoints, and measured then rejected a dedicated PyTorch/ROCm knowledge candidate because warm latency regressed 44.73% and aggregate unique layers rose despite zero fixed LOW/MEDIUM/HIGH/CRITICAL findings; no deployment, holdout, promotion or publication occurred.

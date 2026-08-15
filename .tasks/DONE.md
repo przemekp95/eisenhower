@@ -1,5 +1,36 @@
 # Done
 
+## TASK-048: Split and bound the AI runtime by operational role
+**Priority:** P1 | **Tags:** ai, runtime, docker, rocm, retrieval, reliability
+
+Reduce the backend AI footprint without changing public contracts: separate lightweight online boundaries, classification, knowledge retrieval/response and offline ingest dependencies; require an approved classifier artifact; make heavy runtime profiles explicit; and add measured resource, queue and vLLM lifecycle controls with rollback.
+
+### Plan
+
+- Characterize current images, dependencies, startup training, Compose actions, private HTTP/auth, jobs and retrieval quality gates before changing behavior.
+- Split role-specific dependency sets and image targets while keeping framework types behind project-owned ports and keeping Mongo canonical with Qdrant rebuildable.
+- Require an approved hash-verified classifier artifact at production startup and move training to an explicit offline command.
+- Add explicit core, retrieval, response and full profiles plus private authorized vLLM sleep/wake orchestration with bounded timeouts, readiness, cold-wake and fallback.
+- Add measured CPU/RAM/PID/thread/worker/queue limits, deterministic model/cache handling and benchmark tooling for latency, resources, failures and frozen retrieval quality.
+- Run test-first focused and broad verification, Compose rendering, image/SBOM/security checks and available local measurements; report hardware/deployment/production gaps separately.
+
+### Outcome
+
+Split the AI runtime into a 248 MB HTTP/auth/audit boundary, fail-closed offline-artifact classifier,
+dedicated knowledge and hash-verified ingest roles; made core the default and retrieval/response/full explicit.
+Selected the dedicated pinned PyTorch/ROCm knowledge image and official vLLM 0.26 response image after physical
+gfx1151, exact-image SBOM, all-severity scan/VEX and bounded failure measurements. Added measured response
+CPU/RAM/PID/thread limits, capacity-128 jobs, private authorized mutex-protected stop/wake with bounded probes
+and partial cleanup. The one-shot frozen holdout rejected the no-reranker simplification under the declared
+quality policy without fabricating human decisions. A local response-only rollback switched exact v0.26 to
+retained v0.20 and back, preserving Bearer/readiness/limits with zero OOM/restarts. Backend AI 700/11 skipped,
+local contracts 24/24, four Compose renders, shell/diff checks and independent security review are green. The
+detailed before/after evidence and remaining production/cold-storage risks are in
+`docs/ai-rebuild/runtime-footprint-task048.md`. No push, merge, branch deployment, production change or public
+endpoint occurred.
+
+---
+
 ## TASK-045: Resolve default-branch Dependabot alerts and promote green dev
 **Priority:** P0 | **Tags:** security, dependencies, dependabot, release-gate
 
