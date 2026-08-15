@@ -14,6 +14,9 @@ from urllib.parse import unquote, urlsplit
 PYPI_INDEX = "https://pypi.org/simple"
 PYTORCH_CPU_INDEX = "https://download.pytorch.org/whl/cpu"
 PYTORCH_WHEEL_HOSTS = frozenset({"download.pytorch.org", "download-r2.pytorch.org"})
+PATCHED_BUILD_TOOLCHAIN = (
+  "RUN pip install --no-cache-dir --upgrade setuptools==84.0.0 wheel==0.46.3"
+)
 ALLOWED_UNAUDITED = {
   "torch": "2.13.0+cpu",
   "torchvision": "0.28.0+cpu",
@@ -106,8 +109,11 @@ def validate_dockerfile_policy(dockerfile_text: str) -> None:
     for line in production_dependency_stage.splitlines()
     if re.search(r"\b(?:python\s+-m\s+)?pip\s+install\b", line)
   ]
+  if PATCHED_BUILD_TOOLCHAIN not in pip_install_lines:
+    raise AuditPolicyError("Dockerfile must install the pinned patched build toolchain.")
   expected_lines = (
     [
+      PATCHED_BUILD_TOOLCHAIN,
       "RUN pip install --user -r requirements-boundary.txt",
       "RUN pip install --user -r requirements-ml.txt",
       "RUN pip install --user -r requirements-classifier.txt",
@@ -115,7 +121,7 @@ def validate_dockerfile_policy(dockerfile_text: str) -> None:
       "RUN pip install --user -r requirements-ingest.txt",
     ]
     if role_build
-    else ["RUN pip install --user -r requirements.txt"]
+    else [PATCHED_BUILD_TOOLCHAIN, "RUN pip install --user -r requirements.txt"]
   )
   if pip_install_lines != expected_lines:
     raise AuditPolicyError(

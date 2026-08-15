@@ -13,6 +13,7 @@ WORKDIR /app
 RUN useradd --uid 1000 --create-home --shell /bin/bash app \
     && mkdir -p /app/data /app/logs /home/app/.cache/huggingface \
     && chown -R app:app /app /home/app
+RUN pip install --no-cache-dir --upgrade setuptools==84.0.0 wheel==0.46.3
 
 FROM base AS requirements-source
 COPY requirements-boundary.txt requirements-ml.txt requirements-classifier.txt requirements-knowledge.txt requirements-ingest.txt requirements.txt ./

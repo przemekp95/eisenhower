@@ -25,6 +25,7 @@ PyJWT[crypto]==2.13.0
 
 DOCKERFILE = """\
 FROM base AS dependencies-cpu
+RUN pip install --no-cache-dir --upgrade setuptools==84.0.0 wheel==0.46.3
 COPY requirements.txt .
 RUN pip install --user -r requirements.txt
 FROM base AS production
@@ -199,6 +200,14 @@ def test_rejects_drifted_or_unverifiable_wheel_resolution(package, field, value)
 
 def test_keeps_the_docker_build_on_the_single_checked_requirements_source():
   validate_dockerfile_policy(DOCKERFILE)
+
+  with pytest.raises(AuditPolicyError, match="patched build toolchain"):
+    validate_dockerfile_policy(
+      DOCKERFILE.replace(
+        "RUN pip install --no-cache-dir --upgrade setuptools==84.0.0 wheel==0.46.3\n",
+        "",
+      )
+    )
 
   with pytest.raises(AuditPolicyError, match="Dockerfile"):
     validate_dockerfile_policy(
