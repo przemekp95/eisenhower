@@ -68,6 +68,22 @@ class QueryThresholdRetriever:
     )
 
 
+def confidence_features(
+  dense: list[tuple[str, float]],
+  lexical: list[tuple[str, float]],
+) -> dict[str, float | bool | None]:
+  dense_top = float(dense[0][1]) if dense else None
+  dense_second = float(dense[1][1]) if len(dense) > 1 else 0.0
+  return {
+    "dense_top": dense_top,
+    "dense_margin": round(dense_top - dense_second, 8) if dense_top is not None else None,
+    "lexical_top": float(lexical[0][1]) if lexical else None,
+    "dense_lexical_agreement": bool(
+      dense and lexical and dense[0][0] == lexical[0][0]
+    ),
+  }
+
+
 def build_candidates(dense_retriever, lexical_retriever):
   candidates = {}
   configurations = {}

@@ -2,7 +2,11 @@ import json
 from pathlib import Path
 
 from app.rag.models import AccessScope, RetrievalQuery
-from app.rag.task049_evaluation import build_candidates, QueryThresholdRetriever
+from app.rag.task049_evaluation import (
+  build_candidates,
+  confidence_features,
+  QueryThresholdRetriever,
+)
 
 
 class RecordingRetriever:
@@ -70,3 +74,21 @@ def test_frozen_policy_exactly_matches_candidate_space():
   assert policy["candidates"] == configurations
   assert policy["sparse_trigger"] == "round_2_no_candidate_after_abstention_calibration"
   assert policy["global"]["no_answer_accuracy_min"] == 1.0
+
+
+def test_confidence_features_preserve_dense_margin_and_lexical_agreement():
+  assert confidence_features(
+    [("doc-a", 0.72), ("doc-b", 0.51), ("doc-c", 0.4)],
+    [("doc-a", 3.2), ("doc-d", 1.4)],
+  ) == {
+    "dense_top": 0.72,
+    "dense_margin": 0.21,
+    "lexical_top": 3.2,
+    "dense_lexical_agreement": True,
+  }
+  assert confidence_features([("doc-z", 0.48)], []) == {
+    "dense_top": 0.48,
+    "dense_margin": 0.48,
+    "lexical_top": None,
+    "dense_lexical_agreement": False,
+  }

@@ -36,12 +36,14 @@ from app.rag.mongo_document_store import MongoCanonicalDocumentStore
 from app.rag.task049_evaluation import (
   assert_no_query_overlap,
   build_candidates,
+  confidence_features,
   generate_dataset,
   seed_commitment,
   serialize_cases,
   serialize_documents,
   select_candidate,
 )
+from app.rag.models import AccessScope, RetrievalQuery
 
 
 def _digest(path: Path) -> str:
@@ -156,6 +158,39 @@ def run_calibration(
     expected_configurations = policy["candidates"]
     if configurations != expected_configurations:
       raise ValueError("TASK-049 candidate configuration drifted from policy")
+    confidence_diagnostics = []
+    for case in dataset.cases:
+      query = RetrievalQuery(
+        text=case.task,
+        scope=AccessScope(
+          tenant_id=case.tenant_id,
+          user_id=case.user_id,
+          project_ids=case.project_ids,
+          roles=case.roles,
+        ),
+        project_id=case.query_project_id,
+        limit=20,
+        score_threshold=-1.0,
+      )
+      dense_hits = dense.retrieve(query)
+      lexical_hits = lexical.retrieve(query)
+      confidence_diagnostics.append({
+        "case_id": case.case_id,
+        "language": case.language,
+        "answerability": case.answerability,
+        "category": next(
+          tag.removeprefix("category:")
+          for tag in case.tags
+          if tag.startswith("category:")
+        ),
+        "relevant_document_ids": case.relevant_document_ids,
+        "dense_document_ids": [hit.document_id for hit in dense_hits],
+        "lexical_document_ids": [hit.document_id for hit in lexical_hits],
+        **confidence_features(
+          [(hit.document_id, hit.score) for hit in dense_hits],
+          [(hit.document_id, hit.score) for hit in lexical_hits],
+        ),
+      })
     reports = {
       candidate_id: RetrievalGoldenRunner(candidate).run(list(dataset.cases), k=5)
       for candidate_id, candidate in candidates.items()
@@ -195,6 +230,7 @@ def run_calibration(
         ),
       },
       "configurations": configurations,
+      "confidence_diagnostics": confidence_diagnostics,
       "reports": reports,
       "selected_candidate": selected_candidate,
       "selection_error": selection_error,
