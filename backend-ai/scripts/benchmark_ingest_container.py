@@ -25,6 +25,9 @@ class CgroupSample:
   memory_peak: int
   pids: int
   cpu_usec: int
+  memory_max_events: int
+  memory_oom_events: int
+  memory_oom_kill_events: int
 
 
 def parse_cgroup_v2_path(content: str) -> Path | None:
@@ -56,6 +59,9 @@ def summarize_samples(samples: list[CgroupSample]) -> dict[str, int | float | No
       "cpu_seconds": None,
       "wall_seconds_sampled": None,
       "average_cpu_cores": None,
+      "memory_max_events": None,
+      "memory_oom_events": None,
+      "memory_oom_kill_events": None,
     }
   wall = samples[-1].elapsed_seconds - samples[0].elapsed_seconds
   cpu_seconds = max(0, samples[-1].cpu_usec - samples[0].cpu_usec) / 1_000_000
@@ -69,6 +75,9 @@ def summarize_samples(samples: list[CgroupSample]) -> dict[str, int | float | No
     "cpu_seconds": round(cpu_seconds, 6),
     "wall_seconds_sampled": round(wall, 6),
     "average_cpu_cores": round(cpu_seconds / wall, 6) if wall > 0 else None,
+    "memory_max_events": max(sample.memory_max_events for sample in samples),
+    "memory_oom_events": max(sample.memory_oom_events for sample in samples),
+    "memory_oom_kill_events": max(sample.memory_oom_kill_events for sample in samples),
   }
 
 
@@ -91,13 +100,27 @@ def _read_cpu_usage(cgroup: Path) -> int:
   return values["usage_usec"]
 
 
+def _read_memory_events(cgroup: Path) -> dict[str, int]:
+  return {
+    key: int(value)
+    for key, value in (
+      line.split(maxsplit=1)
+      for line in (cgroup / "memory.events").read_text(encoding="utf-8").splitlines()
+    )
+  }
+
+
 def _sample(cgroup: Path, elapsed: float) -> CgroupSample:
+  memory_events = _read_memory_events(cgroup)
   return CgroupSample(
     elapsed_seconds=round(elapsed, 6),
     memory_current=_read_int(cgroup / "memory.current"),
     memory_peak=_read_int(cgroup / "memory.peak"),
     pids=_read_int(cgroup / "pids.current"),
     cpu_usec=_read_cpu_usage(cgroup),
+    memory_max_events=memory_events.get("max", 0),
+    memory_oom_events=memory_events.get("oom", 0),
+    memory_oom_kill_events=memory_events.get("oom_kill", 0),
   )
 
 

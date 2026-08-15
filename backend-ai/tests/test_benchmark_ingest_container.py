@@ -21,9 +21,9 @@ def test_parses_only_the_unified_cgroup_v2_entry(tmp_path: Path):
 
 def test_summarizes_peak_memory_pids_and_cpu_without_claiming_an_idle_baseline():
   samples = [
-    CgroupSample(elapsed_seconds=0.0, memory_current=100, memory_peak=120, pids=2, cpu_usec=10),
-    CgroupSample(elapsed_seconds=0.2, memory_current=180, memory_peak=220, pids=5, cpu_usec=110_010),
-    CgroupSample(elapsed_seconds=0.4, memory_current=90, memory_peak=220, pids=3, cpu_usec=210_010),
+    CgroupSample(elapsed_seconds=0.0, memory_current=100, memory_peak=120, pids=2, cpu_usec=10, memory_max_events=0, memory_oom_events=0, memory_oom_kill_events=0),
+    CgroupSample(elapsed_seconds=0.2, memory_current=180, memory_peak=220, pids=5, cpu_usec=110_010, memory_max_events=3, memory_oom_events=1, memory_oom_kill_events=0),
+    CgroupSample(elapsed_seconds=0.4, memory_current=90, memory_peak=220, pids=3, cpu_usec=210_010, memory_max_events=5, memory_oom_events=1, memory_oom_kill_events=0),
   ]
 
   assert summarize_samples(samples) == {
@@ -36,6 +36,9 @@ def test_summarizes_peak_memory_pids_and_cpu_without_claiming_an_idle_baseline()
     "cpu_seconds": 0.21,
     "wall_seconds_sampled": 0.4,
     "average_cpu_cores": 0.525,
+    "memory_max_events": 5,
+    "memory_oom_events": 1,
+    "memory_oom_kill_events": 0,
   }
 
 
