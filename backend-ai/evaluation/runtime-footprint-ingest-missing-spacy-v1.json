@@ -1,0 +1,662 @@
+{
+  "container_id": "6a5c1be302f8233dc25ac2fb8c45a90cd1e836e84d18b8244c3d868d92cd2a0f",
+  "deployment_proven": false,
+  "evidence_level": "local-isolated-container",
+  "image": {
+    "id": "sha256:1bcc75d9f9c19d46c4696ae4a04b2050f67007ca8daf5fcbe49586a22326eed1",
+    "reference": "local/eisenhower-ai-ingest:1289f2e02277cd394d9cd3bc5f5c5b253e65b749",
+    "runtime_role": "ingest",
+    "source_revision": "1289f2e02277cd394d9cd3bc5f5c5b253e65b749"
+  },
+  "limits": {
+    "cpus": "2.0",
+    "memory": "2g",
+    "pids": "256"
+  },
+  "production_proven": false,
+  "recorded_at": "2026-08-15T17:12:27.003814+00:00",
+  "result": {
+    "cgroup": {
+      "average_cpu_cores": 0.966551,
+      "cgroup_memory_peak_bytes": 1171759104,
+      "cpu_seconds": 9.36008,
+      "first_memory_current_bytes": 8663040,
+      "last_memory_current_bytes": 382136320,
+      "peak_memory_current_bytes": 1170186240,
+      "peak_pids": 14,
+      "samples": 87,
+      "wall_seconds_sampled": 9.684003
+    },
+    "exit_code": 1,
+    "oom_killed": false,
+    "state_error": null,
+    "stderr_tail": "No languages specified, defaulting to English.\nTraceback (most recent call last):\n  File \"/workspace/backend-ai/scripts/benchmark_document_extraction.py\", line 138, in <module>\n    main()\n  File \"/workspace/backend-ai/scripts/benchmark_document_extraction.py\", line 53, in main\n    result = parser.extract(approved)\n             ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/backend-ai/app/document_extraction/adapters.py\", line 139, in extract\n    raise ExtractionRuntimeRejected(\"fallback parser produced no approved content\")\napp.document_extraction.adapters.ExtractionRuntimeRejected: fallback parser produced no approved content\n",
+    "timed_out": false,
+    "wall_seconds": 10.097761
+  },
+  "role": "ingest-document-extraction",
+  "samples": [
+    {
+      "cpu_usec": 36727,
+      "elapsed_seconds": 0.146942,
+      "memory_current": 8663040,
+      "memory_peak": 8663040,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 139114,
+      "elapsed_seconds": 0.256346,
+      "memory_current": 18182144,
+      "memory_peak": 18182144,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 246591,
+      "elapsed_seconds": 0.369061,
+      "memory_current": 27049984,
+      "memory_peak": 27049984,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 352051,
+      "elapsed_seconds": 0.479392,
+      "memory_current": 34574336,
+      "memory_peak": 34574336,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 464426,
+      "elapsed_seconds": 0.593891,
+      "memory_current": 44007424,
+      "memory_peak": 44019712,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 570363,
+      "elapsed_seconds": 0.707766,
+      "memory_current": 59367424,
+      "memory_peak": 59367424,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 681796,
+      "elapsed_seconds": 0.819822,
+      "memory_current": 86282240,
+      "memory_peak": 86282240,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 790824,
+      "elapsed_seconds": 0.932493,
+      "memory_current": 98545664,
+      "memory_peak": 98545664,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 899377,
+      "elapsed_seconds": 1.044233,
+      "memory_current": 115183616,
+      "memory_peak": 115310592,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1012014,
+      "elapsed_seconds": 1.158267,
+      "memory_current": 123863040,
+      "memory_peak": 123863040,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1125449,
+      "elapsed_seconds": 1.273083,
+      "memory_current": 125833216,
+      "memory_peak": 127270912,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1239445,
+      "elapsed_seconds": 1.387659,
+      "memory_current": 128872448,
+      "memory_peak": 128872448,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1351444,
+      "elapsed_seconds": 1.498866,
+      "memory_current": 158760960,
+      "memory_peak": 158760960,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1459776,
+      "elapsed_seconds": 1.611153,
+      "memory_current": 194789376,
+      "memory_peak": 194789376,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1556703,
+      "elapsed_seconds": 1.72072,
+      "memory_current": 210120704,
+      "memory_peak": 210120704,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1664935,
+      "elapsed_seconds": 1.831566,
+      "memory_current": 231075840,
+      "memory_peak": 231075840,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1774939,
+      "elapsed_seconds": 1.940835,
+      "memory_current": 231911424,
+      "memory_peak": 231911424,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1883942,
+      "elapsed_seconds": 2.050661,
+      "memory_current": 239550464,
+      "memory_peak": 239550464,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1992945,
+      "elapsed_seconds": 2.159818,
+      "memory_current": 254746624,
+      "memory_peak": 254746624,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2102948,
+      "elapsed_seconds": 2.26883,
+      "memory_current": 254746624,
+      "memory_peak": 254746624,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2212715,
+      "elapsed_seconds": 2.379832,
+      "memory_current": 264445952,
+      "memory_peak": 264445952,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2322419,
+      "elapsed_seconds": 2.494037,
+      "memory_current": 281001984,
+      "memory_peak": 281001984,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2431290,
+      "elapsed_seconds": 2.603264,
+      "memory_current": 294191104,
+      "memory_peak": 294436864,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2541227,
+      "elapsed_seconds": 2.712804,
+      "memory_current": 294191104,
+      "memory_peak": 294436864,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2638572,
+      "elapsed_seconds": 2.822489,
+      "memory_current": 312975360,
+      "memory_peak": 312975360,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2747556,
+      "elapsed_seconds": 2.931807,
+      "memory_current": 314097664,
+      "memory_peak": 314253312,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2856562,
+      "elapsed_seconds": 3.040072,
+      "memory_current": 313835520,
+      "memory_peak": 314253312,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2966555,
+      "elapsed_seconds": 3.150523,
+      "memory_current": 314224640,
+      "memory_peak": 314253312,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3069021,
+      "elapsed_seconds": 3.260253,
+      "memory_current": 324272128,
+      "memory_peak": 324272128,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3177789,
+      "elapsed_seconds": 3.369894,
+      "memory_current": 327151616,
+      "memory_peak": 327151616,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3285134,
+      "elapsed_seconds": 3.479725,
+      "memory_current": 351272960,
+      "memory_peak": 351272960,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3394130,
+      "elapsed_seconds": 3.587899,
+      "memory_current": 371007488,
+      "memory_peak": 371007488,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3503079,
+      "elapsed_seconds": 3.697472,
+      "memory_current": 371007488,
+      "memory_peak": 371007488,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3612832,
+      "elapsed_seconds": 3.808238,
+      "memory_current": 374415360,
+      "memory_peak": 374415360,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3723835,
+      "elapsed_seconds": 3.919555,
+      "memory_current": 387895296,
+      "memory_peak": 387895296,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3837839,
+      "elapsed_seconds": 4.033353,
+      "memory_current": 404402176,
+      "memory_peak": 404434944,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3950852,
+      "elapsed_seconds": 4.146796,
+      "memory_current": 422637568,
+      "memory_peak": 422637568,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4064830,
+      "elapsed_seconds": 4.260272,
+      "memory_current": 434294784,
+      "memory_peak": 434294784,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4177833,
+      "elapsed_seconds": 4.373241,
+      "memory_current": 434294784,
+      "memory_peak": 434294784,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4291832,
+      "elapsed_seconds": 4.486934,
+      "memory_current": 434294784,
+      "memory_peak": 434294784,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4404290,
+      "elapsed_seconds": 4.601073,
+      "memory_current": 447852544,
+      "memory_peak": 447852544,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4518283,
+      "elapsed_seconds": 4.715215,
+      "memory_current": 458072064,
+      "memory_peak": 458072064,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4632286,
+      "elapsed_seconds": 4.829311,
+      "memory_current": 678174720,
+      "memory_peak": 681848832,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4739529,
+      "elapsed_seconds": 4.944026,
+      "memory_current": 811245568,
+      "memory_peak": 820912128,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4854538,
+      "elapsed_seconds": 5.058837,
+      "memory_current": 849780736,
+      "memory_peak": 849780736,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4977355,
+      "elapsed_seconds": 5.173741,
+      "memory_current": 910876672,
+      "memory_peak": 910884864,
+      "pids": 14
+    },
+    {
+      "cpu_usec": 5203020,
+      "elapsed_seconds": 5.288108,
+      "memory_current": 1026322432,
+      "memory_peak": 1026322432,
+      "pids": 8
+    },
+    {
+      "cpu_usec": 5423776,
+      "elapsed_seconds": 5.401033,
+      "memory_current": 1030561792,
+      "memory_peak": 1031266304,
+      "pids": 8
+    },
+    {
+      "cpu_usec": 5651906,
+      "elapsed_seconds": 5.520277,
+      "memory_current": 1038950400,
+      "memory_peak": 1040007168,
+      "pids": 8
+    },
+    {
+      "cpu_usec": 5878314,
+      "elapsed_seconds": 5.634797,
+      "memory_current": 1043456000,
+      "memory_peak": 1043456000,
+      "pids": 8
+    },
+    {
+      "cpu_usec": 6100901,
+      "elapsed_seconds": 5.748588,
+      "memory_current": 1048875008,
+      "memory_peak": 1048875008,
+      "pids": 8
+    },
+    {
+      "cpu_usec": 6245152,
+      "elapsed_seconds": 5.863871,
+      "memory_current": 1016229888,
+      "memory_peak": 1048875008,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 6360452,
+      "elapsed_seconds": 5.979235,
+      "memory_current": 1028665344,
+      "memory_peak": 1048875008,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 6466530,
+      "elapsed_seconds": 6.092836,
+      "memory_current": 1033023488,
+      "memory_peak": 1048875008,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 6569458,
+      "elapsed_seconds": 6.207151,
+      "memory_current": 1044742144,
+      "memory_peak": 1048875008,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 6682710,
+      "elapsed_seconds": 6.321866,
+      "memory_current": 1047396352,
+      "memory_peak": 1048875008,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 6793337,
+      "elapsed_seconds": 6.436474,
+      "memory_current": 1051635712,
+      "memory_peak": 1051635712,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 6907309,
+      "elapsed_seconds": 6.550079,
+      "memory_current": 1051443200,
+      "memory_peak": 1051635712,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7020273,
+      "elapsed_seconds": 6.663088,
+      "memory_current": 1051021312,
+      "memory_peak": 1051635712,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7136276,
+      "elapsed_seconds": 6.778878,
+      "memory_current": 1051627520,
+      "memory_peak": 1051635712,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7245611,
+      "elapsed_seconds": 6.889878,
+      "memory_current": 1123942400,
+      "memory_peak": 1123942400,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7355400,
+      "elapsed_seconds": 7.003393,
+      "memory_current": 1129476096,
+      "memory_peak": 1129476096,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7463769,
+      "elapsed_seconds": 7.115523,
+      "memory_current": 1136963584,
+      "memory_peak": 1136963584,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7561425,
+      "elapsed_seconds": 7.227039,
+      "memory_current": 1143271424,
+      "memory_peak": 1143275520,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7563528,
+      "elapsed_seconds": 7.337504,
+      "memory_current": 1143394304,
+      "memory_peak": 1143513088,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7563528,
+      "elapsed_seconds": 7.448684,
+      "memory_current": 1143332864,
+      "memory_peak": 1143513088,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7572787,
+      "elapsed_seconds": 7.56225,
+      "memory_current": 1142943744,
+      "memory_peak": 1143513088,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7574800,
+      "elapsed_seconds": 7.673834,
+      "memory_current": 1143443456,
+      "memory_peak": 1143513088,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7575872,
+      "elapsed_seconds": 7.785657,
+      "memory_current": 1144000512,
+      "memory_peak": 1144000512,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7581895,
+      "elapsed_seconds": 7.900608,
+      "memory_current": 1148346368,
+      "memory_peak": 1148760064,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7594356,
+      "elapsed_seconds": 8.012936,
+      "memory_current": 1155584000,
+      "memory_peak": 1155874816,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7693409,
+      "elapsed_seconds": 8.127243,
+      "memory_current": 1170186240,
+      "memory_peak": 1170186240,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7804271,
+      "elapsed_seconds": 8.238346,
+      "memory_current": 1143525376,
+      "memory_peak": 1171759104,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7915223,
+      "elapsed_seconds": 8.349156,
+      "memory_current": 1143398400,
+      "memory_peak": 1171759104,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8029219,
+      "elapsed_seconds": 8.463222,
+      "memory_current": 1143238656,
+      "memory_peak": 1171759104,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8144195,
+      "elapsed_seconds": 8.577955,
+      "memory_current": 1142878208,
+      "memory_peak": 1171759104,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8259169,
+      "elapsed_seconds": 8.692764,
+      "memory_current": 1142595584,
+      "memory_peak": 1171759104,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8371141,
+      "elapsed_seconds": 8.805026,
+      "memory_current": 1142525952,
+      "memory_peak": 1171759104,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8485135,
+      "elapsed_seconds": 8.919676,
+      "memory_current": 1142525952,
+      "memory_peak": 1171759104,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8599149,
+      "elapsed_seconds": 9.033642,
+      "memory_current": 1142685696,
+      "memory_peak": 1171759104,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8713099,
+      "elapsed_seconds": 9.14716,
+      "memory_current": 1029402624,
+      "memory_peak": 1171759104,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8827112,
+      "elapsed_seconds": 9.26107,
+      "memory_current": 1029148672,
+      "memory_peak": 1171759104,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8940105,
+      "elapsed_seconds": 9.37464,
+      "memory_current": 1029148672,
+      "memory_peak": 1171759104,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9052934,
+      "elapsed_seconds": 9.487267,
+      "memory_current": 1029038080,
+      "memory_peak": 1171759104,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9166858,
+      "elapsed_seconds": 9.601756,
+      "memory_current": 1025925120,
+      "memory_peak": 1171759104,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9282834,
+      "elapsed_seconds": 9.71718,
+      "memory_current": 1025925120,
+      "memory_peak": 1171759104,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9396807,
+      "elapsed_seconds": 9.830945,
+      "memory_current": 382136320,
+      "memory_peak": 1171759104,
+      "pids": 1
+    }
+  ],
+  "schema_version": "runtime-role-container-benchmark-v1",
+  "source_git_dirty": false,
+  "source_git_sha": "1289f2e02277cd394d9cd3bc5f5c5b253e65b749",
+  "workload": {
+    "command": "scripts/benchmark_document_extraction.py",
+    "docling_artifacts_read_only": true,
+    "docling_manifest_sha256": "5cf47966d872e55c9c2c43a73a1369361e7f2c6a358c2c2fbc3dd16350b56300",
+    "fixture_scope": "repository-approved synthetic extraction fixtures",
+    "model_cache_read_only": true,
+    "network_expected": false,
+    "workspace_read_only": true
+  },
+  "workload_report": null
+}
