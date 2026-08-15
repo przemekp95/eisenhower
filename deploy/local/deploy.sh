@@ -4,6 +4,8 @@ set -eu
 root_dir="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
 env_file="${EISENHOWER_LOCAL_ENV:-${root_dir}/deploy/local/.env}"
 state_dir="${EISENHOWER_LOCAL_STATE_DIR:-${root_dir}/.runtime-cache/local-deploy}"
+git_common_dir="$(git -C "$root_dir" rev-parse --path-format=absolute --git-common-dir)"
+lifecycle_lock_dir="${EISENHOWER_LIFECYCLE_LOCK_DIR:-${git_common_dir}/eisenhower/runtime-locks}"
 compose_base="${root_dir}/deploy/local/compose.yaml"
 compose_amd="${root_dir}/deploy/local/compose.amd.yaml"
 action="${1:-render}"
@@ -384,7 +386,22 @@ PY
 
 sleep_response() {
   validate_lifecycle_auth
+  acquire_response_lifecycle_lock
   compose_response stop inference reranker
+}
+
+acquire_response_lifecycle_lock() {
+  lock_timeout="${LIFECYCLE_LOCK_TIMEOUT_SECONDS:-30}"
+  case "$lock_timeout" in *[!0-9]*|'') echo "Lifecycle lock timeout must be a positive integer" >&2; return 1 ;; esac
+  test "$lock_timeout" -gt 0 || { echo "Lifecycle lock timeout must be positive" >&2; return 1; }
+  umask 077
+  mkdir -p "$lifecycle_lock_dir"
+  chmod 700 "$lifecycle_lock_dir"
+  exec 9>"$lifecycle_lock_dir/response.lock"
+  flock -w "$lock_timeout" 9 || {
+    echo "Another response lifecycle operation is still running" >&2
+    return 1
+  }
 }
 
 wait_for_response_service() {
@@ -392,7 +409,7 @@ wait_for_response_service() {
   deadline="$2"
   while test "$(date +%s)" -lt "$deadline"; do
     if compose_response exec -T "$service" sh -c \
-      'curl -fsS -H "Authorization: Bearer $VLLM_API_KEY" http://127.0.0.1:8000/v1/models >/dev/null'; then
+      'curl --connect-timeout 2 --max-time 5 -fsS -H "Authorization: Bearer $VLLM_API_KEY" http://127.0.0.1:8000/v1/models >/dev/null'; then
       return 0
     fi
     sleep 2
@@ -403,26 +420,35 @@ wait_for_response_service() {
 wake_response() {
   validate_lifecycle_auth
   validate_response_inputs
+  acquire_response_lifecycle_lock
   timeout_seconds="${INFERENCE_WAKE_TIMEOUT_SECONDS:?INFERENCE_WAKE_TIMEOUT_SECONDS is required}"
   case "$timeout_seconds" in *[!0-9]*|'') echo "Wake timeout must be a positive integer" >&2; exit 1 ;; esac
   test "$timeout_seconds" -gt 0 || { echo "Wake timeout must be positive" >&2; exit 1; }
   deadline=$(( $(date +%s) + timeout_seconds ))
   # Preserve exact stopped containers/images and serialize cold-load. Physical
   # gfx1151 evidence showed that simultaneous model loading can starve Qwen.
-  compose_response start reranker \
-    || compose_response up --no-deps -d reranker
+  if ! compose_response start reranker; then
+    if ! compose_response up --no-deps -d reranker; then
+      compose_response stop inference reranker || true
+      return 1
+    fi
+  fi
   wait_for_response_service reranker "$deadline" || {
     echo "Reranker cold wake timed out; stopping partial runtime" >&2
-    compose_response stop inference reranker
+    compose_response stop inference reranker || true
     return 1
   }
-  compose_response start inference \
-    || compose_response up --no-deps -d inference
+  if ! compose_response start inference; then
+    if ! compose_response up --no-deps -d inference; then
+      compose_response stop inference reranker || true
+      return 1
+    fi
+  fi
   if wait_for_response_service inference "$deadline"; then
     return 0
   fi
   echo "Response runtime cold wake timed out; stopping partial runtime" >&2
-  compose_response stop inference reranker
+  compose_response stop inference reranker || true
   return 1
 }
 

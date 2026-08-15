@@ -149,3 +149,19 @@ def test_response_cold_wake_serializes_reranker_before_inference():
   assert wake.index("start reranker") < wake.index("wait_for_response_service reranker")
   assert wake.index("wait_for_response_service reranker") < wake.index("start inference")
   assert wake.index("start inference") < wake.index("wait_for_response_service inference")
+
+
+def test_response_lifecycle_has_io_timeout_mutex_and_start_failure_cleanup():
+  deploy_script = (ROOT / "deploy" / "local" / "deploy.sh").read_text(encoding="utf-8")
+  wait = deploy_script.split("wait_for_response_service() {", 1)[1].split("\n}\n", 1)[0]
+  wake = deploy_script.split("wake_response() {", 1)[1].split("\n}\n", 1)[0]
+  sleep = deploy_script.split("sleep_response() {", 1)[1].split("\n}\n", 1)[0]
+
+  assert "--connect-timeout" in wait
+  assert "--max-time" in wait
+  assert "acquire_response_lifecycle_lock" in wake
+  assert "acquire_response_lifecycle_lock" in sleep
+  assert "flock -w" in deploy_script
+  assert wake.count("compose_response stop inference reranker") >= 3
+  assert "if ! compose_response up --no-deps -d reranker" in wake
+  assert "if ! compose_response up --no-deps -d inference" in wake
