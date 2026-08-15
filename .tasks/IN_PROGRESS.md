@@ -23,8 +23,11 @@ Exact-SHA role builds, SBOMs, vulnerability scans, CPU boundary/classifier/knowl
 renders are green; the detailed evidence and methodology assessment are in
 `docs/ai-rebuild/runtime-footprint-task048.md`. A fresh isolated 36-case non-holdout comparison rejected the
 no-reranker candidate because global and Polish MRR missed the declared policy despite lower latency; the
-governed frozen holdout remains unopened. The task remains in progress because physical gfx1151/ROCm
-resource/OOM/wake qualification, ingest calibration, authorized holdout confirmation and the first
+governed frozen holdout remains unopened. Ingest now requires a complete hash-verified read-only Docling
+layout/TableFormer bundle and a pinned spaCy dependency; an isolated 11-case run passed at 2 GiB with zero
+memory pressure events, while a clean 512 MiB run was OOM-killed as expected. The task remains in progress
+because physical gfx1151/ROCm resource/OOM/wake qualification, repeated representative ingest calibration,
+authorized holdout confirmation and the first
 monolith-to-role rollback rehearsal are still open. No deployment, promotion or publication occurred.
 
 ---
