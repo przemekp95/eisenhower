@@ -1,5 +1,35 @@
 # Done
 
+## TASK-049: Qualify retrieval without a separate reranker
+**Priority:** P1 | **Tags:** ai, rag, retrieval, bge-m3, qdrant, performance
+
+Raise multilingual retrieval quality enough to remove the separately served cross-encoder from the selected
+response topology, while preserving ACL, canonical Mongo/Qdrant projection, sealed evaluation, rollback and
+all public contracts. Evaluate BGE-M3 dense retrieval first, add lightweight score-aware fusion when needed,
+and consider dense+sparse BGE-M3 only if the simpler candidates miss the predeclared quality gate.
+
+### Plan
+
+- Freeze a new PL/EN calibration/validation contract without tuning on consumed holdouts; predeclare quality,
+  isolation, latency and resource gates.
+- Characterize BGE-M3 dense and weighted-RRF, then add score-aware fusion behind the existing Retriever port.
+- Add a versioned native BGE-M3 sparse projection only if simpler candidates miss the calibration gate.
+- Select no-reranker only after sealed validation; otherwise retain the incumbent and verified rollback.
+
+### Outcome
+
+Added project-owned DBSF score fusion and a minimal hash-pinned native BGE-M3 sparse head with a separate named
+Qdrant projection, without adding FlagEmbedding's training stack or changing HTTP/MCP/jobs contracts. Fresh
+physical gfx1151 calibration on the selected dedicated PyTorch/ROCm image kept every ACL/stale/isolation safety
+metric green, but the best score-fusion candidate reached only Recall@5 0.8594, MRR 0.8516 and no-answer 0.6042;
+dense+sparse also regressed answerable ranking versus dense and no zero-false-positive gate reached 0.90 recall.
+The validation seed therefore remained sealed and `hybrid-bge-v1` plus its existing private reranker remains the
+selected strategy. Backend AI 730/11 skipped at 87.96%, 24 Compose contracts, Pylint 10.00/10 and a fresh
+772-component/zero-fixed-finding image scan passed. No push, merge, deployment, production or public endpoint
+change occurred. Full evidence is in `docs/ai-rebuild/retrieval-task049.md`.
+
+---
+
 ## TASK-048: Split and bound the AI runtime by operational role
 **Priority:** P1 | **Tags:** ai, runtime, docker, rocm, retrieval, reliability
 

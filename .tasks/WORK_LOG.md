@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-15 — TASK-049: Qualified dense, RRF, DBSF and native BGE-M3 sparse retrieval on a fresh sealed PL/EN calibration and physical selected PyTorch/ROCm image; all security/isolation gates and verification passed, but no no-reranker candidate met answerability quality, so validation stayed sealed and the private incumbent reranker remains selected with no deployment or promotion.
+
 2026-08-15 — TASK-048 completion: Closed the role-split runtime locally with official exact-image vLLM 0.26 for private generation/reranking, dedicated PyTorch/ROCm knowledge, measured response limits, mutex-protected bounded wake/cleanup, a single-use frozen holdout that rejected no-reranker, all-severity SBOM/scan/VEX and a physical gfx1151 v0.26 → v0.20 → v0.26 rollback rehearsal; 700 backend tests/11 skips, 24 deploy contracts, four Compose renders and independent security review passed, with no push, merge, branch deployment or production change.
 
 2026-08-15 — TASK-048 all-severity follow-up: Promoted the physically measured pinned PyTorch/ROCm image to the selected knowledge runtime after its exact-SHA build passed `pip check`, a 772-component SBOM and zero fixed LOW/MEDIUM/HIGH/CRITICAL findings; retained vLLM 0.20.x only for private inference/reranking and recorded its pinned upstream image as a red release gate with 1,472 fixed findings, with no deployment, promotion, publication or risk acceptance.
