@@ -44,7 +44,7 @@ not proposed limits. The active before stack was not restarted or changed.
 | Knowledge cold/warm | active heterogeneous result not comparable | cold ready 6.667 s; warm search p50 134.618 ms, p95 159.244 ms | 20 CPU no-reranker searches; host had active GPU load |
 | Queue | unbounded producer/worker DB topology was inconsistent | capacity 128: enqueue p50 3.637 ms, p95 4.086 ms; overflow rejected in 0.122 ms; replay 0.074 ms | isolated SQLite microbenchmark |
 | Active GPU | 100% use, 3.16 GB VRAM, 70.083 W; inference and reranker each near 101% host CPU | no after measurement | scale-to-zero code/tests are not a physical wake/sleep result |
-| Retrieval quality | dense recall@5 0.6964/MRR 0.5774/p95 36.20 ms; selected hybrid+reranker 0.9107/0.8048/231.83 ms | no-reranker candidate implemented, not promoted | existing 36-case non-holdout report; frozen holdout remains closed |
+| Retrieval quality | dense recall@5 0.6964/MRR 0.5774/p95 25.93 ms; selected hybrid+reranker 0.9107/0.8048/266.83 ms | no-reranker 0.9107/0.7095/48.59 ms; rejected because global and PL MRR miss policy | fresh isolated 36-case non-holdout run; frozen holdout remains closed |
 
 The classifier initially took 121.313 s because `sentence-transformers` performed unsuccessful Hugging Face
 metadata requests despite a complete revision cache. Enforcing `HF_HUB_OFFLINE=1` and
@@ -92,6 +92,9 @@ and [sleep-mode documentation](https://docs.vllm.ai/en/v0.20.0/features/sleep_mo
   verified for the two explicit audit blind spots;
 - four exact-SHA role builds, CycloneDX SBOMs and role vulnerability scans;
 - Compose renders for core, retrieval, response and full using explicit non-production fixture values;
+- isolated non-holdout retrieval comparison at source `2d128d0a`: output SHA-256
+  `9e2af89e03699d7b357f002185ae59caf4de3a3a08edd2c51d3f9647b2a64af3`, with its UUID Mongo database
+  dropped and Qdrant collection deleted after the run;
 - shell syntax and local production contract tests.
 
 ## Open gates and risks
@@ -101,9 +104,11 @@ and [sleep-mode documentation](https://docs.vllm.ai/en/v0.20.0/features/sleep_mo
    VRAM, power or image saving is claimed.
 2. Calibrate every mandatory CPU/RAM/PID/thread value, including ingest and both vLLM services, then run
    deliberate cgroup OOM and queue saturation recovery. `.env.example` intentionally leaves these blank.
-3. Execute the no-reranker comparison only on the governed frozen holdout after human authorization. Current
-   thresholds are global recall@5 >= 0.90/MRR >= 0.80, PL/EN >= 0.85/0.75 and zero isolation/stale/forbidden hits.
-   The default remains `hybrid-bge-v1`; `hybrid-rrf-v1` is only a rollbackable candidate.
+3. A fresh directional comparison on the explicitly unapproved 36-case non-holdout rejected simplification:
+   no-reranker kept recall@5 at 0.9107 and cut p95 from 266.83 ms to 48.59 ms, but global MRR fell from 0.8048
+   to 0.7095 and PL MRR from 0.8000 to 0.5952. Do not tune on or promote from this data. A governed frozen
+   holdout run still requires human authorization; the default remains `hybrid-bge-v1` and
+   `hybrid-rrf-v1` is only a rollbackable candidate.
 4. Physically exercise `sleep-response`/`wake-response`, cold-wake timeout, partial-start cleanup and request
    fallback. Unit tests and render proof do not establish GPU lifecycle behavior.
 5. Qualify the first role-split deployment rollback from the monolithic topology. Later exact-SHA role rollback

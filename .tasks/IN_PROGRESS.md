@@ -21,9 +21,11 @@ classification, explicit core/retrieval/response/full actions, shared bounded SQ
 resource inputs, offline revision-pinned caches and private authenticated vLLM scale-to-zero orchestration.
 Exact-SHA role builds, SBOMs, vulnerability scans, CPU boundary/classifier/knowledge benchmarks and Compose
 renders are green; the detailed evidence and methodology assessment are in
-`docs/ai-rebuild/runtime-footprint-task048.md`. The task remains in progress because physical gfx1151/ROCm
-resource/OOM/wake qualification, ingest calibration, governed frozen-holdout no-reranker comparison and the
-first monolith-to-role rollback rehearsal are still open. No deployment, promotion or publication occurred.
+`docs/ai-rebuild/runtime-footprint-task048.md`. A fresh isolated 36-case non-holdout comparison rejected the
+no-reranker candidate because global and Polish MRR missed the declared policy despite lower latency; the
+governed frozen holdout remains unopened. The task remains in progress because physical gfx1151/ROCm
+resource/OOM/wake qualification, ingest calibration, authorized holdout confirmation and the first
+monolith-to-role rollback rehearsal are still open. No deployment, promotion or publication occurred.
 
 ---
 
