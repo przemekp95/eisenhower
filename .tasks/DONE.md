@@ -1,5 +1,36 @@
 # Done
 
+## TASK-050: Improve single-stage retrieval quality without consuming sealed validation
+**Priority:** P2 | **Tags:** ai, rag, retrieval, quality, evaluation
+
+Improve the no-reranker candidate on calibration/train-dev evidence without introducing another cross-encoder or
+ColBERT service, weakening zero-tolerance safety, tuning on consumed holdouts, or changing the selected runtime
+before every predeclared quality gate passes.
+
+### Plan
+
+- Characterize TASK-049 failures by language and category using only calibration evidence, keeping the validation
+  seed sealed and guarding all earlier holdouts against overlap.
+- Add the smallest project-owned confidence or fusion improvement behind the existing Retriever/evaluation
+  boundary, starting with a failing behavior test and preserving ACL, canonical Mongo and rebuildable Qdrant.
+- Run focused and relevant backend tests, Compose contracts and static checks; execute fresh physical calibration
+  only if the local candidate is eligible, then either retain the reranker or proceed through the sealed gate.
+- Record the measured quality/resource tradeoff and rollback decision without promotion, deployment or production
+  changes.
+
+### Outcome
+
+Added an unselected post-fusion confidence and structured-identifier evidence candidate after proving the old
+dense/BM25 threshold scales were incomparable. Development improved to Recall@5 0.9688, MRR 0.9297 and p95
+120.84 ms, but the independently seeded physical qualification failed at 0.8594/0.8594, no-answer 0.8942 and
+134.77 ms p95, with PL Recall@5 only 0.75. Security/isolation stayed green, the original validation remained
+sealed and `hybrid-bge-v1` plus its private reranker remains selected. Backend AI passed 745/11 skipped at
+88.03%, Compose contracts 24/24 and four renders passed, and the 772-component selected image had zero fixed
+LOW/MEDIUM/HIGH/CRITICAL findings. No push, merge, deployment or production change occurred. Full evidence is
+in `docs/ai-rebuild/retrieval-task050.md`.
+
+---
+
 ## TASK-049: Qualify retrieval without a separate reranker
 **Priority:** P1 | **Tags:** ai, rag, retrieval, bge-m3, qdrant, performance
 

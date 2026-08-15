@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-16 — TASK-050: Added and physically qualified an unselected post-fusion confidence/identifier evidence candidate; independent qualification failed quality and latency despite zero security/isolation violations, so the original validation stayed sealed and the private reranker remains selected, with 745 backend tests/11 skips, 24 Compose contracts/four renders and a fresh 772-component/zero-fixed-finding scan green and no deployment or promotion.
+
 2026-08-15 — TASK-049: Qualified dense, RRF, DBSF and native BGE-M3 sparse retrieval on a fresh sealed PL/EN calibration and physical selected PyTorch/ROCm image; all security/isolation gates and verification passed, but no no-reranker candidate met answerability quality, so validation stayed sealed and the private incumbent reranker remains selected with no deployment or promotion.
 
 2026-08-15 — TASK-048 completion: Closed the role-split runtime locally with official exact-image vLLM 0.26 for private generation/reranking, dedicated PyTorch/ROCm knowledge, measured response limits, mutex-protected bounded wake/cleanup, a single-use frozen holdout that rejected no-reranker, all-severity SBOM/scan/VEX and a physical gfx1151 v0.26 → v0.20 → v0.26 rollback rehearsal; 700 backend tests/11 skips, 24 deploy contracts, four Compose renders and independent security review passed, with no push, merge, branch deployment or production change.
