@@ -49,7 +49,7 @@ not proposed limits. The active before stack was not restarted or changed.
 | Knowledge cold/warm | active heterogeneous result not comparable | cold ready 6.667 s; warm search p50 134.618 ms, p95 159.244 ms | 20 CPU no-reranker searches; host had active GPU load |
 | Ingest container-cold workload | no comparable frozen-container baseline | three 2 GiB runs: wall median 14.864 s/p95 15.482 s, CPU median 15.032 s, PID max 9; all 33 case executions passed | new process/container each run; host storage/page cache was not cold |
 | Queue | unbounded producer/worker DB topology was inconsistent | capacity 128: enqueue p50 3.637 ms, p95 4.086 ms; overflow rejected in 0.122 ms; replay 0.074 ms | isolated SQLite microbenchmark |
-| Active GPU | 100% use, 3.16 GB VRAM, 70.083 W; inference and reranker each near 101% host CPU | no after measurement | scale-to-zero code/tests are not a physical wake/sleep result |
+| Active GPU | fresh read-only snapshot: 100% use, 3.167 GB VRAM, 46.824 GB GTT, 64.049 W, 60 C; inference/reranker each near 101% host CPU | no after measurement | kernel sysfs plus Docker stats; scale-to-zero code/tests are not a physical wake/sleep result |
 | Retrieval quality | dense recall@5 0.6964/MRR 0.5774/p95 25.93 ms; selected hybrid+reranker 0.9107/0.8048/266.83 ms | no-reranker 0.9107/0.7095/48.59 ms; rejected because global and PL MRR miss policy | fresh isolated 36-case non-holdout run; frozen holdout remains closed |
 
 The classifier initially took 121.313 s because `sentence-transformers` performed unsuccessful Hugging Face
