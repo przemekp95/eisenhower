@@ -14,7 +14,7 @@ def test_only_knowledge_dependencies_install_the_selected_rag_framework():
   assert "llama-index" not in requirements.lower()
   assert "llama-index-core==0.14.23" in knowledge_requirements
   assert "llama-index-vector-stores-qdrant==0.10.3" in knowledge_requirements
-  assert "qdrant-client==1.19.0" in requirements
+  assert "qdrant-client==1.19.0" in knowledge_requirements
   assert "llama-index" not in ROOT.joinpath("requirements-boundary.txt").read_text(encoding="utf-8").lower()
 
 

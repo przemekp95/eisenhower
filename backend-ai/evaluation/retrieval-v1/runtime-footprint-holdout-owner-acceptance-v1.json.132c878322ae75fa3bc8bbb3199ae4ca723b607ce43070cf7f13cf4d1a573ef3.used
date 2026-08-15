@@ -1,0 +1,6 @@
+{
+  "approval_receipt_sha256": "132c878322ae75fa3bc8bbb3199ae4ca723b607ce43070cf7f13cf4d1a573ef3",
+  "holdout_started_at": "2026-08-15T20:10:19.298187+00:00",
+  "schema_version": "retrieval-holdout-owner-acceptance-use-v1",
+  "source_git_sha": "e4e824fac269da328186b5611603a4a532cebf64"
+}

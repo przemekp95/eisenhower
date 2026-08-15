@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-08-15T20:48:49+02:00",
+  "evidence_scope": "local physical gfx1151 lifecycle characterization of the already deployed a018f986 stack",
+  "source_revision": "a018f986fefae8a1add6c4c5f929da5320771fde",
+  "operation": {
+    "mechanism": "docker stop/start of the two exact existing container IDs",
+    "deployment_or_recreation": false,
+    "inference_container_id": "c46e57cb07e9d046722806a7256f7d6e131fbb60cda27643802679b89c34634d",
+    "reranker_container_id": "118362b96ed3a28a8fea335e13cef42c17cbd132f68575ec95b71693427923a3",
+    "shared_image_id": "sha256:3be0d8f3ec3ebcc99203e08d895392a8d749ed8a132f41574a8018cdaf525a22",
+    "stop_latency_ms": 11846,
+    "inference_authenticated_ready_ms": 116086,
+    "reranker_authenticated_ready_ms": 29581,
+    "timeout_ms": 300000,
+    "restored_healthy": true
+  },
+  "samples": {
+    "loaded_before_stop": {"gpu_busy_percent": 100, "vram_used_bytes": 2967539712, "gtt_used_bytes": 46846697472, "power_microwatts": 64024000, "temperature_millicelsius": 59000},
+    "stopped_after_10_seconds": {"gpu_busy_percent": 5, "vram_used_bytes": 2982617088, "gtt_used_bytes": 2775347200, "power_microwatts": 26049000, "temperature_millicelsius": 51000, "knowledge_live": true},
+    "five_seconds_after_both_authenticated_ready": {"gpu_busy_percent": 3, "vram_used_bytes": 2969489408, "gtt_used_bytes": 48015409152, "power_microwatts": 42031000, "temperature_millicelsius": 49000, "inference_working_set": "2.866GiB", "reranker_working_set": "2.698GiB", "inference_cpu_percent": 100.95, "reranker_cpu_percent": 101.07, "inference_pids": 278, "reranker_pids": 278, "knowledge_live": true}
+  },
+  "failure_and_scope_notes": [
+    "The baseline knowledge service exposes /health/live but not /health/ready; the initial probe failed with HTTP 404 before either response container was stopped.",
+    "This proves local stop/start recovery and idle resource reduction, not the current branch deployment action, production behavior, request-level fallback, partial-start cleanup or OOM recovery.",
+    "The immediate post-wake working sets are not comparable with the previously observed long-running working sets.",
+    "No image, Compose definition, canonical Mongo data, Qdrant projection or production system was changed."
+  ]
+}

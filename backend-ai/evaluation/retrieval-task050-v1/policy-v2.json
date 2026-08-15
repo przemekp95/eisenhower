@@ -1,0 +1,49 @@
+{
+  "schema_version": "task050-policy-v2",
+  "evidence_split": "qualification_only",
+  "supersedes_development_report_sha256": "3fa3c09c2e8af0487814bbb570026ac5e7be3be3a5691f80670c87c060e158f0",
+  "qualification_seed_sha256": "5eca5909e43032ffed27884357c51eedc7055bb73acc2140a6c2529b8f39fa3b",
+  "task049_validation_seed_sha256": "4ec4be9de8d2eb2e440e4f793791a62ef55ace8ee2e552d6ffd2405661c2deda",
+  "validation_seed_must_remain_sealed": true,
+  "k": 5,
+  "global": {
+    "recall_at_k_min": 0.9,
+    "mrr_at_k_min": 0.8,
+    "no_answer_accuracy_min": 1.0
+  },
+  "languages": {
+    "recall_at_k_min": 0.85,
+    "mrr_at_k_min": 0.75
+  },
+  "safety": {
+    "forbidden_hit_rate_max": 0.0,
+    "stale_hit_rate_max": 0.0,
+    "isolation_violation_rate_max": 0.0,
+    "document_duplicate_rate_max": 0.0
+  },
+  "latency": {
+    "warm_p95_ms_max": 125.0,
+    "incumbent_ratio_max": 0.6
+  },
+  "candidates": {
+    "bge-m3-dbsf-d2-l1-confidence-id-v2": {
+      "strategy": "hybrid-score-confidence-v2",
+      "score_threshold": 0.4,
+      "fusion_mode": "dbsf",
+      "dense_weight": 2.0,
+      "lexical_weight": 1.0,
+      "rrf_k": null,
+      "identifier_evidence_required": true,
+      "confidence": {
+        "dense_top_min": 0.4,
+        "strong_dense_top_min": 0.61,
+        "dense_margin_min": 0.05,
+        "lexical_top_min": 2.0
+      }
+    }
+  },
+  "promotion": {
+    "allowed_from_qualification_result": false,
+    "next_gate": "independent_human_review_then_original_sealed_validation"
+  }
+}

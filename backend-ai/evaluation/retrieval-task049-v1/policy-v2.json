@@ -1,0 +1,43 @@
+{
+  "schema_version": "task049-policy-v2",
+  "calibration_round": 2,
+  "supersedes_policy_sha256": "905897715a2c64a4baee9736d7e0f670e7bda889a2957b4e4a7a5d69ba337baf",
+  "round_1_report_sha256": "e38519963d4903ccdb80bde1ac23f8f0730c0428844d68c16b038eb713f804e6",
+  "round_2_rationale": "Calibrate abstention above 0.50 and remove exact product tokens from semantic paraphrases; round 1 already passed answerable ranking but failed no-answer.",
+  "k": 5,
+  "calibration_seed_sha256": "81de4084ca9a0d4be5490ec3acbfb2d70a0643d9d9f9445987000f0ee6c7a781",
+  "validation_seed_sha256": "4ec4be9de8d2eb2e440e4f793791a62ef55ace8ee2e552d6ffd2405661c2deda",
+  "global": {"recall_at_k_min": 0.9, "mrr_at_k_min": 0.8, "no_answer_accuracy_min": 1.0},
+  "languages": {"recall_at_k_min": 0.85, "mrr_at_k_min": 0.75},
+  "safety": {
+    "forbidden_hit_rate_max": 0.0,
+    "stale_hit_rate_max": 0.0,
+    "isolation_violation_rate_max": 0.0,
+    "document_duplicate_rate_max": 0.0
+  },
+  "latency": {"warm_p95_ms_max": 125.0, "incumbent_ratio_max": 0.6},
+  "non_inferiority": {"global_min_delta": -0.02, "language_min_delta": -0.03},
+  "sparse_trigger": "round_2_no_candidate_after_abstention_calibration",
+  "candidates": {
+    "bge-m3-dense-t55": {"strategy": "dense-v1", "score_threshold": 0.55, "fusion_mode": null, "dense_weight": null, "lexical_weight": null, "rrf_k": null},
+    "bge-m3-dense-t65": {"strategy": "dense-v1", "score_threshold": 0.65, "fusion_mode": null, "dense_weight": null, "lexical_weight": null, "rrf_k": null},
+    "bge-m3-dense-t75": {"strategy": "dense-v1", "score_threshold": 0.75, "fusion_mode": null, "dense_weight": null, "lexical_weight": null, "rrf_k": null},
+    "bge-m3-dense-t85": {"strategy": "dense-v1", "score_threshold": 0.85, "fusion_mode": null, "dense_weight": null, "lexical_weight": null, "rrf_k": null},
+    "bge-m3-rrf-t55": {"strategy": "hybrid-rrf-v1", "score_threshold": 0.55, "fusion_mode": "rrf", "dense_weight": 1.0, "lexical_weight": 2.0, "rrf_k": 20},
+    "bge-m3-rrf-t65": {"strategy": "hybrid-rrf-v1", "score_threshold": 0.65, "fusion_mode": "rrf", "dense_weight": 1.0, "lexical_weight": 2.0, "rrf_k": 20},
+    "bge-m3-rrf-t75": {"strategy": "hybrid-rrf-v1", "score_threshold": 0.75, "fusion_mode": "rrf", "dense_weight": 1.0, "lexical_weight": 2.0, "rrf_k": 20},
+    "bge-m3-rrf-t85": {"strategy": "hybrid-rrf-v1", "score_threshold": 0.85, "fusion_mode": "rrf", "dense_weight": 1.0, "lexical_weight": 2.0, "rrf_k": 20},
+    "bge-m3-score-fusion-d1-l1-t55": {"strategy": "hybrid-score-v1", "score_threshold": 0.55, "fusion_mode": "dbsf", "dense_weight": 1.0, "lexical_weight": 1.0, "rrf_k": null},
+    "bge-m3-score-fusion-d1-l1-t65": {"strategy": "hybrid-score-v1", "score_threshold": 0.65, "fusion_mode": "dbsf", "dense_weight": 1.0, "lexical_weight": 1.0, "rrf_k": null},
+    "bge-m3-score-fusion-d1-l1-t75": {"strategy": "hybrid-score-v1", "score_threshold": 0.75, "fusion_mode": "dbsf", "dense_weight": 1.0, "lexical_weight": 1.0, "rrf_k": null},
+    "bge-m3-score-fusion-d1-l1-t85": {"strategy": "hybrid-score-v1", "score_threshold": 0.85, "fusion_mode": "dbsf", "dense_weight": 1.0, "lexical_weight": 1.0, "rrf_k": null},
+    "bge-m3-score-fusion-d1-l2-t55": {"strategy": "hybrid-score-v1", "score_threshold": 0.55, "fusion_mode": "dbsf", "dense_weight": 1.0, "lexical_weight": 2.0, "rrf_k": null},
+    "bge-m3-score-fusion-d1-l2-t65": {"strategy": "hybrid-score-v1", "score_threshold": 0.65, "fusion_mode": "dbsf", "dense_weight": 1.0, "lexical_weight": 2.0, "rrf_k": null},
+    "bge-m3-score-fusion-d1-l2-t75": {"strategy": "hybrid-score-v1", "score_threshold": 0.75, "fusion_mode": "dbsf", "dense_weight": 1.0, "lexical_weight": 2.0, "rrf_k": null},
+    "bge-m3-score-fusion-d1-l2-t85": {"strategy": "hybrid-score-v1", "score_threshold": 0.85, "fusion_mode": "dbsf", "dense_weight": 1.0, "lexical_weight": 2.0, "rrf_k": null},
+    "bge-m3-score-fusion-d2-l1-t55": {"strategy": "hybrid-score-v1", "score_threshold": 0.55, "fusion_mode": "dbsf", "dense_weight": 2.0, "lexical_weight": 1.0, "rrf_k": null},
+    "bge-m3-score-fusion-d2-l1-t65": {"strategy": "hybrid-score-v1", "score_threshold": 0.65, "fusion_mode": "dbsf", "dense_weight": 2.0, "lexical_weight": 1.0, "rrf_k": null},
+    "bge-m3-score-fusion-d2-l1-t75": {"strategy": "hybrid-score-v1", "score_threshold": 0.75, "fusion_mode": "dbsf", "dense_weight": 2.0, "lexical_weight": 1.0, "rrf_k": null},
+    "bge-m3-score-fusion-d2-l1-t85": {"strategy": "hybrid-score-v1", "score_threshold": 0.85, "fusion_mode": "dbsf", "dense_weight": 2.0, "lexical_weight": 1.0, "rrf_k": null}
+  }
+}

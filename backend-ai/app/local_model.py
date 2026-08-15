@@ -122,18 +122,18 @@ class LocalMiniLMClassifier:
 
   @property
   def current_pointer_path(self) -> Path:
-    return self.settings.model_cache_dir / "local_minilm_current.json"
+    return self.settings.local_model_artifact_dir / "local_minilm_current.json"
 
   @property
   def generations_dir(self) -> Path:
-    return self.settings.model_cache_dir / "local_minilm_generations"
+    return self.settings.local_model_artifact_dir / "local_minilm_generations"
 
   def _active_artifact_path(self, filename: str) -> Path:
     pointer = self._read_current_pointer()
     generation_id = pointer.get("generation_id") if pointer else None
     if generation_id:
       return self.generations_dir / str(generation_id) / filename
-    return self.settings.model_cache_dir / filename
+    return self.settings.local_model_artifact_dir / filename
 
   @property
   def head_path(self) -> Path:
@@ -161,7 +161,7 @@ class LocalMiniLMClassifier:
     if self._status["ready"]:
       return
 
-    self.settings.model_cache_dir.mkdir(parents=True, exist_ok=True)
+    self.settings.local_model_artifact_dir.mkdir(parents=True, exist_ok=True)
     try:
       if self.head_path.exists() and self.meta_path.exists() and self.index_path.exists():
         self._load_artifacts(expected_records=None)
@@ -170,6 +170,10 @@ class LocalMiniLMClassifier:
         self._status["data_stale"] = artifact_fingerprint != current_fingerprint
         return
 
+      if self.settings.app_env == "production":
+        raise ModelNotReadyError(
+          "An approved classifier artifact is required; production startup training is forbidden."
+        )
       self.train(records)
     except ModelNotReadyError as issue:
       self._mark_not_ready(str(issue))
@@ -796,7 +800,7 @@ class LocalMiniLMClassifier:
 
   def _persist_candidate(self, head: Any, meta: dict[str, Any], index: dict[str, Any]) -> str:
     torch = self._require_torch()
-    self.settings.model_cache_dir.mkdir(parents=True, exist_ok=True)
+    self.settings.local_model_artifact_dir.mkdir(parents=True, exist_ok=True)
     candidate_id = uuid.uuid4().hex
     self.generations_dir.mkdir(parents=True, exist_ok=True)
     candidate_dir = self.generations_dir / f".candidate-{candidate_id}"
@@ -805,7 +809,7 @@ class LocalMiniLMClassifier:
     candidate_head = candidate_dir / "local_minilm_head.pt"
     candidate_meta = candidate_dir / "local_minilm_meta.json"
     candidate_index = candidate_dir / "local_minilm_index.json"
-    pointer_candidate = self.settings.model_cache_dir / f".{candidate_id}.current.json"
+    pointer_candidate = self.settings.local_model_artifact_dir / f".{candidate_id}.current.json"
     try:
       torch.save(head.state_dict(), candidate_head)
       with candidate_head.open("rb") as artifact_handle:
@@ -828,7 +832,7 @@ class LocalMiniLMClassifier:
       os.replace(candidate_dir, generation_dir)
       self._fsync_directory(self.generations_dir)
       os.replace(pointer_candidate, self.current_pointer_path)
-      self._fsync_directory(self.settings.model_cache_dir)
+      self._fsync_directory(self.settings.local_model_artifact_dir)
       return candidate_id
     finally:
       pointer_candidate.unlink(missing_ok=True)
@@ -864,6 +868,17 @@ class LocalMiniLMClassifier:
 
   def _validate_active_generation_checksums(self) -> None:
     pointer = self._read_current_pointer()
+    if self.settings.app_env == "production":
+      approved_digest = self.settings.local_model_approved_artifact_sha256
+      if pointer is None or approved_digest is None:
+        raise ModelNotReadyError(
+          "An approved classifier artifact pointer and SHA-256 are required in production."
+        )
+      actual_digest = hashlib.sha256(self.current_pointer_path.read_bytes()).hexdigest()
+      if actual_digest != approved_digest:
+        raise ModelNotReadyError(
+          "Approved classifier artifact checksum does not match the active generation pointer."
+        )
     if pointer is None:
       return
     expected = {
@@ -888,7 +903,7 @@ class LocalMiniLMClassifier:
 
   @contextmanager
   def _process_training_lock(self):
-    lock_path = self.settings.model_cache_dir / "local_minilm_training.lock"
+    lock_path = self.settings.local_model_artifact_dir / "local_minilm_training.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a+", encoding="utf-8") as lock_handle:
       fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)

