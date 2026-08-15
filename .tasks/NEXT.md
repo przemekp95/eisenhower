@@ -14,7 +14,7 @@ Install the exact release APK produced for the promoted SHA on a physical Androi
 
 ### Conditional checkpoint
 
-The repository owner approves every human decision in this task green without reservations through 2026-08-15 23:59:59 Europe/Warsaw. The real keystore, immutable release APK and physical-device result remain technical acceptance evidence.
+The repository owner approves every human decision in this task green without reservations through 2026-08-23 23:59:59 Europe/Warsaw. The real keystore, immutable release APK and physical-device result remain technical acceptance evidence.
 
 ---
 
@@ -32,7 +32,7 @@ The offline data portion passed on 2026-08-10: the stopped production MongoDB an
 
 ### Conditional checkpoint
 
-The repository owner approves every human decision green without reservations through 2026-08-15 23:59:59 Europe/Warsaw. Application rollback still requires a real immutable deployed SHA as technical evidence.
+The repository owner approves every human decision green without reservations through 2026-08-23 23:59:59 Europe/Warsaw. Application rollback still requires a real immutable deployed SHA as technical evidence.
 
 ---
 
@@ -49,7 +49,7 @@ After evaluation and CI gates pass, promote `dev` to `master` through the requir
 
 ### Conditional checkpoint
 
-The repository owner approves deployment authorization and telemetry ownership green without reservations through 2026-08-15 23:59:59 Europe/Warsaw. Direct public HTTPS, deployed exact SHA and active same-SHA telemetry remain technical acceptance evidence.
+The repository owner approves deployment authorization and telemetry ownership green without reservations through 2026-08-23 23:59:59 Europe/Warsaw. Direct public HTTPS, deployed exact SHA and active same-SHA telemetry remain technical acceptance evidence.
 
 ---
 
@@ -66,6 +66,6 @@ Run the MLP, centroid, and incumbent comparison on the frozen human-approved dat
 
 ### Conditional checkpoint
 
-The repository owner approves the human gate green without reservations through 2026-08-15 23:59:59 Europe/Warsaw, so the benchmark and promotion decision may proceed. Preserve actual annotation files, hashes and computed metrics truthfully.
+The repository owner approves the human gate green without reservations through 2026-08-23 23:59:59 Europe/Warsaw, so the benchmark and promotion decision may proceed. Preserve actual annotation files, hashes and computed metrics truthfully.
 
 ---
