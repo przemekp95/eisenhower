@@ -7,10 +7,11 @@ import json
 from math import ceil
 from pathlib import Path
 import random
+import re
 import unicodedata
 
 from .golden import GoldenCase
-from .hybrid import HybridRetriever
+from .hybrid import HybridRetriever, RetrievalConfidencePolicy
 from .models import SourceDocument
 
 
@@ -24,6 +25,11 @@ _CATEGORY_COUNTS = {
   "no-answer-tenant": 4,
   "no-answer-stale": 4,
 }
+
+_STRUCTURED_IDENTIFIER = re.compile(
+  r"(?<![\w-])(?=[A-Za-z0-9-]{4,}(?![\w-]))"
+  r"(?=[A-Za-z0-9-]*\d)[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+(?![\w-])"
+)
 
 _CONCEPTS = {
   "pl": (
@@ -66,6 +72,27 @@ class QueryThresholdRetriever:
     return self.delegate.retrieve(
       query.model_copy(update={"score_threshold": self.score_threshold})
     )
+
+
+class IdentifierEvidenceGateRetriever:
+  """Abstain when structured identifiers requested by a query are absent from evidence."""
+
+  def __init__(self, delegate):
+    self.delegate = delegate
+
+  def retrieve(self, query):
+    hits = self.delegate.retrieve(query)
+    identifiers = {
+      match.group(0).casefold()
+      for match in _STRUCTURED_IDENTIFIER.finditer(query.text)
+    }
+    if not identifiers:
+      return hits
+    evidence = "\n".join(
+      f"{hit.title}\n{hit.text}".casefold()
+      for hit in hits
+    )
+    return hits if all(identifier in evidence for identifier in identifiers) else []
 
 
 def confidence_features(
@@ -125,6 +152,43 @@ def build_candidates(dense_retriever, lexical_retriever):
         "lexical_weight": lexical_weight,
         "rrf_k": 20 if fusion_mode == "rrf" else None,
       }
+  return candidates, configurations
+
+
+def build_task050_candidates(dense_retriever, lexical_retriever):
+  policy = RetrievalConfidencePolicy()
+  candidate_id = "bge-m3-dbsf-d2-l1-confidence-id-v1"
+  hybrid = HybridRetriever(
+    dense_retriever,
+    lexical_retriever,
+    dense_rrf_weight=2.0,
+    lexical_rrf_weight=1.0,
+    candidate_multiplier=4,
+    fusion_mode="dbsf",
+    confidence_policy=policy,
+  )
+  candidates = {
+    candidate_id: IdentifierEvidenceGateRetriever(
+      QueryThresholdRetriever(hybrid, policy.dense_top_min)
+    )
+  }
+  configurations = {
+    candidate_id: {
+      "strategy": "hybrid-score-confidence-v1",
+      "score_threshold": policy.dense_top_min,
+      "fusion_mode": "dbsf",
+      "dense_weight": 2.0,
+      "lexical_weight": 1.0,
+      "rrf_k": None,
+      "identifier_evidence_required": True,
+      "confidence": {
+        "dense_top_min": policy.dense_top_min,
+        "strong_dense_top_min": policy.strong_dense_top_min,
+        "dense_margin_min": policy.dense_margin_min,
+        "lexical_top_min": policy.lexical_top_min,
+      },
+    }
+  }
   return candidates, configurations
 
 
@@ -349,6 +413,45 @@ def generate_dataset(seed: bytes, *, split: str) -> Task049Dataset:
   rng.shuffle(cases)
   rng.shuffle(documents)
   return Task049Dataset(tuple(cases), tuple(documents))
+
+
+def generate_task050_development_dataset(seed: bytes) -> Task049Dataset:
+  base = generate_dataset(seed, split="validation")
+  anchor = base.cases[0]
+  hard_negative_queries = {
+    "pl": (
+      "Jak uzyskać zwrot kosztów prywatnej podróży?",
+      "Kto jest właścicielem konta bankowego klienta?",
+      "Jaka jest polityka urlopowa dla wykonawców?",
+      "Jak zamówić wyposażenie biurowe?",
+    ),
+    "en": (
+      "How can I claim a private travel reimbursement?",
+      "Who owns the customer's bank account?",
+      "What is the leave policy for contractors?",
+      "How do I order office equipment?",
+    ),
+  }
+  cases = [
+    case.model_copy(update={"dataset_version": "task050-development-v1"})
+    for case in base.cases
+  ]
+  for language, queries in hard_negative_queries.items():
+    for index, task in enumerate(queries):
+      case = _case(
+        seed=seed,
+        split="validation",
+        language=language,
+        category="no-answer-unstructured",
+        index=index,
+        tenant_id=anchor.tenant_id,
+        user_id=anchor.user_id,
+        project_id=anchor.query_project_id,
+        task=task,
+      )
+      cases.append(case.model_copy(update={"dataset_version": "task050-development-v1"}))
+  random.Random(int.from_bytes(seed, "big") ^ 0x50).shuffle(cases)
+  return Task049Dataset(tuple(cases), base.documents)
 
 
 def _normalized_query(value: str) -> str:

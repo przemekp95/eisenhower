@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import dataclass
 from math import isfinite, log
 from statistics import fmean, stdev
 import re
@@ -502,6 +503,45 @@ class CanonicalBm25Retriever:
     )[:query.limit]
 
 
+@dataclass(frozen=True)
+class RetrievalConfidencePolicy:
+  """Calibration-owned abstention policy over source-native retrieval scores."""
+
+  dense_top_min: float = 0.40
+  strong_dense_top_min: float = 0.61
+  dense_margin_min: float = 0.05
+  lexical_top_min: float = 5.0
+
+  def __post_init__(self) -> None:
+    dense_values = (self.dense_top_min, self.strong_dense_top_min, self.dense_margin_min)
+    if (
+      any(not isfinite(value) or not 0 <= value <= 1 for value in dense_values)
+      or self.strong_dense_top_min < self.dense_top_min
+      or not isfinite(self.lexical_top_min)
+      or self.lexical_top_min <= 0
+    ):
+      raise ValueError("invalid retrieval confidence thresholds")
+
+  def accepts(
+    self,
+    dense_candidates: Sequence[RetrievalHit],
+    lexical_candidates: Sequence[RetrievalHit],
+  ) -> bool:
+    dense_scores = sorted((item.score for item in dense_candidates), reverse=True)
+    if not dense_scores or dense_scores[0] < self.dense_top_min:
+      return False
+    if not lexical_candidates:
+      return True
+    dense_second = dense_scores[1] if len(dense_scores) > 1 else 0.0
+    dense_margin = dense_scores[0] - dense_second
+    lexical_top = max(item.score for item in lexical_candidates)
+    return (
+      dense_scores[0] >= self.strong_dense_top_min
+      or dense_margin >= self.dense_margin_min
+      or lexical_top >= self.lexical_top_min
+    )
+
+
 class HybridRetriever:
   """Composes canonical dense and lexical retrievers with weighted RRF."""
 
@@ -518,12 +558,14 @@ class HybridRetriever:
     reranker: Reranker | None = None,
     reranker_candidate_limit: int = 20,
     reranker_weight: float = 1.0,
+    confidence_policy: RetrievalConfidencePolicy | None = None,
   ):
     if candidate_multiplier < 1:
       raise ValueError("candidate_multiplier must be positive")
     self.dense_retriever = dense_retriever
     self.lexical_retriever = lexical_retriever
     self.candidate_multiplier = candidate_multiplier
+    self.confidence_policy = confidence_policy
     self.core = HybridRetrievalCore(
       rrf_k=rrf_k,
       dense_rrf_weight=dense_rrf_weight,
@@ -536,7 +578,16 @@ class HybridRetriever:
 
   def retrieve(self, query: RetrievalQuery) -> list[RetrievalHit]:
     candidate_limit = min(20, max(query.limit, query.limit * self.candidate_multiplier))
-    candidate_query = query.model_copy(update={"limit": candidate_limit})
+    candidate_update = {"limit": candidate_limit}
+    if self.confidence_policy is not None:
+      candidate_update["score_threshold"] = -1.0
+    candidate_query = query.model_copy(update=candidate_update)
     dense_candidates = self.dense_retriever.retrieve(candidate_query)
     lexical_candidates = self.lexical_retriever.retrieve(candidate_query)
-    return self.core.rank(query, dense_candidates, lexical_candidates)
+    ranked = self.core.rank(query, dense_candidates, lexical_candidates)
+    if (
+      self.confidence_policy is not None
+      and not self.confidence_policy.accepts(dense_candidates, lexical_candidates)
+    ):
+      return []
+    return ranked

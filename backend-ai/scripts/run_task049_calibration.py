@@ -82,12 +82,21 @@ def run_calibration(
   model_name: str,
   model_revision: str,
   device: str,
+  dataset_factory=None,
+  candidate_factory=None,
+  seed_commitment_field: str = "calibration_seed_sha256",
+  schema_version: str = "task049-calibration-v1",
+  evidence_scope: str = "synthetic_local_physical_candidate_calibration",
 ) -> dict:
   policy = json.loads(policy_path.read_text(encoding="utf-8"))
   seed = _read_seed(seed_path)
-  if seed_commitment(seed) != policy["calibration_seed_sha256"]:
+  if seed_commitment(seed) != policy[seed_commitment_field]:
     raise ValueError("TASK-049 calibration seed commitment mismatch")
-  dataset = generate_dataset(seed, split="calibration")
+  dataset = (
+    dataset_factory(seed)
+    if dataset_factory is not None
+    else generate_dataset(seed, split="calibration")
+  )
   prior_paths = [
     repository_root / "backend-ai" / "evaluation" / "retrieval-v1" / name
     for name in ("review-candidate-v1.jsonl", "review-candidate-v2.jsonl", "review-candidate-v3.jsonl")
@@ -154,7 +163,11 @@ def run_calibration(
       title_weight=2.0,
       text_weight=1.0,
     )
-    candidates, configurations = build_candidates(dense, lexical)
+    candidates, configurations = (
+      candidate_factory(dense, lexical)
+      if candidate_factory is not None
+      else build_candidates(dense, lexical)
+    )
     expected_configurations = policy["candidates"]
     if configurations != expected_configurations:
       raise ValueError("TASK-049 candidate configuration drifted from policy")
@@ -202,8 +215,8 @@ def run_calibration(
       selected_candidate = None
       selection_error = str(error)
     result = {
-      "schema_version": "task049-calibration-v1",
-      "evidence_scope": "synthetic_local_physical_candidate_calibration",
+      "schema_version": schema_version,
+      "evidence_scope": evidence_scope,
       "dataset_version": dataset.cases[0].dataset_version,
       "dataset_seed_sha256": seed_commitment(seed),
       "dataset_cases_sha256": sha256(serialize_cases(dataset.cases).encode("utf-8")).hexdigest(),

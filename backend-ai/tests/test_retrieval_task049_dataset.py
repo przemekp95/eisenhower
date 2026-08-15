@@ -6,6 +6,7 @@ import pytest
 from app.rag.task049_evaluation import (
   assert_no_query_overlap,
   generate_dataset,
+  generate_task050_development_dataset,
   seed_commitment,
 )
 
@@ -48,6 +49,25 @@ def test_task049_validation_seed_changes_every_identity_and_maps_to_dev():
     document.document_id for document in validation.documents
   )
   assert Counter(case.split for case in validation.cases) == {"dev": 96}
+
+
+def test_task050_development_adds_balanced_unstructured_no_answer_hard_negatives():
+  dataset = generate_task050_development_dataset(bytes.fromhex("44" * 32))
+
+  assert len(dataset.cases) == 104
+  assert Counter(case.language for case in dataset.cases) == {"pl": 52, "en": 52}
+  assert Counter(case.answerability for case in dataset.cases) == {
+    "answerable": 64,
+    "no_answer": 40,
+  }
+  hard_negatives = [
+    case for case in dataset.cases
+    if "category:no-answer-unstructured" in case.tags
+  ]
+  assert len(hard_negatives) == 8
+  assert all(case.split == "dev" for case in dataset.cases)
+  assert all(case.dataset_version == "task050-development-v1" for case in dataset.cases)
+  assert all(not case.relevant_document_ids for case in hard_negatives)
 
 
 def test_task049_seed_commitment_and_query_overlap_guard(tmp_path):

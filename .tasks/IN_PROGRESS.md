@@ -1,5 +1,25 @@
 # In Progress
 
+## TASK-050: Improve single-stage retrieval quality without consuming sealed validation
+**Priority:** P2 | **Tags:** ai, rag, retrieval, quality, evaluation
+
+Improve the no-reranker candidate on calibration/train-dev evidence without introducing another cross-encoder or
+ColBERT service, weakening zero-tolerance safety, tuning on consumed holdouts, or changing the selected runtime
+before every predeclared quality gate passes.
+
+### Plan
+
+- Characterize TASK-049 failures by language and category using only calibration evidence, keeping the validation
+  seed sealed and guarding all earlier holdouts against overlap.
+- Add the smallest project-owned confidence or fusion improvement behind the existing Retriever/evaluation
+  boundary, starting with a failing behavior test and preserving ACL, canonical Mongo and rebuildable Qdrant.
+- Run focused and relevant backend tests, Compose contracts and static checks; execute fresh physical calibration
+  only if the local candidate is eligible, then either retain the reranker or proceed through the sealed gate.
+- Record the measured quality/resource tradeoff and rollback decision without promotion, deployment or production
+  changes.
+
+---
+
 ## TASK-047: Deploy the portable local AMD platform with Calendar and Remote MCP
 **Priority:** P0 | **Tags:** calendar, mcp, oauth, n8n, amd, rocm, deployment
 
