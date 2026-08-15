@@ -156,6 +156,9 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn('AI_KNOWLEDGE_IMAGE="local/eisenhower-ai-knowledge:${release_sha}"', script)
     self.assertIn('AI_INGEST_IMAGE="local/eisenhower-ai-ingest:${release_sha}"', script)
     self.assertIn('AI_ROCM_IMAGE="local/eisenhower-ai-rocm:${release_sha}"', script)
+    self.assertIn('VLLM_RESPONSE_IMAGE="local/eisenhower-vllm-rocm:${release_sha}"', script)
+    self.assertIn('export AMD_INFERENCE_IMAGE="$response_image_id"', script)
+    self.assertIn('export AMD_RERANKER_IMAGE="$response_image_id"', script)
     self.assertIn('MCP_IMAGE="local/eisenhower-mcp:${release_sha}"', script)
     self.assertIn('WEB_IMAGE="local/eisenhower-web:${release_sha}"', script)
     self.assertIn('docker image inspect', script)
@@ -173,6 +176,9 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn('rollback.env', script)
     self.assertIn('docker compose', script)
     self.assertIn('config --quiet', script)
+    self.assertIn('inference reranker', script)
+    self.assertIn('ROLLBACK_INFERENCE_IMAGE_ID', script)
+    self.assertIn('ROLLBACK_RERANKER_IMAGE_ID', script)
 
   def test_first_role_split_rollback_preserves_the_legacy_monolith_topology(self):
     script = DEPLOY_SCRIPT_PATH.read_text()
@@ -191,6 +197,10 @@ class LocalProductionContractTest(unittest.TestCase):
 
   def test_amd_inference_is_opt_in_and_uses_the_pinned_rocm_model_contract(self):
     inference = self.amd_services["inference"]
+    self.assertEqual(
+      inference["image"],
+      "${AMD_INFERENCE_IMAGE:?hardened immutable inference image is required}",
+    )
     self.assertEqual(inference["profiles"], ["inference-amd"])
     self.assertEqual(inference["devices"], ["/dev/kfd:/dev/kfd", "/dev/dri:/dev/dri"])
     self.assertIn("healthcheck", inference)
@@ -237,6 +247,10 @@ class LocalProductionContractTest(unittest.TestCase):
 
   def test_amd_reranker_is_a_separate_pinned_bounded_private_service(self):
     reranker = self.amd_services["reranker"]
+    self.assertEqual(
+      reranker["image"],
+      "${AMD_RERANKER_IMAGE:?hardened immutable reranker image is required}",
+    )
     self.assertEqual(reranker["profiles"], ["reranker-amd"])
     self.assertEqual(reranker["devices"], ["/dev/kfd:/dev/kfd", "/dev/dri:/dev/dri"])
     self.assertIn("healthcheck", reranker)

@@ -29,6 +29,7 @@ export AI_CLASSIFIER_IMAGE="local/eisenhower-ai-classifier:${release_sha}"
 export AI_KNOWLEDGE_IMAGE="local/eisenhower-ai-knowledge:${release_sha}"
 export AI_INGEST_IMAGE="local/eisenhower-ai-ingest:${release_sha}"
 export AI_ROCM_IMAGE="local/eisenhower-ai-rocm:${release_sha}"
+export VLLM_RESPONSE_IMAGE="local/eisenhower-vllm-rocm:${release_sha}"
 export MCP_IMAGE="local/eisenhower-mcp:${release_sha}"
 export WEB_IMAGE="local/eisenhower-web:${release_sha}"
 export LOCAL_MODEL_OWNER_APPROVAL_BYPASS=false
@@ -112,12 +113,21 @@ build_retrieval_images() {
 build_response_images() {
   build_retrieval_images
   docker build --build-arg RELEASE_SHA="$release_sha" \
+    -f backend-ai/Dockerfile.response-rocm -t "$VLLM_RESPONSE_IMAGE" backend-ai
+  docker build --build-arg RELEASE_SHA="$release_sha" \
     -f mcp/eisenhower_adapter/Dockerfile -t "$MCP_IMAGE" .
   docker build --build-arg RELEASE_SHA="$release_sha" --target production \
     -f web/Dockerfile -t "$WEB_IMAGE" .
-  for image_ref in "$MCP_IMAGE" "$WEB_IMAGE"; do
+  for image_ref in "$VLLM_RESPONSE_IMAGE" "$MCP_IMAGE" "$WEB_IMAGE"; do
     verify_image "$image_ref"
   done
+  response_image_id="$(docker image inspect "$VLLM_RESPONSE_IMAGE" --format '{{.Id}}')"
+  case "$response_image_id" in
+    sha256:[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) ;;
+    *) echo "Response image has no immutable local image ID" >&2; exit 1 ;;
+  esac
+  export AMD_INFERENCE_IMAGE="$response_image_id"
+  export AMD_RERANKER_IMAGE="$response_image_id"
 }
 
 build_images() {
@@ -125,7 +135,11 @@ build_images() {
 }
 
 record_rollback() {
-  rollback_topology="${1:-full}"
+  requested_topology="${1:-full}"
+  case "$requested_topology" in core|retrieval|response|full) ;; *)
+    echo "Unknown rollback topology: $requested_topology" >&2; exit 1 ;;
+  esac
+  rollback_topology="$requested_topology"
   case "$rollback_topology" in
     core)
       rollback_compose=compose_base
@@ -137,13 +151,12 @@ record_rollback() {
       ;;
     response)
       rollback_compose=compose_response
-      rollback_services="api-service ai-service classifier-service knowledge-service rag-worker mcp-service web"
+      rollback_services="api-service ai-service classifier-service knowledge-service rag-worker inference reranker mcp-service web"
       ;;
     full)
       rollback_compose=compose_full
-      rollback_services="api-service ai-service classifier-service knowledge-service rag-worker mcp-service web"
+      rollback_services="api-service ai-service classifier-service knowledge-service rag-worker inference reranker mcp-service web"
       ;;
-    *) echo "Unknown rollback topology: $rollback_topology" >&2; exit 1 ;;
   esac
   mkdir -p "$state_dir"
   chmod 700 "$state_dir"
@@ -175,7 +188,27 @@ record_rollback() {
     rollback_layout=legacy_monolith
     rollback_topology=full
     rollback_compose=compose_full
-    rollback_services="api-service ai-service knowledge-service rag-worker mcp-service web"
+    rollback_services="api-service ai-service knowledge-service rag-worker inference reranker mcp-service web"
+  else
+    if test -n "$(compose_full ps -q n8n 2>/dev/null || true)"; then
+      rollback_topology=full
+      rollback_compose=compose_full
+      rollback_services="api-service ai-service classifier-service knowledge-service rag-worker inference reranker mcp-service web"
+    elif test -n "$(compose_response ps -q inference 2>/dev/null || true)" \
+      || test -n "$(compose_response ps -q reranker 2>/dev/null || true)"; then
+      rollback_topology=response
+      rollback_compose=compose_response
+      rollback_services="api-service ai-service classifier-service knowledge-service rag-worker inference reranker mcp-service web"
+    elif test -n "$(compose_retrieval ps -q knowledge-service 2>/dev/null || true)" \
+      || test -n "$(compose_retrieval ps -q rag-worker 2>/dev/null || true)"; then
+      rollback_topology=retrieval
+      rollback_compose=compose_retrieval
+      rollback_services="api-service ai-service classifier-service knowledge-service rag-worker"
+    else
+      rollback_topology=core
+      rollback_compose=compose_base
+      rollback_services="api-service ai-service classifier-service"
+    fi
   fi
   {
     echo "ROLLBACK_RECORDED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -189,11 +222,13 @@ record_rollback() {
     fi
     for service in $rollback_services; do
       container_id="$($rollback_compose ps -q "$service" 2>/dev/null || true)"
-      if test -n "$container_id"; then
-        image_id="$(docker inspect "$container_id" --format '{{.Image}}')"
-        key="$(echo "$service" | tr 'a-z-' 'A-Z_')"
-        echo "ROLLBACK_${key}_IMAGE_ID=${image_id}"
-      fi
+      test -n "$container_id" || {
+        echo "Cannot record complete rollback: $service is not running" >&2
+        exit 1
+      }
+      image_id="$(docker inspect "$container_id" --format '{{.Image}}')"
+      key="$(echo "$service" | tr 'a-z-' 'A-Z_')"
+      echo "ROLLBACK_${key}_IMAGE_ID=${image_id}"
     done
   } > "$rollback_file"
 }
@@ -497,6 +532,8 @@ rollback() {
       export AI_ROCM_RELEASE_SHA="$RELEASE_SHA"
       export AI_IMAGE="${ROLLBACK_AI_SERVICE_IMAGE_ID:?missing legacy AI rollback image}"
       export AI_ROCM_IMAGE="${ROLLBACK_KNOWLEDGE_SERVICE_IMAGE_ID:-$AI_IMAGE}"
+      export AMD_INFERENCE_IMAGE="${ROLLBACK_INFERENCE_IMAGE_ID:?missing legacy inference rollback image}"
+      export AMD_RERANKER_IMAGE="${ROLLBACK_RERANKER_IMAGE_ID:?missing legacy reranker rollback image}"
       export MCP_IMAGE="${ROLLBACK_MCP_SERVICE_IMAGE_ID:?missing MCP rollback image}"
       export WEB_IMAGE="${ROLLBACK_WEB_IMAGE_ID:?missing web rollback image}"
       compose_legacy config --quiet
@@ -515,6 +552,7 @@ rollback() {
   export AI_CLASSIFIER_IMAGE="${ROLLBACK_CLASSIFIER_SERVICE_IMAGE_ID:?missing classifier rollback image}"
   case "${ROLLBACK_TOPOLOGY:?missing rollback topology}" in
     core)
+      compose_full stop knowledge-service rag-worker inference reranker mcp-service web >/dev/null 2>&1 || true
       compose_base config --quiet
       compose_base up -d --wait
       smoke_core
@@ -523,6 +561,7 @@ rollback() {
       export AI_KNOWLEDGE_IMAGE="${ROLLBACK_KNOWLEDGE_SERVICE_IMAGE_ID:?missing knowledge rollback image}"
       export AI_INGEST_IMAGE="${ROLLBACK_RAG_WORKER_IMAGE_ID:?missing ingest rollback image}"
       export AI_ROCM_IMAGE="$AI_KNOWLEDGE_IMAGE"
+      compose_full stop inference mcp-service web >/dev/null 2>&1 || true
       compose_retrieval config --quiet
       compose_retrieval up -d --wait
       smoke_retrieval
@@ -531,6 +570,8 @@ rollback() {
       export AI_KNOWLEDGE_IMAGE="${ROLLBACK_KNOWLEDGE_SERVICE_IMAGE_ID:?missing knowledge rollback image}"
       export AI_INGEST_IMAGE="${ROLLBACK_RAG_WORKER_IMAGE_ID:?missing ingest rollback image}"
       export AI_ROCM_IMAGE="$AI_KNOWLEDGE_IMAGE"
+      export AMD_INFERENCE_IMAGE="${ROLLBACK_INFERENCE_IMAGE_ID:?missing inference rollback image}"
+      export AMD_RERANKER_IMAGE="${ROLLBACK_RERANKER_IMAGE_ID:?missing reranker rollback image}"
       export MCP_IMAGE="${ROLLBACK_MCP_SERVICE_IMAGE_ID:?missing MCP rollback image}"
       export WEB_IMAGE="${ROLLBACK_WEB_IMAGE_ID:?missing web rollback image}"
       if test "$ROLLBACK_TOPOLOGY" = response; then

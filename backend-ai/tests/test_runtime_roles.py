@@ -44,6 +44,22 @@ def test_rocm_knowledge_image_is_dedicated_and_does_not_include_vllm_or_ingest_t
   assert "-f backend-ai/Dockerfile.rocm" in deploy_script
 
 
+def test_rocm_response_image_is_hardened_pinned_and_built_for_both_response_roles():
+  dockerfile = (ROOT / "backend-ai" / "Dockerfile.response-rocm").read_text(encoding="utf-8")
+  deploy_script = (ROOT / "deploy" / "local" / "deploy.sh").read_text(encoding="utf-8")
+
+  assert "vllm/vllm-openai-rocm@sha256:5709fafe47123becb2f5e61c32d0b97beff1a629bb40bb753c15464f69a97a18" in dockerfile
+  assert "apt-get upgrade -y" in dockerfile
+  assert "pip uninstall -y PyGObject" in dockerfile
+  assert "python -m pip check" in dockerfile
+  assert 'ENTRYPOINT ["vllm", "serve"]' in dockerfile
+  assert 'VLLM_RESPONSE_IMAGE="local/eisenhower-vllm-rocm:${release_sha}"' in deploy_script
+  assert 'export AMD_INFERENCE_IMAGE="$response_image_id"' in deploy_script
+  assert 'export AMD_RERANKER_IMAGE="$response_image_id"' in deploy_script
+  assert "-f backend-ai/Dockerfile.response-rocm" in deploy_script
+  assert 'for image_ref in "$VLLM_RESPONSE_IMAGE" "$MCP_IMAGE" "$WEB_IMAGE"' in deploy_script
+
+
 def test_local_compose_defaults_to_core_and_keeps_heavy_roles_explicit():
   compose = yaml.safe_load((ROOT / "deploy" / "local" / "compose.yaml").read_text())
   services = compose["services"]
@@ -118,3 +134,5 @@ def test_amd_vllm_lifecycle_is_private_bounded_and_opt_in():
   assert "rag-worker" not in compose["services"]
   assert 'AI_ROCM_IMAGE="local/eisenhower-ai-rocm:${release_sha}"' in deploy_script
   assert "Dockerfile.knowledge-rocm-candidate" not in deploy_script
+  assert 'export AMD_INFERENCE_IMAGE="$response_image_id"' in deploy_script
+  assert 'export AMD_RERANKER_IMAGE="$response_image_id"' in deploy_script
