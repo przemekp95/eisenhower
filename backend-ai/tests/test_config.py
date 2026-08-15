@@ -18,6 +18,8 @@ def test_load_settings_uses_defaults():
   assert settings.rag_response_enabled is False
   assert not settings.rag_response_allowed_users
   assert settings.rag_retrieval_strategy == "hybrid-bge-v1"
+  assert settings.chunking_version == settings.llamaindex_pipeline_version
+  assert settings.llamaindex_candidate_collection.endswith("-candidate")
   assert settings.reranker_base_url == "http://reranker:8000"
   assert settings.reranker_api_key is None
   assert settings.memory_write_enabled is False
@@ -68,6 +70,8 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
       "RAG_EMBEDDING_MODEL_REVISION": "5617a9f61b028005a4858fdac845db406aefb181",
       "RAG_EMBEDDING_DEVICE": "cuda",
       "RAG_RETRIEVAL_STRATEGY": "dense-v1",
+      "LLAMAINDEX_CANDIDATE_COLLECTION": "eisenhower-knowledge-llama-v2-candidate",
+      "LLAMAINDEX_PIPELINE_VERSION": "llama-sentence-512-64-v2",
       "RERANKER_BASE_URL": "http://reranker.internal:8000",
       "RERANKER_API_KEY": "reranker-token",
       "RERANKER_ALLOWED_HOSTS": "reranker.internal",
@@ -98,6 +102,8 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
   )
 
   assert settings.training_data_path == tmp_path / "examples.json"
+  assert settings.chunking_version == "llama-sentence-512-64-v2"
+  assert settings.llamaindex_candidate_collection == "eisenhower-knowledge-llama-v2-candidate"
   assert settings.model_cache_dir == tmp_path / "cache"
   assert settings.local_model_name == "sentence-transformers/test-model"
   assert settings.local_model_revision == "0123456789abcdef0123456789abcdef01234567"

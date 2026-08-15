@@ -4,13 +4,18 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 
 
-def test_production_dependencies_do_not_install_experimental_frameworks():
-  requirements = ROOT.joinpath("requirements.txt").read_text(encoding="utf-8")
+def test_only_knowledge_dependencies_install_the_selected_rag_framework():
+  requirements = ROOT.joinpath("requirements.txt").read_text(encoding="utf-8").lower()
+  knowledge_requirements = ROOT.joinpath("requirements-knowledge.txt").read_text(encoding="utf-8").lower()
 
   assert "requirements-experimental.txt" not in requirements
   assert "haystack" not in requirements.lower()
   assert "langchain" not in requirements.lower()
   assert "llama-index" not in requirements.lower()
+  assert "llama-index-core==0.14.23" in knowledge_requirements
+  assert "llama-index-vector-stores-qdrant==0.10.3" in knowledge_requirements
+  assert "qdrant-client==1.19.0" in requirements
+  assert "llama-index" not in ROOT.joinpath("requirements-boundary.txt").read_text(encoding="utf-8").lower()
 
 
 def test_standard_dev_dependencies_do_not_install_experimental_frameworks():
@@ -27,6 +32,7 @@ def test_application_contracts_do_not_import_ai_framework_types():
     ROOT / "app" / "rag" / "models.py",
     ROOT / "app" / "rag" / "ports.py",
     ROOT / "app" / "rag" / "application.py",
+    ROOT / "app" / "api_boundary.py",
   ]
 
   for path in boundary_files:

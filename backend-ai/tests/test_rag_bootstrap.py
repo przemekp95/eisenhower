@@ -5,9 +5,13 @@ import pytest
 
 from app.config import Settings
 from app.rag.canonical import CanonicalRetriever
-from app.rag.bootstrap import build_rag_service, is_private_mongodb_uri
+from app.rag.bootstrap import build_ingestion_application, build_rag_service, is_private_mongodb_uri
 from app.rag.adapters import SentenceTransformerEmbeddingProvider
 from app.rag.hybrid import HybridRetriever
+from app.rag.llamaindex_engine import LlamaIndexChunkingEngine
+from app.rag.qdrant_llamaindex import LlamaIndexQdrantProjection
+from qdrant_client import QdrantClient
+from qdrant_client import models as qmodels
 
 
 class LocalModel:
@@ -46,7 +50,24 @@ class FakeMongo:
 
 
 class FakeQdrant:
-  pass
+  @staticmethod
+  def collection_exists(_name):
+    return False
+
+
+def cutover_qdrant(settings):
+  client = QdrantClient(location=":memory:")
+  client.create_collection(
+    collection_name=settings.llamaindex_candidate_collection,
+    vectors_config=qmodels.VectorParams(size=2, distance=qmodels.Distance.COSINE),
+  )
+  client.update_collection_aliases(change_aliases_operations=[
+    qmodels.CreateAliasOperation(create_alias=qmodels.CreateAlias(
+      collection_name=settings.llamaindex_candidate_collection,
+      alias_name=settings.qdrant_collection_alias,
+    ))
+  ])
+  return client
 
 
 @pytest.mark.parametrize("uri", [
@@ -104,6 +125,74 @@ def test_rag_bootstrap_supports_retrieval_without_generator_configuration(tmp_pa
 
   assert service.generation_enabled is False
   assert isinstance(service.retriever, CanonicalRetriever)
+
+
+def test_rag_bootstrap_uses_standalone_llamaindex_retrieval_after_cutover(tmp_path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    rag_retrieval_enabled=True,
+    rag_generation_enabled=False,
+    rag_retrieval_strategy="dense-v1",
+    qdrant_url="http://qdrant:6333",
+    mongodb_uri="mongodb://mongodb:27017/eisenhower",
+  )
+
+  service = build_rag_service(
+    settings,
+    Fallback(),
+    qdrant_client=cutover_qdrant(settings),
+    mongo_client=FakeMongo(),
+  )
+
+  assert isinstance(service.retriever, CanonicalRetriever)
+  assert isinstance(service.retriever.projection, LlamaIndexQdrantProjection)
+  assert isinstance(service.retriever.chunking_engine, LlamaIndexChunkingEngine)
+
+
+def test_worker_ingestion_uses_the_same_llamaindex_projection_and_pipeline(tmp_path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    qdrant_url="http://qdrant:6333",
+    mongodb_uri="mongodb://mongodb:27017/eisenhower",
+  )
+
+  ingestion = build_ingestion_application(
+    settings,
+    Fallback(),
+    qdrant_client=cutover_qdrant(settings),
+    mongo_client=FakeMongo(),
+  )
+
+  assert isinstance(ingestion.projection, LlamaIndexQdrantProjection)
+  assert isinstance(ingestion.chunking_engine, LlamaIndexChunkingEngine)
+
+
+def test_runtime_refuses_to_start_before_the_guarded_alias_cutover(tmp_path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    rag_retrieval_enabled=True,
+    rag_generation_enabled=False,
+    rag_retrieval_strategy="dense-v1",
+    qdrant_url="http://qdrant:6333",
+    mongodb_uri="mongodb://mongodb:27017/eisenhower",
+  )
+  client = QdrantClient(location=":memory:")
+  client.create_collection(
+    collection_name="legacy-physical",
+    vectors_config=qmodels.VectorParams(size=2, distance=qmodels.Distance.COSINE),
+  )
+  client.update_collection_aliases(change_aliases_operations=[
+    qmodels.CreateAliasOperation(create_alias=qmodels.CreateAlias(
+      collection_name="legacy-physical",
+      alias_name=settings.qdrant_collection_alias,
+    ))
+  ])
+
+  with pytest.raises(ValueError, match="cutover"):
+    build_rag_service(settings, Fallback(), qdrant_client=client, mongo_client=FakeMongo())
 
 
 def test_pinned_sentence_transformer_embedding_provider_is_separate_from_classifier():

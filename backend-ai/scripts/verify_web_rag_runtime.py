@@ -36,13 +36,13 @@ from app.config import Settings
 from app.auth import AuthError, AuthPrincipal
 from app.generation.models import ClassificationOutput, Evidence, Fact, GenerationResult
 from app.main import create_app
-from app.rag.adapters import QdrantIngestionAdapter, QdrantRetriever
 from app.rag.application import RagAnalysisService
-from app.rag.canonical import CanonicalIngestionApplication
+from app.rag.canonical import CanonicalIngestionApplication, CanonicalRetriever
 from app.rag.collections import QdrantCollectionManager
-from app.rag.ingestion import DeterministicChunker
+from app.rag.llamaindex_engine import LlamaIndexChunkingEngine
 from app.rag.models import AccessScope, GenerationRequest, RetrievalQuery, SourceDocument
 from app.rag.mongo_document_store import MongoCanonicalDocumentStore
+from app.rag.qdrant_llamaindex import LlamaIndexQdrantProjection
 from run_retrieval_candidate import PinnedMiniLMEmbedding
 
 
@@ -221,6 +221,14 @@ def _source_sha256(paths: list[Path]) -> str:
   return digest.hexdigest()
 
 
+def _llamaindex_chunking_engine(settings: Settings) -> LlamaIndexChunkingEngine:
+  return LlamaIndexChunkingEngine(
+    chunk_size=settings.llamaindex_chunk_size,
+    chunk_overlap=settings.llamaindex_chunk_overlap,
+    pipeline_version=settings.llamaindex_pipeline_version,
+  )
+
+
 def build_runtime_app(args: argparse.Namespace):
   """Compose current FastAPI/RAG code with real Qdrant and a test generator."""
   settings = Settings(
@@ -236,6 +244,8 @@ def build_runtime_app(args: argparse.Namespace):
     rag_allowed_tenants=("synthetic-a",),
     qdrant_url=args.qdrant_url,
     qdrant_collection_alias=args.qdrant_alias,
+    mongodb_uri=args.mongodb_uri,
+    mongodb_database=args.mongodb_database,
     embedding_version="minilm-v1",
     cors_allow_origins=(args.web_origin,),
   )
@@ -244,8 +254,23 @@ def build_runtime_app(args: argparse.Namespace):
     settings.local_model_revision,
   )
   qdrant = QdrantClient(url=settings.qdrant_url, timeout=20)
+  mongo = MongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=3_000)
+  mongo.admin.command("ping")
+  canonical_store = MongoCanonicalDocumentStore(
+    mongo[settings.mongodb_database][settings.canonical_documents_collection]
+  )
+  projection = LlamaIndexQdrantProjection(
+    qdrant,
+    embedding,
+    collection_name=settings.qdrant_collection_alias,
+  )
   rag_service = RagAnalysisService(
-    QdrantRetriever(qdrant, embedding, collection_alias=settings.qdrant_collection_alias),
+    CanonicalRetriever(
+      projection,
+      canonical_store,
+      embedding_version=embedding.version,
+      chunking_engine=_llamaindex_chunking_engine(settings),
+    ),
     DeterministicGroundedGenerator(),
     RuntimeProofClassifier(),
     retrieval_version=settings.retrieval_version,
@@ -326,11 +351,17 @@ def run() -> dict[str, Any]:
       if line.strip()
     ]
     canonical_store = MongoCanonicalDocumentStore(mongo[database_name].rag_documents)
+    chunking_engine = _llamaindex_chunking_engine(settings)
+    projection = LlamaIndexQdrantProjection(
+      qdrant,
+      embedding,
+      collection_name=alias,
+    )
     ingestion = CanonicalIngestionApplication(
       embedding,
       canonical_store,
-      QdrantIngestionAdapter(qdrant, collection_name=alias),
-      DeterministicChunker(max_chars=1200, overlap_chars=160),
+      projection,
+      chunking_engine,
     )
     ingestion_result = ingestion.ingest(documents)
     reconciliation = {
@@ -342,7 +373,13 @@ def run() -> dict[str, Any]:
     clean_reconciliation = {"projected": 0, "pending": 0, "drifted": 0}
     if any(result != clean_reconciliation for result in reconciliation.values()):
       raise RuntimeError("frozen synthetic corpus projection did not reconcile cleanly")
-    preflight_hits = QdrantRetriever(qdrant, embedding, collection_alias=alias).retrieve(
+    canonical_retriever = CanonicalRetriever(
+      projection,
+      canonical_store,
+      embedding_version=embedding.version,
+      chunking_engine=chunking_engine,
+    )
+    preflight_hits = canonical_retriever.retrieve(
       RetrievalQuery(
         text=RUNTIME_QUERY,
         scope=scope,
@@ -359,7 +396,7 @@ def run() -> dict[str, Any]:
       for hit in preflight_hits
     ):
       raise RuntimeError("real Qdrant retrieval escaped the synthetic browser scope")
-    wrong_user_hits = QdrantRetriever(qdrant, embedding, collection_alias=alias).retrieve(
+    wrong_user_hits = canonical_retriever.retrieve(
       RetrievalQuery(
         text=RUNTIME_QUERY,
         scope=AccessScope(
@@ -393,6 +430,10 @@ def run() -> dict[str, Any]:
         qdrant_url,
         "--qdrant-alias",
         alias,
+        "--mongodb-uri",
+        f"mongodb://127.0.0.1:27017/{database_name}",
+        "--mongodb-database",
+        database_name,
         "--user-token",
         user_token,
         "--admin-token",
@@ -613,6 +654,8 @@ def _parser() -> argparse.ArgumentParser:
   serve.add_argument("--port", type=int, required=True)
   serve.add_argument("--qdrant-url", required=True)
   serve.add_argument("--qdrant-alias", required=True)
+  serve.add_argument("--mongodb-uri", required=True)
+  serve.add_argument("--mongodb-database", required=True)
   serve.add_argument("--user-token", required=True)
   serve.add_argument("--admin-token", required=True)
   serve.add_argument("--web-origin", required=True)

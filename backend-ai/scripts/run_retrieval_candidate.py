@@ -4,6 +4,7 @@ import argparse
 from hashlib import sha256
 from importlib.metadata import version
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -16,7 +17,6 @@ from qdrant_client import QdrantClient, models as qmodels
 from sentence_transformers import CrossEncoder, SentenceTransformer
 
 from app.config import Settings
-from app.rag.adapters import QdrantIngestionAdapter, QdrantRetriever
 from app.rag.canonical import CanonicalIngestionApplication, CanonicalRetriever
 from app.rag.collections import QdrantCollectionManager
 from app.rag.corpus_manifest import CorpusManifest, RepositoryCorpusConnector
@@ -27,9 +27,10 @@ from app.rag.golden_runner import (
   select_train_strategy,
 )
 from app.rag.hybrid import CanonicalBm25Retriever, HybridRetriever
-from app.rag.ingestion import DeterministicChunker
+from app.rag.llamaindex_engine import LlamaIndexChunkingEngine
 from app.rag.models import AccessScope
 from app.rag.mongo_document_store import MongoCanonicalDocumentStore
+from app.rag.qdrant_llamaindex import LlamaIndexQdrantProjection
 from scripts.verify_qdrant_recovery import verify_candidate_collection_snapshot
 
 
@@ -78,9 +79,16 @@ class VllmScoreReranker:
   model_name = "BAAI/bge-reranker-v2-m3"
   revision = "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e"
 
-  def __init__(self, base_url: str):
+  def __init__(self, base_url: str, api_key: str):
+    if not api_key:
+      raise ValueError("reranker API key is required")
     self.base_url = base_url.rstrip("/")
-    response = httpx.get(f"{self.base_url}/v1/models", timeout=10).raise_for_status()
+    self.headers = {"Authorization": f"Bearer {api_key}"}
+    response = httpx.get(
+      f"{self.base_url}/v1/models",
+      headers=self.headers,
+      timeout=10,
+    ).raise_for_status()
     models = response.json()["data"]
     if len(models) != 1 or not models[0]["id"].endswith(self.revision):
       raise ValueError("reranker endpoint does not expose the pinned model revision")
@@ -91,6 +99,7 @@ class VllmScoreReranker:
   def score(self, query_text, ranked_candidates):
     response = httpx.post(
       f"{self.base_url}/score",
+      headers=self.headers,
       json={
         "text_1": query_text,
         "text_2": [
@@ -114,16 +123,37 @@ def _delete_alias(client: QdrantClient, alias: str) -> None:
     ])
 
 
+def _dirty_source_sha256(repository_root: Path) -> str:
+  digest = sha256()
+  digest.update(subprocess.check_output(
+    ["git", "diff", "--binary", "HEAD", "--"],
+    cwd=repository_root,
+  ))
+  untracked = subprocess.check_output(
+    ["git", "ls-files", "--others", "--exclude-standard", "-z"],
+    cwd=repository_root,
+  ).split(b"\0")
+  for raw_path in sorted(path for path in untracked if path):
+    digest.update(raw_path)
+    digest.update((repository_root / raw_path.decode()).read_bytes())
+  return digest.hexdigest()
+
+
 def run(
   candidate_path: Path,
   snapshot_output: Path | None = None,
   repository_root: Path | None = None,
+  corpus_root: Path | None = None,
   mongo_uri: str = "mongodb://127.0.0.1:27017/?directConnection=true",
   qdrant_url: str = "http://127.0.0.1:6333",
   reranker_url: str | None = None,
+  allow_dirty: bool = False,
+  chunk_size: int = 256,
+  chunk_overlap: int = 32,
 ) -> dict:
   repository_root = (repository_root or Path(__file__).resolve().parents[2]).resolve()
-  manifest_path = repository_root / "docs" / "ai-rebuild" / "corpus-manifest-v1.json"
+  corpus_root = (corpus_root or repository_root).resolve()
+  manifest_path = corpus_root / "docs" / "ai-rebuild" / "corpus-manifest-v1.json"
   manifest = CorpusManifest.load(manifest_path)
   candidate_bytes = candidate_path.read_bytes()
   cases = load_golden_dataset(candidate_path)
@@ -137,6 +167,10 @@ def run(
   settings = Settings(
     training_data_path=repository_root / "data" / "training.jsonl",
     model_cache_dir=repository_root / "data" / "models",
+    llamaindex_chunk_size=chunk_size,
+    llamaindex_chunk_overlap=chunk_overlap,
+    llamaindex_pipeline_version=f"llama-sentence-{chunk_size}-{chunk_overlap}-v1",
+    chunking_version=f"llama-sentence-{chunk_size}-{chunk_overlap}-v1",
   )
   embedding = PinnedMiniLMEmbedding(
     settings.local_model_name,
@@ -153,8 +187,17 @@ def run(
   git_dirty = bool(subprocess.check_output(
     ["git", "status", "--porcelain"], cwd=repository_root, text=True,
   ).strip())
-  if git_dirty:
+  if git_dirty and not allow_dirty:
     raise ValueError("retrieval comparison requires a clean exact-SHA repository")
+  source_patch_sha256 = _dirty_source_sha256(repository_root) if git_dirty else None
+  corpus_git_sha = subprocess.check_output(
+    ["git", "rev-parse", "HEAD"], cwd=corpus_root, text=True,
+  ).strip()
+  corpus_git_dirty = bool(subprocess.check_output(
+    ["git", "status", "--porcelain"], cwd=corpus_root, text=True,
+  ).strip())
+  if corpus_git_dirty:
+    raise ValueError("frozen corpus root must be a clean exact-SHA checkout")
   mongo = MongoClient(mongo_uri, serverSelectionTimeoutMS=3_000)
   qdrant = QdrantClient(url=qdrant_url, timeout=20)
   manager = QdrantCollectionManager(qdrant, alias=alias, vector_size=vector_size)
@@ -174,14 +217,23 @@ def run(
       user_id="eisenhower-owner",
       project_ids=["eisenhower"],
     )
-    documents = RepositoryCorpusConnector(repository_root, manifest).load_initial(scope)
+    documents = RepositoryCorpusConnector(corpus_root, manifest).load_initial(scope)
     store = MongoCanonicalDocumentStore(mongo[database_name].rag_documents)
-    projection = QdrantIngestionAdapter(qdrant, collection_name=alias)
+    chunking_engine = LlamaIndexChunkingEngine(
+      chunk_size=settings.llamaindex_chunk_size,
+      chunk_overlap=settings.llamaindex_chunk_overlap,
+      pipeline_version=settings.llamaindex_pipeline_version,
+    )
+    projection = LlamaIndexQdrantProjection(
+      qdrant,
+      embedding,
+      collection_name=collection_name,
+    )
     ingestion = CanonicalIngestionApplication(
       embedding,
       store,
       projection,
-      DeterministicChunker(max_chars=1200, overlap_chars=160),
+      chunking_engine,
     )
     ingestion_result = ingestion.ingest(documents)
     reconciliation = ingestion.reconcile(scope.tenant_id, "eisenhower")
@@ -191,12 +243,11 @@ def run(
       raise RuntimeError("candidate corpus projection did not reconcile cleanly")
 
     dense_retriever = CanonicalRetriever(
-      QdrantRetriever(qdrant, embedding, collection_alias=alias),
+      projection,
       store,
       embedding_version=embedding.version,
-      chunker=DeterministicChunker(max_chars=1200, overlap_chars=160),
+      chunking_engine=chunking_engine,
     )
-    chunker = DeterministicChunker(max_chars=1200, overlap_chars=160)
     configurations = {
       f"rrf{rrf_k}-title{title_weight:g}-lexical{lexical_weight:g}": {
         "rrf_k": rrf_k,
@@ -215,7 +266,7 @@ def run(
       lexical_retriever = CanonicalBm25Retriever(
         store,
         embedding_version=embedding.version,
-        chunker=chunker,
+        chunking_engine=chunking_engine,
         title_weight=configuration["title_weight"],
         text_weight=configuration["text_weight"],
       )
@@ -247,7 +298,13 @@ def run(
       ),
     )
     if reranker_url is not None:
-      reranker_models = (("bge-v2-m3", VllmScoreReranker(reranker_url)),)
+      reranker_models = ((
+        "bge-v2-m3",
+        VllmScoreReranker(
+          reranker_url,
+          os.environ.get("EISENHOWER_RERANKER_API_KEY", ""),
+        ),
+      ),)
     else:
       reranker_models = tuple(
         (slug, PinnedMultilingualReranker(model_name, revision))
@@ -271,7 +328,7 @@ def run(
         lexical_retriever = CanonicalBm25Retriever(
           store,
           embedding_version=embedding.version,
-          chunker=chunker,
+          chunking_engine=chunking_engine,
           title_weight=base_configuration["title_weight"],
           text_weight=base_configuration["text_weight"],
         )
@@ -312,6 +369,9 @@ def run(
       "public_evidence_proven": False,
       "source_git_sha": git_sha,
       "source_git_dirty": git_dirty,
+      "source_patch_sha256": source_patch_sha256,
+      "corpus_git_sha": corpus_git_sha,
+      "corpus_git_dirty": corpus_git_dirty,
       "candidate_sha256": sha256(candidate_bytes).hexdigest(),
       "manifest_sha256": sha256(manifest_path.read_bytes()).hexdigest(),
       "corpus_snapshot_sha256": manifest.initial_snapshot.sha256,
@@ -327,6 +387,11 @@ def run(
         "qdrant_client_version": version("qdrant-client"),
         "pymongo_version": version("pymongo"),
         "sentence_transformers_version": version("sentence-transformers"),
+      },
+      "llamaindex_pipeline": {
+        "version": settings.llamaindex_pipeline_version,
+        "chunk_size": settings.llamaindex_chunk_size,
+        "chunk_overlap": settings.llamaindex_chunk_overlap,
       },
       "ingestion": ingestion_result,
       "reconciliation": reconciliation,
@@ -369,7 +434,11 @@ def main() -> None:
   parser.add_argument("--output", type=Path, required=True)
   parser.add_argument(
     "--repository-root", type=Path,
-    help="Read the frozen corpus from an explicit clean exact-SHA checkout.",
+    help="Bind source-code lineage to an explicit checkout.",
+  )
+  parser.add_argument(
+    "--corpus-root", type=Path,
+    help="Read the frozen corpus from a separate clean exact-SHA checkout.",
   )
   parser.add_argument(
     "--reranker-url",
@@ -380,6 +449,13 @@ def main() -> None:
     help="MongoDB URI for the isolated temporary candidate database.",
   )
   parser.add_argument(
+    "--allow-dirty",
+    action="store_true",
+    help="Bind a local-only report to the complete dirty source patch instead of claiming an immutable SHA.",
+  )
+  parser.add_argument("--chunk-size", type=int, default=256)
+  parser.add_argument("--chunk-overlap", type=int, default=32)
+  parser.add_argument(
     "--qdrant-url", default="http://127.0.0.1:6333",
     help="Qdrant URL for the isolated temporary candidate collection.",
   )
@@ -389,9 +465,13 @@ def main() -> None:
   report = run(
     args.candidate,
     repository_root=args.repository_root,
+    corpus_root=args.corpus_root,
     mongo_uri=args.mongo_uri,
     qdrant_url=args.qdrant_url,
     reranker_url=args.reranker_url,
+    allow_dirty=args.allow_dirty,
+    chunk_size=args.chunk_size,
+    chunk_overlap=args.chunk_overlap,
   )
   args.output.parent.mkdir(parents=True, exist_ok=True)
   args.output.write_text(

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from ipaddress import ip_address
 from urllib.parse import urlparse
 
@@ -14,16 +13,14 @@ from .adapters import (
   CircuitBreakerGenerationProvider,
   MiniLMEmbeddingProvider,
   SentenceTransformerEmbeddingProvider,
-  QdrantRetriever,
-  QdrantIngestionAdapter,
   OpenAICompatibleGenerationProvider,
   is_private_service_url,
 )
 from .application import RagAnalysisService
 from .canonical import CanonicalIngestionApplication, CanonicalRetriever
-from .collections import QdrantCollectionManager
-from .ingestion import DeterministicChunker
 from .hybrid import CanonicalBm25Retriever, HybridRetriever, PrivateVllmReranker
+from .llamaindex_engine import LlamaIndexChunkingEngine
+from .qdrant_llamaindex import LlamaIndexQdrantProjection
 from .mongo_document_store import MongoCanonicalDocumentStore
 
 
@@ -63,10 +60,11 @@ def build_rag_service(
     api_key=settings.qdrant_api_key,
     timeout=5,
   )
-  projection_retriever = QdrantRetriever(
+  _require_llamaindex_cutover(qdrant, settings)
+  projection_retriever = LlamaIndexQdrantProjection(
     qdrant,
     embedding,
-    collection_alias=settings.qdrant_collection_alias,
+    collection_name=settings.qdrant_collection_alias,
   )
   if mongo_client is None:
     from pymongo import MongoClient
@@ -76,21 +74,22 @@ def build_rag_service(
   canonical_store = MongoCanonicalDocumentStore(
     mongo_client[settings.mongodb_database][settings.canonical_documents_collection]
   )
+  chunking_engine = _llamaindex_chunking_engine(settings)
   dense_retriever = CanonicalRetriever(
     projection_retriever,
     canonical_store,
     embedding_version=settings.embedding_version,
-    chunker=DeterministicChunker(max_chars=1200, overlap_chars=160),
+    chunking_engine=chunking_engine,
   )
-  if settings.rag_retrieval_strategy == "dense-v1":
-    retriever = dense_retriever
-  else:
+  lexical_retriever = None
+  reranker = None
+  if settings.rag_retrieval_strategy == "hybrid-bge-v1":
     if not settings.reranker_api_key:
       raise ValueError("RERANKER_API_KEY is required for hybrid-bge-v1")
     lexical_retriever = CanonicalBm25Retriever(
       canonical_store,
       embedding_version=settings.embedding_version,
-      chunker=DeterministicChunker(max_chars=1200, overlap_chars=160),
+      chunking_engine=chunking_engine,
       title_weight=2.0,
       text_weight=1.0,
     )
@@ -100,8 +99,12 @@ def build_rag_service(
       allowed_hosts=settings.reranker_allowed_hosts,
       client=reranker_client,
     )
-    retriever = HybridRetriever(
-      dense_retriever,
+
+  def with_strategy(dense):
+    if lexical_retriever is None or reranker is None:
+      return dense
+    return HybridRetriever(
+      dense,
       lexical_retriever,
       rrf_k=20,
       dense_rrf_weight=1.0,
@@ -111,6 +114,8 @@ def build_rag_service(
       reranker_candidate_limit=20,
       reranker_weight=1.0,
     )
+
+  retriever = with_strategy(dense_retriever)
   return RagAnalysisService(
     retriever,
     generator,
@@ -196,16 +201,10 @@ def build_ingestion_application(
     api_key=settings.qdrant_api_key,
     timeout=10,
   )
-  probe_vector = embedding.embed(["embedding dimension probe"])[0]
-  safe_version = re.sub(r"[^a-zA-Z0-9_-]", "-", settings.embedding_version)
-  initial_collection = f"eisenhower-knowledge-{safe_version}"
-  QdrantCollectionManager(
+  _require_llamaindex_cutover(qdrant, settings)
+  adapter = LlamaIndexQdrantProjection(
     qdrant,
-    alias=settings.qdrant_collection_alias,
-    vector_size=len(probe_vector),
-  ).ensure_active(initial_collection)
-  adapter = QdrantIngestionAdapter(
-    qdrant,
+    embedding,
     collection_name=settings.qdrant_collection_alias,
   )
   if mongo_client is None:
@@ -220,8 +219,32 @@ def build_ingestion_application(
     embedding,
     canonical_store,
     adapter,
-    DeterministicChunker(max_chars=1200, overlap_chars=160),
+    chunking_engine=_llamaindex_chunking_engine(settings),
   )
+
+
+def _llamaindex_chunking_engine(settings: Settings) -> LlamaIndexChunkingEngine:
+  return LlamaIndexChunkingEngine(
+    chunk_size=settings.llamaindex_chunk_size,
+    chunk_overlap=settings.llamaindex_chunk_overlap,
+    pipeline_version=settings.llamaindex_pipeline_version,
+    cache_path=settings.llamaindex_cache_path,
+  )
+
+
+def _require_llamaindex_cutover(qdrant, settings: Settings) -> None:
+  """Fail closed if the runtime alias does not target the approved LlamaIndex collection."""
+  if not hasattr(qdrant, "get_aliases"):
+    return
+  active = [
+    str(alias.collection_name)
+    for alias in qdrant.get_aliases().aliases
+    if alias.alias_name == settings.qdrant_collection_alias
+  ]
+  if active != [settings.llamaindex_candidate_collection]:
+    raise ValueError(
+      "LlamaIndex runtime requires the guarded Qdrant alias cutover to the configured collection"
+    )
 
 
 def _build_retrieval_embedding(settings: Settings, local_model):

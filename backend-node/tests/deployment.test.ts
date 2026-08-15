@@ -21,6 +21,8 @@ describe('production deployment boundaries', () => {
       LOCAL_MODEL_APPROVED_EVALUATION_SHA256: '0'.repeat(64),
       AI_EVALUATION_FILE: '/tmp/production-evaluation.json',
       AUDIT_HMAC_KEY: 'audit-hmac-key-at-least-32-characters',
+      KNOWLEDGE_SERVICE_BASE_URL: 'http://knowledge.internal:8000',
+      KNOWLEDGE_SERVICE_ALLOWED_HOSTS: 'knowledge.internal',
     };
     const { stdout } = await execFileAsync(
       'docker',
@@ -30,7 +32,7 @@ describe('production deployment boundaries', () => {
     const rendered = JSON.parse(stdout) as {
       services: {
         'api-service': { environment: Record<string, string>; volumes: unknown[] };
-        'ai-service': { environment: Record<string, string>; volumes: unknown[] };
+        'ai-service': { environment: Record<string, string>; volumes?: unknown[] };
       };
     };
     const apiEnvironment = rendered.services['api-service'].environment;
@@ -45,11 +47,11 @@ describe('production deployment boundaries', () => {
     });
     expect(() => loadConfig(apiEnvironment)).not.toThrow();
     expect(rendered.services['ai-service'].environment).toMatchObject({
-      AUDIT_HMAC_KEY: environment.AUDIT_HMAC_KEY,
-      RELEASE_SHA: environment.IMAGE_TAG,
-      AUDIT_DATABASE_PATH: '/app/audit/audit.sqlite3',
+      KNOWLEDGE_SERVICE_BASE_URL: environment.KNOWLEDGE_SERVICE_BASE_URL,
+      KNOWLEDGE_SERVICE_ALLOWED_HOSTS: environment.KNOWLEDGE_SERVICE_ALLOWED_HOSTS,
+      CORS_ALLOW_ORIGINS: environment.CORS_ALLOW_ORIGINS,
     });
-    expect(JSON.stringify(rendered.services['ai-service'].volumes)).toContain('/app/audit');
+    expect(rendered.services['ai-service'].volumes).toBeUndefined();
     expect(JSON.stringify(rendered.services['api-service'].volumes)).toContain('/app/audit');
   });
 
@@ -65,10 +67,10 @@ describe('production deployment boundaries', () => {
     expect(aiBlock).not.toMatch(/^\s+ports:/m);
     expect(apiBlock).not.toMatch(/^\s+ports:/m);
     expect(compose).toMatch(/\$\{WEB_PORT:-8080\}:3000/);
-    expect(aiBlock).toContain('APP_ENV: production');
-    expect(aiBlock).toContain('EISENHOWER_API_TOKEN:');
-    expect(aiBlock).toContain('AUDIT_HMAC_KEY:');
-    expect(aiBlock).toContain('RELEASE_SHA:');
+    expect(aiBlock).toContain('eisenhower-ai-boundary');
+    expect(aiBlock).toContain('KNOWLEDGE_SERVICE_BASE_URL:');
+    expect(aiBlock).toContain('KNOWLEDGE_SERVICE_ALLOWED_HOSTS:');
+    expect(aiBlock).not.toMatch(/LOCAL_MODEL|TRAINING_DATA|TESSERACT|QDRANT/);
   });
 
   it('activates private same-SHA metrics scraping and bounded alert rules on Mikrus', () => {
@@ -88,7 +90,8 @@ describe('production deployment boundaries', () => {
     expect(compose).toMatch(/prom\/prometheus:[^\s]+@sha256:[a-f0-9]{64}/);
     expect(compose).not.toMatch(/prometheus:[\s\S]*?ports:/);
     expect(prometheus).toContain("targets: ['ai-service:8000']");
-    expect(alerts).toContain('EisenhowerAuditWriteFailed');
+    expect(alerts).toContain('EisenhowerKnowledgeServiceDown');
+    expect(alerts).not.toContain('eisenhower_rag_');
     expect(deployScript).toContain('eisenhower_release_info{sha=');
   });
 
