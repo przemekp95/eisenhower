@@ -19,8 +19,8 @@ Reduce the backend AI footprint without changing public contracts: separate ligh
 Implemented four role-specific CPU targets with a 248 MB public boundary, fail-closed hash-approved
 classification, explicit core/retrieval/response/full actions, shared bounded SQLite jobs, mandatory measured
 resource inputs, offline revision-pinned caches and private authenticated vLLM scale-to-zero orchestration.
-Exact-SHA role builds, SBOMs, vulnerability scans, CPU boundary/classifier/knowledge benchmarks and Compose
-renders are green; the detailed evidence and methodology assessment are in
+Exact-SHA role builds, SBOMs, CPU-role vulnerability scans, boundary/classifier/knowledge benchmarks and
+Compose renders are green; the pinned upstream vLLM response image remains a red security gate. The detailed evidence and methodology assessment are in
 `docs/ai-rebuild/runtime-footprint-task048.md`. A fresh isolated 36-case non-holdout comparison rejected the
 no-reranker candidate because global and Polish MRR missed the declared policy despite lower latency; the
 governed frozen holdout remains unopened. Ingest now requires a complete hash-verified read-only Docling

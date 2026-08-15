@@ -1,7 +1,8 @@
 # TASK-048 runtime footprint evidence
 
 Status: implementation and local CPU/image evidence complete; physical response lifecycle is characterized
-and the dedicated knowledge ROCm runtime is selected after physical and all-severity security measurement. Governed holdout and deployment
+and the dedicated knowledge ROCm runtime is selected after physical and all-severity security measurement.
+Governed holdout and deployment
 gates remain open. Nothing in this report proves deployment, Mikrus capacity, production behavior or human
 acceptance.
 
@@ -120,8 +121,8 @@ cleanup, timeout cleanup or production behavior.
 ## Verification
 
 - focused red/green tests for each implementation slice;
-- final backend AI and local deployment suite after the lifecycle follow-up: 697 passed, 11 skipped, coverage
-  85.50%;
+- final backend AI and local deployment suite after the all-severity follow-up: 697 passed, 11 skipped, backend
+  coverage 87.91%;
 - production dependency audit: 171 dependencies; exact official PyTorch CPU wheel sources and SHA-256 values
   verified for the two explicit audit blind spots;
 - four exact-SHA role builds, CycloneDX SBOMs and role vulnerability scans;
