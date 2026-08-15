@@ -124,10 +124,10 @@ def test_amd_vllm_lifecycle_is_private_bounded_and_opt_in():
   assert "sleep-response" in deploy_script
   assert "wake-response" in deploy_script
   assert "/v1/models" in deploy_script
-  assert "compose_response start inference reranker" in deploy_script
-  assert deploy_script.index("compose_response start inference reranker") < deploy_script.index(
-    "compose_response up --no-deps -d inference reranker"
-  )
+  assert "compose_response start reranker" in deploy_script
+  assert "compose_response start inference" in deploy_script
+  assert "compose_response up --no-deps -d reranker" in deploy_script
+  assert "compose_response up --no-deps -d inference" in deploy_script
   assert compose["services"]["knowledge-service"]["image"].startswith("${AI_ROCM_IMAGE")
   assert "render" not in compose["services"]["knowledge-service"]["group_add"]
   assert "110" in compose["services"]["knowledge-service"]["group_add"]
@@ -136,3 +136,16 @@ def test_amd_vllm_lifecycle_is_private_bounded_and_opt_in():
   assert "Dockerfile.knowledge-rocm-candidate" not in deploy_script
   assert 'export AMD_INFERENCE_IMAGE="$response_image_id"' in deploy_script
   assert 'export AMD_RERANKER_IMAGE="$response_image_id"' in deploy_script
+
+
+def test_response_cold_wake_serializes_reranker_before_inference():
+  deploy_script = (ROOT / "deploy" / "local" / "deploy.sh").read_text(encoding="utf-8")
+  wake = deploy_script.split("wake_response() {", 1)[1].split("\n}\n", 1)[0]
+
+  assert "start reranker" in wake
+  assert "wait_for_response_service reranker" in wake
+  assert "start inference" in wake
+  assert "wait_for_response_service inference" in wake
+  assert wake.index("start reranker") < wake.index("wait_for_response_service reranker")
+  assert wake.index("wait_for_response_service reranker") < wake.index("start inference")
+  assert wake.index("start inference") < wake.index("wait_for_response_service inference")

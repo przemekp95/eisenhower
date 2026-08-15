@@ -387,26 +387,40 @@ sleep_response() {
   compose_response stop inference reranker
 }
 
+wait_for_response_service() {
+  service="$1"
+  deadline="$2"
+  while test "$(date +%s)" -lt "$deadline"; do
+    if compose_response exec -T "$service" sh -c \
+      'curl -fsS -H "Authorization: Bearer $VLLM_API_KEY" http://127.0.0.1:8000/v1/models >/dev/null'; then
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
+
 wake_response() {
   validate_lifecycle_auth
   validate_response_inputs
   timeout_seconds="${INFERENCE_WAKE_TIMEOUT_SECONDS:?INFERENCE_WAKE_TIMEOUT_SECONDS is required}"
   case "$timeout_seconds" in *[!0-9]*|'') echo "Wake timeout must be a positive integer" >&2; exit 1 ;; esac
   test "$timeout_seconds" -gt 0 || { echo "Wake timeout must be positive" >&2; exit 1; }
-  # Preserve the exact stopped container/image when scale-to-zero was used.
-  # Only create containers when this is the first cold start.
-  compose_response start inference reranker \
-    || compose_response up --no-deps -d inference reranker
   deadline=$(( $(date +%s) + timeout_seconds ))
-  while test "$(date +%s)" -lt "$deadline"; do
-    if compose_response exec -T inference sh -c \
-      'curl -fsS -H "Authorization: Bearer $VLLM_API_KEY" http://127.0.0.1:8000/v1/models >/dev/null' \
-      && compose_response exec -T reranker sh -c \
-      'curl -fsS -H "Authorization: Bearer $VLLM_API_KEY" http://127.0.0.1:8000/v1/models >/dev/null'; then
-      return 0
-    fi
-    sleep 2
-  done
+  # Preserve exact stopped containers/images and serialize cold-load. Physical
+  # gfx1151 evidence showed that simultaneous model loading can starve Qwen.
+  compose_response start reranker \
+    || compose_response up --no-deps -d reranker
+  wait_for_response_service reranker "$deadline" || {
+    echo "Reranker cold wake timed out; stopping partial runtime" >&2
+    compose_response stop inference reranker
+    return 1
+  }
+  compose_response start inference \
+    || compose_response up --no-deps -d inference
+  if wait_for_response_service inference "$deadline"; then
+    return 0
+  fi
   echo "Response runtime cold wake timed out; stopping partial runtime" >&2
   compose_response stop inference reranker
   return 1
