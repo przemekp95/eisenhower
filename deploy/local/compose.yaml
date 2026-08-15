@@ -299,6 +299,8 @@ services:
       - LOCAL_MODEL_APPROVED_EVALUATION_SHA256=${LOCAL_MODEL_APPROVED_EVALUATION_SHA256:?approved evaluation digest is required}
       - EVALUATION_DATA_PATH=/app/evaluation/production.json
       - MODEL_CACHE_DIR=/app/runtime
+      - DOCLING_ARTIFACTS_PATH=/app/docling-artifacts
+      - DOCLING_ARTIFACTS_MANIFEST_SHA256=${DOCLING_ARTIFACTS_MANIFEST_SHA256:?approved Docling artifact manifest digest is required}
       - JOBS_DATABASE_PATH=/app/data/jobs.sqlite3
       - JOBS_MAX_QUEUED=${JOBS_MAX_QUEUED:?measured bounded queue capacity is required}
       - EISENHOWER_WEBHOOK_SECRET=${EISENHOWER_WEBHOOK_SECRET:?EISENHOWER_WEBHOOK_SECRET is required}
@@ -318,6 +320,7 @@ services:
       - rag_jobs:/app/data
       - model_cache:/home/app/.cache/huggingface
       - ingest_runtime:/app/runtime
+      - ${AI_DOCLING_ARTIFACT_ROOT:?approved Docling artifact directory is required}:/app/docling-artifacts:ro
       - ${AI_CLASSIFIER_ARTIFACT_ROOT:?approved classifier artifact directory is required}:/app/model-artifacts:ro
       - ${AI_EVALUATION_FILE:?approved evaluation file is required}:/app/evaluation/production.json:ro
       - ../../README.md:/corpus/README.md:ro

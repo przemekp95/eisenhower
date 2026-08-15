@@ -59,6 +59,19 @@ Each matching `render-*` action renders only its graph. All first-party images a
    are enabled, the promotion controller's `current.json`, candidate ID and tenant/user allowlists are also
    mandatory.
 
+   Retrieval also requires an explicitly prepared Docling layout-model bundle. Preparing it is an offline
+   operator action, never a builder or production-startup download:
+
+   ```bash
+   PYTHONPATH=backend-ai backend-ai/venv/bin/python \
+     backend-ai/scripts/prepare_docling_artifact.py --output /absolute/new/revision-directory
+   ```
+
+   Set `AI_DOCLING_ARTIFACT_ROOT` to that directory and
+   `DOCLING_ARTIFACTS_MANIFEST_SHA256` to the digest printed by the command. Deployment verifies the manifest
+   before starting retrieval; the worker mounts the bundle read-only and verifies the pinned repository,
+   revision, complete file set, sizes and SHA-256 hashes before constructing Docling.
+
 3. Render without pulling or starting containers, then choose exactly one deployment action:
 
    ```bash

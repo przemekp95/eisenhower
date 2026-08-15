@@ -44,11 +44,23 @@ def test_local_compose_defaults_to_core_and_keeps_heavy_roles_explicit():
     environment = services[service]["environment"]
     assert "HF_HUB_OFFLINE=1" in environment
     assert "TRANSFORMERS_OFFLINE=1" in environment
+  worker = services["rag-worker"]
+  assert "DOCLING_ARTIFACTS_PATH=/app/docling-artifacts" in worker["environment"]
+  assert (
+    "DOCLING_ARTIFACTS_MANIFEST_SHA256="
+    "${DOCLING_ARTIFACTS_MANIFEST_SHA256:?approved Docling artifact manifest digest is required}"
+  ) in worker["environment"]
+  assert (
+    "${AI_DOCLING_ARTIFACT_ROOT:?approved Docling artifact directory is required}:"
+    "/app/docling-artifacts:ro"
+  ) in worker["volumes"]
 
   deploy_script = (ROOT / "deploy" / "local" / "deploy.sh").read_text(encoding="utf-8")
   for action in ("deploy-core", "deploy-retrieval", "deploy-response", "deploy-full"):
     assert f"{action})" in deploy_script
   assert "deploy) deploy_core" in deploy_script
+  assert "validate_docling_approval" in deploy_script
+  assert "Docling artifact manifest digest mismatch" in deploy_script
 
 
 def test_amd_vllm_lifecycle_is_private_bounded_and_opt_in():

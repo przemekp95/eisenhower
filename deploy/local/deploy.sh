@@ -206,8 +206,22 @@ validate_core_inputs() {
   validate_classifier_approval
 }
 
+validate_docling_approval() {
+  docling_manifest="${AI_DOCLING_ARTIFACT_ROOT:-}/manifest.json"
+  test -f "$docling_manifest" || {
+    echo "Approved Docling artifact manifest is required" >&2
+    exit 1
+  }
+  docling_digest="$(sha256sum "$docling_manifest" | awk '{print $1}')"
+  test "$docling_digest" = "${DOCLING_ARTIFACTS_MANIFEST_SHA256:-}" || {
+    echo "Docling artifact manifest digest mismatch" >&2
+    exit 1
+  }
+}
+
 validate_retrieval_inputs() {
   validate_core_inputs
+  validate_docling_approval
   test -n "${RERANKER_API_KEY:-}" || { echo "RERANKER_API_KEY is required" >&2; exit 1; }
   test -n "${RAG_ALLOWED_TENANTS:-}" || { echo "RAG_ALLOWED_TENANTS is required" >&2; exit 1; }
 }

@@ -141,6 +141,9 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
   cpus = validate_limit("cpus", args.cpus)
   pids = validate_limit("pids", args.pids)
   workspace = args.workspace.resolve()
+  docling_artifacts = args.docling_artifacts.resolve()
+  if not (docling_artifacts / "manifest.json").is_file():
+    raise ValueError("Docling artifact manifest is missing")
   container_name = f"eisenhower-task048-ingest-benchmark-{uuid4().hex[:12]}"
   command = [
     "docker", "create",
@@ -152,6 +155,9 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     "--pids-limit", pids,
     "--env", "HF_HUB_OFFLINE=1",
     "--env", "TRANSFORMERS_OFFLINE=1",
+    "--env", "APP_ENV=production",
+    "--env", "DOCLING_ARTIFACTS_PATH=/app/docling-artifacts",
+    "--env", f"DOCLING_ARTIFACTS_MANIFEST_SHA256={args.docling_manifest_sha256}",
     "--env", "TOKENIZERS_PARALLELISM=false",
     "--env", "OMP_NUM_THREADS=1",
     "--env", "TORCH_NUM_THREADS=1",
@@ -160,6 +166,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     "--env", "PYTHONPATH=/workspace/backend-ai",
     "--volume", f"{workspace}:/workspace:ro",
     "--volume", f"{args.model_cache_volume}:/home/app/.cache/huggingface:ro",
+    "--volume", f"{docling_artifacts}:/app/docling-artifacts:ro",
     "--workdir", "/workspace/backend-ai",
     "--entrypoint", "python",
     args.image,
@@ -229,6 +236,8 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         "command": "scripts/benchmark_document_extraction.py",
         "fixture_scope": "repository-approved synthetic extraction fixtures",
         "model_cache_read_only": True,
+        "docling_artifacts_read_only": True,
+        "docling_manifest_sha256": args.docling_manifest_sha256,
         "workspace_read_only": True,
         "network_expected": False,
       },
@@ -269,6 +278,8 @@ def parse_args() -> argparse.Namespace:
     "--model-cache-volume",
     default="eisenhower-local-production_model_cache",
   )
+  parser.add_argument("--docling-artifacts", type=Path, required=True)
+  parser.add_argument("--docling-manifest-sha256", required=True)
   parser.add_argument("--memory", required=True)
   parser.add_argument("--cpus", required=True)
   parser.add_argument("--pids", required=True)
