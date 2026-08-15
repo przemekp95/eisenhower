@@ -1,0 +1,1248 @@
+{
+  "case_ids": [
+    "holdout-pl-recruiter-scope",
+    "holdout-en-no-customer-phone",
+    "holdout-pl-cross-tenant",
+    "holdout-en-wrong-project",
+    "holdout-pl-fresh-operations",
+    "holdout-en-multi-document"
+  ],
+  "cleanup": {
+    "mongo_database_dropped": true,
+    "qdrant_collection_deleted": true
+  },
+  "configuration": {
+    "candidate_multiplier": 4,
+    "dense_rrf_weight": 1.0,
+    "lexical_rrf_weight": 2.0,
+    "reranker_candidate_limit": 20,
+    "reranker_max_tokens": 192,
+    "reranker_model": "BAAI/bge-reranker-v2-m3",
+    "reranker_revision": "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e",
+    "reranker_weight": 1.0,
+    "rrf_k": 20,
+    "text_weight": 1.0,
+    "title_weight": 2.0
+  },
+  "dataset_version": "retrieval-review-candidate-v3-unapproved",
+  "evaluated_split": "holdout",
+  "governance": {
+    "approval_authentication": "repository_record_only",
+    "approval_mode": "time_bounded_owner_acceptance",
+    "approval_receipt_sha256": "132c878322ae75fa3bc8bbb3199ae4ca723b607ce43070cf7f13cf4d1a573ef3",
+    "approval_use_marker": "runtime-footprint-holdout-owner-acceptance-v1.json.132c878322ae75fa3bc8bbb3199ae4ca723b607ce43070cf7f13cf4d1a573ef3.used",
+    "approval_valid_until": "2026-08-15T23:59:59+02:00",
+    "case_decisions_created": false,
+    "deployment_authorized": false,
+    "governance_issues": [
+      "owner_accepted_missing_independent_relevance_review"
+    ],
+    "independent_human_review_satisfied": false,
+    "promotion_authorized": false,
+    "single_use": true,
+    "tuning_authorized": false
+  },
+  "holdout_completed_at": "2026-08-15T20:10:26.962705+00:00",
+  "holdout_started_at": "2026-08-15T20:10:19.298187+00:00",
+  "model": {
+    "embedding_version": "minilm-v1",
+    "id": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42"
+  },
+  "quality_gate": {
+    "rollback_strategy": "hybrid-bge-v1",
+    "selected_strategy": "hybrid_reranker",
+    "simplification_accepted": false,
+    "strategies": {
+      "hybrid_no_reranker": {
+        "checks": {
+          "global.duplicate_hit_rate_max": true,
+          "global.forbidden_hit_rate_max": true,
+          "global.freshness_rate_min": true,
+          "global.isolation_violation_rate_max": true,
+          "global.mrr_at_k_min": false,
+          "global.no_hit_accuracy_min": false,
+          "global.recall_at_k_min": false,
+          "global.stale_hit_rate_max": true,
+          "required_slices.language_en.mrr_at_k_min": false,
+          "required_slices.language_en.recall_at_k_min": true,
+          "required_slices.language_pl.mrr_at_k_min": false,
+          "required_slices.language_pl.recall_at_k_min": false,
+          "required_slices.split_holdout.mrr_at_k_min": false,
+          "required_slices.split_holdout.no_hit_accuracy_min": false,
+          "required_slices.split_holdout.recall_at_k_min": false
+        },
+        "passed": false
+      },
+      "hybrid_reranker": {
+        "checks": {
+          "global.duplicate_hit_rate_max": true,
+          "global.forbidden_hit_rate_max": true,
+          "global.freshness_rate_min": true,
+          "global.isolation_violation_rate_max": true,
+          "global.mrr_at_k_min": false,
+          "global.no_hit_accuracy_min": false,
+          "global.recall_at_k_min": false,
+          "global.stale_hit_rate_max": true,
+          "required_slices.language_en.mrr_at_k_min": false,
+          "required_slices.language_en.recall_at_k_min": true,
+          "required_slices.language_pl.mrr_at_k_min": false,
+          "required_slices.language_pl.recall_at_k_min": false,
+          "required_slices.split_holdout.mrr_at_k_min": false,
+          "required_slices.split_holdout.no_hit_accuracy_min": false,
+          "required_slices.split_holdout.recall_at_k_min": false
+        },
+        "passed": false
+      }
+    },
+    "thresholds_sha256": "e37602d4cbd9a304675382b7d32d999a977631405fc8527bfb29388779e521bb"
+  },
+  "runtime": {
+    "pymongo_version": "4.17.0",
+    "qdrant_client_version": "1.12.0",
+    "qdrant_server_version": "1.12.0"
+  },
+  "schema_version": "retrieval-runtime-footprint-holdout-v1",
+  "source_git_dirty": true,
+  "source_git_sha": "e4e824fac269da328186b5611603a4a532cebf64",
+  "strategies": {
+    "hybrid_no_reranker": {
+      "cases": [
+        {
+          "actual_citation_ids": [],
+          "actual_no_answer": false,
+          "actual_quadrant": null,
+          "allowed_citation_ids": [],
+          "case_id": "holdout-pl-recruiter-scope",
+          "duplicate_hit_ids": [],
+          "execution_id": null,
+          "expected_content_versions": {
+            "c16a06e30b55bb570105b18a161802a8e1fc8556e039fd27f1c69f7dd1ca2fac": "eisenhower-corpus-v1:52686331a28e8c00ec50c02be133cb7305a72923c1b4b0ccc49b565ef60603ea"
+          },
+          "expected_no_answer": false,
+          "expected_quadrant": null,
+          "forbidden_document_ids": [],
+          "grounded": false,
+          "injection_attempt": false,
+          "injection_success": false,
+          "language": "pl",
+          "latency_ms": 49.78625899821054,
+          "model_id": null,
+          "model_revision": null,
+          "output_tokens": 0,
+          "prompt_id": null,
+          "prompt_tokens": 0,
+          "prompt_version": null,
+          "raw_confidence": null,
+          "relevant_document_ids": [
+            "c16a06e30b55bb570105b18a161802a8e1fc8556e039fd27f1c69f7dd1ca2fac"
+          ],
+          "result_mode": "rag",
+          "retrieved_chunk_ids": [
+            "ad325ed9a1898d4f7c98944d8e6e450c7ed650c571f5d0dcd5720b4182dd4314",
+            "2d17457db5be2d41239164fe0ad648da59ae2cdc4a00f09782ab17ed16d554f2",
+            "928c772a2442c745958892bf5f722a49ded5cd16b6a1a09fb3d0bf2a71e5614c",
+            "e8339559316ad4073909b4b7d0e3d09e3a6469ec248cdafeaddb5dff69823328",
+            "a21329c99b53a4d186766b093c7eaa780c6f8f795ad817366feef833b4dd1e22"
+          ],
+          "retrieved_content_versions": [
+            "eisenhower-corpus-v1:52686331a28e8c00ec50c02be133cb7305a72923c1b4b0ccc49b565ef60603ea",
+            "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a",
+            "eisenhower-corpus-v1:7c40b2742030da356bc2f049d3b67ffc7f1a5c92f46b424af3304a015ab685ee",
+            "eisenhower-corpus-v1:a6d4fe50f25a405b6a74c8b09b517f69f41269ecaadf18316b8a76399cc92cc7",
+            "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582"
+          ],
+          "retrieved_document_ids": [
+            "c16a06e30b55bb570105b18a161802a8e1fc8556e039fd27f1c69f7dd1ca2fac",
+            "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349",
+            "1c2db50c264df20f3eeedcd9c748edcbe663bc925d817d3ee7c8da663eabcd6d",
+            "a15ecec4e605d792571456120580b1c996abf893d2cb378b23ca2f4ac42e6682",
+            "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251"
+          ],
+          "schema_valid": true,
+          "schema_version": null,
+          "split": "holdout",
+          "stale_document_ids": []
+        },
+        {
+          "actual_citation_ids": [],
+          "actual_no_answer": false,
+          "actual_quadrant": null,
+          "allowed_citation_ids": [],
+          "case_id": "holdout-en-no-customer-phone",
+          "duplicate_hit_ids": [],
+          "execution_id": null,
+          "expected_content_versions": {},
+          "expected_no_answer": true,
+          "expected_quadrant": null,
+          "forbidden_document_ids": [],
+          "grounded": false,
+          "injection_attempt": false,
+          "injection_success": false,
+          "language": "en",
+          "latency_ms": 39.47094800241757,
+          "model_id": null,
+          "model_revision": null,
+          "output_tokens": 0,
+          "prompt_id": null,
+          "prompt_tokens": 0,
+          "prompt_version": null,
+          "raw_confidence": null,
+          "relevant_document_ids": [],
+          "result_mode": "rag",
+          "retrieved_chunk_ids": [
+            "e056c1cef48c87bec14e873e3ae895b82fd66c67d4845e3702a4db9501e2c3e3",
+            "005d0af4e2552815d54ff42f2d501267406bdee0a935678f9eb2fed71af9d4a6",
+            "cb23fd57a58c3141a3b4ff44e4f5c57e374844b29033632b535d4acee78602c2",
+            "d80d8b77bd694641cabedc2e12564fb590ddd5284885b8098ef70e790d751dd6",
+            "273322418ff9c45af54200ed600b990dae07e0e93f7323099d4a1ee547828685"
+          ],
+          "retrieved_content_versions": [
+            "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582",
+            "eisenhower-corpus-v1:52686331a28e8c00ec50c02be133cb7305a72923c1b4b0ccc49b565ef60603ea",
+            "eisenhower-corpus-v1:13372fa141f184ca91530f3658c1a3984aece3673384155ff09427e0102333c7",
+            "eisenhower-corpus-v1:798e88324008bc881d122d5795475f0266edd88dd8a1c1390c1e9c026c059f8a",
+            "eisenhower-corpus-v1:1b7d4c9053120ac715c5f4457d9227f12ac75a241deca807ec2ec78603ed5fa3"
+          ],
+          "retrieved_document_ids": [
+            "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251",
+            "c16a06e30b55bb570105b18a161802a8e1fc8556e039fd27f1c69f7dd1ca2fac",
+            "e6b4f85bad442748a410f84958a6129e6441114dfffcdf3d42ddcbfc81587626",
+            "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec",
+            "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45"
+          ],
+          "schema_valid": true,
+          "schema_version": null,
+          "split": "holdout",
+          "stale_document_ids": []
+        },
+        {
+          "actual_citation_ids": [],
+          "actual_no_answer": true,
+          "actual_quadrant": null,
+          "allowed_citation_ids": [],
+          "case_id": "holdout-pl-cross-tenant",
+          "duplicate_hit_ids": [],
+          "execution_id": null,
+          "expected_content_versions": {},
+          "expected_no_answer": true,
+          "expected_quadrant": null,
+          "forbidden_document_ids": [
+            "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714"
+          ],
+          "grounded": false,
+          "injection_attempt": false,
+          "injection_success": false,
+          "language": "pl",
+          "latency_ms": 19.544239999959245,
+          "model_id": null,
+          "model_revision": null,
+          "output_tokens": 0,
+          "prompt_id": null,
+          "prompt_tokens": 0,
+          "prompt_version": null,
+          "raw_confidence": null,
+          "relevant_document_ids": [],
+          "result_mode": "no_answer",
+          "retrieved_chunk_ids": [],
+          "retrieved_content_versions": [],
+          "retrieved_document_ids": [],
+          "schema_valid": true,
+          "schema_version": null,
+          "split": "holdout",
+          "stale_document_ids": []
+        },
+        {
+          "actual_citation_ids": [],
+          "actual_no_answer": true,
+          "actual_quadrant": null,
+          "allowed_citation_ids": [],
+          "case_id": "holdout-en-wrong-project",
+          "duplicate_hit_ids": [],
+          "execution_id": null,
+          "expected_content_versions": {},
+          "expected_no_answer": true,
+          "expected_quadrant": null,
+          "forbidden_document_ids": [
+            "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c"
+          ],
+          "grounded": false,
+          "injection_attempt": false,
+          "injection_success": false,
+          "language": "en",
+          "latency_ms": 18.9635599963367,
+          "model_id": null,
+          "model_revision": null,
+          "output_tokens": 0,
+          "prompt_id": null,
+          "prompt_tokens": 0,
+          "prompt_version": null,
+          "raw_confidence": null,
+          "relevant_document_ids": [],
+          "result_mode": "no_answer",
+          "retrieved_chunk_ids": [],
+          "retrieved_content_versions": [],
+          "retrieved_document_ids": [],
+          "schema_valid": true,
+          "schema_version": null,
+          "split": "holdout",
+          "stale_document_ids": []
+        },
+        {
+          "actual_citation_ids": [],
+          "actual_no_answer": false,
+          "actual_quadrant": null,
+          "allowed_citation_ids": [],
+          "case_id": "holdout-pl-fresh-operations",
+          "duplicate_hit_ids": [],
+          "execution_id": null,
+          "expected_content_versions": {
+            "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c": "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff"
+          },
+          "expected_no_answer": false,
+          "expected_quadrant": null,
+          "forbidden_document_ids": [],
+          "grounded": false,
+          "injection_attempt": false,
+          "injection_success": false,
+          "language": "pl",
+          "latency_ms": 38.634485987131484,
+          "model_id": null,
+          "model_revision": null,
+          "output_tokens": 0,
+          "prompt_id": null,
+          "prompt_tokens": 0,
+          "prompt_version": null,
+          "raw_confidence": null,
+          "relevant_document_ids": [
+            "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c"
+          ],
+          "result_mode": "rag",
+          "retrieved_chunk_ids": [
+            "f6b727f0f4087d3830c139c36d3b0eca51486ea8485c4520b4702254c1ce3fee",
+            "f8d3cc821fcd86ff23371156ca8d0df80bc628818fef8166f8c75a02f44ca9f7",
+            "ece49b4ad19211bd060de7a252863af6c0bdf38762ec323f65a20af7a52d061e",
+            "bf7d932aac054237843b4642bbcfd6e9d2326879e24745e2a15f665c6690b9bd",
+            "381d54a33c2001174508530bc26d776b02d76a6b0b2503e8fcf46859510b7738"
+          ],
+          "retrieved_content_versions": [
+            "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a",
+            "eisenhower-corpus-v1:880dc8f430bb2e52b8ef94485fb8a97d81a5e6c5acbcc3e07a98794f28030d80",
+            "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6",
+            "eisenhower-corpus-v1:7c0d078dfb8ef17871a4f510c15f1905b9499afe7f89e73cd93dddff4fe61a02",
+            "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582"
+          ],
+          "retrieved_document_ids": [
+            "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349",
+            "dad8a42bab7ada70cb2b7eacd84d77c95929796b09f8b2f0b2ab8aa23e3d98f3",
+            "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+            "de01489e092e91cc0e21ebbb2a1e8800f3af5ae706b45d88de79467d6a1b8d6d",
+            "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251"
+          ],
+          "schema_valid": true,
+          "schema_version": null,
+          "split": "holdout",
+          "stale_document_ids": []
+        },
+        {
+          "actual_citation_ids": [],
+          "actual_no_answer": false,
+          "actual_quadrant": null,
+          "allowed_citation_ids": [],
+          "case_id": "holdout-en-multi-document",
+          "duplicate_hit_ids": [],
+          "execution_id": null,
+          "expected_content_versions": {
+            "7e4a68f3f60fa02e47af3988fbf8350d029bda2e7bad19d5f3a8a57fc9e309ec": "eisenhower-corpus-v1:f58cf8618d835b3cf70c61c339c76d9dad2ac61cc1fbc91b4d9a3f0889557b3c",
+            "dad8a42bab7ada70cb2b7eacd84d77c95929796b09f8b2f0b2ab8aa23e3d98f3": "eisenhower-corpus-v1:880dc8f430bb2e52b8ef94485fb8a97d81a5e6c5acbcc3e07a98794f28030d80"
+          },
+          "expected_no_answer": false,
+          "expected_quadrant": null,
+          "forbidden_document_ids": [],
+          "grounded": false,
+          "injection_attempt": false,
+          "injection_success": false,
+          "language": "en",
+          "latency_ms": 54.24953400506638,
+          "model_id": null,
+          "model_revision": null,
+          "output_tokens": 0,
+          "prompt_id": null,
+          "prompt_tokens": 0,
+          "prompt_version": null,
+          "raw_confidence": null,
+          "relevant_document_ids": [
+            "dad8a42bab7ada70cb2b7eacd84d77c95929796b09f8b2f0b2ab8aa23e3d98f3",
+            "7e4a68f3f60fa02e47af3988fbf8350d029bda2e7bad19d5f3a8a57fc9e309ec"
+          ],
+          "result_mode": "rag",
+          "retrieved_chunk_ids": [
+            "f8d3cc821fcd86ff23371156ca8d0df80bc628818fef8166f8c75a02f44ca9f7",
+            "cd26766b1e065f9dbd1c6e5f658479836d1e64799fcdb379997e4e6054a6eb34",
+            "355368fd674a758ac2a1a2ca028f167b91165da1baf0d080c63f92179584500a",
+            "e056c1cef48c87bec14e873e3ae895b82fd66c67d4845e3702a4db9501e2c3e3",
+            "122a6d97a7c12cd6553d6f29930455513bbd1d9b7f062c3a0690e6ed1c722224"
+          ],
+          "retrieved_content_versions": [
+            "eisenhower-corpus-v1:880dc8f430bb2e52b8ef94485fb8a97d81a5e6c5acbcc3e07a98794f28030d80",
+            "eisenhower-corpus-v1:f58cf8618d835b3cf70c61c339c76d9dad2ac61cc1fbc91b4d9a3f0889557b3c",
+            "eisenhower-corpus-v1:a3a5df474c7dc890942ddc6d0a1d5da348f056099e933358eca52e902d15b8e8",
+            "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582",
+            "eisenhower-corpus-v1:7a834f647213811a9967e3a4806de66c0200d933dd988450c746ee89721347db"
+          ],
+          "retrieved_document_ids": [
+            "dad8a42bab7ada70cb2b7eacd84d77c95929796b09f8b2f0b2ab8aa23e3d98f3",
+            "7e4a68f3f60fa02e47af3988fbf8350d029bda2e7bad19d5f3a8a57fc9e309ec",
+            "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714",
+            "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251",
+            "bae5208325e3f095be743146b433e20b44d6251cb3b3244b750a609f81915554"
+          ],
+          "schema_valid": true,
+          "schema_version": null,
+          "split": "holdout",
+          "stale_document_ids": []
+        }
+      ],
+      "dataset_version": "retrieval-review-candidate-v3-unapproved",
+      "metrics": {
+        "accuracy": 0.0,
+        "by_language": {
+          "en": {
+            "accuracy": 0.0,
+            "calibration": {
+              "brier_score": 0.0,
+              "cases": 0,
+              "ece": 0.0
+            },
+            "cases": 3,
+            "citation_correctness": 1.0,
+            "citation_recall": 1.0,
+            "document_duplicate_rate": 0.0,
+            "duplicate_hit_rate": 0.0,
+            "fallback_rate": 0.0,
+            "forbidden_case_rate": 0.0,
+            "forbidden_hit_rate": 0.0,
+            "freshness_rate": 1.0,
+            "groundedness": 0.0,
+            "injection_attack_success_rate": 0.0,
+            "isolation_hit_rate": 0.0,
+            "isolation_violation_rate": 0.0,
+            "latency_ms": {
+              "max": 54.24953400506638,
+              "p50": 39.47094800241757,
+              "p95": 54.24953400506638
+            },
+            "macro_f1": 0.0,
+            "mrr": 1.0,
+            "no_answer": {
+              "f1": 0.6667,
+              "precision": 1.0,
+              "recall": 0.5
+            },
+            "no_answer_accuracy": 0.6667,
+            "no_hit_rate": 0.3333,
+            "per_quadrant": {
+              "0": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "2": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "3": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              }
+            },
+            "recall_at_k": 1.0,
+            "schema_valid_rate": 1.0,
+            "semantic_consistency": 1.0,
+            "stale_case_rate": 0.0,
+            "stale_hit_rate": 0.0,
+            "tokens": {
+              "output_mean": 0.0,
+              "prompt_mean": 0.0
+            }
+          },
+          "pl": {
+            "accuracy": 0.0,
+            "calibration": {
+              "brier_score": 0.0,
+              "cases": 0,
+              "ece": 0.0
+            },
+            "cases": 3,
+            "citation_correctness": 1.0,
+            "citation_recall": 1.0,
+            "document_duplicate_rate": 0.0,
+            "duplicate_hit_rate": 0.0,
+            "fallback_rate": 0.0,
+            "forbidden_case_rate": 0.0,
+            "forbidden_hit_rate": 0.0,
+            "freshness_rate": 1.0,
+            "groundedness": 0.0,
+            "injection_attack_success_rate": 0.0,
+            "isolation_hit_rate": 0.0,
+            "isolation_violation_rate": 0.0,
+            "latency_ms": {
+              "max": 49.78625899821054,
+              "p50": 38.634485987131484,
+              "p95": 49.78625899821054
+            },
+            "macro_f1": 0.0,
+            "mrr": 0.5,
+            "no_answer": {
+              "f1": 1.0,
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "no_answer_accuracy": 1.0,
+            "no_hit_rate": 0.3333,
+            "per_quadrant": {
+              "0": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "2": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "3": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              }
+            },
+            "recall_at_k": 0.5,
+            "schema_valid_rate": 1.0,
+            "semantic_consistency": 1.0,
+            "stale_case_rate": 0.0,
+            "stale_hit_rate": 0.0,
+            "tokens": {
+              "output_mean": 0.0,
+              "prompt_mean": 0.0
+            }
+          }
+        },
+        "by_split": {
+          "holdout": {
+            "accuracy": 0.0,
+            "calibration": {
+              "brier_score": 0.0,
+              "cases": 0,
+              "ece": 0.0
+            },
+            "cases": 6,
+            "citation_correctness": 1.0,
+            "citation_recall": 1.0,
+            "document_duplicate_rate": 0.0,
+            "duplicate_hit_rate": 0.0,
+            "fallback_rate": 0.0,
+            "forbidden_case_rate": 0.0,
+            "forbidden_hit_rate": 0.0,
+            "freshness_rate": 1.0,
+            "groundedness": 0.0,
+            "injection_attack_success_rate": 0.0,
+            "isolation_hit_rate": 0.0,
+            "isolation_violation_rate": 0.0,
+            "latency_ms": {
+              "max": 54.24953400506638,
+              "p50": 38.634485987131484,
+              "p95": 54.24953400506638
+            },
+            "macro_f1": 0.0,
+            "mrr": 0.6667,
+            "no_answer": {
+              "f1": 0.8,
+              "precision": 1.0,
+              "recall": 0.6667
+            },
+            "no_answer_accuracy": 0.8333,
+            "no_hit_rate": 0.3333,
+            "per_quadrant": {
+              "0": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "2": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "3": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              }
+            },
+            "recall_at_k": 0.6667,
+            "schema_valid_rate": 1.0,
+            "semantic_consistency": 1.0,
+            "stale_case_rate": 0.0,
+            "stale_hit_rate": 0.0,
+            "tokens": {
+              "output_mean": 0.0,
+              "prompt_mean": 0.0
+            }
+          }
+        },
+        "calibration": {
+          "brier_score": 0.0,
+          "cases": 0,
+          "ece": 0.0
+        },
+        "cases": 6,
+        "citation_correctness": 1.0,
+        "citation_recall": 1.0,
+        "document_duplicate_rate": 0.0,
+        "duplicate_hit_rate": 0.0,
+        "fallback_rate": 0.0,
+        "forbidden_case_rate": 0.0,
+        "forbidden_hit_rate": 0.0,
+        "freshness_rate": 1.0,
+        "groundedness": 0.0,
+        "injection_attack_success_rate": 0.0,
+        "isolation_hit_rate": 0.0,
+        "isolation_violation_rate": 0.0,
+        "latency_ms": {
+          "max": 54.24953400506638,
+          "p50": 38.634485987131484,
+          "p95": 54.24953400506638
+        },
+        "macro_f1": 0.0,
+        "mrr": 0.6667,
+        "no_answer": {
+          "f1": 0.8,
+          "precision": 1.0,
+          "recall": 0.6667
+        },
+        "no_answer_accuracy": 0.8333,
+        "no_hit_rate": 0.3333,
+        "per_quadrant": {
+          "0": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          "1": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          "2": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          "3": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "recall_at_k": 0.6667,
+        "schema_valid_rate": 1.0,
+        "semantic_consistency": 1.0,
+        "stale_case_rate": 0.0,
+        "stale_hit_rate": 0.0,
+        "tokens": {
+          "output_mean": 0.0,
+          "prompt_mean": 0.0
+        }
+      },
+      "mode": "retrieval_only"
+    },
+    "hybrid_reranker": {
+      "cases": [
+        {
+          "actual_citation_ids": [],
+          "actual_no_answer": false,
+          "actual_quadrant": null,
+          "allowed_citation_ids": [],
+          "case_id": "holdout-pl-recruiter-scope",
+          "duplicate_hit_ids": [],
+          "execution_id": null,
+          "expected_content_versions": {
+            "c16a06e30b55bb570105b18a161802a8e1fc8556e039fd27f1c69f7dd1ca2fac": "eisenhower-corpus-v1:52686331a28e8c00ec50c02be133cb7305a72923c1b4b0ccc49b565ef60603ea"
+          },
+          "expected_no_answer": false,
+          "expected_quadrant": null,
+          "forbidden_document_ids": [],
+          "grounded": false,
+          "injection_attempt": false,
+          "injection_success": false,
+          "language": "pl",
+          "latency_ms": 252.9961620020913,
+          "model_id": null,
+          "model_revision": null,
+          "output_tokens": 0,
+          "prompt_id": null,
+          "prompt_tokens": 0,
+          "prompt_version": null,
+          "raw_confidence": null,
+          "relevant_document_ids": [
+            "c16a06e30b55bb570105b18a161802a8e1fc8556e039fd27f1c69f7dd1ca2fac"
+          ],
+          "result_mode": "rag",
+          "retrieved_chunk_ids": [
+            "ad325ed9a1898d4f7c98944d8e6e450c7ed650c571f5d0dcd5720b4182dd4314",
+            "e8339559316ad4073909b4b7d0e3d09e3a6469ec248cdafeaddb5dff69823328",
+            "928c772a2442c745958892bf5f722a49ded5cd16b6a1a09fb3d0bf2a71e5614c",
+            "a43c8746c3554bbed902d0d830b1f350bd7449ab2388c7d7c0c9fc0180866b35",
+            "d309896885ea37cf1f099aa4cd9d37e4646096b1ef361ad7f165fcc3768981fd"
+          ],
+          "retrieved_content_versions": [
+            "eisenhower-corpus-v1:52686331a28e8c00ec50c02be133cb7305a72923c1b4b0ccc49b565ef60603ea",
+            "eisenhower-corpus-v1:a6d4fe50f25a405b6a74c8b09b517f69f41269ecaadf18316b8a76399cc92cc7",
+            "eisenhower-corpus-v1:7c40b2742030da356bc2f049d3b67ffc7f1a5c92f46b424af3304a015ab685ee",
+            "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a",
+            "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582"
+          ],
+          "retrieved_document_ids": [
+            "c16a06e30b55bb570105b18a161802a8e1fc8556e039fd27f1c69f7dd1ca2fac",
+            "a15ecec4e605d792571456120580b1c996abf893d2cb378b23ca2f4ac42e6682",
+            "1c2db50c264df20f3eeedcd9c748edcbe663bc925d817d3ee7c8da663eabcd6d",
+            "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349",
+            "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251"
+          ],
+          "schema_valid": true,
+          "schema_version": null,
+          "split": "holdout",
+          "stale_document_ids": []
+        },
+        {
+          "actual_citation_ids": [],
+          "actual_no_answer": false,
+          "actual_quadrant": null,
+          "allowed_citation_ids": [],
+          "case_id": "holdout-en-no-customer-phone",
+          "duplicate_hit_ids": [],
+          "execution_id": null,
+          "expected_content_versions": {},
+          "expected_no_answer": true,
+          "expected_quadrant": null,
+          "forbidden_document_ids": [],
+          "grounded": false,
+          "injection_attempt": false,
+          "injection_success": false,
+          "language": "en",
+          "latency_ms": 206.25729799212422,
+          "model_id": null,
+          "model_revision": null,
+          "output_tokens": 0,
+          "prompt_id": null,
+          "prompt_tokens": 0,
+          "prompt_version": null,
+          "raw_confidence": null,
+          "relevant_document_ids": [],
+          "result_mode": "rag",
+          "retrieved_chunk_ids": [
+            "500f4e9796257949b5ebe0486caf50e1ff69caef39579617b0f6e7d72c52a5e9",
+            "cb23fd57a58c3141a3b4ff44e4f5c57e374844b29033632b535d4acee78602c2",
+            "c6dd133c238065a084a335fa7471f09e5e3a0499108f10df48f2004706f64a64",
+            "ad325ed9a1898d4f7c98944d8e6e450c7ed650c571f5d0dcd5720b4182dd4314",
+            "d80d8b77bd694641cabedc2e12564fb590ddd5284885b8098ef70e790d751dd6"
+          ],
+          "retrieved_content_versions": [
+            "eisenhower-corpus-v1:a3a5df474c7dc890942ddc6d0a1d5da348f056099e933358eca52e902d15b8e8",
+            "eisenhower-corpus-v1:13372fa141f184ca91530f3658c1a3984aece3673384155ff09427e0102333c7",
+            "eisenhower-corpus-v1:42720f0e6b1b078e6b0e39ee1073d3b0eb00f22e4b47ffb1ac7007da13d6a582",
+            "eisenhower-corpus-v1:52686331a28e8c00ec50c02be133cb7305a72923c1b4b0ccc49b565ef60603ea",
+            "eisenhower-corpus-v1:798e88324008bc881d122d5795475f0266edd88dd8a1c1390c1e9c026c059f8a"
+          ],
+          "retrieved_document_ids": [
+            "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714",
+            "e6b4f85bad442748a410f84958a6129e6441114dfffcdf3d42ddcbfc81587626",
+            "3c9539e8490d52e8d7ba1bd00f5b2023bbf798180bea033d398402218ff40251",
+            "c16a06e30b55bb570105b18a161802a8e1fc8556e039fd27f1c69f7dd1ca2fac",
+            "6c38030b5f4d8a47004f0bce38ebff1d2941c3c42be5762ecc9c9cbb88e9ceec"
+          ],
+          "schema_valid": true,
+          "schema_version": null,
+          "split": "holdout",
+          "stale_document_ids": []
+        },
+        {
+          "actual_citation_ids": [],
+          "actual_no_answer": true,
+          "actual_quadrant": null,
+          "allowed_citation_ids": [],
+          "case_id": "holdout-pl-cross-tenant",
+          "duplicate_hit_ids": [],
+          "execution_id": null,
+          "expected_content_versions": {},
+          "expected_no_answer": true,
+          "expected_quadrant": null,
+          "forbidden_document_ids": [
+            "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714"
+          ],
+          "grounded": false,
+          "injection_attempt": false,
+          "injection_success": false,
+          "language": "pl",
+          "latency_ms": 19.207662000553682,
+          "model_id": null,
+          "model_revision": null,
+          "output_tokens": 0,
+          "prompt_id": null,
+          "prompt_tokens": 0,
+          "prompt_version": null,
+          "raw_confidence": null,
+          "relevant_document_ids": [],
+          "result_mode": "no_answer",
+          "retrieved_chunk_ids": [],
+          "retrieved_content_versions": [],
+          "retrieved_document_ids": [],
+          "schema_valid": true,
+          "schema_version": null,
+          "split": "holdout",
+          "stale_document_ids": []
+        },
+        {
+          "actual_citation_ids": [],
+          "actual_no_answer": true,
+          "actual_quadrant": null,
+          "allowed_citation_ids": [],
+          "case_id": "holdout-en-wrong-project",
+          "duplicate_hit_ids": [],
+          "execution_id": null,
+          "expected_content_versions": {},
+          "expected_no_answer": true,
+          "expected_quadrant": null,
+          "forbidden_document_ids": [
+            "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c"
+          ],
+          "grounded": false,
+          "injection_attempt": false,
+          "injection_success": false,
+          "language": "en",
+          "latency_ms": 17.285009002080187,
+          "model_id": null,
+          "model_revision": null,
+          "output_tokens": 0,
+          "prompt_id": null,
+          "prompt_tokens": 0,
+          "prompt_version": null,
+          "raw_confidence": null,
+          "relevant_document_ids": [],
+          "result_mode": "no_answer",
+          "retrieved_chunk_ids": [],
+          "retrieved_content_versions": [],
+          "retrieved_document_ids": [],
+          "schema_valid": true,
+          "schema_version": null,
+          "split": "holdout",
+          "stale_document_ids": []
+        },
+        {
+          "actual_citation_ids": [],
+          "actual_no_answer": false,
+          "actual_quadrant": null,
+          "allowed_citation_ids": [],
+          "case_id": "holdout-pl-fresh-operations",
+          "duplicate_hit_ids": [],
+          "execution_id": null,
+          "expected_content_versions": {
+            "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c": "eisenhower-corpus-v1:833c090b6e9c25d57fa9334d2e1d00d63c145e1ae90e86585b10f622452b21ff"
+          },
+          "expected_no_answer": false,
+          "expected_quadrant": null,
+          "forbidden_document_ids": [],
+          "grounded": false,
+          "injection_attempt": false,
+          "injection_success": false,
+          "language": "pl",
+          "latency_ms": 190.14036799489986,
+          "model_id": null,
+          "model_revision": null,
+          "output_tokens": 0,
+          "prompt_id": null,
+          "prompt_tokens": 0,
+          "prompt_version": null,
+          "raw_confidence": null,
+          "relevant_document_ids": [
+            "ad4bff1ef99002581bf7b9bc62cf6c6b7e38d54cdeee4a0639361b78f21aaa9c"
+          ],
+          "result_mode": "rag",
+          "retrieved_chunk_ids": [
+            "e768f5b2723b6af8239995a868fefb79e949d1c06d64e960e49a9e33a4dbbcf6",
+            "72686587d2bb2453ea6c925aeb34b9100816fc0038f8e7a722f971b7bd8a873c",
+            "3b068aa16964c31a19c40de92d99d41a1d9fdfef2e5bfc6118fbb1175db3171c",
+            "f8d3cc821fcd86ff23371156ca8d0df80bc628818fef8166f8c75a02f44ca9f7",
+            "2d17457db5be2d41239164fe0ad648da59ae2cdc4a00f09782ab17ed16d554f2"
+          ],
+          "retrieved_content_versions": [
+            "eisenhower-corpus-v1:2fef8812bbfbead6b0b576714011b6f976a3cd99e3aeb910bf96d895ae3b2ab2",
+            "eisenhower-corpus-v1:1b7d4c9053120ac715c5f4457d9227f12ac75a241deca807ec2ec78603ed5fa3",
+            "eisenhower-corpus-v1:a7113602e4d7f233b91f9064a5299727a8dc711274936c5d0f895fa2e869b6a6",
+            "eisenhower-corpus-v1:880dc8f430bb2e52b8ef94485fb8a97d81a5e6c5acbcc3e07a98794f28030d80",
+            "eisenhower-corpus-v1:16abd48fdf5a98094ad4bbc3e67b36824b96704a83fde69134383d6f8daa190a"
+          ],
+          "retrieved_document_ids": [
+            "829eae5c303638639220c821ea397445e97c5f0b58b27103377f3d4b948e26e6",
+            "6c921f8326653092e9e65e1e8b00ec9343731e6a2d9b5ba6f117f6e976741c45",
+            "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+            "dad8a42bab7ada70cb2b7eacd84d77c95929796b09f8b2f0b2ab8aa23e3d98f3",
+            "7510ea358f9e7d99c83a225585bb742168996e8180c8dd58b452adb0f6808349"
+          ],
+          "schema_valid": true,
+          "schema_version": null,
+          "split": "holdout",
+          "stale_document_ids": []
+        },
+        {
+          "actual_citation_ids": [],
+          "actual_no_answer": false,
+          "actual_quadrant": null,
+          "allowed_citation_ids": [],
+          "case_id": "holdout-en-multi-document",
+          "duplicate_hit_ids": [],
+          "execution_id": null,
+          "expected_content_versions": {
+            "7e4a68f3f60fa02e47af3988fbf8350d029bda2e7bad19d5f3a8a57fc9e309ec": "eisenhower-corpus-v1:f58cf8618d835b3cf70c61c339c76d9dad2ac61cc1fbc91b4d9a3f0889557b3c",
+            "dad8a42bab7ada70cb2b7eacd84d77c95929796b09f8b2f0b2ab8aa23e3d98f3": "eisenhower-corpus-v1:880dc8f430bb2e52b8ef94485fb8a97d81a5e6c5acbcc3e07a98794f28030d80"
+          },
+          "expected_no_answer": false,
+          "expected_quadrant": null,
+          "forbidden_document_ids": [],
+          "grounded": false,
+          "injection_attempt": false,
+          "injection_success": false,
+          "language": "en",
+          "latency_ms": 218.32604800874833,
+          "model_id": null,
+          "model_revision": null,
+          "output_tokens": 0,
+          "prompt_id": null,
+          "prompt_tokens": 0,
+          "prompt_version": null,
+          "raw_confidence": null,
+          "relevant_document_ids": [
+            "dad8a42bab7ada70cb2b7eacd84d77c95929796b09f8b2f0b2ab8aa23e3d98f3",
+            "7e4a68f3f60fa02e47af3988fbf8350d029bda2e7bad19d5f3a8a57fc9e309ec"
+          ],
+          "result_mode": "rag",
+          "retrieved_chunk_ids": [
+            "f8d3cc821fcd86ff23371156ca8d0df80bc628818fef8166f8c75a02f44ca9f7",
+            "122a6d97a7c12cd6553d6f29930455513bbd1d9b7f062c3a0690e6ed1c722224",
+            "cd26766b1e065f9dbd1c6e5f658479836d1e64799fcdb379997e4e6054a6eb34",
+            "4c08e420e185d73739ba03bf7743b63e07387e253ffd0eb5c5c7730305e5d057",
+            "a2e7ef3d224a673136c3cf6f37d618cc032a1826c38f7811c4150a97412788fa"
+          ],
+          "retrieved_content_versions": [
+            "eisenhower-corpus-v1:880dc8f430bb2e52b8ef94485fb8a97d81a5e6c5acbcc3e07a98794f28030d80",
+            "eisenhower-corpus-v1:7a834f647213811a9967e3a4806de66c0200d933dd988450c746ee89721347db",
+            "eisenhower-corpus-v1:f58cf8618d835b3cf70c61c339c76d9dad2ac61cc1fbc91b4d9a3f0889557b3c",
+            "eisenhower-corpus-v1:a3a5df474c7dc890942ddc6d0a1d5da348f056099e933358eca52e902d15b8e8",
+            "eisenhower-corpus-v1:a6d4fe50f25a405b6a74c8b09b517f69f41269ecaadf18316b8a76399cc92cc7"
+          ],
+          "retrieved_document_ids": [
+            "dad8a42bab7ada70cb2b7eacd84d77c95929796b09f8b2f0b2ab8aa23e3d98f3",
+            "bae5208325e3f095be743146b433e20b44d6251cb3b3244b750a609f81915554",
+            "7e4a68f3f60fa02e47af3988fbf8350d029bda2e7bad19d5f3a8a57fc9e309ec",
+            "e3d9810843989caffa03d9d7c984a73ab18827d63de7a1432905b3ade3246714",
+            "a15ecec4e605d792571456120580b1c996abf893d2cb378b23ca2f4ac42e6682"
+          ],
+          "schema_valid": true,
+          "schema_version": null,
+          "split": "holdout",
+          "stale_document_ids": []
+        }
+      ],
+      "dataset_version": "retrieval-review-candidate-v3-unapproved",
+      "metrics": {
+        "accuracy": 0.0,
+        "by_language": {
+          "en": {
+            "accuracy": 0.0,
+            "calibration": {
+              "brier_score": 0.0,
+              "cases": 0,
+              "ece": 0.0
+            },
+            "cases": 3,
+            "citation_correctness": 1.0,
+            "citation_recall": 1.0,
+            "document_duplicate_rate": 0.0,
+            "duplicate_hit_rate": 0.0,
+            "fallback_rate": 0.0,
+            "forbidden_case_rate": 0.0,
+            "forbidden_hit_rate": 0.0,
+            "freshness_rate": 1.0,
+            "groundedness": 0.0,
+            "injection_attack_success_rate": 0.0,
+            "isolation_hit_rate": 0.0,
+            "isolation_violation_rate": 0.0,
+            "latency_ms": {
+              "max": 218.32604800874833,
+              "p50": 206.25729799212422,
+              "p95": 218.32604800874833
+            },
+            "macro_f1": 0.0,
+            "mrr": 1.0,
+            "no_answer": {
+              "f1": 0.6667,
+              "precision": 1.0,
+              "recall": 0.5
+            },
+            "no_answer_accuracy": 0.6667,
+            "no_hit_rate": 0.3333,
+            "per_quadrant": {
+              "0": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "2": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "3": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              }
+            },
+            "recall_at_k": 1.0,
+            "schema_valid_rate": 1.0,
+            "semantic_consistency": 1.0,
+            "stale_case_rate": 0.0,
+            "stale_hit_rate": 0.0,
+            "tokens": {
+              "output_mean": 0.0,
+              "prompt_mean": 0.0
+            }
+          },
+          "pl": {
+            "accuracy": 0.0,
+            "calibration": {
+              "brier_score": 0.0,
+              "cases": 0,
+              "ece": 0.0
+            },
+            "cases": 3,
+            "citation_correctness": 1.0,
+            "citation_recall": 1.0,
+            "document_duplicate_rate": 0.0,
+            "duplicate_hit_rate": 0.0,
+            "fallback_rate": 0.0,
+            "forbidden_case_rate": 0.0,
+            "forbidden_hit_rate": 0.0,
+            "freshness_rate": 1.0,
+            "groundedness": 0.0,
+            "injection_attack_success_rate": 0.0,
+            "isolation_hit_rate": 0.0,
+            "isolation_violation_rate": 0.0,
+            "latency_ms": {
+              "max": 252.9961620020913,
+              "p50": 190.14036799489986,
+              "p95": 252.9961620020913
+            },
+            "macro_f1": 0.0,
+            "mrr": 0.5,
+            "no_answer": {
+              "f1": 1.0,
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "no_answer_accuracy": 1.0,
+            "no_hit_rate": 0.3333,
+            "per_quadrant": {
+              "0": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "2": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "3": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              }
+            },
+            "recall_at_k": 0.5,
+            "schema_valid_rate": 1.0,
+            "semantic_consistency": 1.0,
+            "stale_case_rate": 0.0,
+            "stale_hit_rate": 0.0,
+            "tokens": {
+              "output_mean": 0.0,
+              "prompt_mean": 0.0
+            }
+          }
+        },
+        "by_split": {
+          "holdout": {
+            "accuracy": 0.0,
+            "calibration": {
+              "brier_score": 0.0,
+              "cases": 0,
+              "ece": 0.0
+            },
+            "cases": 6,
+            "citation_correctness": 1.0,
+            "citation_recall": 1.0,
+            "document_duplicate_rate": 0.0,
+            "duplicate_hit_rate": 0.0,
+            "fallback_rate": 0.0,
+            "forbidden_case_rate": 0.0,
+            "forbidden_hit_rate": 0.0,
+            "freshness_rate": 1.0,
+            "groundedness": 0.0,
+            "injection_attack_success_rate": 0.0,
+            "isolation_hit_rate": 0.0,
+            "isolation_violation_rate": 0.0,
+            "latency_ms": {
+              "max": 252.9961620020913,
+              "p50": 190.14036799489986,
+              "p95": 252.9961620020913
+            },
+            "macro_f1": 0.0,
+            "mrr": 0.6667,
+            "no_answer": {
+              "f1": 0.8,
+              "precision": 1.0,
+              "recall": 0.6667
+            },
+            "no_answer_accuracy": 0.8333,
+            "no_hit_rate": 0.3333,
+            "per_quadrant": {
+              "0": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "2": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "3": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0
+              }
+            },
+            "recall_at_k": 0.6667,
+            "schema_valid_rate": 1.0,
+            "semantic_consistency": 1.0,
+            "stale_case_rate": 0.0,
+            "stale_hit_rate": 0.0,
+            "tokens": {
+              "output_mean": 0.0,
+              "prompt_mean": 0.0
+            }
+          }
+        },
+        "calibration": {
+          "brier_score": 0.0,
+          "cases": 0,
+          "ece": 0.0
+        },
+        "cases": 6,
+        "citation_correctness": 1.0,
+        "citation_recall": 1.0,
+        "document_duplicate_rate": 0.0,
+        "duplicate_hit_rate": 0.0,
+        "fallback_rate": 0.0,
+        "forbidden_case_rate": 0.0,
+        "forbidden_hit_rate": 0.0,
+        "freshness_rate": 1.0,
+        "groundedness": 0.0,
+        "injection_attack_success_rate": 0.0,
+        "isolation_hit_rate": 0.0,
+        "isolation_violation_rate": 0.0,
+        "latency_ms": {
+          "max": 252.9961620020913,
+          "p50": 190.14036799489986,
+          "p95": 252.9961620020913
+        },
+        "macro_f1": 0.0,
+        "mrr": 0.6667,
+        "no_answer": {
+          "f1": 0.8,
+          "precision": 1.0,
+          "recall": 0.6667
+        },
+        "no_answer_accuracy": 0.8333,
+        "no_hit_rate": 0.3333,
+        "per_quadrant": {
+          "0": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          "1": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          "2": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          "3": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "recall_at_k": 0.6667,
+        "schema_valid_rate": 1.0,
+        "semantic_consistency": 1.0,
+        "stale_case_rate": 0.0,
+        "stale_hit_rate": 0.0,
+        "tokens": {
+          "output_mean": 0.0,
+          "prompt_mean": 0.0
+        }
+      },
+      "mode": "retrieval_only"
+    }
+  },
+  "total_seconds_before_cleanup": 4.370656,
+  "tuning_performed": false
+}
