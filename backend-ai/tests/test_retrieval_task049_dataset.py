@@ -32,6 +32,9 @@ def test_task049_dataset_is_deterministic_balanced_and_synthetic():
   }
   assert all(document.source_uri.startswith("https://docs.invalid/") for document in first.documents)
   assert all("eisenhower" not in case.task.casefold() for case in first.cases)
+  paraphrases = [case for case in first.cases if "category:paraphrase" in case.tags]
+  assert all("orion-" not in case.task.casefold() for case in paraphrases)
+  assert {case.dataset_version for case in first.cases} == {"task049-synthetic-calibration-v2"}
 
 
 def test_task049_validation_seed_changes_every_identity_and_maps_to_dev():

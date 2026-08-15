@@ -71,7 +71,7 @@ class QueryThresholdRetriever:
 def build_candidates(dense_retriever, lexical_retriever):
   candidates = {}
   configurations = {}
-  for threshold in (0.2, 0.35, 0.5):
+  for threshold in (0.55, 0.65, 0.75, 0.85):
     threshold_slug = int(threshold * 100)
     dense_id = f"bge-m3-dense-t{threshold_slug}"
     candidates[dense_id] = QueryThresholdRetriever(dense_retriever, threshold)
@@ -172,7 +172,7 @@ def _case(
   forbidden = forbidden or []
   stale = stale or []
   return GoldenCase(
-    dataset_version=f"task049-synthetic-{split}-v1",
+    dataset_version=f"task049-synthetic-{split}-v2",
     case_id=f"task049-{split}-{language}-{category}-{_token(seed, language, category, index)}",
     tenant_id=tenant_id,
     user_id=user_id,
@@ -246,8 +246,8 @@ def generate_dataset(seed: bytes, *, split: str) -> Task049Dataset:
           )
           documents.append(document)
           task = (
-            f"Jak {paraphrase} dla modułu {product}?"
-            if language == "pl" else f"How do I {paraphrase} for module {product}?"
+            f"Jak {paraphrase}?"
+            if language == "pl" else f"How do I {paraphrase}?"
           )
           cases.append(_case(
             seed=seed, split=split, language=language, category=category, index=index,

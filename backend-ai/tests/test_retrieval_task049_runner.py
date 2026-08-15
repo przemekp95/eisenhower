@@ -39,19 +39,19 @@ def test_task049_builds_only_dense_rrf_and_score_aware_candidates_without_rerank
   candidates, configurations = build_candidates(dense, lexical)
 
   assert set(candidates) == {
-    "bge-m3-dense-t20", "bge-m3-dense-t35", "bge-m3-dense-t50",
-    "bge-m3-rrf-t20", "bge-m3-rrf-t35", "bge-m3-rrf-t50",
+    "bge-m3-dense-t55", "bge-m3-dense-t65", "bge-m3-dense-t75", "bge-m3-dense-t85",
+    "bge-m3-rrf-t55", "bge-m3-rrf-t65", "bge-m3-rrf-t75", "bge-m3-rrf-t85",
     *{
       f"bge-m3-score-fusion-d{dense_weight}-l{lexical_weight}-t{threshold}"
       for dense_weight, lexical_weight in ((2, 1), (1, 1), (1, 2))
-      for threshold in (20, 35, 50)
+      for threshold in (55, 65, 75, 85)
     },
   }
   assert set(candidates) == set(configurations)
   assert all("reranker" not in configuration for configuration in configurations.values())
-  assert configurations["bge-m3-score-fusion-d2-l1-t35"] == {
+  assert configurations["bge-m3-score-fusion-d2-l1-t65"] == {
     "strategy": "hybrid-score-v1",
-    "score_threshold": 0.35,
+    "score_threshold": 0.65,
     "fusion_mode": "dbsf",
     "dense_weight": 2.0,
     "lexical_weight": 1.0,
@@ -61,12 +61,12 @@ def test_task049_builds_only_dense_rrf_and_score_aware_candidates_without_rerank
 
 def test_frozen_policy_exactly_matches_candidate_space():
   policy_path = (
-    Path(__file__).parents[1] / "evaluation" / "retrieval-task049-v1" / "policy.json"
+    Path(__file__).parents[1] / "evaluation" / "retrieval-task049-v1" / "policy-v2.json"
   )
   policy = json.loads(policy_path.read_text(encoding="utf-8"))
 
   _, configurations = build_candidates(RecordingRetriever(), RecordingRetriever())
 
   assert policy["candidates"] == configurations
-  assert policy["sparse_trigger"] == "calibration_no_candidate"
+  assert policy["sparse_trigger"] == "round_2_no_candidate_after_abstention_calibration"
   assert policy["global"]["no_answer_accuracy_min"] == 1.0
