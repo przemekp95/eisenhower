@@ -15,10 +15,12 @@ from .rag.golden_runner import RepositoryEvaluationHandler
 from .rag.job_handlers import RagJobHandlers
 from .rag.reindex import RepositoryReindexHandler
 from .service import QuadrantAIService
+from .runtime_limits import configure_torch_threads
 from .store import TrainingStore
 
 
 def build_worker():
+  configure_torch_threads()
   settings = load_settings()
   store = TrainingStore(settings.training_data_path)
   ai_service = QuadrantAIService(settings=settings, store=store)
@@ -48,7 +50,10 @@ def build_worker():
     reindex_project=reindex_handler,
     evaluate=evaluation_handler,
   )
-  queue = SqliteJobQueue(settings.jobs_database_path)
+  queue = SqliteJobQueue(
+    settings.jobs_database_path,
+    max_queued_jobs=settings.jobs_max_queued,
+  )
   return JobWorker(queue, handlers.registry)
 
 

@@ -1,0 +1,6 @@
+# Dependency-light public HTTP/auth/audit boundary. Keep model/framework packages out.
+fastapi==0.135.4
+pydantic==2.13.4
+uvicorn==0.44.0
+httpx==0.28.1
+PyJWT[crypto]==2.13.0

@@ -92,8 +92,13 @@ def validate_dockerfile_policy(dockerfile_text: str) -> None:
       "Dockerfile must not duplicate or override the checked PyTorch source declaration."
     )
   production_dependency_stage, production_marker, following_stages = dockerfile_text.partition(
-    "FROM base AS production"
+    "FROM classifier AS production"
   )
+  role_build = bool(production_marker)
+  if not production_marker:
+    production_dependency_stage, production_marker, following_stages = dockerfile_text.partition(
+      "FROM base AS production"
+    )
   if not production_marker:
     raise AuditPolicyError("Dockerfile must retain the checked production target.")
   pip_install_lines = [
@@ -101,15 +106,49 @@ def validate_dockerfile_policy(dockerfile_text: str) -> None:
     for line in production_dependency_stage.splitlines()
     if re.search(r"\b(?:python\s+-m\s+)?pip\s+install\b", line)
   ]
-  if pip_install_lines != ["RUN pip install --user -r requirements.txt"]:
+  expected_lines = (
+    [
+      "RUN pip install --user -r requirements-boundary.txt",
+      "RUN pip install --user -r requirements-ml.txt",
+      "RUN pip install --user -r requirements-classifier.txt",
+      "RUN pip install --user -r requirements-knowledge.txt",
+      "RUN pip install --user -r requirements-ingest.txt",
+    ]
+    if role_build
+    else ["RUN pip install --user -r requirements.txt"]
+  )
+  if pip_install_lines != expected_lines:
     raise AuditPolicyError(
-      "Dockerfile production dependencies must use exactly the checked requirements install."
+      "Dockerfile production dependencies must use exactly the checked role requirements installs."
     )
   production_stage = re.split(r"(?m)^FROM\s+", following_stages, maxsplit=1)[0]
   if re.search(r"\b(?:python\s+-m\s+)?pip\s+install\b", production_stage):
     raise AuditPolicyError(
       "Dockerfile production target must not install dependencies outside requirements.txt."
     )
+
+
+def read_requirements_tree(path: Path, *, _seen: set[Path] | None = None) -> str:
+  """Flatten local -r includes for policy validation without permitting remote sources."""
+
+  resolved = path.resolve()
+  seen = _seen or set()
+  if resolved in seen:
+    raise AuditPolicyError(f"Cyclic production requirement include: {path.name}")
+  seen.add(resolved)
+  flattened: list[str] = []
+  for raw_line in resolved.read_text(encoding="utf-8").splitlines():
+    line = raw_line.strip()
+    if line.startswith("-r ") or line.startswith("--requirement "):
+      include_name = line.split(maxsplit=1)[1]
+      include_path = (resolved.parent / include_name).resolve()
+      if include_path.parent != resolved.parent or not include_path.is_file():
+        raise AuditPolicyError(f"Production requirement include is not a local peer: {include_name}")
+      flattened.append(read_requirements_tree(include_path, _seen=seen))
+      continue
+    flattened.append(raw_line)
+  seen.remove(resolved)
+  return "\n".join(flattened)
 
 
 def validate_audit_report(
@@ -280,7 +319,7 @@ def _run_json(command: list[str]) -> tuple[dict, int]:
 
 def run_audit(requirements_path: Path, dockerfile_path: Path) -> tuple[int, dict[str, str]]:
   direct_requirements = validate_requirements_policy(
-    requirements_path.read_text(encoding="utf-8")
+    read_requirements_tree(requirements_path)
   )
   validate_dockerfile_policy(dockerfile_path.read_text(encoding="utf-8"))
 

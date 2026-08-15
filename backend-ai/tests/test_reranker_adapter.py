@@ -53,7 +53,7 @@ def test_private_reranker_verifies_pinned_runtime_and_sends_authenticated_bounde
   )
 
   assert adapter.score("owner approval", (hit(0), hit(1))) == [0.2, 0.8]
-  assert [request.url.path for request in requests] == ["/v1/models", "/score"]
+  assert [request.url.path for request in requests] == ["/v1/models", "/v1/score"]
 
 
 @pytest.mark.parametrize("model", [

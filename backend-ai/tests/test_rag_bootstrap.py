@@ -106,6 +106,29 @@ def test_rag_bootstrap_supports_retrieval_without_generator_configuration(tmp_pa
   assert isinstance(service.retriever, CanonicalRetriever)
 
 
+def test_hybrid_rrf_candidate_does_not_require_or_construct_a_reranker(tmp_path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    rag_retrieval_enabled=True,
+    rag_generation_enabled=False,
+    qdrant_url="http://qdrant:6333",
+    mongodb_uri="mongodb://mongodb:27017/eisenhower",
+    rag_retrieval_strategy="hybrid-rrf-v1",
+    reranker_api_key=None,
+  )
+
+  service = build_rag_service(
+    settings,
+    Fallback(),
+    qdrant_client=FakeQdrant(),
+    mongo_client=FakeMongo(),
+  )
+
+  assert isinstance(service.retriever, HybridRetriever)
+  assert service.retriever.core.reranker is None
+
+
 def test_pinned_sentence_transformer_embedding_provider_is_separate_from_classifier():
   class Encoder:
     def __init__(self, model_name, *, revision, device):

@@ -1,5 +1,6 @@
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256
 import math
 
 from app.config import Settings
@@ -177,6 +178,57 @@ def test_local_model_loads_existing_artifacts_without_retraining(tmp_path: Path)
 
   assert loader.status()["ready"] is True
   assert loader.predict("urgent deadline today").confidence > 0
+
+
+def test_production_startup_never_trains_when_artifact_is_missing(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    app_env="production",
+    local_model_approved_artifact_sha256="a" * 64,
+  )
+  model = LocalMiniLMClassifier(settings=settings, encoder=FakeEncoder())
+  model.train = lambda _records: (_ for _ in ()).throw(AssertionError("startup training is forbidden"))  # type: ignore[method-assign]
+
+  try:
+    model.ensure_ready(records())
+  except ModelNotReadyError as issue:
+    assert "approved classifier artifact" in str(issue).lower()
+  else:
+    raise AssertionError("Production must fail closed without an approved artifact")
+
+  assert model.status()["ready"] is False
+
+
+def test_production_startup_verifies_the_approved_pointer_digest(tmp_path: Path):
+  training_settings = build_settings(tmp_path)
+  trainer = LocalMiniLMClassifier(settings=training_settings, encoder=FakeEncoder())
+  trainer.train(records())
+  pointer_digest = sha256(trainer.current_pointer_path.read_bytes()).hexdigest()
+
+  approved_settings = Settings(
+    training_data_path=training_settings.training_data_path,
+    model_cache_dir=training_settings.model_cache_dir,
+    app_env="production",
+    local_model_approved_artifact_sha256=pointer_digest,
+  )
+  loader = LocalMiniLMClassifier(settings=approved_settings, encoder=FakeEncoder())
+  loader.ensure_ready(records())
+  assert loader.status()["ready"] is True
+
+  rejected_settings = Settings(
+    training_data_path=training_settings.training_data_path,
+    model_cache_dir=training_settings.model_cache_dir,
+    app_env="production",
+    local_model_approved_artifact_sha256="0" * 64,
+  )
+  rejected = LocalMiniLMClassifier(settings=rejected_settings, encoder=FakeEncoder())
+  try:
+    rejected.ensure_ready(records())
+  except ModelNotReadyError as issue:
+    assert "approved classifier artifact checksum" in str(issue).lower()
+  else:
+    raise AssertionError("Production must reject an unapproved artifact pointer")
 
 
 def test_local_model_keeps_verified_incumbent_ready_when_training_data_becomes_stale(tmp_path: Path):

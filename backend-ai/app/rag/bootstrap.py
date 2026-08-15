@@ -85,8 +85,6 @@ def build_rag_service(
   if settings.rag_retrieval_strategy == "dense-v1":
     retriever = dense_retriever
   else:
-    if not settings.reranker_api_key:
-      raise ValueError("RERANKER_API_KEY is required for hybrid-bge-v1")
     lexical_retriever = CanonicalBm25Retriever(
       canonical_store,
       embedding_version=settings.embedding_version,
@@ -94,12 +92,16 @@ def build_rag_service(
       title_weight=2.0,
       text_weight=1.0,
     )
-    reranker = PrivateVllmReranker(
-      settings.reranker_base_url,
-      settings.reranker_api_key,
-      allowed_hosts=settings.reranker_allowed_hosts,
-      client=reranker_client,
-    )
+    reranker = None
+    if settings.rag_retrieval_strategy == "hybrid-bge-v1":
+      if not settings.reranker_api_key:
+        raise ValueError("RERANKER_API_KEY is required for hybrid-bge-v1")
+      reranker = PrivateVllmReranker(
+        settings.reranker_base_url,
+        settings.reranker_api_key,
+        allowed_hosts=settings.reranker_allowed_hosts,
+        client=reranker_client,
+      )
     retriever = HybridRetriever(
       dense_retriever,
       lexical_retriever,

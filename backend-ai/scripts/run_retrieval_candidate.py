@@ -78,9 +78,15 @@ class VllmScoreReranker:
   model_name = "BAAI/bge-reranker-v2-m3"
   revision = "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e"
 
-  def __init__(self, base_url: str):
+  def __init__(self, base_url: str, api_key: str, *, client: httpx.Client | None = None):
+    if not api_key:
+      raise ValueError("reranker API key is required")
     self.base_url = base_url.rstrip("/")
-    response = httpx.get(f"{self.base_url}/v1/models", timeout=10).raise_for_status()
+    self.client = client or httpx.Client()
+    self.headers = {"Authorization": f"Bearer {api_key}"}
+    response = self.client.get(
+      f"{self.base_url}/v1/models", headers=self.headers, timeout=10
+    ).raise_for_status()
     models = response.json()["data"]
     if len(models) != 1 or not models[0]["id"].endswith(self.revision):
       raise ValueError("reranker endpoint does not expose the pinned model revision")
@@ -89,8 +95,9 @@ class VllmScoreReranker:
       raise ValueError("reranker endpoint model length is outside the evaluated bounds")
 
   def score(self, query_text, ranked_candidates):
-    response = httpx.post(
-      f"{self.base_url}/score",
+    response = self.client.post(
+      f"{self.base_url}/v1/score",
+      headers=self.headers,
       json={
         "text_1": query_text,
         "text_2": [
@@ -121,6 +128,7 @@ def run(
   mongo_uri: str = "mongodb://127.0.0.1:27017/?directConnection=true",
   qdrant_url: str = "http://127.0.0.1:6333",
   reranker_url: str | None = None,
+  reranker_api_key: str | None = None,
 ) -> dict:
   repository_root = (repository_root or Path(__file__).resolve().parents[2]).resolve()
   manifest_path = repository_root / "docs" / "ai-rebuild" / "corpus-manifest-v1.json"
@@ -247,7 +255,10 @@ def run(
       ),
     )
     if reranker_url is not None:
-      reranker_models = (("bge-v2-m3", VllmScoreReranker(reranker_url)),)
+      reranker_models = ((
+        "bge-v2-m3",
+        VllmScoreReranker(reranker_url, reranker_api_key or ""),
+      ),)
     else:
       reranker_models = tuple(
         (slug, PinnedMultilingualReranker(model_name, revision))
@@ -290,14 +301,17 @@ def run(
           candidate_retrievers[name]
         ).run(train_cases, k=5)
     selected_name = select_train_strategy(train_reports)
+    base_hybrid_retriever = candidate_retrievers[selected_base]
     hybrid_retriever = candidate_retrievers[selected_name]
     dev_validation = RetrievalStrategyComparisonRunner({
       "dense": dense_retriever,
-      "hybrid": hybrid_retriever,
+      "hybrid": base_hybrid_retriever,
+      "reranked": hybrid_retriever,
     }).run(cases, k=5, split="dev")
     strategy_comparison = RetrievalStrategyComparisonRunner({
       "dense": dense_retriever,
-      "hybrid": hybrid_retriever,
+      "hybrid": base_hybrid_retriever,
+      "reranked": hybrid_retriever,
     }).run(cases, k=5)
     recovery = (
       verify_candidate_collection_snapshot(qdrant, manager, collection_name, snapshot_output)
@@ -376,6 +390,10 @@ def main() -> None:
     help="Use a loopback/private vLLM score endpoint exposing the pinned BGE revision.",
   )
   parser.add_argument(
+    "--reranker-api-key",
+    help="Bearer credential for the private vLLM /v1 score and model endpoints.",
+  )
+  parser.add_argument(
     "--mongo-uri", default="mongodb://127.0.0.1:27017/?directConnection=true",
     help="MongoDB URI for the isolated temporary candidate database.",
   )
@@ -392,6 +410,7 @@ def main() -> None:
     mongo_uri=args.mongo_uri,
     qdrant_url=args.qdrant_url,
     reranker_url=args.reranker_url,
+    reranker_api_key=args.reranker_api_key,
   )
   args.output.parent.mkdir(parents=True, exist_ok=True)
   args.output.write_text(

