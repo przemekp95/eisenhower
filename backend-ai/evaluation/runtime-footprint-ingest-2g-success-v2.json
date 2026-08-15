@@ -1,0 +1,1591 @@
+{
+  "container_id": "d1a203e18e8fded060716844aa78eb7c1d482c1c30d34dbcd59aae86a88d9d33",
+  "deployment_proven": false,
+  "evidence_level": "local-isolated-container",
+  "image": {
+    "id": "sha256:5af5da0d551be43abbb92d6abe106004eaac70dd10b2e6a1fae5484a86185e3c",
+    "reference": "local/eisenhower-ai-ingest:9ebfb8de535a0df1dd8a3f8f867a9437b1e642a4",
+    "runtime_role": "ingest",
+    "source_revision": "9ebfb8de535a0df1dd8a3f8f867a9437b1e642a4"
+  },
+  "limits": {
+    "cpus": "2.0",
+    "memory": "2g",
+    "pids": "256"
+  },
+  "production_proven": false,
+  "recorded_at": "2026-08-15T17:21:01.755318+00:00",
+  "result": {
+    "cgroup": {
+      "average_cpu_cores": 1.029396,
+      "cgroup_memory_peak_bytes": 2041946112,
+      "cpu_seconds": 14.916695,
+      "first_memory_current_bytes": 8069120,
+      "last_memory_current_bytes": 1633370112,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "peak_memory_current_bytes": 1997324288,
+      "peak_pids": 7,
+      "samples": 130,
+      "wall_seconds_sampled": 14.490729
+    },
+    "exit_code": 0,
+    "oom_killed": false,
+    "state_error": null,
+    "stderr_tail": "No languages specified, defaulting to English.\n",
+    "timed_out": false,
+    "wall_seconds": 15.287987
+  },
+  "role": "ingest-document-extraction",
+  "samples": [
+    {
+      "cpu_usec": 38376,
+      "elapsed_seconds": 0.145512,
+      "memory_current": 8069120,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 8077312,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 144732,
+      "elapsed_seconds": 0.259635,
+      "memory_current": 18173952,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 18243584,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 250073,
+      "elapsed_seconds": 0.374148,
+      "memory_current": 27152384,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 27152384,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 351875,
+      "elapsed_seconds": 0.48696,
+      "memory_current": 36896768,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 36896768,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 459643,
+      "elapsed_seconds": 0.601575,
+      "memory_current": 43962368,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 43962368,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 555126,
+      "elapsed_seconds": 0.714135,
+      "memory_current": 65499136,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 65499136,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 651411,
+      "elapsed_seconds": 0.828416,
+      "memory_current": 86532096,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 86532096,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 733085,
+      "elapsed_seconds": 0.942193,
+      "memory_current": 129409024,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 129417216,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 836574,
+      "elapsed_seconds": 1.05731,
+      "memory_current": 144945152,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 144945152,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 941915,
+      "elapsed_seconds": 1.171292,
+      "memory_current": 161968128,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 161968128,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1037790,
+      "elapsed_seconds": 1.283614,
+      "memory_current": 172609536,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 172609536,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1140169,
+      "elapsed_seconds": 1.395454,
+      "memory_current": 178737152,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 182603776,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1236144,
+      "elapsed_seconds": 1.506623,
+      "memory_current": 187420672,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 187420672,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1301957,
+      "elapsed_seconds": 1.617854,
+      "memory_current": 202625024,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 202625024,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1375165,
+      "elapsed_seconds": 1.73295,
+      "memory_current": 219926528,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 219926528,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1470223,
+      "elapsed_seconds": 1.844422,
+      "memory_current": 256958464,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 256958464,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1582045,
+      "elapsed_seconds": 1.959278,
+      "memory_current": 290156544,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 290156544,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1684570,
+      "elapsed_seconds": 2.072657,
+      "memory_current": 308846592,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 308846592,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1777004,
+      "elapsed_seconds": 2.185051,
+      "memory_current": 329576448,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 329576448,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1882963,
+      "elapsed_seconds": 2.297039,
+      "memory_current": 338849792,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 338935808,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1982693,
+      "elapsed_seconds": 2.411835,
+      "memory_current": 349966336,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 350068736,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2092275,
+      "elapsed_seconds": 2.526268,
+      "memory_current": 361091072,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 361091072,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2206558,
+      "elapsed_seconds": 2.641078,
+      "memory_current": 368361472,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 368361472,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2319408,
+      "elapsed_seconds": 2.755459,
+      "memory_current": 372899840,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 372899840,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2416488,
+      "elapsed_seconds": 2.869802,
+      "memory_current": 382746624,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 382746624,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2522000,
+      "elapsed_seconds": 2.984702,
+      "memory_current": 399007744,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 399007744,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2622536,
+      "elapsed_seconds": 3.099406,
+      "memory_current": 415277056,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 415277056,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2734527,
+      "elapsed_seconds": 3.211437,
+      "memory_current": 415277056,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 415277056,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2828976,
+      "elapsed_seconds": 3.325699,
+      "memory_current": 427876352,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 427892736,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2933792,
+      "elapsed_seconds": 3.438434,
+      "memory_current": 440479744,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 440479744,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3048738,
+      "elapsed_seconds": 3.552786,
+      "memory_current": 440532992,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 440741888,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3163741,
+      "elapsed_seconds": 3.668139,
+      "memory_current": 439799808,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 440741888,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3260281,
+      "elapsed_seconds": 3.783579,
+      "memory_current": 448540672,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 448540672,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3374788,
+      "elapsed_seconds": 3.899024,
+      "memory_current": 453255168,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 453255168,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3482742,
+      "elapsed_seconds": 4.013737,
+      "memory_current": 459235328,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 459239424,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3579582,
+      "elapsed_seconds": 4.129358,
+      "memory_current": 490176512,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 490176512,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3677071,
+      "elapsed_seconds": 4.244412,
+      "memory_current": 517767168,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 518029312,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3787683,
+      "elapsed_seconds": 4.358409,
+      "memory_current": 521031680,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 521281536,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3902686,
+      "elapsed_seconds": 4.472752,
+      "memory_current": 521031680,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 521281536,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3998439,
+      "elapsed_seconds": 4.586635,
+      "memory_current": 537104384,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 537366528,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4105986,
+      "elapsed_seconds": 4.70148,
+      "memory_current": 548007936,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 548007936,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4215551,
+      "elapsed_seconds": 4.816438,
+      "memory_current": 564756480,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 564756480,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4316310,
+      "elapsed_seconds": 4.931126,
+      "memory_current": 587198464,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 587452416,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4419191,
+      "elapsed_seconds": 5.0457,
+      "memory_current": 601120768,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 601358336,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4538547,
+      "elapsed_seconds": 5.161362,
+      "memory_current": 604995584,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 604995584,
+      "pids": 7
+    },
+    {
+      "cpu_usec": 4767615,
+      "elapsed_seconds": 5.276445,
+      "memory_current": 617152512,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 617811968,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 4982331,
+      "elapsed_seconds": 5.390837,
+      "memory_current": 631918592,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 631918592,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 5201938,
+      "elapsed_seconds": 5.504911,
+      "memory_current": 654749696,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 655212544,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 5423572,
+      "elapsed_seconds": 5.620289,
+      "memory_current": 673091584,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 673091584,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 5651268,
+      "elapsed_seconds": 5.73579,
+      "memory_current": 964816896,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 964816896,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 5792456,
+      "elapsed_seconds": 5.850948,
+      "memory_current": 1017466880,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1039790080,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 5896858,
+      "elapsed_seconds": 5.964862,
+      "memory_current": 1019301888,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1039790080,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 6001420,
+      "elapsed_seconds": 6.078231,
+      "memory_current": 1111273472,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1111805952,
+      "pids": 7
+    },
+    {
+      "cpu_usec": 6110359,
+      "elapsed_seconds": 6.187513,
+      "memory_current": 1200377856,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1200377856,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 6221473,
+      "elapsed_seconds": 6.2981,
+      "memory_current": 1200193536,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1200377856,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 6331564,
+      "elapsed_seconds": 6.408157,
+      "memory_current": 1200455680,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1200455680,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 6440684,
+      "elapsed_seconds": 6.517554,
+      "memory_current": 1200455680,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1200455680,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 6549915,
+      "elapsed_seconds": 6.625832,
+      "memory_current": 1201799168,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1201799168,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 6649827,
+      "elapsed_seconds": 6.735151,
+      "memory_current": 1205354496,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1205354496,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 6754448,
+      "elapsed_seconds": 6.844519,
+      "memory_current": 1219268608,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1219268608,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 6859273,
+      "elapsed_seconds": 6.953408,
+      "memory_current": 1222758400,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1222799360,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 6957965,
+      "elapsed_seconds": 7.062812,
+      "memory_current": 1238953984,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1238953984,
+      "pids": 2
+    },
+    {
+      "cpu_usec": 7055386,
+      "elapsed_seconds": 7.172928,
+      "memory_current": 1247551488,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1247551488,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7163513,
+      "elapsed_seconds": 7.282691,
+      "memory_current": 1250082816,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1250127872,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7273512,
+      "elapsed_seconds": 7.392604,
+      "memory_current": 1250082816,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1250127872,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7383511,
+      "elapsed_seconds": 7.50245,
+      "memory_current": 1250082816,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1250127872,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7475651,
+      "elapsed_seconds": 7.612465,
+      "memory_current": 1263493120,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1263493120,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7577035,
+      "elapsed_seconds": 7.721739,
+      "memory_current": 1330581504,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1330610176,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7682803,
+      "elapsed_seconds": 7.832215,
+      "memory_current": 1337909248,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1338032128,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7783083,
+      "elapsed_seconds": 7.942444,
+      "memory_current": 1349009408,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1349009408,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7889978,
+      "elapsed_seconds": 8.05129,
+      "memory_current": 1360543744,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1362903040,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 7990724,
+      "elapsed_seconds": 8.160289,
+      "memory_current": 1379913728,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1379913728,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8096473,
+      "elapsed_seconds": 8.270642,
+      "memory_current": 1387798528,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1387839488,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8205194,
+      "elapsed_seconds": 8.379772,
+      "memory_current": 1389277184,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1389326336,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8315145,
+      "elapsed_seconds": 8.49032,
+      "memory_current": 1391198208,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1391235072,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8425128,
+      "elapsed_seconds": 8.599993,
+      "memory_current": 1392185344,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1392185344,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8526424,
+      "elapsed_seconds": 8.709819,
+      "memory_current": 1393225728,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1393393664,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8635419,
+      "elapsed_seconds": 8.818741,
+      "memory_current": 1393872896,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1393872896,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8744414,
+      "elapsed_seconds": 8.927966,
+      "memory_current": 1394159616,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1394434048,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8853417,
+      "elapsed_seconds": 9.036903,
+      "memory_current": 1393930240,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1394434048,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 8962421,
+      "elapsed_seconds": 9.146149,
+      "memory_current": 1393479680,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1394434048,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9071424,
+      "elapsed_seconds": 9.255012,
+      "memory_current": 1393479680,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1394434048,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9180945,
+      "elapsed_seconds": 9.364653,
+      "memory_current": 1394057216,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1394434048,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9288374,
+      "elapsed_seconds": 9.473895,
+      "memory_current": 1380720640,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1394434048,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9398378,
+      "elapsed_seconds": 9.583684,
+      "memory_current": 1383829504,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1394434048,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9509380,
+      "elapsed_seconds": 9.695548,
+      "memory_current": 1386713088,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1394434048,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9606540,
+      "elapsed_seconds": 9.806513,
+      "memory_current": 1450414080,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1450414080,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9715661,
+      "elapsed_seconds": 9.916187,
+      "memory_current": 1457983488,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1462992896,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9825657,
+      "elapsed_seconds": 10.025713,
+      "memory_current": 1457983488,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1462992896,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 9933661,
+      "elapsed_seconds": 10.134495,
+      "memory_current": 1457897472,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1462992896,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 10036777,
+      "elapsed_seconds": 10.244787,
+      "memory_current": 1465499648,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1465499648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 10145780,
+      "elapsed_seconds": 10.353986,
+      "memory_current": 1465499648,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1465499648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 10254784,
+      "elapsed_seconds": 10.463324,
+      "memory_current": 1465499648,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1465499648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 10363787,
+      "elapsed_seconds": 10.572193,
+      "memory_current": 1465499648,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1465499648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 10472790,
+      "elapsed_seconds": 10.68058,
+      "memory_current": 1465499648,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1465499648,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 10572722,
+      "elapsed_seconds": 10.789782,
+      "memory_current": 1466023936,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1466023936,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 10786055,
+      "elapsed_seconds": 10.89936,
+      "memory_current": 1478995968,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1479766016,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 11005737,
+      "elapsed_seconds": 11.008673,
+      "memory_current": 1486352384,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1486352384,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 11225744,
+      "elapsed_seconds": 11.119233,
+      "memory_current": 1493954560,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1494855680,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 11436831,
+      "elapsed_seconds": 11.229299,
+      "memory_current": 1500123136,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1500123136,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 11583041,
+      "elapsed_seconds": 11.338321,
+      "memory_current": 1466249216,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1500123136,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 11694084,
+      "elapsed_seconds": 11.448659,
+      "memory_current": 1468309504,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1500123136,
+      "pids": 2
+    },
+    {
+      "cpu_usec": 11796475,
+      "elapsed_seconds": 11.558994,
+      "memory_current": 1778294784,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1778294784,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 11907477,
+      "elapsed_seconds": 11.66984,
+      "memory_current": 1835175936,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1835175936,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 12018490,
+      "elapsed_seconds": 11.781224,
+      "memory_current": 1879212032,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1879212032,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 12128662,
+      "elapsed_seconds": 11.892001,
+      "memory_current": 1973223424,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1973485568,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 12242672,
+      "elapsed_seconds": 12.006232,
+      "memory_current": 1982398464,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1982398464,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 12356699,
+      "elapsed_seconds": 12.120265,
+      "memory_current": 1982283776,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1982398464,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 12470712,
+      "elapsed_seconds": 12.234454,
+      "memory_current": 1982279680,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1982398464,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 12585885,
+      "elapsed_seconds": 12.349197,
+      "memory_current": 1982279680,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1982398464,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 12700896,
+      "elapsed_seconds": 12.464237,
+      "memory_current": 1983590400,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 1983590400,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 12814248,
+      "elapsed_seconds": 12.578504,
+      "memory_current": 1997324288,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 2041946112,
+      "pids": 6
+    },
+    {
+      "cpu_usec": 13015255,
+      "elapsed_seconds": 12.692552,
+      "memory_current": 1821769728,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 2041946112,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 13129186,
+      "elapsed_seconds": 12.806717,
+      "memory_current": 1821085696,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 2041946112,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 13243179,
+      "elapsed_seconds": 12.920631,
+      "memory_current": 1821016064,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 2041946112,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 13356015,
+      "elapsed_seconds": 13.033813,
+      "memory_current": 1820848128,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 2041946112,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 13471019,
+      "elapsed_seconds": 13.148729,
+      "memory_current": 1820631040,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 2041946112,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 13585022,
+      "elapsed_seconds": 13.263416,
+      "memory_current": 1820631040,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 2041946112,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 13700026,
+      "elapsed_seconds": 13.378005,
+      "memory_current": 1820631040,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 2041946112,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 13815029,
+      "elapsed_seconds": 13.492839,
+      "memory_current": 1820631040,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 2041946112,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 13929032,
+      "elapsed_seconds": 13.607456,
+      "memory_current": 1820393472,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 2041946112,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 14044035,
+      "elapsed_seconds": 13.72184,
+      "memory_current": 1820393472,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 2041946112,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 14158040,
+      "elapsed_seconds": 13.836353,
+      "memory_current": 1657204736,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 2041946112,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 14272637,
+      "elapsed_seconds": 13.950842,
+      "memory_current": 1653858304,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 2041946112,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 14386640,
+      "elapsed_seconds": 14.065057,
+      "memory_current": 1653604352,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 2041946112,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 14500644,
+      "elapsed_seconds": 14.178759,
+      "memory_current": 1653604352,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 2041946112,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 14614600,
+      "elapsed_seconds": 14.293149,
+      "memory_current": 1653563392,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 2041946112,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 14729603,
+      "elapsed_seconds": 14.407525,
+      "memory_current": 1648091136,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 2041946112,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 14843607,
+      "elapsed_seconds": 14.522535,
+      "memory_current": 1648091136,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 2041946112,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 14955071,
+      "elapsed_seconds": 14.636241,
+      "memory_current": 1633370112,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "memory_peak": 2041946112,
+      "pids": 1
+    }
+  ],
+  "schema_version": "runtime-role-container-benchmark-v1",
+  "source_git_dirty": false,
+  "source_git_sha": "9ebfb8de535a0df1dd8a3f8f867a9437b1e642a4",
+  "workload": {
+    "command": "scripts/benchmark_document_extraction.py",
+    "docling_artifacts_read_only": true,
+    "docling_manifest_sha256": "5cf47966d872e55c9c2c43a73a1369361e7f2c6a358c2c2fbc3dd16350b56300",
+    "fixture_scope": "repository-approved synthetic extraction fixtures",
+    "model_cache_read_only": true,
+    "network_expected": false,
+    "workspace_read_only": true
+  },
+  "workload_report": {
+    "cases": [
+      {
+        "elapsed_seconds": 5.96661,
+        "element_kinds": [
+          "heading",
+          "paragraph"
+        ],
+        "elements": 2,
+        "extraction_sha256": "0212d212dac323aec2aaf5f77d6021d81e4f90e518fd435fafe11d5848620443",
+        "extractor_name": "docling",
+        "extractor_version": "2.119.0",
+        "ocr_performed": false,
+        "parser_role": "docling-primary",
+        "process_peak_rss_after_bytes": 1274028032,
+        "process_peak_rss_before_bytes": 68100096,
+        "required_phrases_present": true,
+        "source": "extraction-golden-pdf.pdf",
+        "source_sha256": "9f796cf2f08571cecb59a50e412e2d7f4a6ac81ab0aa7d47ded5733e8380a8ad"
+      },
+      {
+        "elapsed_seconds": 3.114743,
+        "element_kinds": [
+          "heading",
+          "paragraph"
+        ],
+        "elements": 2,
+        "extraction_sha256": "dbc571eda912233085be06d9cf97c7beeae160dca91089ba966e04095d8f5dc3",
+        "extractor_name": "unstructured",
+        "extractor_version": "0.25.2",
+        "ocr_performed": false,
+        "parser_role": "unstructured-controlled-fallback",
+        "process_peak_rss_after_bytes": 1501741056,
+        "process_peak_rss_before_bytes": 1274028032,
+        "required_phrases_present": true,
+        "source": "extraction-golden-pdf.pdf",
+        "source_sha256": "9f796cf2f08571cecb59a50e412e2d7f4a6ac81ab0aa7d47ded5733e8380a8ad"
+      },
+      {
+        "elapsed_seconds": 0.308097,
+        "element_kinds": [
+          "heading",
+          "list_item",
+          "paragraph",
+          "table"
+        ],
+        "elements": 4,
+        "extraction_sha256": "3fd8b783b7e30a16783726dcfc81b7e84231710e5ee4526f114da539fe38e932",
+        "extractor_name": "docling",
+        "extractor_version": "2.119.0",
+        "ocr_performed": false,
+        "parser_role": "docling-primary",
+        "process_peak_rss_after_bytes": 1513537536,
+        "process_peak_rss_before_bytes": 1513537536,
+        "required_phrases_present": true,
+        "source": "extraction-golden-docx.docx",
+        "source_sha256": "dfa9c6f493d5d7e793e01e3e49b8075b6c9f7d06eac8fe3eeefd1e118c9fcef2"
+      },
+      {
+        "elapsed_seconds": 0.01386,
+        "element_kinds": [
+          "heading",
+          "list_item",
+          "paragraph",
+          "table"
+        ],
+        "elements": 4,
+        "extraction_sha256": "fce5d319b0efa4a003416bd6efed9819935b3fd0395b72b6ddf1bb728bd25fbe",
+        "extractor_name": "unstructured",
+        "extractor_version": "0.25.2",
+        "ocr_performed": false,
+        "parser_role": "unstructured-controlled-fallback",
+        "process_peak_rss_after_bytes": 1514696704,
+        "process_peak_rss_before_bytes": 1513537536,
+        "required_phrases_present": true,
+        "source": "extraction-golden-docx.docx",
+        "source_sha256": "dfa9c6f493d5d7e793e01e3e49b8075b6c9f7d06eac8fe3eeefd1e118c9fcef2"
+      },
+      {
+        "elapsed_seconds": 0.28881,
+        "element_kinds": [
+          "heading",
+          "paragraph",
+          "table"
+        ],
+        "elements": 3,
+        "extraction_sha256": "96ab92f9f688c5b3fdb462c105b7d8353d75abdcac2247914ae43704f64844fe",
+        "extractor_name": "docling",
+        "extractor_version": "2.119.0",
+        "ocr_performed": false,
+        "parser_role": "docling-primary",
+        "process_peak_rss_after_bytes": 1516793856,
+        "process_peak_rss_before_bytes": 1514696704,
+        "required_phrases_present": true,
+        "source": "extraction-golden-pptx.pptx",
+        "source_sha256": "800e0a9a9d16c2c5355cf721b82adbfb31d25b58d0993153a2663dcbbea085b3"
+      },
+      {
+        "elapsed_seconds": 0.009997,
+        "element_kinds": [
+          "heading",
+          "paragraph",
+          "table"
+        ],
+        "elements": 3,
+        "extraction_sha256": "7442a87b1494f8567580fed38ec3c8758f06aa3b293f410f600af30292c5b2ab",
+        "extractor_name": "unstructured",
+        "extractor_version": "0.25.2",
+        "ocr_performed": false,
+        "parser_role": "unstructured-controlled-fallback",
+        "process_peak_rss_after_bytes": 1516793856,
+        "process_peak_rss_before_bytes": 1516793856,
+        "required_phrases_present": true,
+        "source": "extraction-golden-pptx.pptx",
+        "source_sha256": "800e0a9a9d16c2c5355cf721b82adbfb31d25b58d0993153a2663dcbbea085b3"
+      },
+      {
+        "elapsed_seconds": 0.292531,
+        "element_kinds": [
+          "heading",
+          "list_item",
+          "paragraph",
+          "table"
+        ],
+        "elements": 8,
+        "extraction_sha256": "6e7ebf9b3112edefa4d912917da73d49f7ee036334cb8e77bc00fed8f62a3eff",
+        "extractor_name": "docling",
+        "extractor_version": "2.119.0",
+        "ocr_performed": false,
+        "parser_role": "docling-primary",
+        "process_peak_rss_after_bytes": 1521827840,
+        "process_peak_rss_before_bytes": 1521827840,
+        "required_phrases_present": true,
+        "source": "extraction-golden-pl.html",
+        "source_sha256": "797acbd5f4d1b652791515dc21213bc35d5e9d2aec6e3815590b10d7e908591d"
+      },
+      {
+        "elapsed_seconds": 0.084279,
+        "element_kinds": [
+          "heading",
+          "list_item",
+          "paragraph",
+          "table"
+        ],
+        "elements": 8,
+        "extraction_sha256": "2872c72879589d5c4955ddf3f36432767aab69594909dc2ec03d4f7ca24b5081",
+        "extractor_name": "unstructured",
+        "extractor_version": "0.25.2",
+        "ocr_performed": false,
+        "parser_role": "unstructured-controlled-fallback",
+        "process_peak_rss_after_bytes": 1523171328,
+        "process_peak_rss_before_bytes": 1521827840,
+        "required_phrases_present": true,
+        "source": "extraction-golden-pl.html",
+        "source_sha256": "797acbd5f4d1b652791515dc21213bc35d5e9d2aec6e3815590b10d7e908591d"
+      },
+      {
+        "elapsed_seconds": 0.290848,
+        "element_kinds": [
+          "heading",
+          "list_item",
+          "paragraph",
+          "table"
+        ],
+        "elements": 8,
+        "extraction_sha256": "312d7994deacbbeee3518fef6d15e8c23eabb47439c757f2cbda158acfcc5ead",
+        "extractor_name": "docling",
+        "extractor_version": "2.119.0",
+        "ocr_performed": false,
+        "parser_role": "docling-primary",
+        "process_peak_rss_after_bytes": 1523171328,
+        "process_peak_rss_before_bytes": 1523171328,
+        "required_phrases_present": true,
+        "source": "extraction-golden-en.html",
+        "source_sha256": "6878f20c21ef61e6f86c8eb263fbbd9ebf2fdd8db195089b79771dabce04b23a"
+      },
+      {
+        "elapsed_seconds": 0.014716,
+        "element_kinds": [
+          "heading",
+          "list_item",
+          "paragraph",
+          "table"
+        ],
+        "elements": 8,
+        "extraction_sha256": "0e61b8af7be65a53135732950c897c696224d61d2d342aa483ec90c267b05e1f",
+        "extractor_name": "unstructured",
+        "extractor_version": "0.25.2",
+        "ocr_performed": false,
+        "parser_role": "unstructured-controlled-fallback",
+        "process_peak_rss_after_bytes": 1523171328,
+        "process_peak_rss_before_bytes": 1523171328,
+        "required_phrases_present": true,
+        "source": "extraction-golden-en.html",
+        "source_sha256": "6878f20c21ef61e6f86c8eb263fbbd9ebf2fdd8db195089b79771dabce04b23a"
+      },
+      {
+        "elapsed_seconds": 1.531644,
+        "element_kinds": [
+          "heading"
+        ],
+        "elements": 1,
+        "extraction_sha256": "1159f8269eb6b0ba254340c7e2fa62e9ea1f87643b7ad42347654be51bf2a7e2",
+        "extractor_name": "docling",
+        "extractor_version": "2.119.0",
+        "ocr_approval_id": "task018-synthetic-ocr-owner-approval-2026-08-10",
+        "ocr_engine": "tesseract-cli",
+        "ocr_engine_version": "5.3.4",
+        "ocr_performed": true,
+        "parser_role": "docling-primary-approved-ocr",
+        "process_peak_rss_after_bytes": 2157154304,
+        "process_peak_rss_before_bytes": 1523171328,
+        "required_phrases_present": true,
+        "source": "extraction-golden-ocr.pdf",
+        "source_sha256": "e592a5a9da2abbc47f95ec5868754f84d0c6fa584af3a289ef16763343bc9f79"
+      }
+    ],
+    "dependency_versions": {
+      "docling": "2.119.0",
+      "onnxruntime": "1.27.0",
+      "torch": "2.13.0+cpu",
+      "torchvision": "0.28.0+cpu",
+      "unstructured": "0.25.2",
+      "unstructured-inference": "1.6.13"
+    },
+    "docling_layout_model": {
+      "repository": "docling-project/docling-layout-heron-onnx",
+      "revision": "40bde044036bb181c130ddf6c51792187268748f"
+    },
+    "manifest_sha256": "a5fa40a4a6ffadb784533eb4b5bff63035b51672c83bb86757d9c098535d1111",
+    "manifest_version": "eisenhower-corpus-v1",
+    "ocr_without_frozen_receipt_rejection": "ocr_human_approval_required",
+    "offline": true,
+    "schema_version": "document-extraction-benchmark-v1",
+    "synthetic_fixture_notice": "Smoke benchmark only; representative human review remains a separate gate."
+  }
+}
