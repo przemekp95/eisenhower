@@ -155,7 +155,7 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn('AI_CLASSIFIER_IMAGE="local/eisenhower-ai-classifier:${release_sha}"', script)
     self.assertIn('AI_KNOWLEDGE_IMAGE="local/eisenhower-ai-knowledge:${release_sha}"', script)
     self.assertIn('AI_INGEST_IMAGE="local/eisenhower-ai-ingest:${release_sha}"', script)
-    self.assertIn('AI_ROCM_IMAGE="local/eisenhower-ai-rocm:${release_sha}"', script)
+    self.assertIn('AI_KNOWLEDGE_ROCM_IMAGE="local/eisenhower-ai-knowledge-rocm:${release_sha}"', script)
     self.assertIn('MCP_IMAGE="local/eisenhower-mcp:${release_sha}"', script)
     self.assertIn('WEB_IMAGE="local/eisenhower-web:${release_sha}"', script)
     self.assertIn('docker image inspect', script)
@@ -174,6 +174,21 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn('docker compose', script)
     self.assertIn('config --quiet', script)
 
+  def test_first_role_split_rollback_preserves_the_legacy_monolith_topology(self):
+    script = DEPLOY_SCRIPT_PATH.read_text()
+
+    self.assertIn('ROLLBACK_LAYOUT=legacy_monolith', script)
+    self.assertIn('rollback.legacy.compose.yaml', script)
+    self.assertIn('rollback.legacy.compose.amd.yaml', script)
+    self.assertIn('ROLLBACK_LEGACY_COMPOSE_SHA256', script)
+    self.assertIn('compose_legacy()', script)
+    self.assertIn('AI_IMAGE="${ROLLBACK_AI_SERVICE_IMAGE_ID:', script)
+    self.assertIn('Legacy rollback Compose digest mismatch', script)
+    self.assertLess(
+      script.index('case "${ROLLBACK_LAYOUT:-roles}" in'),
+      script.index('missing classifier rollback image'),
+    )
+
   def test_amd_inference_is_opt_in_and_uses_the_pinned_rocm_model_contract(self):
     inference = self.amd_services["inference"]
     self.assertEqual(inference["profiles"], ["inference-amd"])
@@ -190,12 +205,13 @@ class LocalProductionContractTest(unittest.TestCase):
   def test_amd_retrieval_profile_runs_pinned_bge_m3_without_enabling_generation(self):
     ai = self.amd_services["knowledge-service"]
     classifier = self.services["classifier-service"]
-    worker = self.amd_services["rag-worker"]
+    worker = self.services["rag-worker"]
     self.assertEqual(ai["profiles"], ["retrieval-amd", "response-amd"])
-    self.assertEqual(worker["profiles"], ["retrieval-amd"])
+    self.assertEqual(worker["profiles"], ["retrieval", "response", "full"])
+    self.assertIn("/dev/kfd:/dev/kfd", ai["devices"])
+    self.assertIn("/dev/dri:/dev/dri", ai["devices"])
+    self.assertNotIn("devices", worker)
     for service in (ai, worker):
-      self.assertIn("/dev/kfd:/dev/kfd", service["devices"])
-      self.assertIn("/dev/dri:/dev/dri", service["devices"])
       self.assertIn("RAG_EMBEDDING_MODEL_NAME=BAAI/bge-m3", service["environment"])
       self.assertIn(
         "RAG_EMBEDDING_MODEL_REVISION=5617a9f61b028005a4858fdac845db406aefb181",
@@ -209,9 +225,11 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn("RAG_RESPONSE_PROMOTION_POINTER_PATH=/app/promotion/current.json", self.services["knowledge-service"]["environment"])
     self.assertIn("${AI_PROMOTION_ROOT:-./.runtime/promotion}:/app/promotion:ro", self.services["knowledge-service"]["volumes"])
     rocm_dockerfile = (ROOT / "backend-ai" / "Dockerfile.rocm").read_text(encoding="utf-8")
+    rocm_requirements = (ROOT / "backend-ai" / "requirements-knowledge-rocm.txt").read_text(encoding="utf-8")
     self.assertIn("ENTRYPOINT []", rocm_dockerfile)
-    self.assertIn("grpcio==1.78.0", rocm_dockerfile)
-    self.assertIn("'protobuf>=6.31.1,<7'", rocm_dockerfile)
+    self.assertIn("grpcio==1.78.0", rocm_requirements)
+    self.assertIn("protobuf>=6.31.1,<7", rocm_requirements)
+    self.assertNotIn("vllm/vllm-openai-rocm", rocm_dockerfile)
 
   def test_amd_reranker_is_a_separate_pinned_bounded_private_service(self):
     reranker = self.amd_services["reranker"]

@@ -198,6 +198,7 @@ services:
   knowledge-service:
     <<: *common
     image: ${AI_KNOWLEDGE_IMAGE:?AI_KNOWLEDGE_IMAGE must be a versioned tag or digest}
+    command: ["python", "-m", "uvicorn", "app.knowledge_runtime:from_environment", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
     profiles: [retrieval, response, full]
     group_add: ["1001"]
     depends_on:
@@ -270,6 +271,7 @@ services:
   rag-worker:
     <<: *common
     image: ${AI_INGEST_IMAGE:?AI_INGEST_IMAGE must be a versioned tag or digest}
+    command: ["python", "-m", "app.worker_runtime"]
     profiles: [retrieval, response, full]
     environment:
       - APP_ENV=production

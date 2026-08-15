@@ -28,7 +28,7 @@ export AI_BOUNDARY_IMAGE="local/eisenhower-ai-boundary:${release_sha}"
 export AI_CLASSIFIER_IMAGE="local/eisenhower-ai-classifier:${release_sha}"
 export AI_KNOWLEDGE_IMAGE="local/eisenhower-ai-knowledge:${release_sha}"
 export AI_INGEST_IMAGE="local/eisenhower-ai-ingest:${release_sha}"
-export AI_ROCM_IMAGE="local/eisenhower-ai-rocm:${release_sha}"
+export AI_KNOWLEDGE_ROCM_IMAGE="local/eisenhower-ai-knowledge-rocm:${release_sha}"
 export MCP_IMAGE="local/eisenhower-mcp:${release_sha}"
 export WEB_IMAGE="local/eisenhower-web:${release_sha}"
 export LOCAL_MODEL_OWNER_APPROVAL_BYPASS=false
@@ -66,6 +66,14 @@ compose_full() {
     --profile inference-amd --profile reranker-amd "$@"
 }
 
+compose_legacy() {
+  docker compose --env-file "$env_file" \
+    -f "$state_dir/rollback.legacy.compose.yaml" \
+    -f "$state_dir/rollback.legacy.compose.amd.yaml" \
+    --profile retrieval-amd --profile response-amd \
+    --profile inference-amd --profile reranker-amd "$@"
+}
+
 verify_image() {
   image_ref="$1"
   image_revision="$(docker image inspect "$image_ref" \
@@ -95,8 +103,8 @@ build_retrieval_images() {
   docker build --build-arg RELEASE_SHA="$release_sha" --target ingest \
     -f backend-ai/Dockerfile -t "$AI_INGEST_IMAGE" backend-ai
   docker build --build-arg RELEASE_SHA="$release_sha" \
-    -f backend-ai/Dockerfile.rocm -t "$AI_ROCM_IMAGE" backend-ai
-  for image_ref in "$AI_KNOWLEDGE_IMAGE" "$AI_INGEST_IMAGE" "$AI_ROCM_IMAGE"; do
+    -f backend-ai/Dockerfile.rocm -t "$AI_KNOWLEDGE_ROCM_IMAGE" backend-ai
+  for image_ref in "$AI_KNOWLEDGE_IMAGE" "$AI_INGEST_IMAGE" "$AI_KNOWLEDGE_ROCM_IMAGE"; do
     verify_image "$image_ref"
   done
 }
@@ -143,9 +151,42 @@ record_rollback() {
   umask 077
   cp "$env_file" "$state_dir/rollback.config.env"
   chmod 600 "$state_dir/rollback.config.env"
+  rollback_layout=roles
+  classifier_container_id="$($rollback_compose ps -q classifier-service 2>/dev/null || true)"
+  ai_container_id="$($rollback_compose ps -q ai-service 2>/dev/null || true)"
+  if test -n "$ai_container_id" && test -z "$classifier_container_id"; then
+    legacy_revision="$(docker inspect "$ai_container_id" \
+      --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
+    case "$legacy_revision" in
+      [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]* ) ;;
+      *) echo "Legacy AI image has no valid source revision" >&2; exit 1 ;;
+    esac
+    git cat-file -e "${legacy_revision}^{commit}"
+    git show "${legacy_revision}:deploy/local/compose.yaml" \
+      > "$state_dir/rollback.legacy.compose.yaml"
+    git show "${legacy_revision}:deploy/local/compose.amd.yaml" \
+      > "$state_dir/rollback.legacy.compose.amd.yaml"
+    chmod 600 "$state_dir/rollback.legacy.compose.yaml" \
+      "$state_dir/rollback.legacy.compose.amd.yaml"
+    rollback_legacy_digest="$(
+      sha256sum "$state_dir/rollback.legacy.compose.yaml" \
+        "$state_dir/rollback.legacy.compose.amd.yaml" | sha256sum | awk '{print $1}'
+    )"
+    rollback_layout=legacy_monolith
+    rollback_topology=full
+    rollback_compose=compose_full
+    rollback_services="api-service ai-service knowledge-service rag-worker mcp-service web"
+  fi
   {
     echo "ROLLBACK_RECORDED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     echo "ROLLBACK_TOPOLOGY=$rollback_topology"
+    if test "$rollback_layout" = legacy_monolith; then
+      echo "ROLLBACK_LAYOUT=legacy_monolith"
+      echo "ROLLBACK_RELEASE_SHA=$legacy_revision"
+      echo "ROLLBACK_LEGACY_COMPOSE_SHA256=$rollback_legacy_digest"
+    else
+      echo "ROLLBACK_LAYOUT=roles"
+    fi
     for service in $rollback_services; do
       container_id="$($rollback_compose ps -q "$service" 2>/dev/null || true)"
       if test -n "$container_id"; then
@@ -317,7 +358,10 @@ wake_response() {
   timeout_seconds="${INFERENCE_WAKE_TIMEOUT_SECONDS:?INFERENCE_WAKE_TIMEOUT_SECONDS is required}"
   case "$timeout_seconds" in *[!0-9]*|'') echo "Wake timeout must be a positive integer" >&2; exit 1 ;; esac
   test "$timeout_seconds" -gt 0 || { echo "Wake timeout must be positive" >&2; exit 1; }
-  compose_response up --no-deps -d inference reranker
+  # Preserve the exact stopped container/image when scale-to-zero was used.
+  # Only create containers when this is the first cold start.
+  compose_response start inference reranker \
+    || compose_response up --no-deps -d inference reranker
   deadline=$(( $(date +%s) + timeout_seconds ))
   while test "$(date +%s)" -lt "$deadline"; do
     if compose_response exec -T inference sh -c \
@@ -432,7 +476,41 @@ rollback() {
   . "$rollback_config"
   . "$rollback_file"
   set +a
+  env_file="$rollback_config"
   export API_IMAGE="${ROLLBACK_API_SERVICE_IMAGE_ID:?missing API rollback image}"
+  case "${ROLLBACK_LAYOUT:-roles}" in
+    legacy_monolith)
+      legacy_base="$state_dir/rollback.legacy.compose.yaml"
+      legacy_amd="$state_dir/rollback.legacy.compose.amd.yaml"
+      test -f "$legacy_base" && test -f "$legacy_amd" || {
+        echo "Legacy rollback Compose snapshot is incomplete" >&2
+        exit 1
+      }
+      actual_legacy_digest="$(
+        sha256sum "$legacy_base" "$legacy_amd" | sha256sum | awk '{print $1}'
+      )"
+      test "$actual_legacy_digest" = "${ROLLBACK_LEGACY_COMPOSE_SHA256:-}" || {
+        echo "Legacy rollback Compose digest mismatch" >&2
+        exit 1
+      }
+      export RELEASE_SHA="${ROLLBACK_RELEASE_SHA:?missing legacy release SHA}"
+      export AI_ROCM_RELEASE_SHA="$RELEASE_SHA"
+      export AI_IMAGE="${ROLLBACK_AI_SERVICE_IMAGE_ID:?missing legacy AI rollback image}"
+      export AI_ROCM_IMAGE="${ROLLBACK_KNOWLEDGE_SERVICE_IMAGE_ID:-$AI_IMAGE}"
+      export MCP_IMAGE="${ROLLBACK_MCP_SERVICE_IMAGE_ID:?missing MCP rollback image}"
+      export WEB_IMAGE="${ROLLBACK_WEB_IMAGE_ID:?missing web rollback image}"
+      compose_legacy config --quiet
+      compose_legacy up -d --wait
+      compose_legacy ps
+      curl -fsS "http://127.0.0.1:${NODE_BIND_PORT:-3001}/health/ready" >/dev/null
+      curl -fsS "http://127.0.0.1:${AI_BIND_PORT:-8000}/health/ready" >/dev/null
+      compose_legacy exec -T knowledge-service \
+        curl -fsS http://127.0.0.1:8000/health/live >/dev/null
+      return 0
+      ;;
+    roles) ;;
+    *) echo "Unknown rollback layout: $ROLLBACK_LAYOUT" >&2; exit 1 ;;
+  esac
   export AI_BOUNDARY_IMAGE="${ROLLBACK_AI_SERVICE_IMAGE_ID:?missing AI boundary rollback image}"
   export AI_CLASSIFIER_IMAGE="${ROLLBACK_CLASSIFIER_SERVICE_IMAGE_ID:?missing classifier rollback image}"
   case "${ROLLBACK_TOPOLOGY:?missing rollback topology}" in
@@ -444,7 +522,7 @@ rollback() {
     retrieval)
       export AI_KNOWLEDGE_IMAGE="${ROLLBACK_KNOWLEDGE_SERVICE_IMAGE_ID:?missing knowledge rollback image}"
       export AI_INGEST_IMAGE="${ROLLBACK_RAG_WORKER_IMAGE_ID:?missing ingest rollback image}"
-      export AI_ROCM_IMAGE="$AI_KNOWLEDGE_IMAGE"
+      export AI_KNOWLEDGE_ROCM_IMAGE="$AI_KNOWLEDGE_IMAGE"
       compose_retrieval config --quiet
       compose_retrieval up -d --wait
       smoke_retrieval
@@ -452,7 +530,7 @@ rollback() {
     response|full)
       export AI_KNOWLEDGE_IMAGE="${ROLLBACK_KNOWLEDGE_SERVICE_IMAGE_ID:?missing knowledge rollback image}"
       export AI_INGEST_IMAGE="${ROLLBACK_RAG_WORKER_IMAGE_ID:?missing ingest rollback image}"
-      export AI_ROCM_IMAGE="$AI_KNOWLEDGE_IMAGE"
+      export AI_KNOWLEDGE_ROCM_IMAGE="$AI_KNOWLEDGE_IMAGE"
       export MCP_IMAGE="${ROLLBACK_MCP_SERVICE_IMAGE_ID:?missing MCP rollback image}"
       export WEB_IMAGE="${ROLLBACK_WEB_IMAGE_ID:?missing web rollback image}"
       if test "$ROLLBACK_TOPOLOGY" = response; then

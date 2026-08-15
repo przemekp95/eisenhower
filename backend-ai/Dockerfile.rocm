@@ -1,44 +1,34 @@
-FROM vllm/vllm-openai-rocm@sha256:3be0d8f3ec3ebcc99203e08d895392a8d749ed8a132f41574a8018cdaf525a22
+FROM rocm/pytorch@sha256:4449f856653602317e4101a76fce599c7fcd58ccec2e539951fce5f73083179e
 
 ARG RELEASE_SHA
-LABEL org.opencontainers.image.revision=$RELEASE_SHA
+LABEL org.opencontainers.image.revision=$RELEASE_SHA \
+      eisenhower.runtime.role=knowledge-rocm
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=on \
     PIP_DISABLE_PIP_VERSION_CHECK=on \
-    HF_HOME=/home/app/.cache/huggingface
+    HF_HOME=/home/app/.cache/huggingface \
+    TOKENIZERS_PARALLELISM=false
 
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        curl libgomp1 libmagic1 poppler-utils tesseract-ocr tesseract-ocr-pol \
+    && apt-get install -y --no-install-recommends curl libgomp1 \
     && rm -rf /var/lib/apt/lists/* \
-    && python -m pip install --no-cache-dir \
-        fastapi==0.135.4 \
-        pydantic==2.13.4 \
-        uvicorn==0.44.0 \
-        python-multipart==0.0.32 \
-        pillow==12.3.0 \
-        pytesseract==0.3.13 \
-        sentence-transformers==5.7.0 \
-        qdrant-client==1.12.0 \
-        grpcio==1.78.0 \
-        grpcio-tools==1.78.0 \
-        'protobuf>=6.31.1,<7' \
-        httpx==0.28.1 \
-        'PyJWT[crypto]==2.13.0' \
-        pymongo==4.17.0 \
+    && python -m pip install --no-cache-dir --upgrade setuptools==84.0.0 wheel==0.46.3 \
     && useradd --uid 1000 --create-home --shell /bin/bash app \
     && mkdir -p /app/data /app/logs /home/app/.cache/huggingface \
     && chown -R app:app /app /home/app
 
+COPY requirements-boundary.txt requirements-knowledge-rocm.txt ./
+RUN python -m pip install --no-cache-dir -r requirements-knowledge-rocm.txt
+
 COPY --chown=app:app . .
 
 USER app
-HEALTHCHECK --interval=30s --timeout=30s --start-period=300s --retries=5 \
-    CMD curl -f http://localhost:8000/health/ready || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=300s --retries=5 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"
 EXPOSE 8000
 ENTRYPOINT []
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+CMD ["python", "-m", "uvicorn", "app.knowledge_runtime:from_environment", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

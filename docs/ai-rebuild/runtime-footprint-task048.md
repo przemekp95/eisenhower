@@ -1,7 +1,7 @@
 # TASK-048 runtime footprint evidence
 
-Status: implementation and local CPU/image evidence complete; physical ROCm, governed holdout and deployment
-gates remain open. Nothing in this report proves deployment, Mikrus capacity, production behavior or human
+Status: implementation and local CPU/image evidence complete; physical response lifecycle is characterized,
+while dedicated knowledge ROCm, governed holdout and deployment gates remain open. Nothing in this report proves deployment, Mikrus capacity, production behavior or human
 acceptance.
 
 Source baseline: `a018f986fefae8a1add6c4c5f929da5320771fde`.
@@ -16,7 +16,8 @@ starts only core; retrieval, response, automation, identity/access and the forme
 Production classification never trains and fails closed unless the mounted atomic generation pointer matches
 the separately configured SHA-256.
 
-The builder no longer performs a model prefetch that was absent from the final image. Runtime model roles are
+Role entrypoints are explicit in Compose as well as in image CMDs, so an AMD image overlay cannot turn
+knowledge or the SQLite worker back into the monolithic HTTP process. The builder no longer performs a model prefetch that was absent from the final image. Runtime model roles are
 offline-only against mounted artifacts. Docling layout and TableFormer are prepared by an explicit offline
 command into a 529,459,930-byte regular-file bundle; its complete file set, two immutable repository commits,
 sizes and SHA-256 values are bound by manifest digest. The worker verifies it before constructing Docling and
@@ -26,7 +27,8 @@ hidden runtime installation. Existing cache revisions were not deleted or pruned
 ## Before and after
 
 All memory figures distinguish Docker working set from cgroup `memory.peak`. CPU figures are observations,
-not proposed limits. The active before stack was not restarted or changed.
+not proposed limits. The active baseline was not redeployed or recreated; only its two existing response
+containers were later stopped and started for the explicitly recorded lifecycle characterization.
 
 | Axis | Before, active `a018f986…` stack | After, isolated candidate | Evidence boundary |
 | --- | --- | --- | --- |
@@ -41,15 +43,15 @@ not proposed limits. The active before stack was not restarted or changed.
 | Classifier RAM | included in monolith | 926.6 MiB working set, 1.01 GiB cgroup peak | approved artifact, cached MiniLM, one Torch/OMP thread |
 | Knowledge RAM | active ROCm service 192.9 MiB working set, 5.82 GiB cgroup peak | CPU `hybrid-rrf-v1`: 762.8 MiB working set, 1.89 GiB cgroup peak | isolated read-only search; not ROCm evidence |
 | Ingest RAM | active worker 98.86 MiB working set, 1.43 GiB cgroup peak | three 2 GiB repetitions: peak 1.84–2.11 GB, p95 2.10 GB, 0 max/OOM events; 512 MiB: exit 137, `OOMKilled=true` | isolated read-only 11-case extraction; no active stores or worker startup |
-| Inference RAM | 354 MiB working set, 13.53 GiB cgroup peak | not restarted or scaled to zero | active vLLM observation only |
-| Reranker RAM | 626.8 MiB working set, 6.27 GiB cgroup peak | not restarted or scaled to zero | active vLLM observation only |
+| Inference RAM | long-running 323–354 MiB working set, 13.53 GiB historical cgroup peak | 2.866 GiB five seconds after authenticated cold-wake; 278 PIDs | same exact baseline container; immediate post-wake and long-running working sets are not comparable |
+| Reranker RAM | long-running 626–640 MiB working set, 6.27 GiB historical cgroup peak | 2.698 GiB five seconds after authenticated cold-wake; 278 PIDs | same exact baseline container; immediate post-wake and long-running working sets are not comparable |
 | Boundary cold/warm | no comparable split baseline | cold live 0.775 s; warm p50 0.459 ms, p95 0.576 ms | 100 loopback liveness calls |
 | Classifier cold/warm | no comparable exact-artifact baseline | cold first classification 6.113 s; warm p50 16.572 ms, p95 21.218 ms | 30 loopback requests, static benchmark auth only |
 | Classifier failure | startup training was possible | absent approved pointer: HTTP 503 in 6.523 ms, no artifact created | production mode characterization |
 | Knowledge cold/warm | active heterogeneous result not comparable | cold ready 6.667 s; warm search p50 134.618 ms, p95 159.244 ms | 20 CPU no-reranker searches; host had active GPU load |
 | Ingest container-cold workload | no comparable frozen-container baseline | three 2 GiB runs: wall median 14.864 s/p95 15.482 s, CPU median 15.032 s, PID max 9; all 33 case executions passed | new process/container each run; host storage/page cache was not cold |
 | Queue | unbounded producer/worker DB topology was inconsistent | capacity 128: enqueue p50 3.637 ms, p95 4.086 ms; overflow rejected in 0.122 ms; replay 0.074 ms | isolated SQLite microbenchmark |
-| Active GPU | fresh read-only snapshot: 100% use, 3.167 GB VRAM, 46.824 GB GTT, 64.049 W, 60 C; inference/reranker each near 101% host CPU | no after measurement | kernel sysfs plus Docker stats; scale-to-zero code/tests are not a physical wake/sleep result |
+| Physical response lifecycle | loaded: 100% GPU, 2.968 GB VRAM, 46.847 GB GTT, 64.024 W; stopped after 10 s: 5%, 2.983 GB, 2.775 GB, 26.049 W | stop 11.846 s; reranker ready 29.581 s; inference ready 116.086 s; both restored healthy | exact existing baseline containers, authenticated `/v1/models`, kernel sysfs and Docker stats; no recreate/deploy |
 | Retrieval quality | dense recall@5 0.6964/MRR 0.5774/p95 25.93 ms; selected hybrid+reranker 0.9107/0.8048/266.83 ms | no-reranker 0.9107/0.7095/48.59 ms; rejected because global and PL MRR miss policy | fresh isolated 36-case non-holdout run; frozen holdout remains closed |
 
 The classifier initially took 121.313 s because `sentence-transformers` performed unsuccessful Hugging Face
@@ -79,6 +81,13 @@ The active vLLM 0.20 service confirmed that authenticated `/v1/score` returns 20
 Compose stop/start operator action with constant-time token validation, bounded authenticated readiness and
 stop-on-timeout fallback. This follows the vLLM 0.20 [security guidance](https://docs.vllm.ai/en/v0.20.0/usage/security/)
 and [sleep-mode documentation](https://docs.vllm.ai/en/v0.20.0/features/sleep_mode/).
+
+The physical lifecycle rehearsal used `stop`/`start` on the exact deployed container IDs rather than current
+branch `compose up`, which could have recreated a baseline container with unbuilt branch images. Stopping both
+response engines reduced GTT by about 44.1 GB and board power by about 38 W while knowledge liveness remained
+green. The repository wake action now attempts Compose `start` first and only creates missing containers as a
+first-cold-start fallback. This measurement does not prove request-level application fallback, partial-start
+cleanup, timeout cleanup or production behavior.
 
 ## Contract and architecture assessment
 
@@ -126,12 +135,18 @@ and [sleep-mode documentation](https://docs.vllm.ai/en/v0.20.0/features/sleep_mo
 - six additional clean exact-image ingest repetitions aggregated into comparable 2 GiB and 2.5 GiB summaries;
   all 66 case executions passed and raw report SHA-256 values are retained, while host-cache order remains an
   explicit confounder.
+- exact-container physical gfx1151 response stop/start: authenticated ready in 29.581 s for reranker and
+  116.086 s for inference, both restored healthy; no image or Compose recreation occurred.
+- legacy monolith Compose snapshots from source `a018f986…` render successfully with their exact image IDs;
+  the role-split rollback contract now stores and SHA-verifies those source-revision configs. The mutating
+  migration/rollback rehearsal remains separately authorized work.
 
 ## Open gates and risks
 
-1. Run clean physical gfx1151/ROCm cold/warm/idle/peak/OOM/wake measurements without the current inference and
-   reranker load. Until then the ROCm knowledge service remains on the existing vLLM-derived image and no GPU,
-   VRAM, power or image saving is claimed.
+1. Benchmark a dedicated pinned PyTorch/ROCm knowledge image against the vLLM-derived baseline with identical
+   application dependencies and the frozen BGE-M3 revision. The current vLLM-derived image is 10.684 GB OCI
+   (42.6 GB unpacked), but shares 30 of 33 layers with response vLLM, so no aggregate disk/cache saving is
+   claimed. Do not switch until physical gfx1151 quality, latency, RSS/OOM, VRAM/power, SBOM and rollback pass.
 2. Calibrate every mandatory CPU/RAM/PID/thread value, especially both vLLM services, using repeated
    representative workloads. Ingest now has one clean success and one deliberate OOM boundary, but not enough
    repetitions or production-shaped documents to set a deployment limit. `.env.example` remains blank.
@@ -140,9 +155,11 @@ and [sleep-mode documentation](https://docs.vllm.ai/en/v0.20.0/features/sleep_mo
    to 0.7095 and PL MRR from 0.8000 to 0.5952. Do not tune on or promote from this data. A governed frozen
    holdout run still requires human authorization; the default remains `hybrid-bge-v1` and
    `hybrid-rrf-v1` is only a rollbackable candidate.
-4. Physically exercise `sleep-response`/`wake-response`, cold-wake timeout, partial-start cleanup and request
-   fallback. Unit tests and render proof do not establish GPU lifecycle behavior.
-5. Qualify the first role-split deployment rollback from the monolithic topology. Later exact-SHA role rollback
-   is recorded, but the migration boundary still needs an operator rehearsal.
+4. The exact-container physical sleep/wake path passed locally. Request fallback, forced cold-wake timeout,
+   partial-start cleanup and OOM recovery remain unqualified; deliberately inducing them on the active stack
+   requires a separately scoped disruption rehearsal.
+5. The first role-split rollback now preserves SHA-verified legacy Compose snapshots and the exact monolith
+   image IDs, closing the implementation gap. A real deployment/rollback remains unexecuted because this task
+   explicitly withholds deployment authority.
 6. Size Prometheus storage before adding a TSDB byte limit. Retention time is already bounded; guessing a byte
    cap without cardinality/storage evidence would create an avoidable outage risk.

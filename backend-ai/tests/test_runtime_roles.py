@@ -28,6 +28,18 @@ def test_ai_images_install_role_specific_dependencies_without_model_prefetch():
   assert "libgl1" in ingest_stage
 
 
+def test_rocm_knowledge_image_is_dedicated_and_does_not_include_vllm_or_ingest_tools():
+  dockerfile = (ROOT / "backend-ai" / "Dockerfile.rocm").read_text(encoding="utf-8")
+
+  assert "rocm/pytorch@sha256:4449f856653602317e4101a76fce599c7fcd58ccec2e539951fce5f73083179e" in dockerfile
+  assert "eisenhower.runtime.role=knowledge-rocm" in dockerfile
+  assert "requirements-knowledge-rocm.txt" in dockerfile
+  assert "vllm/vllm-openai-rocm" not in dockerfile
+  assert "tesseract" not in dockerfile
+  assert "poppler" not in dockerfile
+  assert "pytesseract" not in dockerfile
+
+
 def test_local_compose_defaults_to_core_and_keeps_heavy_roles_explicit():
   compose = yaml.safe_load((ROOT / "deploy" / "local" / "compose.yaml").read_text())
   services = compose["services"]
@@ -49,6 +61,11 @@ def test_local_compose_defaults_to_core_and_keeps_heavy_roles_explicit():
     assert "HF_HUB_OFFLINE=1" in environment
     assert "TRANSFORMERS_OFFLINE=1" in environment
   worker = services["rag-worker"]
+  assert services["knowledge-service"]["command"] == [
+    "python", "-m", "uvicorn", "app.knowledge_runtime:from_environment", "--factory",
+    "--host", "0.0.0.0", "--port", "8000", "--workers", "1",
+  ]
+  assert worker["command"] == ["python", "-m", "app.worker_runtime"]
   assert "DOCLING_ARTIFACTS_PATH=/app/docling-artifacts" in worker["environment"]
   assert (
     "DOCLING_ARTIFACTS_MANIFEST_SHA256="
@@ -87,3 +104,10 @@ def test_amd_vllm_lifecycle_is_private_bounded_and_opt_in():
   assert "sleep-response" in deploy_script
   assert "wake-response" in deploy_script
   assert "/v1/models" in deploy_script
+  assert "compose_response start inference reranker" in deploy_script
+  assert deploy_script.index("compose_response start inference reranker") < deploy_script.index(
+    "compose_response up --no-deps -d inference reranker"
+  )
+  assert compose["services"]["knowledge-service"]["image"].startswith("${AI_KNOWLEDGE_ROCM_IMAGE")
+  assert "rag-worker" not in compose["services"]
+  assert 'AI_KNOWLEDGE_ROCM_IMAGE="local/eisenhower-ai-knowledge-rocm:${release_sha}"' in deploy_script
