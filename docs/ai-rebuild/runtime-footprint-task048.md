@@ -40,14 +40,14 @@ not proposed limits. The active before stack was not restarted or changed.
 | AI boundary RAM | old monolith 136.1 MiB working set, 315 MiB cgroup peak | 42.22 MiB working set, 57.94 MiB cgroup peak | isolated liveness benchmark |
 | Classifier RAM | included in monolith | 926.6 MiB working set, 1.01 GiB cgroup peak | approved artifact, cached MiniLM, one Torch/OMP thread |
 | Knowledge RAM | active ROCm service 192.9 MiB working set, 5.82 GiB cgroup peak | CPU `hybrid-rrf-v1`: 762.8 MiB working set, 1.89 GiB cgroup peak | isolated read-only search; not ROCm evidence |
-| Ingest RAM | active worker 98.86 MiB working set, 1.43 GiB cgroup peak | 2 GiB limit: 1.90 GiB sampled / 1.90 GiB cgroup peak, 0 max/OOM events; 512 MiB: exit 137, `OOMKilled=true` | isolated read-only 11-case extraction; no active stores or worker startup |
+| Ingest RAM | active worker 98.86 MiB working set, 1.43 GiB cgroup peak | three 2 GiB repetitions: peak 1.84–2.11 GB, p95 2.10 GB, 0 max/OOM events; 512 MiB: exit 137, `OOMKilled=true` | isolated read-only 11-case extraction; no active stores or worker startup |
 | Inference RAM | 354 MiB working set, 13.53 GiB cgroup peak | not restarted or scaled to zero | active vLLM observation only |
 | Reranker RAM | 626.8 MiB working set, 6.27 GiB cgroup peak | not restarted or scaled to zero | active vLLM observation only |
 | Boundary cold/warm | no comparable split baseline | cold live 0.775 s; warm p50 0.459 ms, p95 0.576 ms | 100 loopback liveness calls |
 | Classifier cold/warm | no comparable exact-artifact baseline | cold first classification 6.113 s; warm p50 16.572 ms, p95 21.218 ms | 30 loopback requests, static benchmark auth only |
 | Classifier failure | startup training was possible | absent approved pointer: HTTP 503 in 6.523 ms, no artifact created | production mode characterization |
 | Knowledge cold/warm | active heterogeneous result not comparable | cold ready 6.667 s; warm search p50 134.618 ms, p95 159.244 ms | 20 CPU no-reranker searches; host had active GPU load |
-| Ingest cold workload | no comparable frozen-container baseline | 15.288 s wall, 14.917 CPU-s, peak 7 PID; all 11 required phrase checks passed | PDF/DOCX/PPTX/HTML primary+fallback and approved OCR, one isolated run |
+| Ingest container-cold workload | no comparable frozen-container baseline | three 2 GiB runs: wall median 14.864 s/p95 15.482 s, CPU median 15.032 s, PID max 9; all 33 case executions passed | new process/container each run; host storage/page cache was not cold |
 | Queue | unbounded producer/worker DB topology was inconsistent | capacity 128: enqueue p50 3.637 ms, p95 4.086 ms; overflow rejected in 0.122 ms; replay 0.074 ms | isolated SQLite microbenchmark |
 | Active GPU | 100% use, 3.16 GB VRAM, 70.083 W; inference and reranker each near 101% host CPU | no after measurement | scale-to-zero code/tests are not a physical wake/sleep result |
 | Retrieval quality | dense recall@5 0.6964/MRR 0.5774/p95 25.93 ms; selected hybrid+reranker 0.9107/0.8048/266.83 ms | no-reranker 0.9107/0.7095/48.59 ms; rejected because global and PL MRR miss policy | fresh isolated 36-case non-holdout run; frozen holdout remains closed |
@@ -64,6 +64,14 @@ completed all 11 frozen synthetic cases with zero cgroup pressure events. A 1 Gi
 recorded 3,664 `memory.max` events and had a dirty evidence tree due to the preceding uncommitted report, so it
 is informative only. The clean 512 MiB failure produced 3,774 `memory.max` events and a container OOM kill.
 These are single-host synthetic measurements, not production limit recommendations.
+
+A subsequent exact-image repetition set at source `090c1d5c` ran three clean reports for each of 2 GiB and
+2.5 GiB. Both sets passed all 11 cases per run with zero pressure/OOM events. At 2 GiB the maximum cgroup peak
+was 2,114,969,600 bytes, leaving only 32,514,048 bytes below the limit; wall p95 was 15.482 s. The later 2.5 GiB
+set peaked at 1,837,862,912 bytes with wall p95 14.265 s, but it ran after the model and fixture files had warmed
+the host page cache. Therefore the lower second peak is not attributed to the higher limit, neither set is a
+true cold-host-storage benchmark, and no deployment limit was filled in. The committed aggregates bind each
+of the six external raw reports by SHA-256.
 
 The active vLLM 0.20 service confirmed that authenticated `/v1/score` returns 200, unauthenticated
 `/v1/score` returns 401, while unauthenticated `/score` returns 200. The adapter therefore uses only
@@ -115,6 +123,9 @@ and [sleep-mode documentation](https://docs.vllm.ai/en/v0.20.0/features/sleep_mo
 - shell syntax and local production contract tests.
 - deterministic Docling artifact preparation plus isolated cgroup-v2 ingest evidence for successful 2 GiB and
   OOM-killed 512 MiB runs; neither accessed active MongoDB, Qdrant or the GPU.
+- six additional clean exact-image ingest repetitions aggregated into comparable 2 GiB and 2.5 GiB summaries;
+  all 66 case executions passed and raw report SHA-256 values are retained, while host-cache order remains an
+  explicit confounder.
 
 ## Open gates and risks
 

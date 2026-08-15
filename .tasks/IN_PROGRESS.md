@@ -26,7 +26,7 @@ no-reranker candidate because global and Polish MRR missed the declared policy d
 governed frozen holdout remains unopened. Ingest now requires a complete hash-verified read-only Docling
 layout/TableFormer bundle and a pinned spaCy dependency; an isolated 11-case run passed at 2 GiB with zero
 memory pressure events, while a clean 512 MiB run was OOM-killed as expected. The task remains in progress
-because physical gfx1151/ROCm resource/OOM/wake qualification, repeated representative ingest calibration,
+because physical gfx1151/ROCm resource/OOM/wake qualification, production-shaped and cold-host ingest calibration,
 authorized holdout confirmation and the first
 monolith-to-role rollback rehearsal are still open. No deployment, promotion or publication occurred.
 
