@@ -155,7 +155,7 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn('AI_CLASSIFIER_IMAGE="local/eisenhower-ai-classifier:${release_sha}"', script)
     self.assertIn('AI_KNOWLEDGE_IMAGE="local/eisenhower-ai-knowledge:${release_sha}"', script)
     self.assertIn('AI_INGEST_IMAGE="local/eisenhower-ai-ingest:${release_sha}"', script)
-    self.assertIn('AI_KNOWLEDGE_ROCM_IMAGE="local/eisenhower-ai-knowledge-rocm:${release_sha}"', script)
+    self.assertIn('AI_ROCM_IMAGE="local/eisenhower-ai-rocm:${release_sha}"', script)
     self.assertIn('MCP_IMAGE="local/eisenhower-mcp:${release_sha}"', script)
     self.assertIn('WEB_IMAGE="local/eisenhower-web:${release_sha}"', script)
     self.assertIn('docker image inspect', script)
@@ -229,7 +229,7 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn("ENTRYPOINT []", rocm_dockerfile)
     self.assertIn("grpcio==1.78.0", rocm_requirements)
     self.assertIn("protobuf>=6.31.1,<7", rocm_requirements)
-    self.assertNotIn("vllm/vllm-openai-rocm", rocm_dockerfile)
+    self.assertIn("vllm/vllm-openai-rocm", rocm_dockerfile)
 
   def test_amd_reranker_is_a_separate_pinned_bounded_private_service(self):
     reranker = self.amd_services["reranker"]

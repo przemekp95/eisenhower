@@ -1,11 +1,11 @@
-FROM vllm/vllm-openai-rocm@sha256:3be0d8f3ec3ebcc99203e08d895392a8d749ed8a132f41574a8018cdaf525a22
+FROM rocm/pytorch@sha256:4449f856653602317e4101a76fce599c7fcd58ccec2e539951fce5f73083179e
 
 ARG RELEASE_SHA
 LABEL org.opencontainers.image.revision=$RELEASE_SHA \
-      eisenhower.runtime.role=knowledge-rocm-vllm
+      eisenhower.runtime.role=knowledge-rocm-candidate
 
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PIP_NO_CACHE_DIR=on \
-    PIP_DISABLE_PIP_VERSION_CHECK=on HF_HOME=/home/app/.cache/huggingface \
+    PIP_DISABLE_PIP_VERSION_CHECK=on HF_HOME=/home/ubuntu/.cache/huggingface \
     TOKENIZERS_PARALLELISM=false
 WORKDIR /app
 RUN apt-get update \
@@ -13,13 +13,13 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl libgomp1 \
     && rm -rf /var/lib/apt/lists/* \
     && python -m pip install --no-cache-dir --upgrade setuptools==84.0.0 wheel==0.46.3 \
-    && useradd --uid 1000 --create-home --shell /bin/bash app \
-    && mkdir -p /app/data /app/logs /home/app/.cache/huggingface \
-    && chown -R app:app /app /home/app
+    && test "$(id -u ubuntu)" = 1000 \
+    && mkdir -p /app/data /app/logs /home/ubuntu/.cache/huggingface \
+    && chown -R ubuntu:ubuntu /app /home/ubuntu
 COPY requirements-boundary.txt requirements-knowledge-rocm.txt ./
 RUN python -m pip install --no-cache-dir -r requirements-knowledge-rocm.txt
-COPY --chown=app:app . .
-USER app
+COPY --chown=ubuntu:ubuntu . .
+USER ubuntu
 HEALTHCHECK --interval=30s --timeout=5s --start-period=300s --retries=5 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"
 EXPOSE 8000

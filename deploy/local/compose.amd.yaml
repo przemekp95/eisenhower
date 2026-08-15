@@ -2,7 +2,7 @@ name: eisenhower-local-production
 
 services:
   knowledge-service:
-    image: ${AI_KNOWLEDGE_ROCM_IMAGE:?AI_KNOWLEDGE_ROCM_IMAGE must be an immutable local tag or digest}
+    image: ${AI_ROCM_IMAGE:?AI_ROCM_IMAGE must be an immutable local tag or digest}
     profiles:
       - retrieval-amd
       - response-amd

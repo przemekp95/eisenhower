@@ -1,7 +1,8 @@
 # TASK-048 runtime footprint evidence
 
-Status: implementation and local CPU/image evidence complete; physical response lifecycle is characterized,
-while dedicated knowledge ROCm, governed holdout and deployment gates remain open. Nothing in this report proves deployment, Mikrus capacity, production behavior or human
+Status: implementation and local CPU/image evidence complete; physical response lifecycle is characterized
+and the first dedicated knowledge ROCm candidate is measured and rejected. Governed holdout and deployment
+gates remain open. Nothing in this report proves deployment, Mikrus capacity, production behavior or human
 acceptance.
 
 Source baseline: `a018f986fefae8a1add6c4c5f929da5320771fde`.
@@ -36,7 +37,7 @@ containers were later stopped and started for the explicitly recorded lifecycle 
 | Layer sharing | one image | 50 layer references, 18 unique layers across four roles | local image metadata |
 | Public AI dependency surface | full ML/OCR/Docling environment | boundary SBOM 124 components; no Torch, transformers, OCR or Docling | Trivy CycloneDX |
 | Role SBOMs | not split | classifier 228, knowledge 166, initial ingest 373; operational ingest 403 components | Trivy CycloneDX |
-| HIGH/CRITICAL image findings | not freshly gated per role | 0/0 for every exact-SHA role after patching vendored build tooling | Trivy 0.71.1 DB from 2026-08-15, `--ignore-unfixed` |
+| Fixed image findings | not freshly gated per role | 0 LOW/MEDIUM/HIGH/CRITICAL for the dedicated PyTorch/ROCm experiment; 0 HIGH/CRITICAL for every selected exact-SHA role | Trivy 0.71.1 DB from 2026-08-15, `--ignore-unfixed` |
 | Hugging Face runtime cache | about 14.3 GiB | 14.3 GiB; no revision deleted | read-only mounted volume, `du` |
 | BuildKit cache | 39.98 GB, 16.73 GB reclaimable | 50.11 GB, 26.85 GB reclaimable after candidate and exact-SHA builds | local builder; deliberately not pruned |
 | AI boundary RAM | old monolith 136.1 MiB working set, 315 MiB cgroup peak | 42.22 MiB working set, 57.94 MiB cgroup peak | isolated liveness benchmark |
@@ -52,6 +53,7 @@ containers were later stopped and started for the explicitly recorded lifecycle 
 | Ingest container-cold workload | no comparable frozen-container baseline | three 2 GiB runs: wall median 14.864 s/p95 15.482 s, CPU median 15.032 s, PID max 9; all 33 case executions passed | new process/container each run; host storage/page cache was not cold |
 | Queue | unbounded producer/worker DB topology was inconsistent | capacity 128: enqueue p50 3.637 ms, p95 4.086 ms; overflow rejected in 0.122 ms; replay 0.074 ms | isolated SQLite microbenchmark |
 | Physical response lifecycle | loaded: 100% GPU, 2.968 GB VRAM, 46.847 GB GTT, 64.024 W; stopped after 10 s: 5%, 2.983 GB, 2.775 GB, 26.049 W | stop 11.846 s; reranker ready 29.581 s; inference ready 116.086 s; both restored healthy | exact existing baseline containers, authenticated `/v1/models`, kernel sysfs and Docker stats; no recreate/deploy |
+| Knowledge ROCm image | vLLM-derived: 10.684 GB OCI/33 layer refs; 26 layer digests shared with response vLLM | dedicated PyTorch: 10.614 GB/13 refs, 0 shared; aggregate unique digests rise 28 → 39; warm median regresses 44.73%; rejected | one process-cold alternating physical pair; min embedding cosine 0.99999988; not a capacity qualification |
 | Retrieval quality | dense recall@5 0.6964/MRR 0.5774/p95 25.93 ms; selected hybrid+reranker 0.9107/0.8048/266.83 ms | no-reranker 0.9107/0.7095/48.59 ms; rejected because global and PL MRR miss policy | fresh isolated 36-case non-holdout run; frozen holdout remains closed |
 
 The classifier initially took 121.313 s because `sentence-transformers` performed unsuccessful Hugging Face
@@ -118,7 +120,7 @@ cleanup, timeout cleanup or production behavior.
 ## Verification
 
 - focused red/green tests for each implementation slice;
-- final backend AI and local deployment suite after the repetition follow-up: 695 passed, 11 skipped, coverage
+- final backend AI and local deployment suite after the lifecycle follow-up: 697 passed, 11 skipped, coverage
   85.50%;
 - production dependency audit: 171 dependencies; exact official PyTorch CPU wheel sources and SHA-256 values
   verified for the two explicit audit blind spots;
@@ -137,16 +139,20 @@ cleanup, timeout cleanup or production behavior.
   explicit confounder.
 - exact-container physical gfx1151 response stop/start: authenticated ready in 29.581 s for reranker and
   116.086 s for inference, both restored healthy; no image or Compose recreation occurred.
+- the pinned official PyTorch/ROCm knowledge experiment built on gfx1151, passed `pip check`, emitted a
+  772-component SBOM and had zero fixed LOW/MEDIUM/HIGH/CRITICAL findings after package updates. Its embeddings
+  matched the vLLM-derived baseline (minimum cosine 0.99999988), but warm median regressed 44.73% and aggregate
+  unique image layer digests increased from 28 to 39, so it is not selected by Compose.
 - legacy monolith Compose snapshots from source `a018f986…` render successfully with their exact image IDs;
   the role-split rollback contract now stores and SHA-verifies those source-revision configs. The mutating
   migration/rollback rehearsal remains separately authorized work.
 
 ## Open gates and risks
 
-1. Benchmark a dedicated pinned PyTorch/ROCm knowledge image against the vLLM-derived baseline with identical
-   application dependencies and the frozen BGE-M3 revision. The current vLLM-derived image is 10.684 GB OCI
-   (42.6 GB unpacked), but shares 30 of 33 layers with response vLLM, so no aggregate disk/cache saving is
-   claimed. Do not switch until physical gfx1151 quality, latency, RSS/OOM, VRAM/power, SBOM and rollback pass.
+1. The first dedicated pinned PyTorch/ROCm candidate is rejected: it barely changes individual OCI size,
+   increases aggregate unique layers/cache and regresses warm latency despite matching embeddings. It remains
+   an explicit non-deployed experiment. Reconsider only with a smaller supported base and a repeated physical
+   capacity/quality packet; no disk or power saving is claimed.
 2. Calibrate every mandatory CPU/RAM/PID/thread value, especially both vLLM services, using repeated
    representative workloads. Ingest now has one clean success and one deliberate OOM boundary, but not enough
    repetitions or production-shaped documents to set a deployment limit. `.env.example` remains blank.

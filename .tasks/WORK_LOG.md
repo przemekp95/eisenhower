@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-15 — TASK-048 ROCm/lifecycle follow-up: Physically stopped and cold-started the exact local inference/reranker containers with authenticated readiness and full restoration, added SHA-verified legacy-monolith rollback snapshots, fixed effective AMD role entrypoints, and measured then rejected a dedicated PyTorch/ROCm knowledge candidate because warm latency regressed 44.73% and aggregate unique layers rose despite zero fixed LOW/MEDIUM/HIGH/CRITICAL findings; no deployment, holdout, promotion or publication occurred.
+
 2026-08-15 — TASK-048 ingest repetition follow-up: Added a fail-closed comparable-run aggregator and ran six clean exact-image container-cold extraction repetitions at 2 GiB and 2.5 GiB; all 66 case executions passed without pressure/OOM, but the 2 GiB maximum left only 32.5 MB headroom and the later 2.5 GiB set had a warm host page-cache confounder, so no deployment limit was guessed or filled in.
 
 2026-08-15 — TASK-048 ingest follow-up: Replaced hidden Docling/Unstructured runtime downloads with a complete two-repository hash-verified read-only artifact bundle and pinned spaCy wheel, fixed the required OpenCV system runtime and bounded writable library caches; all 11 frozen synthetic extraction cases passed in an isolated 2 GiB cgroup with zero pressure events, while a clean 512 MiB run was OOM-killed, with no active stores, GPU, deployment or cache pruning touched.

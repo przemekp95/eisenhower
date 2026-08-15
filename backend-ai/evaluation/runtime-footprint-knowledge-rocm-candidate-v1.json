@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-08-15T21:10:00+02:00",
+  "decision": "rejected_for_default_runtime",
+  "reason": "The dedicated PyTorch image preserved embedding values but regressed warm latency and increased aggregate unique image layers/cache while barely changing the individual OCI size.",
+  "hardware": "physical gfx1151 Radeon 8060S Graphics",
+  "model": "BAAI/bge-m3",
+  "model_revision": "5617a9f61b028005a4858fdac845db406aefb181",
+  "workload": {"texts": 32, "dimensions": 1024, "batch_size": 8, "warm_repetitions": 5, "host_page_cache_cold": false},
+  "baseline": {
+    "image": "local/eisenhower-ai-rocm:a018f986fefae8a1add6c4c5f929da5320771fde",
+    "image_id": "sha256:47ff6727973d92aefbcab549e862c421a827a880329aa3572489315055a0f0c8",
+    "oci_size_bytes": 10684039092,
+    "rootfs_layer_references": 33,
+    "torch": "2.10.0+git8514f05",
+    "hip": "7.2.53211",
+    "load_ms": 156094.27168501134,
+    "cold_encode_ms": 1313.1120350008132,
+    "warm_ms": [296.41033698862884, 293.6786959908204, 294.29376299958676, 295.8440220099874, 295.3355529898545],
+    "cuda_peak_allocated_bytes": 2358647808,
+    "cuda_peak_reserved_bytes": 2380267520,
+    "observed_working_set": "5.017GiB",
+    "exit_code": 0
+  },
+  "candidate": {
+    "dockerfile": "backend-ai/Dockerfile.knowledge-rocm-candidate",
+    "source_revision": "6bf9b6522f7a7881eaccf7facf8f27471ea2a8f9",
+    "base": "rocm/pytorch@sha256:4449f856653602317e4101a76fce599c7fcd58ccec2e539951fce5f73083179e",
+    "image": "local/eisenhower-ai-knowledge-rocm:6bf9b6522f7a7881eaccf7facf8f27471ea2a8f9",
+    "image_id": "sha256:d82aa93e81232a4a6e3b3c919cc4c4742617f16ae5fb4c592dbc4f591e162b1e",
+    "oci_size_bytes": 10613986924,
+    "rootfs_layer_references": 13,
+    "torch": "2.10.0+rocm7.2.4.git3d3aa833",
+    "hip": "7.2.53211",
+    "load_ms": 154764.4170440035,
+    "cold_encode_ms": 1375.418241994339,
+    "warm_ms": [431.2007669941522, 424.70863299968187, 427.4341879936401, 425.30585199710913, 433.64571800339036],
+    "warm_median_regression_percent": 44.7283212828506,
+    "cuda_peak_allocated_bytes": 2358647808,
+    "cuda_peak_reserved_bytes": 2380267520,
+    "observed_working_set": "3.417GiB",
+    "exit_code": 0,
+    "pip_check": "pass",
+    "sbom_components": 772,
+    "fixed_vulnerabilities": {"LOW": 0, "MEDIUM": 0, "HIGH": 0, "CRITICAL": 0}
+  },
+  "quality": {"minimum_pairwise_cosine": 0.9999998807907104, "mean_pairwise_cosine": 1.0, "maximum_absolute_delta": 2.942979335784912e-7},
+  "aggregate_layer_cache": {
+    "vllm_response_plus_vllm_knowledge_unique_layer_digests": 28,
+    "vllm_response_plus_pytorch_knowledge_unique_layer_digests": 39,
+    "baseline_layers_shared_with_vllm": 26,
+    "candidate_layers_shared_with_vllm": 0
+  },
+  "scope_limits": [
+    "This is one alternating physical pair after a process-cold start, not a three-run production capacity qualification.",
+    "The working-set figures are spot observations, not cgroup memory.peak values.",
+    "The frozen governed holdout was not opened and active MongoDB/Qdrant data was not used.",
+    "The candidate is retained as an explicit experiment and is not selected by deploy/local Compose."
+  ],
+  "raw_evidence_root": "/mnt/data/cache/codex/eisenhower-task048-knowledge-rocm-6bf9b652"
+}

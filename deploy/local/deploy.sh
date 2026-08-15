@@ -28,7 +28,7 @@ export AI_BOUNDARY_IMAGE="local/eisenhower-ai-boundary:${release_sha}"
 export AI_CLASSIFIER_IMAGE="local/eisenhower-ai-classifier:${release_sha}"
 export AI_KNOWLEDGE_IMAGE="local/eisenhower-ai-knowledge:${release_sha}"
 export AI_INGEST_IMAGE="local/eisenhower-ai-ingest:${release_sha}"
-export AI_KNOWLEDGE_ROCM_IMAGE="local/eisenhower-ai-knowledge-rocm:${release_sha}"
+export AI_ROCM_IMAGE="local/eisenhower-ai-rocm:${release_sha}"
 export MCP_IMAGE="local/eisenhower-mcp:${release_sha}"
 export WEB_IMAGE="local/eisenhower-web:${release_sha}"
 export LOCAL_MODEL_OWNER_APPROVAL_BYPASS=false
@@ -103,8 +103,8 @@ build_retrieval_images() {
   docker build --build-arg RELEASE_SHA="$release_sha" --target ingest \
     -f backend-ai/Dockerfile -t "$AI_INGEST_IMAGE" backend-ai
   docker build --build-arg RELEASE_SHA="$release_sha" \
-    -f backend-ai/Dockerfile.rocm -t "$AI_KNOWLEDGE_ROCM_IMAGE" backend-ai
-  for image_ref in "$AI_KNOWLEDGE_IMAGE" "$AI_INGEST_IMAGE" "$AI_KNOWLEDGE_ROCM_IMAGE"; do
+    -f backend-ai/Dockerfile.rocm -t "$AI_ROCM_IMAGE" backend-ai
+  for image_ref in "$AI_KNOWLEDGE_IMAGE" "$AI_INGEST_IMAGE" "$AI_ROCM_IMAGE"; do
     verify_image "$image_ref"
   done
 }
@@ -522,7 +522,7 @@ rollback() {
     retrieval)
       export AI_KNOWLEDGE_IMAGE="${ROLLBACK_KNOWLEDGE_SERVICE_IMAGE_ID:?missing knowledge rollback image}"
       export AI_INGEST_IMAGE="${ROLLBACK_RAG_WORKER_IMAGE_ID:?missing ingest rollback image}"
-      export AI_KNOWLEDGE_ROCM_IMAGE="$AI_KNOWLEDGE_IMAGE"
+      export AI_ROCM_IMAGE="$AI_KNOWLEDGE_IMAGE"
       compose_retrieval config --quiet
       compose_retrieval up -d --wait
       smoke_retrieval
@@ -530,7 +530,7 @@ rollback() {
     response|full)
       export AI_KNOWLEDGE_IMAGE="${ROLLBACK_KNOWLEDGE_SERVICE_IMAGE_ID:?missing knowledge rollback image}"
       export AI_INGEST_IMAGE="${ROLLBACK_RAG_WORKER_IMAGE_ID:?missing ingest rollback image}"
-      export AI_KNOWLEDGE_ROCM_IMAGE="$AI_KNOWLEDGE_IMAGE"
+      export AI_ROCM_IMAGE="$AI_KNOWLEDGE_IMAGE"
       export MCP_IMAGE="${ROLLBACK_MCP_SERVICE_IMAGE_ID:?missing MCP rollback image}"
       export WEB_IMAGE="${ROLLBACK_WEB_IMAGE_ID:?missing web rollback image}"
       if test "$ROLLBACK_TOPOLOGY" = response; then

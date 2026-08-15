@@ -25,10 +25,15 @@ renders are green; the detailed evidence and methodology assessment are in
 no-reranker candidate because global and Polish MRR missed the declared policy despite lower latency; the
 governed frozen holdout remains unopened. Ingest now requires a complete hash-verified read-only Docling
 layout/TableFormer bundle and a pinned spaCy dependency; an isolated 11-case run passed at 2 GiB with zero
-memory pressure events, while a clean 512 MiB run was OOM-killed as expected. The task remains in progress
-because physical gfx1151/ROCm resource/OOM/wake qualification, production-shaped and cold-host ingest calibration,
-authorized holdout confirmation and the first
-monolith-to-role rollback rehearsal are still open. No deployment, promotion or publication occurred.
+memory pressure events, while a clean 512 MiB run was OOM-killed as expected. An exact-container physical
+response lifecycle run reduced GTT by about 44.1 GB and board power by about 38 W, then restored authenticated
+reranker readiness in 29.581 s and inference readiness in 116.086 s. A pinned official PyTorch/ROCm knowledge
+candidate passed gfx1151, dependency, SBOM and zero-fixed-vulnerability gates at every severity and matched
+baseline embeddings, but was rejected because warm latency regressed 44.73% and aggregate unique layers rose
+from 28 to 39. Legacy monolith rollback now preserves SHA-verified source Compose snapshots and exact image IDs.
+The task remains in progress because production-shaped/cold-host ingest calibration, independent human review
+and the governed frozen holdout, forced response failure/OOM cleanup, and the separately authorized mutating
+monolith-to-role deployment/rollback rehearsal are still open. No deployment, promotion or publication occurred.
 
 ---
 
