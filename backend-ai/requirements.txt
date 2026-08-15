@@ -10,7 +10,7 @@ torch==2.13.0+cpu
 torchvision==0.28.0+cpu
 sentence-transformers==5.7.0
 transformers==5.14.1
-qdrant-client==1.12.0
+qdrant-client==1.19.0
 httpx==0.28.1
 PyJWT[crypto]==2.13.0
 pymongo==4.17.0

@@ -4,6 +4,8 @@ UV ?= uv
 BACKEND_AI_VENV ?= backend-ai/venv
 BACKEND_AI_PYTHON ?= $(BACKEND_AI_VENV)/bin/python
 BACKEND_AI_PIP ?= $(BACKEND_AI_VENV)/bin/pip
+BACKEND_AI_PYTHONPATH ?=
+BACKEND_AI_TEST_ENV = $(if $(BACKEND_AI_PYTHONPATH),PYTHONPATH=$(BACKEND_AI_PYTHONPATH),)
 
 .PHONY: setup test test-bdd test-ai test-api-client test-mcp typecheck-node lint lint-ai format format-web format-check format-check-web build audit-production verify dev-web dev-api dev-ai dev-mobile
 
@@ -19,14 +21,14 @@ test:
 	cd backend-node && $(NPM) test
 	$(MAKE) test-bdd
 	cd web && $(NPM) test
-	COVERAGE_RCFILE=backend-ai/.coveragerc $(BACKEND_AI_PYTHON) -m pytest backend-ai/tests
+	$(BACKEND_AI_TEST_ENV) COVERAGE_RCFILE=backend-ai/.coveragerc $(BACKEND_AI_PYTHON) -m pytest backend-ai/tests
 	cd mobile/eisenhower-matrix && $(NPM) test
 
 test-bdd:
 	cd backend-node && $(NPM) run test:bdd
 
 test-ai:
-	COVERAGE_RCFILE=backend-ai/.coveragerc $(BACKEND_AI_PYTHON) -m pytest backend-ai/tests
+	$(BACKEND_AI_TEST_ENV) COVERAGE_RCFILE=backend-ai/.coveragerc $(BACKEND_AI_PYTHON) -m pytest backend-ai/tests
 
 test-api-client:
 	$(NPM) --prefix packages/api-client run check
@@ -42,7 +44,7 @@ lint:
 	$(MAKE) format-check-web
 
 lint-ai:
-	$(BACKEND_AI_PYTHON) -m pylint --rcfile=backend-ai/.pylintrc --fail-under=10.0 backend-ai/app
+	$(BACKEND_AI_TEST_ENV) $(BACKEND_AI_PYTHON) -m pylint --rcfile=backend-ai/.pylintrc --fail-under=10.0 backend-ai/app
 
 format:
 	$(MAKE) format-web
@@ -65,6 +67,8 @@ audit-production:
 	cd web && $(NPM) audit --omit=dev --audit-level=high
 	cd mobile/eisenhower-matrix && $(NPM) run audit:production
 	$(BACKEND_AI_PYTHON) backend-ai/scripts/production_dependency_audit.py
+	$(BACKEND_AI_PYTHON) -m pip_audit -r backend-ai/requirements-boundary.txt --progress-spinner off
+	$(BACKEND_AI_PYTHON) -m pip_audit -r backend-ai/requirements-knowledge.txt --progress-spinner off
 
 verify:
 	$(MAKE) audit-production
@@ -73,7 +77,7 @@ verify:
 	cd backend-node && $(NPM) run build && $(NPM) run test:coverage
 	$(MAKE) test-bdd
 	cd web && $(NPM) run format:check && $(NPM) run build && $(NPM) run test:coverage && $(NPM) run test:integration
-	COVERAGE_RCFILE=backend-ai/.coveragerc $(BACKEND_AI_PYTHON) -m pytest backend-ai/tests
+	$(BACKEND_AI_TEST_ENV) COVERAGE_RCFILE=backend-ai/.coveragerc $(BACKEND_AI_PYTHON) -m pytest backend-ai/tests
 	cd mobile/eisenhower-matrix && $(NPM) run test:coverage
 	$(MAKE) typecheck-node
 	$(MAKE) lint-ai

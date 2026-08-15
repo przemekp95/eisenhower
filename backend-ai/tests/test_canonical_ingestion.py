@@ -4,7 +4,7 @@ from app.rag.canonical import (
   CanonicalWriteStatus,
 )
 from app.rag.errors import ProjectionUnavailable
-from app.rag.ingestion import DeterministicChunker, build_chunk_records
+from app.rag.llamaindex_engine import LlamaIndexChunkingEngine
 from app.rag.models import SourceDocument
 
 
@@ -13,6 +13,14 @@ class Embedder:
 
   def embed(self, texts):
     return [[float(index)] for index, _ in enumerate(texts)]
+
+
+def chunking():
+  return LlamaIndexChunkingEngine(
+    chunk_size=64,
+    chunk_overlap=4,
+    pipeline_version="llama-test-v1",
+  )
 
 
 class Store:
@@ -81,10 +89,10 @@ class Projection:
         for chunk in chunks
       }
 
-  def tombstone(self, document_id, tenant_id, content_version):
+  def tombstone(self, document_id, tenant_id, content_version, *, source_sequence):
     if self.fail:
       raise ProjectionUnavailable("qdrant unavailable")
-    self.tombstones.append((document_id, tenant_id, content_version))
+    self.tombstones.append((document_id, tenant_id, content_version, source_sequence))
     self.chunks[(tenant_id, document_id)] = set()
 
   def projected_chunks(self, document_id, tenant_id):
@@ -105,7 +113,7 @@ def document(sequence=1, text="Reviewed decision"):
 def test_canonical_document_is_staged_before_projection_and_marked_complete():
   store = Store()
   projection = Projection(store)
-  app = CanonicalIngestionApplication(Embedder(), store, projection)
+  app = CanonicalIngestionApplication(Embedder(), store, projection, chunking())
   result = app.ingest([document()])
   assert result == {"accepted": 1, "duplicate": 0, "stale": 0, "conflict": 0, "projected": 1, "pending": 0, "embedding_version": "minilm-v1"}
   assert store.events == ["stage", "projected"]
@@ -113,7 +121,7 @@ def test_canonical_document_is_staged_before_projection_and_marked_complete():
 
 def test_projection_failure_leaves_canonical_document_pending_for_reconciliation():
   store = Store()
-  app = CanonicalIngestionApplication(Embedder(), store, Projection(store, fail=True))
+  app = CanonicalIngestionApplication(Embedder(), store, Projection(store, fail=True), chunking())
   result = app.ingest([document()])
   assert result["accepted"] == 1
   assert result["projected"] == 0
@@ -124,7 +132,7 @@ def test_projection_failure_leaves_canonical_document_pending_for_reconciliation
 def test_stale_duplicate_and_conflicting_sequences_never_reach_projection():
   store = Store()
   projection = Projection(store)
-  app = CanonicalIngestionApplication(Embedder(), store, projection)
+  app = CanonicalIngestionApplication(Embedder(), store, projection, chunking())
   app.ingest([document(sequence=2)])
   result = app.ingest([document(sequence=1), document(sequence=2), document(sequence=2, text="conflict")])
   assert result["stale"] == 1
@@ -136,7 +144,7 @@ def test_stale_duplicate_and_conflicting_sequences_never_reach_projection():
 def test_reconciliation_projects_a_previously_staged_pending_document():
   store = Store()
   projection = Projection(store, fail=True)
-  app = CanonicalIngestionApplication(Embedder(), store, projection)
+  app = CanonicalIngestionApplication(Embedder(), store, projection, chunking())
   app.ingest([document()])
   projection.fail = False
 
@@ -147,7 +155,7 @@ def test_reconciliation_projects_a_previously_staged_pending_document():
 def test_retrying_the_same_command_reprojects_its_pending_canonical_document():
   store = Store()
   projection = Projection(store, fail=True)
-  app = CanonicalIngestionApplication(Embedder(), store, projection)
+  app = CanonicalIngestionApplication(Embedder(), store, projection, chunking())
   first = app.ingest([document()])
   projection.fail = False
 
@@ -163,7 +171,7 @@ def test_retrying_the_same_command_reprojects_its_pending_canonical_document():
 def test_ingest_result_ignores_an_unrelated_pending_document():
   store = Store()
   projection = Projection(store, fail=True)
-  app = CanonicalIngestionApplication(Embedder(), store, projection)
+  app = CanonicalIngestionApplication(Embedder(), store, projection, chunking())
   unrelated = document().model_copy(update={"document_id": "unrelated"})
   app.ingest([unrelated])
   projection.fail = False
@@ -178,7 +186,7 @@ def test_ingest_result_ignores_an_unrelated_pending_document():
 def test_reconciliation_repairs_projection_drift_even_when_canonical_is_not_pending():
   store = Store()
   projection = Projection(store)
-  app = CanonicalIngestionApplication(Embedder(), store, projection)
+  app = CanonicalIngestionApplication(Embedder(), store, projection, chunking())
   app.ingest([document()])
   projection.chunks.clear()
 
@@ -188,13 +196,13 @@ def test_reconciliation_repairs_projection_drift_even_when_canonical_is_not_pend
 def test_forced_reindex_projects_every_current_document_after_collection_loss():
   store = Store()
   projection = Projection(store)
-  app = CanonicalIngestionApplication(Embedder(), store, projection)
+  app = CanonicalIngestionApplication(Embedder(), store, projection, chunking())
   app.ingest([document()])
   projection.documents.clear()
   projection.chunks.clear()
 
   assert app.reindex_project("tenant-1", "project-1") == {"documents": 1, "projected": 1, "pending": 0}
-  expected = build_chunk_records(document(), DeterministicChunker(), embedding_version="minilm-v1")
+  expected = chunking().build(document(), embedding_version="minilm-v1")
   assert projection.chunks[("tenant-1", "doc-1")] == {
     (chunk.chunk_id, chunk.checksum, chunk.content_version) for chunk in expected
   }
@@ -207,7 +215,7 @@ def test_programming_errors_are_not_silently_converted_to_pending_state():
     def replace_documents(self, documents, chunks, vectors):
       raise ValueError("invalid adapter contract")
 
-  app = CanonicalIngestionApplication(Embedder(), store, BrokenProjection(store))
+  app = CanonicalIngestionApplication(Embedder(), store, BrokenProjection(store), chunking())
   try:
     app.ingest([document()])
   except ValueError as error:
@@ -219,7 +227,7 @@ def test_programming_errors_are_not_silently_converted_to_pending_state():
 def test_tombstone_is_canonical_and_projected_without_retaining_content():
   store = Store()
   projection = Projection(store)
-  app = CanonicalIngestionApplication(Embedder(), store, projection)
+  app = CanonicalIngestionApplication(Embedder(), store, projection, chunking())
   app.ingest([document(sequence=1, text="private content")])
 
   app.tombstone(["doc-1"], tenant_id="tenant-1", content_version="deleted-v2", source_sequence=2)
@@ -228,13 +236,13 @@ def test_tombstone_is_canonical_and_projected_without_retaining_content():
   assert tombstone.deleted is True
   assert tombstone.text == ""
   assert "private content" not in repr(tombstone)
-  assert projection.tombstones == [("doc-1", "tenant-1", "deleted-v2")]
+  assert projection.tombstones == [("doc-1", "tenant-1", "deleted-v2", 2)]
 
 
 def test_tombstone_result_ignores_an_unrelated_pending_document():
   store = Store()
   projection = Projection(store, fail=True)
-  app = CanonicalIngestionApplication(Embedder(), store, projection)
+  app = CanonicalIngestionApplication(Embedder(), store, projection, chunking())
   unrelated = document().model_copy(update={"document_id": "unrelated"})
   app.ingest([unrelated])
   projection.fail = False

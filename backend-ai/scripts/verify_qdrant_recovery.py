@@ -12,10 +12,9 @@ from uuid import NAMESPACE_URL, uuid4, uuid5
 import httpx
 from qdrant_client import QdrantClient, models as qmodels
 
-from app.rag.adapters import QdrantIngestionAdapter, QdrantRetriever
 from app.rag.collections import QdrantCollectionManager
-from app.rag.ingestion import DeterministicChunker, build_chunk_records
-from app.rag.models import AccessScope, RetrievalQuery, SourceDocument
+from app.rag.llamaindex_engine import LlamaIndexChunkingEngine
+from app.rag.models import SourceDocument
 
 
 QDRANT_URL = "http://127.0.0.1:6333"
@@ -86,15 +85,33 @@ def _digest(points) -> str:
   ).hexdigest()
 
 
-def _hit_ids(retriever, *, tenant: str, user: str, project: str) -> list[str]:
-  hits = retriever.retrieve(RetrievalQuery(
-    text="runtime evidence",
-    scope=AccessScope(tenant_id=tenant, user_id=user, project_ids=[project]),
-    project_id=project,
+def _hit_ids(client, collection_name: str, *, tenant: str, user: str, project: str) -> list[str]:
+  result = client.query_points(
+    collection_name=collection_name,
+    query=[1.0, 0.0, 0.0],
+    query_filter=qmodels.Filter(must=[
+      qmodels.FieldCondition(key="tenant_id", match=qmodels.MatchValue(value=tenant)),
+      qmodels.FieldCondition(key="project_id", match=qmodels.MatchValue(value=project)),
+      qmodels.FieldCondition(key="acl_subjects", match=qmodels.MatchAny(any=[f"user:{user}"])),
+      qmodels.FieldCondition(key="deleted", match=qmodels.MatchValue(value=False)),
+    ]),
     limit=20,
     score_threshold=-1,
-  ))
-  return sorted(hit.chunk_id for hit in hits)
+    with_payload=True,
+    with_vectors=False,
+  )
+  return sorted(str(point.payload["chunk_id"]) for point in result.points)
+
+
+def _delete_document_points(client, collection_name: str, document_id: str, tenant_id: str) -> None:
+  client.delete(
+    collection_name=collection_name,
+    points_selector=qmodels.FilterSelector(filter=qmodels.Filter(must=[
+      qmodels.FieldCondition(key="tenant_id", match=qmodels.MatchValue(value=tenant_id)),
+      qmodels.FieldCondition(key="document_id", match=qmodels.MatchValue(value=document_id)),
+    ])),
+    wait=True,
+  )
 
 
 def verify_candidate_collection_snapshot(
@@ -177,19 +194,18 @@ def run_verification(snapshot_output: Path | None = None) -> dict:
         _point("delete-me", tenant="tenant-a", project="project-a", acl=["user:user-a"]),
       ],
     )
-    retriever = QdrantRetriever(client, ConstantEmbedding(), collection_alias=alias)
     isolation = {
       "allowed_scope_hits": _hit_ids(
-        retriever, tenant="tenant-a", user="user-a", project="project-a"
+        client, alias, tenant="tenant-a", user="user-a", project="project-a"
       ),
       "wrong_project_hits": _hit_ids(
-        retriever, tenant="tenant-a", user="user-a", project="project-c"
+        client, alias, tenant="tenant-a", user="user-a", project="project-c"
       ),
       "wrong_user_hits": _hit_ids(
-        retriever, tenant="tenant-a", user="user-z", project="project-a"
+        client, alias, tenant="tenant-a", user="user-z", project="project-a"
       ),
       "cross_tenant_hits": _hit_ids(
-        retriever, tenant="tenant-z", user="user-a", project="project-a"
+        client, alias, tenant="tenant-z", user="user-a", project="project-a"
       ),
     }
     if isolation != {
@@ -232,10 +248,8 @@ def run_verification(snapshot_output: Path | None = None) -> dict:
     if restored_digest != source_digest:
       raise AssertionError("Isolated restored collection differs from snapshot source")
 
-    source_projection = QdrantIngestionAdapter(client, collection_name=source)
-    restored_projection = QdrantIngestionAdapter(client, collection_name=restored)
-    for projection in (source_projection, restored_projection):
-      projection.tombstone("document-delete-me", "tenant-a", "deleted-v2")
+    for collection_name in (source, restored):
+      _delete_document_points(client, collection_name, "document-delete-me", "tenant-a")
     refreshed = SourceDocument(
       document_id="document-allowed",
       tenant_id="tenant-a",
@@ -249,12 +263,21 @@ def run_verification(snapshot_output: Path | None = None) -> dict:
       source_sequence=2,
       acl_subjects=["user:user-a"],
     )
-    chunks = build_chunk_records(
-      refreshed,
-      DeterministicChunker(max_chars=1200, overlap_chars=160),
-      embedding_version=EMBEDDING_VERSION,
+    chunks = LlamaIndexChunkingEngine(
+      chunk_size=512,
+      chunk_overlap=64,
+      pipeline_version="llama-recovery-v1",
+    ).build(refreshed, embedding_version=EMBEDDING_VERSION)
+    _delete_document_points(client, restored, refreshed.document_id, refreshed.tenant_id)
+    client.upsert(
+      collection_name=restored,
+      points=[qmodels.PointStruct(
+        id=str(uuid5(NAMESPACE_URL, chunks[0].chunk_id)),
+        vector=[1.0, 0.0, 0.0],
+        payload=chunks[0].model_dump(),
+      )],
+      wait=True,
     )
-    restored_projection.replace_documents([refreshed], chunks, [[1.0, 0.0, 0.0]])
     restored_inventory = _all_points(client, restored)
     restored_chunk_ids = sorted(str(point.payload["chunk_id"]) for point in restored_inventory)
     expected_restored_ids = sorted([
@@ -275,7 +298,7 @@ def run_verification(snapshot_output: Path | None = None) -> dict:
     manager.activate(restored, previous_collection=source)
     cutover_seconds = perf_counter() - cutover_started
     cutover_hits = _hit_ids(
-      retriever, tenant="tenant-a", user="user-a", project="project-a"
+      client, alias, tenant="tenant-a", user="user-a", project="project-a"
     )
     if cutover_hits != [chunks[0].chunk_id]:
       raise AssertionError("Alias cutover did not expose exactly the refreshed projection")
@@ -285,7 +308,7 @@ def run_verification(snapshot_output: Path | None = None) -> dict:
     manager.activate(source, previous_collection=restored)
     rollback_seconds = perf_counter() - rollback_started
     rollback_hits = _hit_ids(
-      retriever, tenant="tenant-a", user="user-a", project="project-a"
+      client, alias, tenant="tenant-a", user="user-a", project="project-a"
     )
     if rollback_hits != ["allowed"]:
       raise AssertionError("Alias rollback failed or resurrected tombstoned content")

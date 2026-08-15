@@ -28,14 +28,22 @@ jobs:
             context: ./backend-ai
             dockerfile: ./backend-ai/Dockerfile
             tag: eisenhower-ai
+            target: knowledge-production
+          - name: backend-ai-boundary
+            context: ./backend-ai
+            dockerfile: ./backend-ai/Dockerfile
+            tag: eisenhower-ai-boundary
+            target: api-boundary
           - name: backend-node
             context: .
             dockerfile: ./backend-node/Dockerfile
             tag: eisenhower-api
+            target: production
           - name: web
             context: .
             dockerfile: ./web/Dockerfile
             tag: eisenhower-web
+            target: production
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -68,7 +76,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          target: production
+          target: ${{ matrix.target }}
           push: ${{ steps.docker-hub.outputs.enabled == 'true' }}
           tags: ${{ steps.docker-hub.outputs.enabled == 'true' && format('{0}/{1}:{2}', env.DOCKER_HUB_USERNAME, matrix.tag, env.RELEASE_SHA) || format('local/{0}:{1}', matrix.tag, env.RELEASE_SHA) }}
           cache-from: type=gha

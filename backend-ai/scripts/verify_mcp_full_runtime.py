@@ -25,13 +25,12 @@ from pymongo import MongoClient
 from qdrant_client import QdrantClient, models as qmodels
 
 from app.config import Settings
-from app.rag.adapters import QdrantIngestionAdapter
 from app.rag.canonical import CanonicalIngestionApplication
-from app.rag.collections import QdrantCollectionManager
 from app.rag.corpus_manifest import CorpusManifest, RepositoryCorpusConnector
-from app.rag.ingestion import DeterministicChunker
+from app.rag.llamaindex_engine import LlamaIndexChunkingEngine
 from app.rag.models import AccessScope
 from app.rag.mongo_document_store import MongoCanonicalDocumentStore
+from app.rag.qdrant_llamaindex import LlamaIndexQdrantProjection
 from run_retrieval_candidate import PinnedMiniLMEmbedding
 from mcp.client import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
@@ -165,8 +164,9 @@ def run() -> dict[str, Any]:
     """Run the isolated full local runtime proof and return its evidence report."""
     suffix = uuid4().hex
     database_name = f"eisenhower_task020_mcp_{suffix}"
-    collection_name = f"task020_mcp_{suffix}"
+    collection_name = f"task020_mcp_{suffix}-candidate"
     alias = f"task020_mcp_active_{suffix}"
+    pipeline_version = "task020-mcp-llamaindex-v1"
     project_id = f"task020-demo-{suffix}"
     node_port = _available_port()
     ai_port = _available_port()
@@ -203,9 +203,6 @@ def run() -> dict[str, Any]:
         qdrant_runtime = (
             httpx.get("http://127.0.0.1:6333/", timeout=5).raise_for_status().json()
         )
-        QdrantCollectionManager(
-            qdrant, alias=alias, vector_size=vector_size
-        ).ensure_active(collection_name)
         scope = AccessScope(
             tenant_id="local",
             user_id="local-admin",
@@ -219,8 +216,17 @@ def run() -> dict[str, Any]:
         ingestion = CanonicalIngestionApplication(
             embedding,
             canonical_store,
-            QdrantIngestionAdapter(qdrant, collection_name=alias),
-            DeterministicChunker(max_chars=1200, overlap_chars=160),
+            LlamaIndexQdrantProjection(
+                qdrant,
+                embedding,
+                collection_name=collection_name,
+                active_alias=alias,
+            ),
+            chunking_engine=LlamaIndexChunkingEngine(
+                chunk_size=512,
+                chunk_overlap=64,
+                pipeline_version=pipeline_version,
+            ),
         )
         ingestion_result = ingestion.ingest(documents)
         reconciliation = ingestion.reconcile("local", project_id)
@@ -284,8 +290,18 @@ def run() -> dict[str, Any]:
                 "RAG_RETRIEVAL_ENABLED": "true",
                 "RAG_GENERATION_ENABLED": "false",
                 "RAG_RESPONSE_ENABLED": "false",
+                "RAG_RETRIEVAL_STRATEGY": "dense-v1",
+                "LLAMAINDEX_CANDIDATE_COLLECTION": collection_name,
+                "LLAMAINDEX_PIPELINE_VERSION": pipeline_version,
+                "LLAMAINDEX_CHUNK_SIZE": "256",
+                "LLAMAINDEX_CHUNK_OVERLAP": "32",
+                "RAG_EMBEDDING_MODEL_NAME": embedding.model_name,
+                "RAG_EMBEDDING_MODEL_REVISION": embedding.revision,
                 "QDRANT_URL": "http://127.0.0.1:6333",
                 "QDRANT_COLLECTION_ALIAS": alias,
+                "MONGODB_URI": f"mongodb://127.0.0.1:27017/{database_name}",
+                "MONGODB_DATABASE": database_name,
+                "CANONICAL_DOCUMENTS_COLLECTION": "rag_documents",
             }
             with node_log.open("w", encoding="utf-8") as node_output, ai_log.open(
                 "w", encoding="utf-8"
@@ -432,6 +448,12 @@ def run() -> dict[str, Any]:
                         "embedding_model": embedding.model_name,
                         "embedding_revision": embedding.revision,
                         "embedding_version": embedding.version,
+                        "rag_engine": "llamaindex-candidate",
+                        "llamaindex_pipeline_version": pipeline_version,
+                        "llama_index_core": version("llama-index-core"),
+                        "llama_index_qdrant": version(
+                            "llama-index-vector-stores-qdrant"
+                        ),
                         "vector_size": vector_size,
                         "mcp_sdk": "2.0.0",
                         "mcp_transport": "stdio subprocess with SDK handshake",

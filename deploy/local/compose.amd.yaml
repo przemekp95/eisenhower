@@ -22,34 +22,6 @@ services:
     security_opt:
       - seccomp=unconfined
 
-  ai-service:
-    image: ${AI_ROCM_IMAGE:?AI_ROCM_IMAGE must be an immutable local tag or digest}
-    profiles:
-      - retrieval-amd
-    environment:
-      - RELEASE_SHA=${AI_ROCM_RELEASE_SHA:?AI_ROCM_RELEASE_SHA must match the immutable image source SHA}
-      - RAG_RETRIEVAL_ENABLED=true
-      - RAG_GENERATION_ENABLED=false
-      - RAG_RESPONSE_ENABLED=false
-      - RAG_RESPONSE_PROMOTION_POINTER_PATH=/app/promotion/current.json
-      - RAG_RESPONSE_CANDIDATE_ID=${RAG_RESPONSE_CANDIDATE_ID:-}
-      - RAG_EMBEDDING_MODEL_NAME=BAAI/bge-m3
-      - RAG_EMBEDDING_MODEL_REVISION=5617a9f61b028005a4858fdac845db406aefb181
-      - RAG_EMBEDDING_DEVICE=cuda
-      - EMBEDDING_VERSION=bge-m3-v1
-    volumes:
-      - ${AI_PROMOTION_ROOT:-./.runtime/promotion}:/app/promotion:ro
-    ipc: host
-    group_add:
-      - video
-      - render
-      - "110"
-    devices:
-      - /dev/kfd:/dev/kfd
-      - /dev/dri:/dev/dri
-    security_opt:
-      - seccomp=unconfined
-
   rag-worker:
     image: ${AI_ROCM_IMAGE:?AI_ROCM_IMAGE must be an immutable local tag or digest}
     profiles:

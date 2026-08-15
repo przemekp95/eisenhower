@@ -101,9 +101,17 @@ def validate_dockerfile_policy(dockerfile_text: str) -> None:
     for line in production_dependency_stage.splitlines()
     if re.search(r"\b(?:python\s+-m\s+)?pip\s+install\b", line)
   ]
-  if pip_install_lines != ["RUN pip install --user -r requirements.txt"]:
+  allowed_installs = {
+    "RUN pip install --user -r requirements.txt",
+    "RUN pip install --user -r requirements-boundary.txt",
+  }
+  if (
+    pip_install_lines.count("RUN pip install --user -r requirements.txt") != 1
+    or pip_install_lines.count("RUN pip install --user -r requirements-boundary.txt") > 1
+    or any(line not in allowed_installs for line in pip_install_lines)
+  ):
     raise AuditPolicyError(
-      "Dockerfile production dependencies must use exactly the checked requirements install."
+      "Dockerfile production dependencies must use only the checked requirements installs."
     )
   production_stage = re.split(r"(?m)^FROM\s+", following_stages, maxsplit=1)[0]
   if re.search(r"\b(?:python\s+-m\s+)?pip\s+install\b", production_stage):

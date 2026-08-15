@@ -15,39 +15,17 @@ services:
       retries: 5
 
   ai-service:
-    image: ${DOCKER_HUB_USERNAME:?DOCKER_HUB_USERNAME is required}/eisenhower-ai:${IMAGE_TAG:?IMAGE_TAG is required}
+    image: ${DOCKER_HUB_USERNAME:?DOCKER_HUB_USERNAME is required}/eisenhower-ai-boundary:${IMAGE_TAG:?IMAGE_TAG is required}
     restart: unless-stopped
+    command: ["python", "-m", "uvicorn", "app.api_boundary:from_environment", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
     environment:
-      APP_ENV: production
-      EISENHOWER_API_TOKEN: ${EISENHOWER_API_TOKEN:?EISENHOWER_API_TOKEN is required}
-      EISENHOWER_ADMIN_TOKEN: ${EISENHOWER_ADMIN_TOKEN:?EISENHOWER_ADMIN_TOKEN is required}
-      AUDIT_HMAC_KEY: ${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY is required}
-      AUDIT_DATABASE_PATH: /app/audit/audit.sqlite3
-      RELEASE_SHA: ${IMAGE_TAG:?IMAGE_TAG is required}
-      TRAINING_DATA_PATH: /app/data/training_data.json
-      MODEL_CACHE_DIR: /app/data/runtime
-      EVALUATION_DATA_PATH: /app/evaluation/production.json
-      LOCAL_MODEL_REQUIRE_EVALUATION: "true"
-      LOCAL_MODEL_EVALUATION_PROFILE: production
-      LOCAL_MODEL_APPROVED_EVALUATION_SHA256: ${LOCAL_MODEL_APPROVED_EVALUATION_SHA256:?approved production evaluation digest is required}
-      AI_MANAGEMENT_ENABLED: "false"
-      LOCAL_MODEL_NAME: ${LOCAL_MODEL_NAME:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
-      LOCAL_MODEL_REVISION: ${LOCAL_MODEL_REVISION:-e8f8c211226b894fcb81acc59f3b34ba3efd5f42}
-      LOCAL_MODEL_EPOCHS: ${LOCAL_MODEL_EPOCHS:-60}
-      LOCAL_MODEL_PATIENCE: ${LOCAL_MODEL_PATIENCE:-8}
-      LOCAL_MODEL_HIDDEN_DIM: ${LOCAL_MODEL_HIDDEN_DIM:-128}
-      LOCAL_MODEL_DROPOUT: ${LOCAL_MODEL_DROPOUT:-0.1}
-      LOCAL_MODEL_LEARNING_RATE: ${LOCAL_MODEL_LEARNING_RATE:-0.01}
-      TESSERACT_LANGUAGES: ${TESSERACT_LANGUAGES:-eng+pol}
+      KNOWLEDGE_SERVICE_BASE_URL: ${KNOWLEDGE_SERVICE_BASE_URL:?private knowledge service URL is required}
+      KNOWLEDGE_SERVICE_ALLOWED_HOSTS: ${KNOWLEDGE_SERVICE_ALLOWED_HOSTS:?private knowledge service host is required}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:?CORS_ALLOW_ORIGINS is required}
-    volumes:
-      - ai_data:/app/data
-      - audit_data:/app/audit
-      - ${AI_EVALUATION_FILE:?approved production evaluation file is required}:/app/evaluation/production.json:ro
     expose:
       - "8000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5).read()"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -126,6 +104,5 @@ services:
 
 volumes:
   mongodb_data:
-  ai_data:
   audit_data:
   prometheus_data:

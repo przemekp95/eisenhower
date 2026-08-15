@@ -7,6 +7,15 @@ from app.rag.hybrid import (
   HybridRetriever,
   RerankerUnavailable,
 )
+from app.rag.llamaindex_engine import LlamaIndexChunkingEngine
+
+
+def llama_chunking():
+  return LlamaIndexChunkingEngine(
+    chunk_size=64,
+    chunk_overlap=4,
+    pipeline_version="llama-test-v1",
+  )
 from app.rag.canonical import CanonicalDocumentState
 from app.rag.models import AccessScope, RetrievalHit, RetrievalQuery, SourceDocument
 
@@ -113,6 +122,7 @@ def test_hybrid_can_recall_a_canonical_lexical_candidate_that_dense_missed():
   lexical = CanonicalBm25Retriever(
     store,
     embedding_version="minilm-v1",
+    chunking_engine=llama_chunking(),
   )
   retriever = HybridRetriever(dense, lexical, rrf_k=60)
 
@@ -154,7 +164,11 @@ def test_lexical_retriever_enforces_pending_tombstone_version_acl_and_scope_boun
     [old, pending, deleted, foreign_acl, foreign_project, foreign_tenant],
     states,
   )
-  retriever = CanonicalBm25Retriever(store, embedding_version="minilm-v1")
+  retriever = CanonicalBm25Retriever(
+    store,
+    embedding_version="minilm-v1",
+    chunking_engine=llama_chunking(),
+  )
 
   ranked = retriever.retrieve(query("currenttoken", limit=10))
 
@@ -168,7 +182,11 @@ def test_lexical_canonical_store_failure_propagates_instead_of_falling_back():
     def project_documents(self, _tenant_id, _project_id=None):
       raise RuntimeError("canonical store unavailable")
 
-  retriever = CanonicalBm25Retriever(UnavailableStore(), embedding_version="minilm-v1")
+  retriever = CanonicalBm25Retriever(
+    UnavailableStore(),
+    embedding_version="minilm-v1",
+    chunking_engine=llama_chunking(),
+  )
 
   with pytest.raises(RuntimeError, match="canonical store unavailable"):
     retriever.retrieve(query())
@@ -380,5 +398,6 @@ def test_bm25_field_weight_configuration_is_bounded(kwargs):
     CanonicalBm25Retriever(
       CanonicalStore([], {}),
       embedding_version="minilm-v1",
+      chunking_engine=llama_chunking(),
       **kwargs,
     )

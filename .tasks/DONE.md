@@ -1,5 +1,29 @@
 # Done
 
+## TASK-048: Migrate RAG mechanics to LlamaIndex and isolate the heavy knowledge runtime
+**Priority:** P1 | **Tags:** rag, llamaindex, migration, knowledge-service, mikrus
+
+Replace the long-term custom RAG mechanics incrementally with a minimal pinned LlamaIndex engine behind Eisenhower-owned application ports, while preserving MongoDB truth, authorization, canonical revalidation, stable transport contracts and a reversible rollout. Keep the small Mikrus profile limited to the lightweight web/API boundary and place embeddings, retrieval/reranking, ingest/OCR and generation in a private knowledge service on a measured stronger host.
+
+### Plan
+
+- Make the LlamaIndex retrieval and ingestion composition independently startable without constructing the replaced legacy Qdrant/chunking path.
+- Route ordinary ingest, replay, tombstone, reconcile and reindex through the versioned LlamaIndex projection while preserving Mongo ordering, idempotency and canonical fail-closed revalidation.
+- Replace chunk-ID overlap telemetry with frozen-corpus relevance, citation/no-answer, isolation, stale/tombstone and latency evidence; keep aggregate-only shadow observations.
+- Implement a guarded local alias cutover and physical-collection rollback rehearsal, with the previous collection retained and exact-current checks.
+- Remove only the superseded legacy mechanics after candidate-only, parity and rollback gates pass; retain Eisenhower-owned domain policy, DTOs, ports, auth, audit and fallback.
+- Fix and verify the lightweight Mikrus boundary contract, then run focused red-green, broad tests/lint/audits, Docker/Compose and bounded local runtime evidence without claiming deployment or production.
+
+### Outcome
+
+Cut ordinary retrieval, ingest, replay, tombstone, reconcile and reindex over to exact-pinned LlamaIndex `IngestionPipeline`, cache and Qdrant projection behind Eisenhower ports, selected the shared `llama-sentence-256-32-v1` node identity, and removed the superseded retriever, ingestion adapter, deterministic chunker and shadow router. Mongo remains canonical; tenant/project/ACL revalidation, `source_sequence`, checksum/version, stale/conflict rejection, tombstones, citations, fallback, auth, audit and stable HTTP/MCP/job DTOs remain Eisenhower-owned. Added fail-closed alias preflight/apply/rollback tooling with mandatory durable attempt/result audit and compensation on result-audit failure, and blocked candidate backfill after activation; disposable Qdrant 1.18.2 served the candidate through the alias and served retained legacy data again after rollback.
+
+The selected 36-case unapproved local report recorded hybrid Recall@k 0.9107, MRR 0.6577, citation correctness/recall and no-answer accuracy 1.0, freshness 1.0, zero stale/forbidden/isolation hits and p95 54.00 ms. This improves the historical local incumbent but does not meet the proposed unapproved MRR 0.8 threshold and is not human/holdout acceptance. Fresh verification passed 657 backend tests with 12 opt-in skips, Pylint 10.00/10, 240 Node tests plus build, 50 MCP tests, 25 deployment-profile tests, actionlint, Compose rendering, Python/Node/web/mobile dependency audits, and two live Qdrant tests. Final Trivy scans found zero fixable HIGH/CRITICAL findings in both built images.
+
+The local boundary image is 51,145,114 bytes, reached liveness in 478 ms at 41.27 MiB observed RSS, failed readiness with HTTP 503 when its private upstream was absent, and contains none of torch, torchvision, Docling, Unstructured, ONNX, Tesseract or LlamaIndex. The final private knowledge image is 935,476,896 bytes; isolated LlamaIndex engine initialization took 1.07 s and 141.45 MiB peak RSS on this 109.7 GiB development host. These measurements do not size Mikrus or production. No push, PR, merge, persistent alias change, deployment, Mikrus modification or public production promotion was performed.
+
+---
+
 ## TASK-045: Resolve default-branch Dependabot alerts and promote green dev
 **Priority:** P0 | **Tags:** security, dependencies, dependabot, release-gate
 
