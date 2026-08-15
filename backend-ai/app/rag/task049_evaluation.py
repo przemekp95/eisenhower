@@ -157,7 +157,7 @@ def build_candidates(dense_retriever, lexical_retriever):
 
 def build_task050_candidates(dense_retriever, lexical_retriever):
   policy = RetrievalConfidencePolicy()
-  candidate_id = "bge-m3-dbsf-d2-l1-confidence-id-v1"
+  candidate_id = "bge-m3-dbsf-d2-l1-confidence-id-v2"
   hybrid = HybridRetriever(
     dense_retriever,
     lexical_retriever,
@@ -174,7 +174,7 @@ def build_task050_candidates(dense_retriever, lexical_retriever):
   }
   configurations = {
     candidate_id: {
-      "strategy": "hybrid-score-confidence-v1",
+      "strategy": "hybrid-score-confidence-v2",
       "score_threshold": policy.dense_top_min,
       "fusion_mode": "dbsf",
       "dense_weight": 2.0,

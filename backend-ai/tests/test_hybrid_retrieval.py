@@ -234,7 +234,7 @@ def test_confidence_policy_rejects_weak_generic_overlap_after_scope_validation()
     hit("dense-a", "generic operational note", score=0.53),
     hit("dense-b", "another generic note", score=0.52),
   ])
-  lexical = DenseRetriever([hit("lexical", "generic note", score=2.8)])
+  lexical = DenseRetriever([hit("lexical", "generic note", score=1.8)])
   retriever = HybridRetriever(
     dense,
     lexical,
@@ -250,16 +250,25 @@ def test_confidence_policy_rejects_weak_generic_overlap_after_scope_validation()
   assert lexical.queries[0].score_threshold == -1.0
 
 
+def test_confidence_policy_rejects_dense_similarity_without_lexical_evidence():
+  retriever = HybridRetriever(
+    DenseRetriever([hit("semantic", "semantic match", score=0.53)]),
+    DenseRetriever([]),
+    confidence_policy=RetrievalConfidencePolicy(),
+  )
+
+  assert retriever.retrieve(query("unsupported semantic question")) == []
+
+
 @pytest.mark.parametrize(
   ("dense_hits", "lexical_hits"),
   [
-    ([hit("semantic", "semantic match", score=0.53)], []),
     ([hit("strong", "strong semantic match", score=0.62)], [hit("weak", "weak", score=2.8)]),
     (
       [hit("margin-a", "semantic match", score=0.55), hit("margin-b", "noise", score=0.49)],
       [hit("weak", "weak", score=2.8)],
     ),
-    ([hit("dense", "semantic match", score=0.55)], [hit("exact", "exact", score=5.1)]),
+    ([hit("dense", "semantic match", score=0.55)], [hit("exact", "exact", score=2.1)]),
   ],
 )
 def test_confidence_policy_preserves_supported_signal_paths(dense_hits, lexical_hits):

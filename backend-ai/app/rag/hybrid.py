@@ -510,7 +510,7 @@ class RetrievalConfidencePolicy:
   dense_top_min: float = 0.40
   strong_dense_top_min: float = 0.61
   dense_margin_min: float = 0.05
-  lexical_top_min: float = 5.0
+  lexical_top_min: float = 2.0
 
   def __post_init__(self) -> None:
     dense_values = (self.dense_top_min, self.strong_dense_top_min, self.dense_margin_min)
@@ -531,7 +531,7 @@ class RetrievalConfidencePolicy:
     if not dense_scores or dense_scores[0] < self.dense_top_min:
       return False
     if not lexical_candidates:
-      return True
+      return False
     dense_second = dense_scores[1] if len(dense_scores) > 1 else 0.0
     dense_margin = dense_scores[0] - dense_second
     lexical_top = max(item.score for item in lexical_candidates)

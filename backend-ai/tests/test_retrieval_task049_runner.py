@@ -135,10 +135,10 @@ def test_task050_candidate_combines_source_native_confidence_and_identifier_evid
     RecordingRetriever(), RecordingRetriever()
   )
 
-  assert set(candidates) == {"bge-m3-dbsf-d2-l1-confidence-id-v1"}
+  assert set(candidates) == {"bge-m3-dbsf-d2-l1-confidence-id-v2"}
   assert configurations == {
-    "bge-m3-dbsf-d2-l1-confidence-id-v1": {
-      "strategy": "hybrid-score-confidence-v1",
+    "bge-m3-dbsf-d2-l1-confidence-id-v2": {
+      "strategy": "hybrid-score-confidence-v2",
       "score_threshold": 0.40,
       "fusion_mode": "dbsf",
       "dense_weight": 2.0,
@@ -149,7 +149,7 @@ def test_task050_candidate_combines_source_native_confidence_and_identifier_evid
         "dense_top_min": 0.40,
         "strong_dense_top_min": 0.61,
         "dense_margin_min": 0.05,
-        "lexical_top_min": 5.0,
+        "lexical_top_min": 2.0,
       },
     }
   }
