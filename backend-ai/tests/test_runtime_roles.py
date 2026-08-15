@@ -29,16 +29,19 @@ def test_ai_images_install_role_specific_dependencies_without_model_prefetch():
 
 
 def test_rocm_knowledge_image_is_dedicated_and_does_not_include_vllm_or_ingest_tools():
-  dockerfile = (ROOT / "backend-ai" / "Dockerfile.knowledge-rocm-candidate").read_text(encoding="utf-8")
+  dockerfile = (ROOT / "backend-ai" / "Dockerfile.rocm").read_text(encoding="utf-8")
 
   assert "rocm/pytorch@sha256:4449f856653602317e4101a76fce599c7fcd58ccec2e539951fce5f73083179e" in dockerfile
-  assert "eisenhower.runtime.role=knowledge-rocm-candidate" in dockerfile
+  assert "eisenhower.runtime.role=knowledge-rocm" in dockerfile
   assert "requirements-knowledge-rocm.txt" in dockerfile
   assert "apt-get upgrade -y" in dockerfile
   assert "vllm/vllm-openai-rocm" not in dockerfile
   assert "tesseract" not in dockerfile
   assert "poppler" not in dockerfile
   assert "pytesseract" not in dockerfile
+
+  deploy_script = (ROOT / "deploy" / "local" / "deploy.sh").read_text(encoding="utf-8")
+  assert "-f backend-ai/Dockerfile.rocm" in deploy_script
 
 
 def test_local_compose_defaults_to_core_and_keeps_heavy_roles_explicit():

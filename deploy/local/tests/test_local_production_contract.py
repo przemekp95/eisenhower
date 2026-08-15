@@ -229,7 +229,11 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn("ENTRYPOINT []", rocm_dockerfile)
     self.assertIn("grpcio==1.78.0", rocm_requirements)
     self.assertIn("protobuf>=6.31.1,<7", rocm_requirements)
-    self.assertIn("vllm/vllm-openai-rocm", rocm_dockerfile)
+    self.assertIn(
+      "rocm/pytorch@sha256:4449f856653602317e4101a76fce599c7fcd58ccec2e539951fce5f73083179e",
+      rocm_dockerfile,
+    )
+    self.assertNotIn("vllm/vllm-openai-rocm", rocm_dockerfile)
 
   def test_amd_reranker_is_a_separate_pinned_bounded_private_service(self):
     reranker = self.amd_services["reranker"]
