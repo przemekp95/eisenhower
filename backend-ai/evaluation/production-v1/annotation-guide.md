@@ -39,3 +39,57 @@ If human judgments move a case out of its intended cell and a cell falls below 3
 ## Data integrity and freeze
 
 Before benchmarking, verify 240 unique IDs, 240 unique normalized `(task, context)` pairs, valid `pl`/`en` language values, complete annotations, and no exact normalized task overlap with training data. Freeze the final pool, both blind annotations, adjudication output, guide, and coverage manifest together. Record the version identifier and SHA-256 of every file. Benchmarking and any promotion decision must use that immutable packet. Promotion is fail-closed if human annotation, agreement, coverage, integrity, or hashing is incomplete.
+
+## Evidence commands
+
+Keep every completed input and output below in a private directory. The scripts create immutable output files with mode `0600` in directories with mode `0700`; choose a new versioned file name instead of editing or replacing an existing artifact.
+
+Freeze agreement before showing either pass or `internal-strata.jsonl` to an adjudicator:
+
+```bash
+backend-ai/venv/bin/python backend-ai/scripts/measure_annotation_agreement.py \
+  --pool PRIVATE/pool.jsonl \
+  --guide backend-ai/evaluation/production-v1/annotation-guide.md \
+  --coverage-manifest PRIVATE/internal-strata.jsonl \
+  --annotator-a PRIVATE/annotator-a.jsonl \
+  --annotator-b PRIVATE/annotator-b.jsonl \
+  --annotator-a-id eval-a-PSEUDONYM \
+  --annotator-a-completed-at 2026-08-17T10:00:00Z \
+  --annotator-b-id eval-b-PSEUDONYM \
+  --annotator-b-completed-at 2026-08-17T11:00:00Z \
+  --measured-at 2026-08-17T11:05:00Z \
+  --packet-version eisenhower-classifier-production-v1 \
+  --output PRIVATE/agreement-v1.json
+```
+
+If both agreement gates pass, adjudicate exactly the reported disagreement IDs. Every adjudication JSONL row must contain `id`, integer `quadrant`, and a non-empty human `rationale`. Then build the pending candidate and its private evidence manifest:
+
+```bash
+backend-ai/venv/bin/python backend-ai/scripts/finalize_annotations.py \
+  --agreement-report PRIVATE/agreement-v1.json \
+  --pool PRIVATE/pool.jsonl \
+  --guide backend-ai/evaluation/production-v1/annotation-guide.md \
+  --coverage-manifest PRIVATE/internal-strata.jsonl \
+  --annotator-a PRIVATE/annotator-a.jsonl \
+  --annotator-b PRIVATE/annotator-b.jsonl \
+  --adjudication PRIVATE/adjudication-v1.jsonl \
+  --adjudicator-id eval-adjudicator-PSEUDONYM \
+  --adjudicated-at 2026-08-17T12:00:00Z \
+  --dataset-name eisenhower-classifier-production-v1 \
+  --candidate-output PRIVATE/candidate-v1.json \
+  --manifest-output PRIVATE/annotation-evidence-v1.json
+```
+
+When the agreement report contains no disagreements, omit all three adjudication arguments. After a separate named human approval, freeze the exact candidate and bind the evidence-manifest digest into production governance:
+
+```bash
+backend-ai/venv/bin/python backend-ai/scripts/freeze_evaluation.py \
+  --input PRIVATE/candidate-v1.json \
+  --evidence-manifest PRIVATE/annotation-evidence-v1.json \
+  --output PRIVATE/production-v1.json \
+  --manifest PRIVATE/production-v1.manifest.json \
+  --approver-id eval-approver-PSEUDONYM \
+  --approved-at 2026-08-17T13:00:00Z
+```
+
+Pseudonyms and timestamps are operator attestations, while SHA-256 proves integrity rather than authorship. Keep the agreement report and evidence manifest private because pseudonyms and disagreement IDs may be correlatable. Do not upload them to public CI or substitute AI-generated labels for either human pass.

@@ -244,12 +244,40 @@ def test_production_evaluation_governance_accepts_a_large_frozen_dual_annotated_
         "annotator_a_sha256": "a" * 64,
         "annotator_b_sha256": "b" * 64,
         "pool_sha256": "c" * 64,
+        "evidence_manifest_sha256": "d" * 64,
       },
       "frozen": True,
     },
   }
 
   assert not evaluation_governance_issues(dataset, profile="production")
+
+
+def test_production_governance_rejects_a_missing_annotation_evidence_manifest_digest():
+  dataset = {
+    "examples": [],
+    "governance": {
+      "status": "approved",
+      "independent_from_training": True,
+      "independent_annotators": 2,
+      "inter_annotator_agreement": 1.0,
+      "frozen": True,
+      "annotation_evidence": {
+        "sample_count": 0,
+        "raw_agreement": 1.0,
+        "cohen_kappa": 1.0,
+        "annotator_a_sha256": "a" * 64,
+        "annotator_b_sha256": "b" * 64,
+        "pool_sha256": "c" * 64,
+      },
+    },
+  }
+
+  assert "invalid_annotation_evidence_manifest_digest" in {
+    issue["code"] for issue in evaluation_governance_issues(
+      dataset, profile="production", minimum_examples=0, minimum_per_language_class=0
+    )
+  }
 
 
 def test_semantic_leakage_report_flags_near_duplicates_not_only_exact_text():

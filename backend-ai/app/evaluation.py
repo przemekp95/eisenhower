@@ -307,6 +307,16 @@ def evaluation_governance_issues(
       for digest in evidence_digests
     ):
       issues.append({"code": "invalid_annotation_evidence_digest"})
+    evidence_manifest_digest = annotation_evidence.get("evidence_manifest_sha256")
+    if (
+      not isinstance(evidence_manifest_digest, str)
+      or len(evidence_manifest_digest) != 64
+      or any(
+        character not in "0123456789abcdef"
+        for character in evidence_manifest_digest.lower()
+      )
+    ):
+      issues.append({"code": "invalid_annotation_evidence_manifest_digest"})
     if int(annotation_evidence.get("sample_count") or 0) != len(examples):
       issues.append({"code": "annotation_evidence_sample_count_mismatch"})
     evidence_kappa = annotation_evidence.get("cohen_kappa")
