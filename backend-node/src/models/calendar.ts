@@ -13,6 +13,7 @@ const connectionSchema = new Schema({
   status: { type: String, required: true, enum: ['active', 'revoked', 'error'] },
 }, { timestamps: true });
 connectionSchema.index({ tenantId: 1, ownerId: 1, provider: 1, calendarId: 1 }, { unique: true });
+connectionSchema.index({ tenantId: 1, ownerId: 1, status: 1 });
 
 const bindingSchema = new Schema({
   ...scope,
@@ -45,6 +46,8 @@ conflictSchema.index(
   { bindingId: 1, taskRevision: 1, providerRevision: 1 },
   { unique: true },
 );
+conflictSchema.index({ tenantId: 1, ownerId: 1, status: 1, createdAt: 1 });
+conflictSchema.index({ tenantId: 1, ownerId: 1, connectionId: 1, status: 1 });
 
 const syncStateSchema = new Schema({
   ...scope,
@@ -77,6 +80,7 @@ const outboxSchema = new Schema({
   lastError: { type: String },
 }, { timestamps: true });
 outboxSchema.index({ status: 1, availableAt: 1, leaseUntil: 1 });
+outboxSchema.index({ tenantId: 1, ownerId: 1, status: 1 });
 
 const receiptSchema = new Schema({
   operationId: { type: String, required: true },

@@ -32,7 +32,12 @@ class SqliteDocumentVersionStore:
       )
 
   def _connect(self):
-    return sqlite3.connect(self.path, timeout=5)
+    connection = sqlite3.connect(self.path, timeout=5)
+    connection.execute("PRAGMA busy_timeout = 5000")
+    connection.execute("PRAGMA journal_mode = WAL")
+    connection.execute("PRAGMA synchronous = FULL")
+    connection.execute("PRAGMA wal_autocheckpoint = 1000")
+    return connection
 
   def current(self, tenant_id: str, document_id: str) -> int | None:
     with self._connect() as connection:

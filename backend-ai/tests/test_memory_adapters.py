@@ -90,6 +90,20 @@ def repository():
   return MongoMemoryRepository(records, idempotency, client=client), records, idempotency, session
 
 
+def test_mongo_indexes_match_export_order_and_physically_expire_retained_records():
+  _adapter, records, _idempotency, _session = repository()
+
+  assert records.create_index.call_args_list[1].args[0] == [
+    ("tenant_id", 1), ("user_id", 1), ("created_at", 1), ("memory_id", 1),
+  ]
+  assert records.create_index.call_args_list[1].kwargs == {"name": "memory_scope_list"}
+  assert records.create_index.call_args_list[3].args[0] == [("expires_at", 1)]
+  assert records.create_index.call_args_list[3].kwargs == {
+    "expireAfterSeconds": 0,
+    "name": "memory_expiration_ttl",
+  }
+
+
 def test_mongo_save_is_transactional_scope_bound_and_durably_idempotent():
   adapter, records, idempotency, session = repository()
   saved = adapter.save(record(), "create-1")
@@ -99,6 +113,10 @@ def test_mongo_save_is_transactional_scope_bound_and_durably_idempotent():
   selector = records.find_one.call_args.args[0]
   assert selector == {"tenant_id": "tenant-1", "user_id": "user-1", "memory_id": "memory-1"}
   assert records.insert_one.call_args.kwargs["session"] is session
+  persisted_record = records.insert_one.call_args.args[0]
+  assert isinstance(persisted_record["created_at"], datetime)
+  assert isinstance(persisted_record["updated_at"], datetime)
+  assert isinstance(persisted_record["expires_at"], datetime)
   durable_receipt = idempotency.insert_one.call_args.args[0]
   assert "response" not in durable_receipt
   assert "Prefer Polish" not in repr(durable_receipt)

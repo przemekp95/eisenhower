@@ -87,8 +87,19 @@ def test_store_creates_unique_identity_and_pending_lookup_indexes():
       {"unique": True, "name": "canonical_tenant_document_unique"},
     ),
     (
-      [("tenant_id", 1), ("project_id", 1), ("projection_pending", 1)],
-      {"name": "canonical_projection_pending"},
+      [("tenant_id", 1), ("projection_pending", 1), ("source_sequence", 1), ("document_id", 1)],
+      {"name": "canonical_pending_by_tenant"},
+    ),
+    (
+      [
+        ("tenant_id", 1), ("project_id", 1), ("projection_pending", 1),
+        ("source_sequence", 1), ("document_id", 1),
+      ],
+      {"name": "canonical_pending_by_project"},
+    ),
+    (
+      [("tenant_id", 1), ("project_id", 1), ("document_id", 1)],
+      {"name": "canonical_project_documents"},
     ),
   ]
 

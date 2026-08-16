@@ -49,6 +49,14 @@ INFORMATION_DELTA_STATUSES = {
   "freshness_unverified",
 }
 AUDIT_OUTCOMES = {"attempt", "success", "rejected", "error"}
+JOB_TYPES = {
+  "rag.extract_document",
+  "rag.upsert",
+  "rag.tombstone",
+  "rag.reindex_project",
+  "rag.evaluate",
+}
+JOB_STATUSES = {"queued", "running", "completed", "dead_letter"}
 RELEASE_SHA_PATTERN = re.compile(r"^[a-f0-9]{40}$")
 LATENCY_BUCKETS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0)
 
@@ -99,6 +107,7 @@ class MetricsRegistry:
     self._memory_duration_sum = Counter()
     self._memory_duration_buckets = Counter()
     self._job_depth: dict[str, int] = {}
+    self._job_depth_by_type: dict[tuple[str, str], int] = {}
     self._job_queue_enabled = False
     self._job_worker_heartbeat_age_seconds: float | None = None
     self._release_sha = "0" * 40
@@ -210,7 +219,23 @@ class MetricsRegistry:
 
   def set_job_depth(self, status: str, count: int) -> None:
     with self._lock:
-      self._job_depth[status] = max(0, int(count))
+      self._job_depth[_bounded(status, JOB_STATUSES)] = max(0, int(count))
+
+  def set_job_depths(self, depths: dict[str, int]) -> None:
+    bounded: dict[str, int] = {}
+    for status, count in depths.items():
+      key = _bounded(status, JOB_STATUSES)
+      bounded[key] = bounded.get(key, 0) + max(0, int(count))
+    with self._lock:
+      self._job_depth = bounded
+
+  def set_job_depths_by_type(self, depths: dict[tuple[str, str], int]) -> None:
+    bounded: dict[tuple[str, str], int] = {}
+    for (job_type, status), count in depths.items():
+      key = (_bounded(job_type, JOB_TYPES), _bounded(status, JOB_STATUSES))
+      bounded[key] = bounded.get(key, 0) + max(0, int(count))
+    with self._lock:
+      self._job_depth_by_type = bounded
 
   def set_job_queue_enabled(self, enabled: bool) -> None:
     with self._lock:
@@ -419,6 +444,15 @@ class MetricsRegistry:
       ])
       for status, value in sorted(self._job_depth.items()):
         lines.append(f"eisenhower_job_queue_depth{{{_labels(status=status)}}} {value}")
+      lines.extend([
+        "# HELP eisenhower_job_queue_depth_by_type Durable jobs by bounded type and lifecycle status.",
+        "# TYPE eisenhower_job_queue_depth_by_type gauge",
+      ])
+      for (job_type, status), value in sorted(self._job_depth_by_type.items()):
+        lines.append(
+          "eisenhower_job_queue_depth_by_type"
+          f"{{{_labels(job_type=job_type, status=status)}}} {value}"
+        )
       lines.extend([
         "# HELP eisenhower_job_worker_heartbeat_age_seconds Age of the latest durable worker heartbeat.",
         "# TYPE eisenhower_job_worker_heartbeat_age_seconds gauge",

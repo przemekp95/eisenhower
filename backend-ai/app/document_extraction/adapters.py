@@ -1,19 +1,24 @@
 from __future__ import annotations
 
+from collections import OrderedDict
 from enum import Enum
 from hashlib import sha256
 from importlib.metadata import version
 import json
+from multiprocessing import get_context
+from multiprocessing.connection import Connection
 import os
+from os import sysconf
 from pathlib import Path
 from resource import RUSAGE_SELF, getrusage
 from time import monotonic
-from typing import Mapping
+from typing import Callable, Mapping
 
 from .artifacts import ArtifactBundleRejected, verify_artifact_bundle
 
 from .models import (
   ApprovedExtractionRequest,
+  BoundingBox,
   ElementKind,
   ExtractedDocument,
   ExtractionElement,
@@ -70,6 +75,18 @@ class ExtractionRuntimeRejected(RuntimeError):
   """Extraction failed or exceeded its frozen runtime contract without fallback."""
 
 
+_SAFE_RUNTIME_REJECTIONS = frozenset({
+  "fallback_parser_failed_closed",
+  "fallback_parser_resource_budget_exceeded",
+  "fallback_quality_below_approved_threshold",
+  "parser_memory_limit_exceeded",
+  "parser_process_failed_closed",
+  "parser_wall_time_exceeded",
+  "primary_parser_failed_closed",
+  "primary_parser_resource_budget_exceeded",
+})
+
+
 class GovernedDocumentExtractor:
   def __init__(self, primary, fallback):
     self.primary = primary
@@ -84,12 +101,21 @@ class GovernedDocumentExtractor:
       return result.model_copy(update={"provenance": provenance})
 
 
+def build_governed_document_extractor() -> GovernedDocumentExtractor:
+  """Construct the frozen local parser chain inside the isolated process."""
+  return GovernedDocumentExtractor(
+    DoclingDocumentExtractor(),
+    UnstructuredDocumentExtractor(),
+  )
+
+
 class DoclingDocumentExtractor:
   def __init__(self, converter_factory=None):
     self.converter_factory = converter_factory or _docling_converter
+    self._converters = OrderedDict()
 
   def extract(self, request: ApprovedExtractionRequest) -> ExtractedDocument:
-    converter = self.converter_factory(request)
+    converter = self._converter(request)
     started = monotonic()
     try:
       result = converter.convert(
@@ -100,9 +126,14 @@ class DoclingDocumentExtractor:
     except PrimaryFallbackEligible:
       raise
     except (MemoryError, TimeoutError) as error:
-      raise ExtractionRuntimeRejected("primary parser exceeded its resource budget") from error
+      raise ExtractionRuntimeRejected("primary_parser_resource_budget_exceeded") from error
     except Exception as error:
-      raise ExtractionRuntimeRejected("primary parser failed closed") from error
+      if error.__class__.__name__ in {
+        "UnsupportedDocumentFormatError",
+        "UnsupportedFormatError",
+      }:
+        raise PrimaryFallbackEligible(FallbackReason.PRIMARY_UNSUPPORTED_LAYOUT) from error
+      raise ExtractionRuntimeRejected("primary_parser_failed_closed") from error
     _enforce_runtime_budget(started, request)
     elements = _docling_elements(result.document)
     if sum(len(element.text.strip()) for element in elements) < request.minimum_primary_text_characters:
@@ -114,6 +145,21 @@ class DoclingDocumentExtractor:
       extractor_version=version("docling"),
       ocr_engine="tesseract-cli" if request.ocr else None,
     )
+
+  def _converter(self, request: ApprovedExtractionRequest):
+    key = (
+      request.limits.maximum_wall_seconds,
+      tuple(request.ocr.languages) if request.ocr else (),
+    )
+    converter = self._converters.get(key)
+    if converter is not None:
+      self._converters.move_to_end(key)
+      return converter
+    converter = self.converter_factory(request)
+    self._converters[key] = converter
+    while len(self._converters) > 4:
+      self._converters.popitem(last=False)
+    return converter
 
 
 class UnstructuredDocumentExtractor:
@@ -130,13 +176,14 @@ class UnstructuredDocumentExtractor:
         pdf_infer_table_structure=False,
       )
     except (MemoryError, TimeoutError) as error:
-      raise ExtractionRuntimeRejected("fallback parser exceeded its resource budget") from error
+      raise ExtractionRuntimeRejected("fallback_parser_resource_budget_exceeded") from error
     except Exception as error:
-      raise ExtractionRuntimeRejected("fallback parser failed closed") from error
+      raise ExtractionRuntimeRejected("fallback_parser_failed_closed") from error
     _enforce_runtime_budget(started, request)
     elements = _unstructured_elements(raw_elements)
-    if not elements:
-      raise ExtractionRuntimeRejected("fallback parser produced no approved content")
+    fallback_minimum = min(request.minimum_primary_text_characters, 20)
+    if sum(len(element.text.strip()) for element in elements) < fallback_minimum:
+      raise ExtractionRuntimeRejected("fallback_quality_below_approved_threshold")
     return _document(
       request,
       elements,
@@ -144,6 +191,157 @@ class UnstructuredDocumentExtractor:
       extractor_version=version("unstructured"),
       ocr_engine=None,
     )
+
+
+class IsolatedDocumentExtractor:
+  """Run the parser in a reusable, memory-capped spawned child process."""
+
+  def __init__(self, extractor_factory: Callable[[], object]):
+    self._extractor_factory = extractor_factory
+    self._process = None
+    self._connection: Connection | None = None
+    self._memory_limit: int | None = None
+
+  @property
+  def child_pid(self) -> int | None:
+    if self._process is None or not self._process.is_alive():
+      return None
+    return self._process.pid
+
+  def extract(self, request: ApprovedExtractionRequest) -> ExtractedDocument:
+    started = monotonic()
+    self._ensure_child(request.limits.maximum_peak_memory_bytes)
+    remaining = request.limits.maximum_wall_seconds - (monotonic() - started)
+    if remaining <= 0 or self._connection is None:
+      self._stop_child()
+      raise ExtractionRuntimeRejected("parser_wall_time_exceeded")
+    try:
+      self._connection.send(request.model_dump(mode="python"))
+      deadline = monotonic() + remaining
+      while True:
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+          self._stop_child()
+          raise ExtractionRuntimeRejected("parser_wall_time_exceeded")
+        if self._connection.poll(min(0.05, remaining)):
+          status, payload = self._connection.recv()
+          break
+        if self.child_pid is None:
+          self._stop_child()
+          raise ExtractionRuntimeRejected("parser_process_failed_closed")
+        if _resident_set_bytes(self.child_pid) > request.limits.maximum_peak_memory_bytes:
+          self._stop_child()
+          raise ExtractionRuntimeRejected("parser_memory_limit_exceeded")
+    except (EOFError, BrokenPipeError, OSError) as error:
+      self._stop_child()
+      raise ExtractionRuntimeRejected("parser_process_failed_closed") from error
+    if status == "ok":
+      peak_rss = int(payload["peak_rss_bytes"])
+      if peak_rss > request.limits.maximum_peak_memory_bytes:
+        self._stop_child()
+        raise ExtractionRuntimeRejected("parser_memory_limit_exceeded")
+      return ExtractedDocument.model_validate(payload["document"])
+    if status == "memory":
+      self._stop_child()
+      raise ExtractionRuntimeRejected("parser_memory_limit_exceeded")
+    if status == "runtime" and payload in _SAFE_RUNTIME_REJECTIONS:
+      if payload in {
+        "fallback_parser_resource_budget_exceeded",
+        "parser_memory_limit_exceeded",
+        "primary_parser_resource_budget_exceeded",
+      }:
+        self._stop_child()
+      raise ExtractionRuntimeRejected(payload)
+    raise ExtractionRuntimeRejected("primary_parser_failed_closed")
+
+  def close(self) -> None:
+    if self._connection is not None and self.child_pid is not None:
+      try:
+        self._connection.send(None)
+      except (BrokenPipeError, OSError):
+        pass
+    self._stop_child()
+
+  def _ensure_child(self, memory_limit: int) -> None:
+    if self.child_pid is not None and self._memory_limit == memory_limit:
+      return
+    self._stop_child()
+    context = get_context("spawn")
+    parent, child = context.Pipe()
+    process = context.Process(
+      target=_isolated_extraction_worker,
+      args=(child, self._extractor_factory),
+      daemon=True,
+    )
+    process.start()
+    child.close()
+    self._process = process
+    self._connection = parent
+    self._memory_limit = memory_limit
+
+  def _stop_child(self) -> None:
+    connection, process = self._connection, self._process
+    self._connection = None
+    self._process = None
+    self._memory_limit = None
+    if connection is not None:
+      connection.close()
+    if process is not None:
+      if process.is_alive():
+        process.terminate()
+      process.join(timeout=2)
+      if process.is_alive():
+        process.kill()
+        process.join(timeout=2)
+
+  def __del__(self):
+    self.close()
+
+
+def _isolated_extraction_worker(
+  connection: Connection,
+  extractor_factory: Callable[[], object],
+) -> None:
+  try:
+    extractor = extractor_factory()
+    while True:
+      payload = connection.recv()
+      if payload is None:
+        return
+      try:
+        request = ApprovedExtractionRequest.model_validate(payload)
+        result = extractor.extract(request)
+        connection.send(("ok", {
+          "document": result.model_dump(mode="json"),
+          "peak_rss_bytes": getrusage(RUSAGE_SELF).ru_maxrss * 1024,
+        }))
+      except MemoryError:
+        connection.send(("memory", None))
+      except ExtractionRuntimeRejected as error:
+        rejection = str(error)
+        connection.send((
+          "runtime",
+          rejection if rejection in _SAFE_RUNTIME_REJECTIONS else "primary_parser_failed_closed",
+        ))
+      except Exception:
+        connection.send(("runtime", "primary_parser_failed_closed"))
+  except MemoryError:
+    try:
+      connection.send(("memory", None))
+    except Exception:
+      pass
+  finally:
+    connection.close()
+
+
+def _resident_set_bytes(pid: int) -> int:
+  try:
+    resident_pages = int(
+      (Path("/proc") / str(pid) / "statm").read_text(encoding="ascii").split()[1]
+    )
+  except (FileNotFoundError, IndexError, OSError, ValueError):
+    return 0
+  return resident_pages * int(sysconf("SC_PAGE_SIZE"))
 
 
 def _docling_converter(request: ApprovedExtractionRequest):
@@ -208,7 +406,15 @@ def _docling_elements(document) -> list[ExtractionElement]:
       continue
     kind = _kind(label)
     table = _docling_table(item, document) if kind is ElementKind.TABLE else None
-    elements.append(_element(text, kind, len(elements), offset, depth, table=table))
+    elements.append(_element(
+      text,
+      kind,
+      len(elements),
+      offset,
+      depth,
+      table=table,
+      source_spans=_docling_source_spans(item, offset, len(text)),
+    ))
     offset += len(text) + 1
   return elements
 
@@ -269,6 +475,7 @@ def _element(
   *,
   table: TableData | None,
   page_number: int | None = None,
+  source_spans: list[SourceSpan] | None = None,
 ) -> ExtractionElement:
   checksum = sha256(text.encode("utf-8")).hexdigest()
   return ExtractionElement(
@@ -276,7 +483,7 @@ def _element(
     kind=kind,
     text=text,
     checksum=checksum,
-    source_spans=[SourceSpan(
+    source_spans=source_spans or [SourceSpan(
       page_number=page_number,
       start_offset=offset,
       end_offset=offset + len(text),
@@ -286,6 +493,33 @@ def _element(
     list_marker="-" if kind is ElementKind.LIST_ITEM else None,
     table=table,
   )
+
+
+def _docling_source_spans(item, offset: int, text_length: int) -> list[SourceSpan] | None:
+  spans = []
+  for provenance in getattr(item, "prov", ()) or ():
+    page_number = getattr(provenance, "page_no", None)
+    if not isinstance(page_number, int) or page_number < 1:
+      continue
+    raw_box = getattr(provenance, "bbox", None)
+    box = None
+    if raw_box is not None:
+      coordinates = [getattr(raw_box, name, None) for name in ("l", "t", "r", "b")]
+      if all(isinstance(value, (int, float)) for value in coordinates):
+        left, top, right, bottom = (max(float(value), 0.0) for value in coordinates)
+        box = BoundingBox(
+          left=min(left, right),
+          top=min(top, bottom),
+          right=max(left, right),
+          bottom=max(top, bottom),
+        )
+    spans.append(SourceSpan(
+      page_number=page_number,
+      start_offset=offset,
+      end_offset=offset + text_length,
+      bounding_box=box,
+    ))
+  return spans or None
 
 
 def _document(
@@ -331,6 +565,6 @@ def _document(
 
 def _enforce_runtime_budget(started: float, request: ApprovedExtractionRequest) -> None:
   if monotonic() - started > request.limits.maximum_wall_seconds:
-    raise ExtractionRuntimeRejected("parser exceeded maximum_wall_seconds")
+    raise ExtractionRuntimeRejected("parser_wall_time_exceeded")
   if getrusage(RUSAGE_SELF).ru_maxrss * 1024 > request.limits.maximum_peak_memory_bytes:
-    raise ExtractionRuntimeRejected("parser exceeded maximum_peak_memory_bytes")
+    raise ExtractionRuntimeRejected("parser_memory_limit_exceeded")

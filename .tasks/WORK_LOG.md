@@ -1,5 +1,9 @@
 # Completion log
 
+2026-08-16 — TASK-053: Unified the durable SQLite ingestion queue, added bounded WAL/retention/metrics, aligned Mongo pools/indexes/resource caps and BSON TTL dates, and wired governed Docling/Unstructured extraction through a monitored reusable child; full repository verification and isolated local runtime/benchmark evidence passed without deployment or production claims.
+
+2026-08-16 — TASK-051: Reconciled the runtime role split with LlamaIndex, extended active conditional checkpoints through 2026-08-23 23:59:59 Europe/Warsaw, completed full local/Compose/image/SBOM/all-severity verification, and promoted green PRs #209/#210 through dev to exact master `384d40bcde95f77a55ea03897da9ddab10f03b64`; exact-SHA push CI, Dependency Graph and master-to-dev sync passed without release, deployment or production changes.
+
 2026-08-15 — TASK-052: Reconciled the independently completed LlamaIndex cutover task under a non-colliding ID during integration; preserved Mongo canonical fail-closed policy, guarded Qdrant alias rollback and the measured lightweight boundary/private knowledge split without claiming deployment or human acceptance.
 
 2026-08-16 — TASK-050: Added and physically qualified an unselected post-fusion confidence/identifier evidence candidate; independent qualification failed quality and latency despite zero security/isolation violations, so the original validation stayed sealed and the private reranker remains selected, with 745 backend tests/11 skips, 24 Compose contracts/four renders and a fresh 772-component/zero-fixed-finding scan green and no deployment or promotion.
@@ -17,7 +21,6 @@
 2026-08-15 — TASK-048 ingest follow-up: Replaced hidden Docling/Unstructured runtime downloads with a complete two-repository hash-verified read-only artifact bundle and pinned spaCy wheel, fixed the required OpenCV system runtime and bounded writable library caches; all 11 frozen synthetic extraction cases passed in an isolated 2 GiB cgroup with zero pressure events, while a clean 512 MiB run was OOM-killed, with no active stores, GPU, deployment or cache pruning touched.
 
 2026-08-15 — TASK-048 milestone: Split AI runtime dependencies and images into boundary/classifier/knowledge/ingest roles, made core the default and retrieval/response/full explicit, required hash-approved offline classifier artifacts, added bounded shared jobs and private authenticated vLLM lifecycle controls, and produced exact-SHA image/SBOM/scan plus local CPU measurements; physical ROCm/OOM/wake, ingest, governed holdout and deployment/rollback gates remain open, with no promotion or deployment performed.
-
 2026-08-13 — TASK-047 deploy follow-up: Removed unprovisioned `profile` and `email` scopes from the web authorization request after a live Keycloak browser flow returned `invalid_scope`; identity and authorization continue to use the explicit governed claim and resource scopes.
 
 2026-08-13 — TASK-047 deploy follow-up: Split the CPU classifier from response-generation flags after the exact-master runtime proved that inherited global response settings made its fail-closed PromptSpec validation reject startup; generation and responses remain enabled only in the isolated knowledge service.

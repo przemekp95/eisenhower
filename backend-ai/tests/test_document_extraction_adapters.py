@@ -12,8 +12,10 @@ from app.document_extraction.adapters import (
   ExtractionRuntimeRejected,
   FallbackReason,
   GovernedDocumentExtractor,
+  IsolatedDocumentExtractor,
   PrimaryFallbackEligible,
   UnstructuredDocumentExtractor,
+  build_governed_document_extractor,
 )
 from app.document_extraction.models import (
   ApprovedExtractionRequest,
@@ -94,12 +96,40 @@ class RecordingExtractor:
     return self.result
 
 
+class _SleepingExtractor:
+  def extract(self, _request):
+    __import__("time").sleep(5)
+
+
+def _sleeping_extractor_factory():
+  return _SleepingExtractor()
+
+
+class _MemoryFailingExtractor:
+  def extract(self, _request):
+    raise MemoryError("sensitive allocation detail")
+
+
+def _memory_failing_extractor_factory():
+  return _MemoryFailingExtractor()
+
+
+class _MemoryHoggingExtractor:
+  def extract(self, _request):
+    self.payload = bytearray(512 * 1024 * 1024)
+    __import__("time").sleep(5)
+
+
+def _memory_hogging_extractor_factory():
+  return _MemoryHoggingExtractor()
+
+
 @pytest.mark.parametrize("reason", list(FallbackReason))
 def test_governed_fallback_runs_only_for_the_two_approved_primary_reasons(tmp_path, reason):
   path = tmp_path / "fixture.html"
   path.write_text("<h1>Reviewed fixture</h1>", encoding="utf-8")
   fallback_result = UnstructuredDocumentExtractor(
-    partition_function=lambda **_kwargs: [type("Title", (), {"category": "Title", "__str__": lambda _self: "Reviewed fixture"})()]
+    partition_function=lambda **_kwargs: [type("Title", (), {"category": "Title", "__str__": lambda _self: "Reviewed fixture content"})()]
   ).extract(approved(path))
   primary = RecordingExtractor(error=PrimaryFallbackEligible(reason))
   fallback = RecordingExtractor(result=fallback_result)
@@ -125,6 +155,129 @@ def test_governed_fallback_does_not_mask_security_resource_or_programming_failur
     GovernedDocumentExtractor(RecordingExtractor(error=error), fallback).extract(approved(path))
 
   assert fallback.calls == 0
+
+
+def test_docling_reuses_converter_for_identical_runtime_configuration(tmp_path):
+  path = tmp_path / "fixture.html"
+  path.write_text("<h1>Reviewed fixture content</h1>", encoding="utf-8")
+  converters = []
+
+  class Document:
+    @staticmethod
+    def iterate_items():
+      item = type("Item", (), {"label": "title", "text": "Reviewed fixture content"})()
+      return [(item, 1)]
+
+  class Converter:
+    @staticmethod
+    def convert(*_args, **_kwargs):
+      return type("Result", (), {"document": Document()})()
+
+  def factory(_request):
+    converters.append(Converter())
+    return converters[-1]
+
+  extractor = DoclingDocumentExtractor(converter_factory=factory)
+  extractor.extract(approved(path))
+  extractor.extract(approved(path))
+
+  assert len(converters) == 1
+
+
+def test_unstructured_rejects_nonempty_but_below_threshold_result(tmp_path):
+  path = tmp_path / "fixture.html"
+  path.write_text("<p>x</p>", encoding="utf-8")
+  extractor = UnstructuredDocumentExtractor(
+    partition_function=lambda **_kwargs: ["x"],
+  )
+
+  with pytest.raises(ExtractionRuntimeRejected, match="fallback_quality_below_approved_threshold"):
+    extractor.extract(approved(path))
+
+
+def test_known_unsupported_primary_layout_reaches_fallback_with_real_reason(tmp_path):
+  path = tmp_path / "fixture.html"
+  path.write_text("<h1>Reviewed fixture</h1>", encoding="utf-8")
+
+  class UnsupportedFormatError(Exception):
+    pass
+
+  primary = DoclingDocumentExtractor(
+    converter_factory=lambda _request: type(
+      "Converter",
+      (),
+      {"convert": lambda *_args, **_kwargs: (_ for _ in ()).throw(UnsupportedFormatError())},
+    )(),
+  )
+  fallback = UnstructuredDocumentExtractor(
+    partition_function=lambda **_kwargs: [
+      type("Title", (), {"category": "Title", "__str__": lambda _self: "Reviewed fixture content"})()
+    ],
+  )
+
+  result = GovernedDocumentExtractor(primary, fallback).extract(approved(path))
+
+  assert result.provenance.extractor_name == "unstructured"
+  assert result.provenance.fallback_reason == "PRIMARY_UNSUPPORTED_LAYOUT"
+
+
+def test_isolated_extractor_enforces_wall_timeout_and_cleans_up_child(tmp_path):
+  path = tmp_path / "fixture.html"
+  path.write_text("<h1>Reviewed fixture</h1>", encoding="utf-8")
+  request = approved(path).model_copy(update={
+    "limits": approved(path).limits.model_copy(update={"maximum_wall_seconds": 0.1}),
+  })
+  extractor = IsolatedDocumentExtractor(_sleeping_extractor_factory)
+
+  with pytest.raises(ExtractionRuntimeRejected, match="parser_wall_time_exceeded"):
+    extractor.extract(request)
+
+  assert extractor.child_pid is None
+
+
+def test_isolated_extractor_maps_child_memory_failure_without_sensitive_details(tmp_path):
+  path = tmp_path / "fixture.html"
+  path.write_text("<h1>Reviewed fixture</h1>", encoding="utf-8")
+  extractor = IsolatedDocumentExtractor(_memory_failing_extractor_factory)
+
+  with pytest.raises(ExtractionRuntimeRejected) as observed:
+    extractor.extract(approved(path))
+
+  assert str(observed.value) == "parser_memory_limit_exceeded"
+  assert "sensitive" not in str(observed.value)
+  assert extractor.child_pid is None
+  extractor.close()
+
+
+def test_isolated_extractor_kills_a_child_that_exceeds_the_rss_cap(tmp_path):
+  path = tmp_path / "fixture.html"
+  path.write_text("<h1>Reviewed fixture</h1>", encoding="utf-8")
+  request = approved(path).model_copy(update={
+    "limits": approved(path).limits.model_copy(
+      update={"maximum_peak_memory_bytes": 128 * 1024 * 1024}
+    ),
+  })
+  extractor = IsolatedDocumentExtractor(_memory_hogging_extractor_factory)
+
+  with pytest.raises(ExtractionRuntimeRejected, match="parser_memory_limit_exceeded"):
+    extractor.extract(request)
+
+  assert extractor.child_pid is None
+
+
+def test_real_governed_chain_runs_in_a_reused_memory_bounded_child():
+  path = Path(__file__).resolve().parents[2] / "corpus" / "approved-documents" / "extraction-golden-en.html"
+  extractor = IsolatedDocumentExtractor(build_governed_document_extractor)
+
+  first = extractor.extract(approved(path))
+  child_pid = extractor.child_pid
+  second = extractor.extract(approved(path))
+
+  assert child_pid is not None
+  assert extractor.child_pid == child_pid
+  assert first.extraction_checksum == second.extraction_checksum
+  assert "Corpus validation plan" in "\n".join(item.text for item in second.elements)
+  extractor.close()
 
 
 def test_real_docling_primary_preserves_html_structure_and_security_metadata():
@@ -160,6 +313,16 @@ def test_real_pdf_runs_through_pinned_local_docling_and_unstructured_engines():
   assert DOCLING_LAYOUT_MODEL_REVISION == "40bde044036bb181c130ddf6c51792187268748f"
   assert "Corpus PDF validation" in "\n".join(item.text for item in primary.elements)
   assert "Corpus PDF validation" in "\n".join(item.text for item in fallback.elements)
+  assert any(
+    span.page_number == 1 and span.bounding_box is not None
+    for element in primary.elements
+    for span in element.source_spans
+  )
+  assert any(
+    span.page_number == 1
+    for element in fallback.elements
+    for span in element.source_spans
+  )
   assert primary.provenance.ocr.performed is False
   assert fallback.provenance.ocr.performed is False
 
