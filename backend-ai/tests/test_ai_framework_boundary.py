@@ -26,6 +26,15 @@ def test_standard_dev_dependencies_do_not_install_experimental_frameworks():
   assert "haystack" not in requirements
 
 
+def test_experimental_langchain_core_is_pinned_outside_known_vulnerable_ranges():
+  requirements = ROOT.joinpath("requirements-experimental.txt").read_text(encoding="utf-8").splitlines()
+  core_pin = next(line for line in requirements if line.startswith("langchain-core=="))
+  version = tuple(int(part) for part in core_pin.removeprefix("langchain-core==").split("."))
+
+  # GHSA-926x-3r5x-gfhw is fixed in 1.2.28; GHSA-pjwx-r37v-7724 requires 1.3.3.
+  assert version >= (1, 3, 3)
+
+
 def test_application_contracts_do_not_import_ai_framework_types():
   forbidden = ("haystack", "langchain", "llama_index", "langgraph")
   boundary_files = [
