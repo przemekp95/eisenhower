@@ -55,8 +55,6 @@ jest.mock('./components/matrixLazyComponents', () => ({
     taskDescription,
     onApplyDescription,
     onApplyQuadrant,
-    onAnalysisComplete,
-    onAnalysisTaskAdd,
     onOCRTasksExtracted,
     onClose,
   }: {
@@ -64,9 +62,7 @@ jest.mock('./components/matrixLazyComponents', () => ({
     taskDescription?: string;
     onApplyDescription?: (description: string) => Promise<void> | void;
     onApplyQuadrant?: (patch: { urgent: boolean; important: boolean }) => Promise<void> | void;
-    onAnalysisComplete: (analysis: api.LangChainAnalysis) => void;
-    onAnalysisTaskAdd: (analysis: api.LangChainAnalysis) => Promise<void>;
-    onOCRTasksExtracted: (result: api.OCRResult, learn: boolean) => Promise<unknown>;
+    onOCRTasksExtracted: (result: api.OCRResult) => Promise<unknown>;
     onClose: () => void;
   }) => (
     <div>
@@ -89,137 +85,56 @@ jest.mock('./components/matrixLazyComponents', () => ({
       <button
         type="button"
         onClick={() =>
-          void onAnalysisTaskAdd({
-            task: 'critical task',
-            langchain_analysis: {
-              quadrant: 1,
-              reasoning: 'Delegate this',
-              confidence: 0.9,
-              method: 'langchain',
+          void onOCRTasksExtracted({
+            filename: 'tasks.txt',
+            image_info: {
+              size_bytes: 32,
+              shape: 'unknown',
             },
-            rag_classification: {
-              quadrant: 0,
-              quadrant_name: 'Do Now',
-              confidence: 0.7,
+            ocr: {
+              extracted_text: 'Escalate outage\nPlan roadmap',
+              raw_tasks_detected: 3,
+              method: 'tesseract',
             },
-            comparison: {
-              methods_agree: false,
-              confidence_difference: 0.2,
+            classified_tasks: [
+              {
+                text: 'Escalate outage',
+                quadrant: 0,
+                quadrant_name: 'Do Now',
+                confidence: 0.96,
+              },
+              {
+                text: '   ',
+                quadrant: 1,
+                quadrant_name: 'Delegate',
+                confidence: 0.2,
+              },
+              {
+                text: 'Plan roadmap',
+                quadrant: 2,
+                quadrant_name: 'Schedule',
+                confidence: 0.74,
+              },
+              {
+                text: 'Escalate outage',
+                quadrant: 0,
+                quadrant_name: 'Do Now',
+                confidence: 0.9,
+              },
+            ],
+            summary: {
+              total_tasks: 3,
+              quadrant_distribution: {
+                counts: { 0: 2, 1: 0, 2: 1, 3: 0 },
+                percentages: { 0: 66.67, 1: 0, 2: 33.33, 3: 0 },
+                quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
+              },
             },
             timestamp: new Date().toISOString(),
           })
         }
       >
-        Add analyzed task
-      </button>
-      <button
-        type="button"
-        onClick={() =>
-          onAnalysisComplete({
-            task: 'critical task',
-            langchain_analysis: {
-              quadrant: 2,
-              reasoning: 'Schedule this',
-              confidence: 0.9,
-              method: 'langchain',
-            },
-            rag_classification: {
-              quadrant: 0,
-              quadrant_name: 'Do Now',
-              confidence: 0.7,
-            },
-            comparison: {
-              methods_agree: false,
-              confidence_difference: 0.2,
-            },
-            timestamp: new Date().toISOString(),
-          })
-        }
-      >
-        Apply AI analysis
-      </button>
-      <button
-        type="button"
-        onClick={() =>
-          void onOCRTasksExtracted(
-            {
-              filename: 'tasks.txt',
-              image_info: {
-                size_bytes: 32,
-                shape: 'unknown',
-              },
-              ocr: {
-                extracted_text: 'Escalate outage\nPlan roadmap',
-                raw_tasks_detected: 3,
-                method: 'tesseract',
-              },
-              classified_tasks: [
-                {
-                  text: 'Escalate outage',
-                  quadrant: 0,
-                  quadrant_name: 'Do Now',
-                  confidence: 0.96,
-                },
-                {
-                  text: '   ',
-                  quadrant: 1,
-                  quadrant_name: 'Delegate',
-                  confidence: 0.2,
-                },
-                {
-                  text: 'Plan roadmap',
-                  quadrant: 2,
-                  quadrant_name: 'Schedule',
-                  confidence: 0.74,
-                },
-                {
-                  text: 'Escalate outage',
-                  quadrant: 0,
-                  quadrant_name: 'Do Now',
-                  confidence: 0.9,
-                },
-              ],
-              summary: {
-                total_tasks: 3,
-                quadrant_distribution: {
-                  counts: { 0: 2, 1: 0, 2: 1, 3: 0 },
-                  percentages: { 0: 66.67, 1: 0, 2: 33.33, 3: 0 },
-                  quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
-                },
-              },
-              timestamp: new Date().toISOString(),
-            },
-            true
-          )
-        }
-      >
-        Import OCR tasks
-      </button>
-      <button
-        type="button"
-        onClick={() =>
-          void onOCRTasksExtracted(
-            {
-              filename: 'one.txt',
-              image_info: { size_bytes: 3, shape: 'unknown' },
-              ocr: { extracted_text: 'One', raw_tasks_detected: 1, method: 'tesseract' },
-              classified_tasks: [
-                { text: 'One', quadrant: 1, quadrant_name: 'Delegate', confidence: 0.8 },
-              ],
-              summary: {
-                total_tasks: 1,
-                quadrant_distribution: {
-                  counts: { 0: 0, 1: 1, 2: 0, 3: 0 },
-                  percentages: { 0: 0, 1: 100, 2: 0, 3: 0 },
-                  quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
-                },
-              },
-            },
-            false
-          )
-        }
-      >
-        Import OCR without feedback
+        Import scanned tasks
       </button>
       <button type="button" onClick={onClose}>
         Close AI tools
@@ -248,7 +163,6 @@ jest.mock('gsap', () => ({
 }));
 
 const classifyTask = jest.mocked(api.classifyTask);
-const learnFromAcceptedOCRTasks = jest.mocked(api.learnFromAcceptedOCRTasks);
 
 function renderMatrix(overrides: Partial<React.ComponentProps<typeof Matrix>> = {}) {
   return render(
@@ -272,7 +186,6 @@ describe('Matrix', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.setItem('eisenhower-language', 'pl');
-    learnFromAcceptedOCRTasks.mockResolvedValue({ examples_added: 2, retrained: true });
     dragCallbacks.length = 0;
     matrixTimelineOnCompleteCallbacks.length = 0;
     mockShouldDisableMotion.mockReturnValue(true);
@@ -788,7 +701,7 @@ describe('Matrix', () => {
     fireEvent.change(screen.getByPlaceholderText(/Opis/i), {
       target: { value: 'Draft context' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Otwórz asystenta AI' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Otwórz pomoc w porządkowaniu' }));
 
     expect(await screen.findByTestId('assistant-target')).toHaveTextContent(
       'Draft with AI|Draft context'
@@ -820,7 +733,7 @@ describe('Matrix', () => {
       onUpdateTask,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Otwórz asystenta AI dla Existing task' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Otwórz pomoc dla zadania Existing task' }));
     expect(await screen.findByTestId('assistant-target')).toHaveTextContent(
       'Existing task|Existing description'
     );
@@ -850,7 +763,7 @@ describe('Matrix', () => {
       onUpdateTask,
     });
     fireEvent.click(
-      screen.getByRole('button', { name: 'Otwórz asystenta AI dla Conflicting task' })
+      screen.getByRole('button', { name: 'Otwórz pomoc dla zadania Conflicting task' })
     );
     fireEvent.click(screen.getByRole('button', { name: 'Apply assistant description' }));
     await screen.findByRole('alert');
@@ -878,11 +791,11 @@ describe('Matrix', () => {
     });
 
     expect(
-      screen.queryByRole('button', { name: 'Otwórz asystenta AI dla Delegated AI task' })
+      screen.queryByRole('button', { name: 'Otwórz pomoc dla zadania Delegated AI task' })
     ).not.toBeInTheDocument();
   });
 
-  it('imports OCR tasks into the matrix form pipeline', async () => {
+  it('imports scanned tasks through the idempotent matrix pipeline', async () => {
     const onAddTask = jest.fn().mockResolvedValue(undefined);
 
     render(
@@ -900,104 +813,23 @@ describe('Matrix', () => {
     fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
       target: { value: 'dowolne zadanie' },
     });
-    fireEvent.click(screen.getByText(/Otwórz asystenta AI/i));
-    fireEvent.click(await screen.findByText('Import OCR tasks'));
+    fireEvent.click(screen.getByText(/Otwórz pomoc w porządkowaniu/i));
+    fireEvent.click(await screen.findByText('Import scanned tasks'));
 
     await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(2));
-    await waitFor(() =>
-      expect(learnFromAcceptedOCRTasks).toHaveBeenCalledWith([
-        { text: 'Escalate outage', quadrant: 0 },
-        { text: 'Plan roadmap', quadrant: 2 },
-      ])
+    expect(onAddTask).toHaveBeenNthCalledWith(
+      1,
+      { title: 'Escalate outage', description: '', urgent: true, important: true },
+      expect.stringMatching(/^web-ocr-import-/)
     );
-    expect(onAddTask).toHaveBeenNthCalledWith(1, {
-      title: 'Escalate outage',
-      description: '',
-      urgent: true,
-      important: true,
-    });
-    expect(onAddTask).toHaveBeenNthCalledWith(2, {
-      title: 'Plan roadmap',
-      description: '',
-      urgent: false,
-      important: true,
-    });
+    expect(onAddTask).toHaveBeenNthCalledWith(
+      2,
+      { title: 'Plan roadmap', description: '', urgent: false, important: true },
+      expect.stringMatching(/^web-ocr-import-/)
+    );
   });
 
-  it('keeps importing OCR tasks when persisting accepted OCR feedback fails', async () => {
-    const onAddTask = jest.fn().mockResolvedValue(undefined);
-    learnFromAcceptedOCRTasks.mockRejectedValueOnce(new Error('feedback offline'));
-
-    render(
-      <LanguageProvider>
-        <Matrix
-          tasks={[]}
-          loading={false}
-          onAddTask={onAddTask}
-          onUpdateTask={jest.fn()}
-          onDeleteTask={jest.fn()}
-        />
-      </LanguageProvider>
-    );
-
-    fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
-      target: { value: 'dowolne zadanie' },
-    });
-    fireEvent.click(screen.getByText(/Otwórz asystenta AI/i));
-    fireEvent.click(await screen.findByText('Import OCR tasks'));
-
-    await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(learnFromAcceptedOCRTasks).toHaveBeenCalledTimes(1));
-  });
-
-  it('imports reviewed OCR without feedback when consent is false', async () => {
-    const onAddTask = jest.fn().mockResolvedValue(undefined);
-    render(
-      <LanguageProvider>
-        <Matrix
-          tasks={[]}
-          loading={false}
-          onAddTask={onAddTask}
-          onUpdateTask={jest.fn()}
-          onDeleteTask={jest.fn()}
-        />
-      </LanguageProvider>
-    );
-    fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
-      target: { value: 'draft' },
-    });
-    fireEvent.click(screen.getByText(/Otwórz asystenta AI/i));
-    fireEvent.click(await screen.findByText('Import OCR without feedback'));
-
-    await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(1));
-    expect(learnFromAcceptedOCRTasks).not.toHaveBeenCalled();
-  });
-
-  it('reports unknown OCR feedback failures without losing persisted tasks', async () => {
-    const onAddTask = jest.fn().mockResolvedValue(undefined);
-    learnFromAcceptedOCRTasks.mockRejectedValueOnce('feedback offline');
-    render(
-      <LanguageProvider>
-        <Matrix
-          tasks={[]}
-          loading={false}
-          onAddTask={onAddTask}
-          onUpdateTask={jest.fn()}
-          onDeleteTask={jest.fn()}
-        />
-      </LanguageProvider>
-    );
-    fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
-      target: { value: 'draft' },
-    });
-    fireEvent.click(screen.getByText(/Otwórz asystenta AI/i));
-    fireEvent.click(await screen.findByText('Import OCR tasks'));
-
-    await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(2));
-    expect(learnFromAcceptedOCRTasks).toHaveBeenCalledTimes(1);
-  });
-
-  it('sends OCR feedback only for tasks that were actually persisted', async () => {
+  it('continues a scanned import when one task cannot be saved', async () => {
     const onAddTask = jest
       .fn()
       .mockResolvedValueOnce(undefined)
@@ -1017,13 +849,10 @@ describe('Matrix', () => {
     fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
       target: { value: 'draft' },
     });
-    fireEvent.click(screen.getByText(/Otwórz asystenta AI/i));
-    fireEvent.click(await screen.findByText('Import OCR tasks'));
+    fireEvent.click(screen.getByText(/Otwórz pomoc w porządkowaniu/i));
+    fireEvent.click(await screen.findByText('Import scanned tasks'));
 
     await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(2));
-    expect(learnFromAcceptedOCRTasks).toHaveBeenCalledWith([
-      { text: 'Escalate outage', quadrant: 0 },
-    ]);
   });
 
   it('ignores empty AI suggestions', async () => {
@@ -1106,7 +935,7 @@ describe('Matrix', () => {
     fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
       target: { value: 'critical task' },
     });
-    fireEvent.click(screen.getByText(/Otwórz asystenta AI/i));
+    fireEvent.click(screen.getByText(/Otwórz pomoc w porządkowaniu/i));
 
     await screen.findByTestId('assistant-target');
   });
@@ -1127,7 +956,7 @@ describe('Matrix', () => {
     fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
       target: { value: 'critical task' },
     });
-    fireEvent.click(screen.getByText(/Otwórz asystenta AI/i));
+    fireEvent.click(screen.getByText(/Otwórz pomoc w porządkowaniu/i));
 
     await screen.findByTestId('assistant-target');
 

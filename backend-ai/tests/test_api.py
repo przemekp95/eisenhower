@@ -9,6 +9,7 @@ import pytest
 
 from app.config import Settings
 from app.audit import AuditAction, AuditOutcome
+from app.auth import AuthPrincipal
 from app.generation.models import InformationDelta, KnowledgeAnswerClaim, statement_checksum
 from app.local_model import LocalMiniLMClassifier, LocalPrediction, ModelNotReadyError, SimilarExample
 from app.jobs import SqliteJobQueue
@@ -1262,13 +1263,63 @@ def test_root_and_capabilities(real_model_bundle):
   assert root.status_code == 200
   assert readiness.status_code == 200
   assert capabilities.status_code == 200
+  assert set(capabilities.json()) == {
+    "classification",
+    "reasoned_local_analysis",
+    "knowledge_retrieval",
+    "retrieval_augmented_generation",
+    "local_similar_examples",
+    "ocr",
+    "batch_analysis",
+  }
   assert capabilities.json()["classification"] is True
-  assert capabilities.json()["providers"]["local_model"] is True
-  assert capabilities.json()["providers"]["ocr"] is True
-  assert capabilities.json()["provider_controls"]["local_model"]["enabled"] is True
   assert capabilities.json()["retrieval_augmented_generation"] is False
   assert capabilities.json()["local_similar_examples"] is True
-  assert capabilities.json()["legacy"]["langchain_analysis"] is False
+
+  operator_capabilities = client.get("/operator/capabilities")
+  assert operator_capabilities.status_code == 200
+  assert operator_capabilities.json()["providers"]["local_model"] is True
+  assert operator_capabilities.json()["providers"]["ocr"] is True
+  assert operator_capabilities.json()["provider_controls"]["local_model"]["enabled"] is True
+  assert operator_capabilities.json()["legacy"]["langchain_analysis"] is False
+  assert "device" in operator_capabilities.json()
+  business_user_operator_view = client.get(
+    "/operator/capabilities",
+    headers={"Authorization": "Bearer test-api-token"},
+  )
+  assert business_user_operator_view.status_code == 403
+
+
+def test_business_admin_cannot_access_operator_capabilities_or_controls(tmp_path: Path):
+  class BusinessAdminVerifier:
+    def verify(self, _token: str) -> AuthPrincipal:
+      return AuthPrincipal(
+        tenant_id="local",
+        user_id="business-admin",
+        roles=["admin"],
+        scopes=["ai:analyze"],
+      )
+
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  client = TestClient(
+    create_app(
+      settings=settings,
+      store=store,
+      ai_service=service,
+      token_verifier=BusinessAdminVerifier(),
+    ),
+    headers={"Authorization": "Bearer business-admin-token"},
+  )
+
+  assert client.get("/capabilities").status_code == 200
+  assert client.get("/operator/capabilities").status_code == 403
+  assert client.get("/training-stats").status_code == 403
+  assert client.put("/providers/local_model", json={"enabled": False}).status_code == 403
 
 
 def test_capabilities_report_ocr_unavailable_without_host_tesseract(real_model_bundle):
@@ -1277,10 +1328,8 @@ def test_capabilities_report_ocr_unavailable_without_host_tesseract(real_model_b
   capabilities = client.get("/capabilities")
 
   assert capabilities.status_code == 200
-  assert capabilities.json()["providers"]["local_model"] is True
-  assert capabilities.json()["providers"]["ocr"] is False
-  assert capabilities.json()["provider_controls"]["tesseract"]["available"] is False
-  assert capabilities.json()["provider_controls"]["tesseract"]["active"] is False
+  assert capabilities.json()["classification"] is True
+  assert capabilities.json()["ocr"] is False
 
 
 def test_cors_allows_local_frontend_origins(real_model_bundle):
@@ -1507,11 +1556,13 @@ def test_capabilities_stay_available_when_startup_raises_generic_error(tmp_path:
   client = build_client(tmp_path, local_model=FakeLocalModel(startup_error=RuntimeError("corrupt artifacts")))
 
   capabilities = client.get("/capabilities")
+  operator_capabilities = client.get("/operator/capabilities")
   stats = client.get("/training-stats")
 
   assert capabilities.status_code == 200
-  assert capabilities.json()["providers"]["local_model"] is False
-  assert capabilities.json()["provider_controls"]["local_model"]["available"] is False
+  assert capabilities.json()["classification"] is False
+  assert operator_capabilities.json()["providers"]["local_model"] is False
+  assert operator_capabilities.json()["provider_controls"]["local_model"]["available"] is False
   assert stats.status_code == 200
   assert stats.json()["model_ready"] is False
   assert stats.json()["model_error"] == "corrupt artifacts"

@@ -1,18 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { OCRResult, extractTasksFromImage } from '../../services/api';
 import { useLanguage } from '../../i18n/LanguageContext';
 
 export interface OCRImportSummary {
   imported: number;
   failed: number;
-  learned: boolean;
-  feedbackError?: string;
 }
 
 interface Props {
   onTasksExtracted: (
-    result: OCRResult,
-    learnFromAccepted: boolean
+    result: OCRResult
   ) => Promise<OCRImportSummary | number | void> | OCRImportSummary | number | void;
 }
 
@@ -25,9 +22,7 @@ export default function ImageUpload({ onTasksExtracted }: Props) {
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [learnFromAccepted, setLearnFromAccepted] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const requestRef = useRef<AbortController | null>(null);
   const { language, t } = useLanguage();
 
   const copy =
@@ -36,59 +31,38 @@ export default function ImageUpload({ onTasksExtracted }: Props) {
           review: 'Sprawdź zadania przed importem',
           include: 'Uwzględnij zadanie',
           quadrant: 'Kwadrant dla',
-          learn: 'Pomóż ulepszać podpowiedzi na podstawie zaakceptowanych zadań',
           import: 'Importuj wybrane',
           importing: 'Importowanie…',
           none: 'Wybierz co najmniej jedno niepuste zadanie.',
-          summary: (imported: number, failed: number, learned: boolean) =>
-            `Dodano: ${imported}. Nie dodano: ${failed}. Ulepszanie podpowiedzi: ${learned ? 'tak' : 'nie'}.`,
+          summary: (imported: number, failed: number) =>
+            `Dodano: ${imported}. Nie dodano: ${failed}.`,
         }
       : {
           review: 'Review tasks before import',
           include: 'Include task',
           quadrant: 'Quadrant for',
-          learn: 'Help improve suggestions using the accepted tasks',
           import: 'Import selected',
           importing: 'Importing…',
           none: 'Select at least one non-empty task.',
-          summary: (imported: number, failed: number, learned: boolean) =>
-            `Added: ${imported}. Not added: ${failed}. Improve suggestions: ${learned ? 'yes' : 'no'}.`,
+          summary: (imported: number, failed: number) =>
+            `Added: ${imported}. Not added: ${failed}.`,
         };
-
-  useEffect(
-    () => () => {
-      const request = requestRef.current;
-      requestRef.current = null;
-      request?.abort();
-    },
-    []
-  );
 
   const handleSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    requestRef.current?.abort();
-    const controller = new AbortController();
-    requestRef.current = controller;
     setLoading(true);
     setError(null);
     setStatus(null);
-    setResult(null);
-    setReviewTasks([]);
     try {
-      const payload = await extractTasksFromImage(file, { signal: controller.signal });
+      const payload = await extractTasksFromImage(file);
       setResult(payload);
       setReviewTasks(payload.classified_tasks.map((task) => ({ ...task, selected: true })));
-      setLearnFromAccepted(false);
-    } catch (issue) {
-      const code = issue && typeof issue === 'object' && 'code' in issue ? issue.code : undefined;
-      if (code !== 'request_cancelled') setError(t('ai.ocr.failed'));
+    } catch {
+      setError(t('ai.ocr.failed'));
     } finally {
-      if (requestRef.current === controller) {
-        requestRef.current = null;
-        setLoading(false);
-      }
+      setLoading(false);
       event.target.value = '';
     }
   };
@@ -118,13 +92,12 @@ export default function ImageUpload({ onTasksExtracted }: Props) {
           quadrant: Number(task.quadrant),
         })),
       };
-      const response = await onTasksExtracted(reviewedResult, learnFromAccepted);
+      const response = await onTasksExtracted(reviewedResult);
       const summary: OCRImportSummary =
         typeof response === 'number'
-          ? { imported: response, failed: selected.length - response, learned: false }
-          : (response ?? { imported: 0, failed: selected.length, learned: false });
-      setStatus(copy.summary(summary.imported, summary.failed, summary.learned));
-      if (summary.feedbackError) setError(t('ai.ocr.failed'));
+          ? { imported: response, failed: selected.length - response }
+          : (response ?? { imported: 0, failed: selected.length });
+      setStatus(copy.summary(summary.imported, summary.failed));
     } catch {
       setError(t('ai.ocr.failed'));
     } finally {
@@ -195,14 +168,6 @@ export default function ImageUpload({ onTasksExtracted }: Props) {
               </select>
             </div>
           ))}
-          <label className="flex items-start gap-2 text-sm text-white/80">
-            <input
-              type="checkbox"
-              checked={learnFromAccepted}
-              onChange={(event) => setLearnFromAccepted(event.target.checked)}
-            />
-            <span>{copy.learn}</span>
-          </label>
           <button
             type="button"
             onClick={() => void handleImport(result)}

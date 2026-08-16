@@ -59,6 +59,8 @@ const syncStateSchema = new Schema({
     type: new Schema({
       channelId: { type: String, required: true },
       resourceId: { type: String, required: true },
+      verificationHash: { type: String, required: true },
+      lastMessageNumber: { type: Number },
       expiresAt: { type: Date, required: true },
     }, { _id: false }),
   },
@@ -77,6 +79,7 @@ const outboxSchema = new Schema({
   attempts: { type: Number, required: true, default: 0 },
   availableAt: { type: Date, required: true, default: Date.now },
   leaseUntil: { type: Date },
+  leaseId: { type: String },
   lastError: { type: String },
 }, { timestamps: true });
 outboxSchema.index({ status: 1, availableAt: 1, leaseUntil: 1 });

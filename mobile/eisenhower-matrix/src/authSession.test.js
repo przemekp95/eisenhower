@@ -1,26 +1,11 @@
-import {
-  clearAdminToken,
-  clearApiToken,
-  getAdminToken,
-  getApiToken,
-  setAdminToken,
-  setApiToken,
-  setCredentials,
-  subscribeToApiToken,
-} from './authSession';
+import { clearApiToken, getApiToken, setApiToken, subscribeToApiToken } from './authSession';
 
 describe('in-memory credentials', () => {
   afterEach(() => clearApiToken());
 
-  it('keeps credentials separate without persisting them', () => {
-    setCredentials(' user-token ', ' admin-token ');
-
+  it('keeps the runtime access credential in memory without persisting it', () => {
+    setApiToken(' user-token ');
     expect(getApiToken()).toBe('user-token');
-    expect(getAdminToken()).toBe('admin-token');
-
-    clearAdminToken();
-    expect(getApiToken()).toBe('user-token');
-    expect(getAdminToken()).toBeNull();
   });
 
   it('normalizes empty values and notifies only active subscribers', () => {
@@ -28,25 +13,21 @@ describe('in-memory credentials', () => {
     const unsubscribe = subscribeToApiToken(listener);
 
     setApiToken(null);
-    setAdminToken(undefined);
     unsubscribe();
     clearApiToken();
 
     expect(getApiToken()).toBeNull();
-    expect(getAdminToken()).toBeNull();
-    expect(listener).toHaveBeenCalledTimes(2);
+    expect(listener).toHaveBeenCalledTimes(1);
   });
 
-  it('notifies subscribers when both credentials are cleared together or admin is cleared', () => {
+  it('notifies subscribers when the access credential is cleared', () => {
     const listener = jest.fn();
     const unsubscribe = subscribeToApiToken(listener);
 
-    setCredentials(null, undefined);
-    clearAdminToken();
+    clearApiToken();
 
     expect(getApiToken()).toBeNull();
-    expect(getAdminToken()).toBeNull();
-    expect(listener).toHaveBeenCalledTimes(2);
+    expect(listener).toHaveBeenCalledTimes(1);
     unsubscribe();
   });
 });

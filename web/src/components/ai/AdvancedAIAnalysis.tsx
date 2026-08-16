@@ -112,7 +112,7 @@ export default function AdvancedAIAnalysis({
             {t('ai.analysis.suggestedQuadrant').replace(
               '{quadrant}',
               resolveQuadrantLabel(resolveSuggestedQuadrant(analysis), quadrantLabels, (quadrant) =>
-                t('ai.manage.quadrantUnknown').replace('{quadrant}', String(quadrant))
+                t('ai.quadrantUnknown').replace('{quadrant}', String(quadrant))
               )
             )}
           </p>

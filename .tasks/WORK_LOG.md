@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-16 — TASK-056: Made Calendar, task assistance and automation one business-only product flow, removed technical administration/training credentials, hardened transactional Calendar/n8n recovery, and passed full local verification plus real n8n 2.4.6 and multi-viewport Playwright rehearsals without deployment or production changes.
+
 2026-08-16 — TASK-055: Kept task CRUD and web/mobile recovery usable without GPU inference through bounded cancellable AI calls, fail-closed capability UX and an exact-SHA access-core profile; full repository verification, three-viewport E2E, isolated no-upstream boundary runtime and Compose rendering passed, with no change to the running stack and no deployment.
 
 2026-08-16 — TASK-054: Integrated a task-centered AI assistant for drafts and owned tasks with editable grounded questions, citations, honest no-answer states and explicit description/quadrant confirmation; separated administration, fixed mobile sheet scrolling, and passed 196 unit tests at 100% coverage, 2 integration tests, build plus desktop/390/320 Playwright/Axe checks without deployment or human-acceptance claims.

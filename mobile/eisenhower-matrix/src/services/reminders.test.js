@@ -74,6 +74,13 @@ describe('private local reminders', () => {
     });
     expect(result).toMatchObject({ id: 'task-1', reminderStatus: 'permission_denied' });
     expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+
+    Notifications.getPermissionsAsync.mockResolvedValue({ status: 'granted' });
+    await expect(resyncTaskReminders([futureTask], {
+      now: new Date('2026-08-12T10:00:00.000Z'),
+    })).resolves.toEqual([
+      expect.objectContaining({ notificationId: 'native-1', reminderStatus: 'scheduled' }),
+    ]);
   });
 
   it('cancels reminders when a schedule is absent or the task is no longer active', async () => {

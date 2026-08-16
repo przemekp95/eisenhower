@@ -43,11 +43,13 @@ describe('Google Calendar provider boundary', () => {
 
   it('resolves an outbox event through its own OAuth grant and returns no tokens', async () => {
     const connection = await connect();
+    const status = await request(app).get('/calendar/status').set('Authorization', 'Bearer test-api-token');
     await CalendarOutboxModel.create({ eventId: 'out-1', tenantId: 'local', ownerId: 'local-user', aggregateId: 'task-1', aggregateRevision: 1, type: 'event_create', payload: { title: 'Task' }, status: 'pending' });
     const response = await post('/internal/calendar/provider/outbound', { eventId: 'out-1' });
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ providerEventId: expect.any(String), providerEtag: 'etag-created', connectionId: connection!.id });
     expect(JSON.stringify(response.body)).not.toContain('secret');
+    expect(status.body).toMatchObject({ status: 'connected', canConnect: true });
   });
 
   it('uses only the persisted checkpoint and rejects revoked or malformed requests', async () => {
@@ -105,7 +107,10 @@ describe('Google Calendar provider boundary', () => {
     const allowed = await post('/internal/calendar/provider/watch', { connectionId: connection!.id, address: 'https://hooks.example.com/google-calendar' });
     const denied = await post('/internal/calendar/provider/watch', { connectionId: connection!.id, address: 'https://evil.example/hook' });
     expect(allowed.status).toBe(200);
-    expect(allowed.body).toEqual({ channelId: expect.any(String), resourceId: 'resource-1', expiresAt: expect.any(String) });
+    expect(allowed.body).toEqual({
+      channelId: expect.any(String), resourceId: 'resource-1', expiresAt: expect.any(String),
+      verificationHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
     expect(JSON.stringify(allowed.body)).not.toContain('token');
     expect(denied.status).toBe(400);
   });
@@ -277,11 +282,63 @@ describe('Google Calendar provider boundary', () => {
 
   it('supports initial full-resync and page-token checkpoints without importing baseline events', async () => {
     const connection = await connect();
-    calendar.listChanges = async (input) => ({ events: [{ id: 'historical' }], ...(input.pageToken ? { nextSyncToken: 'done' } : { nextPageToken: 'page-2' }) });
+    const checkpoints: Array<Record<string, unknown>> = [];
+    calendar.listChanges = async (input) => {
+      checkpoints.push(input);
+      return { events: [{ id: 'historical' }], ...(input.pageToken ? { nextSyncToken: 'done' } : { nextPageToken: 'page-2' }) };
+    };
     expect((await post('/internal/calendar/provider/changes', { connectionId: connection!.id, checkpoint: 'full-resync' })).body)
-      .toEqual({ events: [], nextPageToken: 'page-2' });
-    await CalendarSyncStateModel.create({ tenantId: 'local', ownerId: 'local-user', connectionId: connection!.id, pageToken: 'page-2', fullResyncRequired: false });
-    expect((await post('/internal/calendar/provider/changes', { connectionId: connection!.id, checkpoint: 'page-2' })).body)
-      .toEqual({ events: [{ id: 'historical' }], nextSyncToken: 'done' });
+      .toEqual({ events: [], nextSyncToken: 'done' });
+    expect(checkpoints).toHaveLength(2);
+    expect(checkpoints[1]).toMatchObject({ pageToken: 'page-2' });
+  });
+
+  it('drains incremental pages in one bounded request and fails closed on a runaway cursor', async () => {
+    const connection = await connect();
+    await CalendarSyncStateModel.create({
+      tenantId: 'local', ownerId: 'local-user', connectionId: connection!.id,
+      syncToken: 'sync-current', fullResyncRequired: false,
+    });
+    calendar.listChanges = async (input) => input.pageToken
+      ? { events: [{ id: 'second' }], nextSyncToken: 'sync-final' }
+      : { events: [{ id: 'first' }], nextPageToken: 'page-2' };
+
+    const drained = await post('/internal/calendar/provider/changes', {
+      connectionId: connection!.id, checkpoint: 'sync-current',
+    });
+    expect(drained).toMatchObject({
+      status: 200,
+      body: { events: [{ id: 'first' }, { id: 'second' }], nextSyncToken: 'sync-final' },
+    });
+
+    let page = 0;
+    calendar.listChanges = async () => ({ events: [], nextPageToken: `page-${++page}` });
+    const runaway = await post('/internal/calendar/provider/changes', {
+      connectionId: connection!.id, checkpoint: 'sync-current',
+    });
+    expect(runaway).toMatchObject({
+      status: 500, body: { error: 'google_calendar_changes_page_limit_exceeded' },
+    });
+  });
+
+  it('returns a controlled provider reset and rejects a page without a checkpoint', async () => {
+    const connection = await connect();
+    await CalendarSyncStateModel.create({
+      tenantId: 'local', ownerId: 'local-user', connectionId: connection!.id,
+      syncToken: 'sync-current', fullResyncRequired: false,
+    });
+    calendar.listChanges = async () => ({ events: [], resetRequired: true });
+    const reset = await post('/internal/calendar/provider/changes', {
+      connectionId: connection!.id, checkpoint: 'sync-current',
+    });
+    calendar.listChanges = async () => ({ events: [] });
+    const incomplete = await post('/internal/calendar/provider/changes', {
+      connectionId: connection!.id, checkpoint: 'sync-current',
+    });
+
+    expect(reset).toMatchObject({ status: 200, body: { events: [], resetRequired: true } });
+    expect(incomplete).toMatchObject({
+      status: 500, body: { error: 'google_calendar_changes_checkpoint_missing' },
+    });
   });
 });
