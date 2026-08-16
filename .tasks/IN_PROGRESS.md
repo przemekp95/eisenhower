@@ -1,5 +1,23 @@
 # In Progress
 
+## TASK-060: Consolidate and qualify outstanding dependency updates
+**Priority:** P1 | **Tags:** dependencies, security, maintenance, ci
+
+Replace the stale and overlapping Dependabot branches with one compatible, reproducible dependency set. Preserve the existing FastAPI, Express, React, mobile, Android and release-security boundaries, and promote only an exact green result through `dev` to `master` without deployment or image publication.
+
+### Plan
+
+- Capture the concrete failures from every red Dependabot PR and classify older local or remote branches as included, incompatible or already superseded.
+- Consolidate compatible Python, Node, web, mobile and GitHub Actions updates while retaining explicit version constraints where upstream major releases are not yet compatible.
+- Run focused resolver, audit, unit, integration, build, Android and full repository verification without weakening security or functional assertions.
+- Promote the exact green SHA through reviewed `dev` and `master` PRs, close superseded Dependabot PRs with evidence, then verify synchronized branches and an empty alert dashboard.
+
+### Progress
+
+The consolidated graph now replaces the stale Dependabot branches: Node CI and the digest-pinned web build use Node 24, Cucumber 13 is qualified, unused direct Babel presets were removed, React and React Test Renderer are aligned, and compatible Python, npm and GitHub Actions updates are applied. Full `make verify`, native Android `assembleRelease`, APK integrity checks, both web Docker targets and an all-severity Trivy scan are green. NumPy remains capped below 2.5 only on the supported Python 3.11 release runtime; moving that boundary requires a separate image and physical-runtime requalification rather than a resolver bypass. Promotion and Dependabot branch closeout remain.
+
+---
+
 ## TASK-047: Deploy the portable local AMD platform with Calendar and Remote MCP
 **Priority:** P0 | **Tags:** calendar, mcp, oauth, n8n, amd, rocm, deployment
 
