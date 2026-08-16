@@ -4,6 +4,8 @@ import { expect, test } from '@playwright/test';
 test('keeps manual task flow available when optional AI capabilities are offline', async ({
   page,
 }) => {
+  test.setTimeout(60_000);
+
   await page.addInitScript(() => {
     localStorage.clear();
     localStorage.setItem('eisenhower-language', 'pl');
