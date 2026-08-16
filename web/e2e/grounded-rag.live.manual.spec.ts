@@ -4,11 +4,10 @@ import path from 'node:path';
 
 const aiApiUrl = process.env.LIVE_AI_API_URL;
 const accessToken = process.env.LIVE_ACCESS_TOKEN;
-const adminToken = process.env.LIVE_ADMIN_TOKEN;
 const query = process.env.LIVE_RAG_QUERY;
 const evidenceDir = process.env.LIVE_EVIDENCE_DIR;
 
-if (!aiApiUrl || !accessToken || !adminToken || !query || !evidenceDir) {
+if (!aiApiUrl || !accessToken || !query || !evidenceDir) {
   throw new Error('The live RAG runtime environment is incomplete');
 }
 
@@ -20,27 +19,25 @@ test('real browser reaches governed RAG and renders cited explicit mode', async 
     localStorage.setItem('eisenhower-language', 'en');
   });
   await page.goto('/');
-  await page.getByLabel('Token dostępu').fill(accessToken);
-  await page.getByLabel('Token administratora AI').fill(adminToken);
-  await page.getByRole('button', { name: 'Odblokuj' }).click();
+  await page.getByLabel('Access code').fill(accessToken);
+  await page.getByRole('button', { name: 'Enter the system' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Eisenhower Matrix' })).toBeVisible();
 
   await page.getByPlaceholder('Task title').fill(query);
-  await page.getByRole('button', { name: 'Open AI tools' }).click();
-  await page.getByRole('tab', { name: 'Grounded RAG' }).click();
+  await page.getByRole('button', { name: 'Open AI assistant' }).click();
 
   const responsePromise = page.waitForResponse(
     (response) =>
-      response.url() === `${aiApiUrl}/v2/ai/analyze` && response.request().method() === 'POST'
+      response.url() === `${aiApiUrl}/v2/knowledge/answer` && response.request().method() === 'POST'
   );
-  await page.getByRole('button', { name: 'Run grounded analysis' }).click();
+  await page.getByRole('button', { name: 'Check sources' }).click();
   const response = await responsePromise;
   const requestBody = response.request().postDataJSON();
   const responseBody = await response.json();
 
   expect(response.status()).toBe(200);
-  expect(requestBody).toEqual({ task: query });
-  expect(responseBody.mode).toBe('rag');
+  expect(requestBody).toEqual({ query, language: 'en', project_id: null, limit: 5 });
+  expect(responseBody.status).toBe('answered');
   expect(responseBody.retrieval.hit_count).toBeGreaterThan(0);
   expect(responseBody.retrieval.embedding_version).toBe('minilm-v1');
   expect(responseBody.citations.length).toBeGreaterThan(0);
@@ -53,12 +50,8 @@ test('real browser reaches governed RAG and renders cited explicit mode', async 
   ).toBe(true);
 
   const result = page.getByTestId('grounded-result');
-  await expect(result.getByText('RAG', { exact: true })).toBeVisible();
-  await expect(result.getByText(/retrieved chunks/)).toBeVisible();
+  await expect(result.getByText('Answer with sources', { exact: true })).toBeVisible();
   await expect(result.getByText(responseBody.citations[0].title, { exact: true })).toBeVisible();
-  await expect(
-    result.getByText(responseBody.citations[0].source_uri, { exact: true })
-  ).toBeVisible();
 
   const dialog = page.getByRole('dialog');
   const box = await dialog.boundingBox();

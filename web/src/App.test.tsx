@@ -83,20 +83,9 @@ jest.mock('./components/Matrix', () => ({
 }));
 jest.mock('./components/matrixLazyComponents', () => ({
   __esModule: true,
-  AIToolsComponent: ({
-    initialTab,
-    onClose,
-    onAnalysisComplete,
-  }: {
-    initialTab?: string;
-    onClose: () => void;
-    onAnalysisComplete: () => void;
-  }) => (
+  AIAdministrationComponent: ({ onClose }: { onClose: () => void }) => (
     <div>
-      <p>{initialTab === 'manage' ? 'Administration panel' : 'AI tools'}</p>
-      <button type="button" onClick={onAnalysisComplete}>
-        complete-admin-analysis
-      </button>
+      <p>Administration panel</p>
       <button type="button" onClick={onClose}>
         close-admin
       </button>
@@ -280,7 +269,6 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Administracja' }));
     expect(screen.getByText('Administration panel')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('complete-admin-analysis'));
     fireEvent.click(screen.getByText('close-admin'));
     expect(screen.queryByText('Administration panel')).not.toBeInTheDocument();
   });

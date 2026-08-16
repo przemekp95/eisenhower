@@ -1,119 +1,42 @@
-import { FormEvent, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import AdvancedAIAnalysis from './ai/AdvancedAIAnalysis';
 import GroundedAIAnalysis from './ai/GroundedAIAnalysis';
+import TaskPrioritySuggestion from './ai/TaskPrioritySuggestion';
 import BatchAnalysis from './ai/BatchAnalysis';
-import AIManagement from './ai/AIManagement';
 import ImageUpload from './ai/ImageUpload';
 import type { OCRImportSummary } from './ai/ImageUpload';
-import { BatchAnalysisResult, LangChainAnalysis, OCRResult } from '../services/api';
+import { BatchAnalysisResult, OCRResult } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
-import {
-  clearAdminToken,
-  getAdminRejection,
-  getAdminToken,
-  setAdminToken,
-  subscribeToApiToken,
-} from '../authSession';
 
 interface Props {
   taskTitle: string;
+  taskDescription?: string;
+  currentUrgent?: boolean;
+  currentImportant?: boolean;
   initialTab?: Tab;
   onClose: () => void;
-  onAnalysisComplete: (analysis: LangChainAnalysis) => void;
-  onAnalysisTaskAdd?: (analysis: LangChainAnalysis) => Promise<void> | void;
+  onApplyDescription?: (description: string) => Promise<void> | void;
+  onApplyQuadrant?: (patch: { urgent: boolean; important: boolean }) => Promise<void> | void;
   onOCRTasksExtracted?: (
     result: OCRResult,
     learnFromAccepted: boolean
   ) => Promise<OCRImportSummary | number | void> | OCRImportSummary | number | void;
 }
 
-type Tab = 'analysis' | 'grounded' | 'ocr' | 'batch' | 'manage';
+type Tab = 'assistant' | 'ocr' | 'batch';
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-function AdminAccessPanel({ children }: { children: React.ReactNode }) {
-  const { language } = useLanguage();
-  const adminToken = useSyncExternalStore(subscribeToApiToken, getAdminToken, getAdminToken);
-  const [credential, setCredential] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-  const pl = language === 'pl';
-  const rejected = getAdminRejection() === 'rejected';
-
-  useEffect(() => {
-    if (!adminToken) inputRef.current?.focus();
-  }, [adminToken]);
-
-  if (!adminToken) {
-    const submit = (event: FormEvent) => {
-      event.preventDefault();
-      setAdminToken(credential);
-      setCredential('');
-    };
-    return (
-      <form onSubmit={submit} className="space-y-3 rounded-2xl border border-white/10 p-4">
-        <h3 className="font-semibold">{pl ? 'Dostęp administracyjny' : 'Administrator access'}</h3>
-        <p className="text-sm leading-6 text-white/65">
-          {pl
-            ? 'Wpisz osobny kod administratora otrzymany od właściciela systemu. Ten kod służy wyłącznie do zarządzania i nie otwiera zadań użytkownika.'
-            : 'Enter the separate administrator code provided by the system owner. It is used only for management and does not open user tasks.'}
-        </p>
-        {rejected ? (
-          <p
-            role="alert"
-            className="rounded-xl border border-red-300/30 bg-red-950/40 p-3 text-sm text-red-100"
-          >
-            {pl
-              ? 'Kod administratora jest nieprawidłowy lub wygasł. Sprawdź go albo skontaktuj się z właścicielem systemu.'
-              : 'The administrator code is incorrect or has expired. Check it or contact the system owner.'}
-          </p>
-        ) : null}
-        <label htmlFor="ai-admin-token" className="block text-sm">
-          {pl ? 'Kod administratora' : 'Administrator code'}
-        </label>
-        <input
-          ref={inputRef}
-          id="ai-admin-token"
-          type="password"
-          autoComplete="off"
-          value={credential}
-          onChange={(event) => setCredential(event.target.value)}
-          className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3"
-        />
-        <button
-          type="submit"
-          disabled={!credential.trim()}
-          className="rounded-full bg-cyan-300 px-4 py-2 font-semibold text-slate-950 disabled:opacity-40"
-        >
-          {pl ? 'Otwórz administrację' : 'Open administration'}
-        </button>
-      </form>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={clearAdminToken}
-          className="rounded-full border border-white/15 px-4 py-2 text-sm"
-        >
-          {pl ? 'Zmień kod administratora' : 'Change administrator code'}
-        </button>
-      </div>
-      {children}
-    </div>
-  );
-}
-
 export default function AITools({
   taskTitle,
-  initialTab = 'analysis',
+  taskDescription = '',
+  currentUrgent = false,
+  currentImportant = false,
+  initialTab = 'assistant',
   onClose,
-  onAnalysisComplete,
-  onAnalysisTaskAdd,
+  onApplyDescription,
+  onApplyQuadrant,
   onOCRTasksExtracted,
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
@@ -166,9 +89,7 @@ export default function AITools({
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    if (initialTab !== 'manage' || getAdminToken()) {
-      closeButtonRef.current!.focus();
-    }
+    closeButtonRef.current!.focus();
 
     return () => {
       document.body.style.overflow = previousBodyOverflow;
@@ -188,11 +109,9 @@ export default function AITools({
     );
 
   const tabs: Array<{ id: Tab; label: string }> = [
-    { id: 'analysis', label: t('ai.tabs.analysis') },
-    { id: 'grounded', label: t('ai.tabs.grounded') },
+    { id: 'assistant', label: t('ai.tabs.assistant') },
     { id: 'ocr', label: t('ai.tabs.ocr') },
     { id: 'batch', label: t('ai.tabs.batch') },
-    { id: 'manage', label: t('ai.tabs.manage') },
   ];
 
   const formatOcrImportedSummary = (count: number) => {
@@ -237,14 +156,14 @@ export default function AITools({
         }
       }}
     >
-      <div className="flex min-h-full items-start justify-center">
+      <div className="flex min-h-full justify-end">
         <div
           ref={dialogRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby="ai-tools-title"
           aria-describedby="ai-tools-description"
-          className="flex w-full max-w-4xl max-h-[calc(100vh-1rem)] flex-col overflow-y-auto overscroll-contain rounded-[2rem] border border-white/10 bg-slate-900/95 text-white shadow-2xl sm:max-h-[calc(100vh-2rem)]"
+          className="flex h-[calc(100vh-1rem)] max-h-[calc(100vh-1rem)] w-full max-w-2xl flex-col overflow-y-auto overscroll-contain rounded-[2rem] border border-white/10 bg-slate-900/95 text-white shadow-2xl sm:h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-2rem)]"
           onMouseDown={(event) => event.stopPropagation()}
           style={{ scrollbarGutter: 'stable' }}
         >
@@ -303,18 +222,33 @@ export default function AITools({
             </div>
           </div>
           <div className="px-4 pb-4 pt-4 sm:px-6 sm:pb-6 sm:pt-5">
-            {activeTab === 'analysis' ? (
-              <div role="tabpanel" id="ai-panel-analysis" aria-labelledby="ai-tab-analysis">
-                <AdvancedAIAnalysis
+            {activeTab === 'assistant' ? (
+              <div
+                role="tabpanel"
+                id="ai-panel-assistant"
+                aria-labelledby="ai-tab-assistant"
+                className="space-y-5"
+              >
+                <section className="rounded-3xl border border-cyan-200/15 bg-cyan-300/5 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100/70">
+                    {t('ai.task.context')}
+                  </p>
+                  <h3 className="mt-2 text-lg font-semibold">{taskTitle}</h3>
+                  {taskDescription ? (
+                    <p className="mt-1 text-sm leading-6 text-white/65">{taskDescription}</p>
+                  ) : null}
+                </section>
+                <TaskPrioritySuggestion
                   taskTitle={taskTitle}
-                  onAnalysisComplete={onAnalysisComplete}
-                  onAddToMatrix={onAnalysisTaskAdd}
+                  currentUrgent={currentUrgent}
+                  currentImportant={currentImportant}
+                  onApply={onApplyQuadrant ?? (() => undefined)}
                 />
-              </div>
-            ) : null}
-            {activeTab === 'grounded' ? (
-              <div role="tabpanel" id="ai-panel-grounded" aria-labelledby="ai-tab-grounded">
-                <GroundedAIAnalysis taskTitle={taskTitle} />
+                <GroundedAIAnalysis
+                  taskTitle={taskTitle}
+                  taskDescription={taskDescription}
+                  onApplyDescription={onApplyDescription}
+                />
               </div>
             ) : null}
             {activeTab === 'ocr' ? (
@@ -325,13 +259,6 @@ export default function AITools({
             {activeTab === 'batch' ? (
               <div role="tabpanel" id="ai-panel-batch" aria-labelledby="ai-tab-batch">
                 <BatchAnalysis onBatchComplete={handleBatch} />
-              </div>
-            ) : null}
-            {activeTab === 'manage' ? (
-              <div role="tabpanel" id="ai-panel-manage" aria-labelledby="ai-tab-manage">
-                <AdminAccessPanel>
-                  <AIManagement onModelUpdated={() => setLastSummary(t('ai.summary.updated'))} />
-                </AdminAccessPanel>
               </div>
             ) : null}
             {lastSummary ? (

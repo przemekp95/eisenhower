@@ -2,7 +2,7 @@ import { FormEvent, Suspense, useEffect, useRef, useState, useSyncExternalStore 
 import LanguageSwitcher from './components/LanguageSwitcher';
 import Matrix from './components/Matrix';
 import CalendarSyncPanel from './components/CalendarSyncPanel';
-import { AIToolsComponent } from './components/matrixLazyComponents';
+import { AIAdministrationComponent } from './components/matrixLazyComponents';
 import {
   clearTokens,
   getAccessRejection,
@@ -396,12 +396,7 @@ function AppContent() {
 
       {showAdministration ? (
         <Suspense fallback={<div role="status">{t('ai.loading')}</div>}>
-          <AIToolsComponent
-            taskTitle=""
-            initialTab="manage"
-            onClose={() => setShowAdministration(false)}
-            onAnalysisComplete={() => undefined}
-          />
+          <AIAdministrationComponent onClose={() => setShowAdministration(false)} />
         </Suspense>
       ) : null}
     </main>

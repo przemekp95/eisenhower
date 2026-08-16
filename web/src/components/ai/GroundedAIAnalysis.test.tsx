@@ -7,10 +7,13 @@ jest.mock('../../services/api');
 
 const mockedApi = jest.mocked(api);
 
-function renderAnalysis(taskTitle = 'prepare incident review') {
+function renderAnalysis(
+  taskTitle = 'prepare incident review',
+  overrides: Partial<React.ComponentProps<typeof GroundedAIAnalysis>> = {}
+) {
   return render(
     <LanguageProvider>
-      <GroundedAIAnalysis taskTitle={taskTitle} />
+      <GroundedAIAnalysis taskTitle={taskTitle} {...overrides} />
     </LanguageProvider>
   );
 }
@@ -62,6 +65,77 @@ describe('GroundedAIAnalysis', () => {
     expect(screen.queryByText(/eisenhower:\/\/repository/)).not.toBeInTheDocument();
     expect(document.querySelector('script')).toBeNull();
     expect(document.querySelector('img[src="x"]')).toBeNull();
+  });
+
+  it('uses an editable question instead of silently treating the task title as the query', async () => {
+    mockedApi.answerKnowledge.mockResolvedValueOnce(groundedResult());
+    renderAnalysis();
+
+    const question = screen.getByRole('textbox', { name: 'Question for the assistant' });
+    expect(question).toHaveValue('prepare incident review');
+    fireEvent.change(question, { target: { value: 'Which approved procedure applies?' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Check sources' }));
+
+    await waitFor(() =>
+      expect(mockedApi.answerKnowledge).toHaveBeenCalledWith(
+        'Which approved procedure applies?',
+        'en'
+      )
+    );
+  });
+
+  it('previews and explicitly confirms applying an answer to the task description', async () => {
+    const onApplyDescription = jest.fn().mockResolvedValue(undefined);
+    mockedApi.answerKnowledge.mockResolvedValueOnce(groundedResult());
+    renderAnalysis('prepare incident review', {
+      taskDescription: 'Existing context',
+      onApplyDescription,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Check sources' }));
+    await screen.findByText('The cited incident policy requires an immediate review.');
+    fireEvent.click(screen.getByRole('button', { name: 'Use in task description' }));
+
+    const preview = screen.getByRole('textbox', { name: 'Description preview' });
+    expect(preview).toHaveValue(
+      'Existing context\n\nThe cited incident policy requires an immediate review.'
+    );
+    expect(onApplyDescription).not.toHaveBeenCalled();
+    fireEvent.change(preview, { target: { value: 'Reviewed final description' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm description update' }));
+
+    await waitFor(() =>
+      expect(onApplyDescription).toHaveBeenCalledWith('Reviewed final description')
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Task description updated');
+  });
+
+  it('keeps the description preview recoverable when applying fails', async () => {
+    const onApplyDescription = jest.fn().mockRejectedValue(new Error('revision conflict'));
+    mockedApi.answerKnowledge.mockResolvedValueOnce(groundedResult());
+    renderAnalysis('prepare incident review', { onApplyDescription });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Check sources' }));
+    await screen.findByText('The cited incident policy requires an immediate review.');
+    fireEvent.click(screen.getByRole('button', { name: 'Use in task description' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm description update' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('The task could not be updated')
+    );
+    expect(screen.getByRole('textbox', { name: 'Description preview' })).toBeInTheDocument();
+  });
+
+  it('cancels a staged description without applying it', async () => {
+    const onApplyDescription = jest.fn();
+    mockedApi.answerKnowledge.mockResolvedValueOnce(groundedResult());
+    renderAnalysis('prepare incident review', { onApplyDescription });
+    fireEvent.click(screen.getByRole('button', { name: 'Check sources' }));
+    await screen.findByText('The cited incident policy requires an immediate review.');
+    fireEvent.click(screen.getByRole('button', { name: 'Use in task description' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('textbox', { name: 'Description preview' })).not.toBeInTheDocument();
+    expect(onApplyDescription).not.toHaveBeenCalled();
   });
 
   it('shows loading and then an honest no-answer without invented sources', async () => {

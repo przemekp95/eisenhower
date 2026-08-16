@@ -81,22 +81,18 @@ export default function Matrix({
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
   const [pendingLifecycleId, setPendingLifecycleId] = useState<string | null>(null);
   const [taskErrors, setTaskErrors] = useState<Record<string, string>>({});
+  const [assistantTarget, setAssistantTarget] = useState<'draft' | string | null>(null);
   const {
     aiError,
     aiLoading,
-    closeAiTools,
     createError,
     createPending,
-    handleAnalysisComplete,
-    handleAnalysisImport,
     handleDragEnd,
     handleOCRImport,
     handleSubmit,
     handleSuggest,
     newTask,
-    openAiTools,
     quadrants,
-    showAiTools,
     updateNewTaskField,
   } = useMatrixController({
     tasks,
@@ -104,6 +100,36 @@ export default function Matrix({
     onUpdateTask,
     translate: t,
   });
+
+  const assistantTask =
+    assistantTarget === 'draft'
+      ? newTask
+      : (tasks.find((task) => task._id === assistantTarget) ?? null);
+
+  const applyAssistantPatch = async (target: 'draft' | string, patch: Partial<TaskInput>) => {
+    if (target === 'draft') {
+      for (const [key, value] of Object.entries(patch) as Array<
+        [keyof TaskInput, TaskInput[keyof TaskInput]]
+      >) {
+        updateNewTaskField(key, value);
+      }
+      return;
+    }
+
+    setPendingTaskId(target);
+    setTaskErrors((current) => ({ ...current, [target]: '' }));
+    try {
+      await onUpdateTask(target, patch);
+    } catch (issue) {
+      setTaskErrors((current) => ({
+        ...current,
+        [target]: issue instanceof Error ? issue.message : t('status.saveError'),
+      }));
+      throw issue;
+    } finally {
+      setPendingTaskId(null);
+    }
+  };
 
   const runTaskUpdate = async (id: string, patch: Partial<TaskInput>) => {
     setPendingTaskId(id);
@@ -275,11 +301,12 @@ export default function Matrix({
           </label>
           <label className="relative col-span-2 text-sm font-medium text-white/80 md:col-span-1">
             {t('form.description')}
-            <input
+            <textarea
               value={newTask.description}
               disabled={createPending}
               onChange={(event) => updateNewTaskField('description', event.target.value)}
-              className="mt-1 min-h-12 w-full rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-white transition-all placeholder:text-white/50 focus:border-cyan-200/40 focus:bg-white/12 focus:outline-hidden"
+              rows={3}
+              className="mt-1 min-h-12 w-full resize-y rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-white transition-all placeholder:text-white/50 focus:border-cyan-200/40 focus:bg-white/12 focus:outline-hidden"
               placeholder={t('form.description')}
               aria-label={t('form.description')}
             />
@@ -376,7 +403,7 @@ export default function Matrix({
             </button>
             <button
               type="button"
-              onClick={openAiTools}
+              onClick={() => setAssistantTarget('draft')}
               disabled={createPending || !newTask.title.trim()}
               className={`rounded-full bg-white/10 px-4 py-2 text-sm text-white transition-all hover:bg-white/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10 ${
                 newTask.title.trim() ? 'pulse-ai' : ''
@@ -589,20 +616,33 @@ export default function Matrix({
                                 ) : null}
                               </div>
                               {taskView === 'owned' && editingTask?.id !== task._id ? (
-                                <button
-                                  type="button"
-                                  aria-label={format(t('task.edit'), { title: task.title })}
-                                  onClick={() =>
-                                    setEditingTask({
-                                      id: task._id,
-                                      title: task.title,
-                                      description: task.description,
-                                    })
-                                  }
-                                  className="mt-3 min-h-11 rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold hover:bg-white/15"
-                                >
-                                  {format(t('task.edit'), { title: task.title })}
-                                </button>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    aria-label={format(t('task.edit'), { title: task.title })}
+                                    onClick={() =>
+                                      setEditingTask({
+                                        id: task._id,
+                                        title: task.title,
+                                        description: task.description,
+                                      })
+                                    }
+                                    className="min-h-11 rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold hover:bg-white/15"
+                                  >
+                                    {format(t('task.edit'), { title: task.title })}
+                                  </button>
+                                  {(task.lifecycleState ?? 'active') !== 'trashed' ? (
+                                    <button
+                                      type="button"
+                                      aria-label={format(t('ai.task.open'), { title: task.title })}
+                                      onClick={() => setAssistantTarget(task._id)}
+                                      disabled={pendingTaskId === task._id}
+                                      className="min-h-11 rounded-xl border border-cyan-200/20 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-50 hover:bg-cyan-300/15 disabled:opacity-40"
+                                    >
+                                      {t('ai.task.action')}
+                                    </button>
+                                  ) : null}
+                                </div>
                               ) : null}
                               {taskErrors[task._id] ? (
                                 <p role="alert" className="mt-3 text-sm text-red-200">
@@ -708,7 +748,7 @@ export default function Matrix({
         </DragDropContext>
       </div>
 
-      {showAiTools ? (
+      {assistantTarget && assistantTask ? (
         <Suspense
           fallback={
             <div className="fixed inset-0 grid place-items-center bg-black/70 text-white">
@@ -717,10 +757,15 @@ export default function Matrix({
           }
         >
           <AIToolsComponent
-            taskTitle={newTask.title}
-            onClose={closeAiTools}
-            onAnalysisComplete={handleAnalysisComplete}
-            onAnalysisTaskAdd={handleAnalysisImport}
+            taskTitle={assistantTask.title}
+            taskDescription={assistantTask.description}
+            currentUrgent={assistantTask.urgent}
+            currentImportant={assistantTask.important}
+            onClose={() => setAssistantTarget(null)}
+            onApplyDescription={(description) =>
+              applyAssistantPatch(assistantTarget, { description })
+            }
+            onApplyQuadrant={(patch) => applyAssistantPatch(assistantTarget, patch)}
             onOCRTasksExtracted={handleOCRImport}
           />
         </Suspense>
