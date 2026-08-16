@@ -1,6 +1,6 @@
 # In Progress
 
-## TASK-056: Gate release publication on complete all-severity image scans
+## TASK-057: Gate release publication on complete all-severity image scans
 **Priority:** P0 | **Tags:** security, dependencies, docker, release-gate
 
 Prevent publication of any first-party production image until its complete installed contents pass a fail-closed LOW, MEDIUM, HIGH and CRITICAL vulnerability scan and produce retained SBOM evidence.
