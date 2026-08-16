@@ -1,5 +1,40 @@
 # Done
 
+## TASK-051: Promote the runtime-footprint work through green dev and master
+**Priority:** P0 | **Tags:** release, ci, runtime, rag, promotion
+
+Integrate every unpublished commit from `codex/runtime-footprint-20260815` with the current remote development
+line, extend the owner's active conditional checkpoints consistently through 2026-08-23 23:59:59
+Europe/Warsaw, and promote the exact verified source through the required PR-to-dev and dev-to-master workflow
+without deploying or changing production runtime state.
+
+### Plan
+
+- Reconcile the current `origin/dev`/`origin/master` ancestry and independently merged LlamaIndex work without
+  stash, history rewriting, contract regression or loss of either line's evidence.
+- Extend only active conditional checkpoints; preserve historical timestamps, consumed approvals and immutable
+  benchmark evidence.
+- Run the full local release gate and inspect the final security, HTTP/browser, async jobs/outbox, CQRS,
+  ports-and-adapters and TDD/DDD/BDD boundaries.
+- Push the feature branch, merge a green exact-head PR to `dev`, then merge a green dev-only PR to `master` and
+  verify post-merge CI for the exact remote SHA; do not deploy or modify production.
+
+### Outcome
+
+Reconciled the role-split runtime with the independently completed LlamaIndex migration, extended only active
+conditional checkpoints through 2026-08-23 23:59:59 Europe/Warsaw, and kept vLLM private for response/reranking
+while the knowledge role uses its dedicated pinned PyTorch/ROCm runtime. Full local verification, five strict
+Compose renders, exact-SHA builds of all four role images, CycloneDX SBOMs and all-severity Trivy scans passed;
+the scan feed reported zero findings with an available fixed version.
+
+Promoted exact head `b7baab89721a673ea397a8af42c35b43edd48ff8` through green PR #209 to dev merge
+`3bf3e883fcb5c0efd46f7c23e0d031450a2fa534`, verified its push CI, then promoted dev-only PR #210 to master
+`384d40bcde95f77a55ea03897da9ddab10f03b64` and verified exact-SHA push CI, Dependency Graph and automatic
+master-to-dev synchronization. Release and deployment remained manual and were not run; production state and
+the dirty primary checkout were not changed.
+
+---
+
 ## TASK-052: Migrate RAG mechanics to LlamaIndex and isolate the heavy knowledge runtime
 **Priority:** P1 | **Tags:** rag, llamaindex, migration, knowledge-service, mikrus
 
