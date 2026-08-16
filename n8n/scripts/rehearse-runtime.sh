@@ -21,6 +21,8 @@ trap cleanup EXIT HUP INT TERM
 run_n8n() {
   docker run --rm \
     --user "$(id -u):$(id -g)" \
+    -e HOME=/tmp \
+    -e N8N_USER_FOLDER=/reconcile \
     -e N8N_ENCRYPTION_KEY=rehearsal-only-32-byte-secret-key \
     -e N8N_DIAGNOSTICS_ENABLED=false \
     -e EISENHOWER_NODE_INTERNAL_API_URL=http://127.0.0.1:9 \
@@ -30,7 +32,6 @@ run_n8n() {
     -e GOOGLE_CALENDAR_WEBHOOK_URL=https://example.invalid/eisenhower/google-calendar/webhook \
     -e N8N_BLOCK_ENV_ACCESS_IN_NODE=false \
     -e NODE_FUNCTION_ALLOW_BUILTIN=crypto \
-    -v "$runtime_dir:/home/node/.n8n" \
     -v "$runtime_dir:/reconcile" \
     -v "$root_dir/n8n:/repo-n8n:ro" \
     -v "$root_dir/n8n/workflows:/workflows:ro" \
@@ -41,6 +42,8 @@ run_reconcile() {
   docker run --rm \
     --entrypoint /repo-n8n/scripts/reconcile-runtime-container.sh \
     --user "$(id -u):$(id -g)" \
+    -e HOME=/tmp \
+    -e N8N_USER_FOLDER=/reconcile \
     -e N8N_ENCRYPTION_KEY=rehearsal-only-32-byte-secret-key \
     -e N8N_DIAGNOSTICS_ENABLED=false \
     -e EISENHOWER_NODE_INTERNAL_API_URL=http://127.0.0.1:9 \
@@ -50,7 +53,6 @@ run_reconcile() {
     -e GOOGLE_CALENDAR_WEBHOOK_URL=https://example.invalid/eisenhower/google-calendar/webhook \
     -e N8N_BLOCK_ENV_ACCESS_IN_NODE=false \
     -e NODE_FUNCTION_ALLOW_BUILTIN=crypto \
-    -v "$runtime_dir:/home/node/.n8n" \
     -v "$runtime_dir:/reconcile" \
     -v "$root_dir/n8n:/repo-n8n:ro" \
     -v "$root_dir/n8n/workflows:/workflows:ro" \
@@ -97,6 +99,8 @@ log_file="$runtime_dir/start.log"
 set +e
 timeout 12 docker run --rm \
   --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp \
+  -e N8N_USER_FOLDER=/reconcile \
   -e N8N_ENCRYPTION_KEY=rehearsal-only-32-byte-secret-key \
   -e N8N_DIAGNOSTICS_ENABLED=false \
   -e EISENHOWER_NODE_INTERNAL_API_URL=http://127.0.0.1:9 \
@@ -106,7 +110,7 @@ timeout 12 docker run --rm \
   -e GOOGLE_CALENDAR_WEBHOOK_URL=https://example.invalid/eisenhower/google-calendar/webhook \
   -e N8N_BLOCK_ENV_ACCESS_IN_NODE=false \
   -e NODE_FUNCTION_ALLOW_BUILTIN=crypto \
-  -v "$runtime_dir:/home/node/.n8n" \
+  -v "$runtime_dir:/reconcile" \
   n8nio/n8n:2.4.6 start >"$log_file" 2>&1
 start_status=$?
 set -e

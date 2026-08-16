@@ -69,6 +69,23 @@ test('RAG activation remains behind an explicit ready gate', async () => {
   );
 });
 
+test('runtime rehearsal supports runner UIDs that are absent from the image passwd file', async () => {
+  const rehearsal = await readFile(
+    path.join(root, 'n8n/scripts/rehearse-runtime.sh'),
+    'utf8',
+  );
+  const containerReconcile = await readFile(
+    path.join(root, 'n8n/scripts/reconcile-runtime-container.sh'),
+    'utf8',
+  );
+
+  assert.equal(rehearsal.match(/-e HOME=\/tmp/g)?.length, 3);
+  assert.equal(rehearsal.match(/-e N8N_USER_FOLDER=\/reconcile/g)?.length, 3);
+  assert.doesNotMatch(rehearsal, /:\/home\/node\/\.n8n/);
+  assert.match(containerReconcile, /\$N8N_USER_FOLDER\/\.n8n\/database\.sqlite/);
+  assert.match(containerReconcile, /database_path=\/home\/node\/\.n8n\/database\.sqlite/);
+});
+
 test('plan detects active drift, removes same-name duplicates, and converges', async () => {
   const desired = await loadDesiredWorkflows(workflowDir, { ragReady: false });
   const canonical = desired[0];

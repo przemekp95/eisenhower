@@ -7,7 +7,11 @@ test "$rag_ready" = true || test "$rag_ready" = false || {
   exit 2
 }
 rag_credential_id="${N8N_RAG_HEADER_AUTH_CREDENTIAL_ID:-}"
-database_path=/home/node/.n8n/database.sqlite
+if test -n "${N8N_USER_FOLDER:-}"; then
+  database_path="$N8N_USER_FOLDER/.n8n/database.sqlite"
+else
+  database_path=/home/node/.n8n/database.sqlite
+fi
 database_backup=/reconcile/database.sqlite.before-reconcile
 
 mkdir -p /reconcile
@@ -45,7 +49,7 @@ if ! n8n export:workflow --all --output=/reconcile/current.json; then
 fi
 if test "$rag_ready" = true; then
   node /repo-n8n/scripts/verify-runtime-credential.cjs \
-    /home/node/.n8n/database.sqlite "$rag_credential_id"
+    "$database_path" "$rag_credential_id"
 fi
 node /repo-n8n/scripts/reconcile-runtime.mjs \
   --workflows /workflows \
@@ -63,7 +67,7 @@ plan_ids unpublishIds | while IFS= read -r workflow_id; do
 done
 
 node /repo-n8n/scripts/delete-workflow-duplicates.cjs \
-  /home/node/.n8n/database.sqlite /reconcile/plan.json
+  "$database_path" /reconcile/plan.json
 
 if test -n "$(plan_ids importIds)"; then
   n8n import:workflow --input=/reconcile/import.json
