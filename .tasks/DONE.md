@@ -1,5 +1,28 @@
 # Done
 
+## TASK-049: Integrate grounded AI into the task workflow
+**Priority:** P1 | **Tags:** web, ux, ai, rag, accessibility
+
+Turn the existing grounded-answer capability into a clear task-centered workflow for new and existing tasks without allowing generated content to mutate task data silently.
+
+### Plan
+
+- Add failing behavior tests for editable questions, existing-task entry, honest result states, explicit apply confirmation and separation of administration from user AI tools.
+- Replace the five-purpose modal hierarchy with a restrained task assistant surface that keeps decision help and grounded answers contextual while moving administration to its dedicated entry.
+- Let users apply a grounded answer to a task description and apply an independently classified quadrant only through explicit preview and confirmation, preserving revisions and draft/error recovery.
+- Update PL/EN utility copy and browser acceptance coverage for desktop/mobile, keyboard, accessibility, authorization and fail-closed HTTP behavior.
+- Run focused red/green loops, web unit/integration/build/format checks, Playwright/Axe and broader repository verification proportional to the final change.
+
+### Outcome
+
+Replaced the five-purpose AI modal with a task-centered side sheet available from both a new-task draft and owned existing tasks. It combines an independently requested quadrant suggestion with an editable grounded question, honest no-answer handling, visible citations and explicit preview/confirmation before applying either a description or priority change. Draft use remains local until ordinary task creation, existing-task updates preserve the normal API/revision path and failed writes keep the proposed change visible; delegated tasks expose no mutating assistant action.
+
+Moved model administration into its own lazy-loaded dialog with the separate administrator credential gate, retained OCR and batch review as secondary utilities, and updated PL/EN task-first copy. The description field now preserves multiline sourced content. Browser authorization behavior remains unchanged: the existing memory-only Bearer client and fail-closed API/gateway controls are reused, with no new credential storage or messaging/job path.
+
+Implemented with recorded red-green loops. Fresh verification passed 196 web unit tests at 100% statement/branch/function/line coverage, 2 web integration tests, the production web build, six grounded-answer Playwright/Axe scenarios across desktop, 390 px and 320 px, and six board/administration accessibility scenarios across the same viewports. The mobile run first exposed an off-viewport action bug; the full-height scroll container fix passed the repeated narrow-viewport scenarios. No push, PR, deployment, public-production validation or human usability acceptance was performed.
+
+---
+
 ## TASK-048: Migrate RAG mechanics to LlamaIndex and isolate the heavy knowledge runtime
 **Priority:** P1 | **Tags:** rag, llamaindex, migration, knowledge-service, mikrus
 

@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
@@ -70,15 +71,17 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1, name: 'Eisenhower Matrix' })).toBeVisible();
 });
 
-test('renders a sourced answer with escaped citations on desktop and mobile', async ({
-  page,
-}) => {
+test('renders a sourced answer with escaped citations on desktop and mobile', async ({ page }) => {
   await page.getByPlaceholder('Task title').fill('Prepare the incident review');
-  const opener = page.getByRole('button', { name: 'Open AI tools' });
+  await page.getByPlaceholder('Description').fill('Existing context');
+  const opener = page.getByRole('button', { name: 'Open AI assistant' });
   await opener.click();
 
   await expect(page.getByRole('button', { name: 'Close' })).toBeFocused();
-  await page.getByRole('tab', { name: 'Answers with sources' }).click();
+  await expect(page.getByRole('tab', { name: 'Task assistant' })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
   await page.getByRole('button', { name: 'Check sources' }).click();
 
   await expect(page.getByText('Answer with sources', { exact: true })).toBeVisible();
@@ -91,6 +94,20 @@ test('renders a sourced answer with escaped citations on desktop and mobile', as
   await expect(page.getByText(/<script>window.compromised=true/)).toBeVisible();
   await expect(page.locator('blockquote script')).toHaveCount(0);
   await expect(page.locator('li img[src="x"]')).toHaveCount(0);
+  const accessibility = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(accessibility.violations).toEqual([]);
+
+  await page.getByRole('button', { name: 'Use in task description' }).click();
+  await expect(page.getByLabel('Description preview')).toHaveValue(
+    'Existing context\n\nThe approved incident procedure requires an immediate review.'
+  );
+  await page.getByRole('button', { name: 'Confirm description update' }).click();
+  await expect(page.getByPlaceholder('Description')).toHaveValue(
+    'Existing context\n\nThe approved incident procedure requires an immediate review.'
+  );
 
   const dialog = page.getByRole('dialog');
   const box = await dialog.boundingBox();
@@ -106,8 +123,7 @@ test('renders a sourced answer with escaped citations on desktop and mobile', as
 
 test('renders an honest no-answer without fabricated citations', async ({ page }) => {
   await page.getByPlaceholder('Task title').fill('Question outside approved knowledge');
-  await page.getByRole('button', { name: 'Open AI tools' }).click();
-  await page.getByRole('tab', { name: 'Answers with sources' }).click();
+  await page.getByRole('button', { name: 'Open AI assistant' }).click();
   await page.getByRole('button', { name: 'Check sources' }).click();
 
   await expect(page.getByText('No answer', { exact: true })).toBeVisible();

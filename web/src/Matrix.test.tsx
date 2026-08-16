@@ -51,11 +51,19 @@ jest.mock('./components/matrixLazyComponents', () => ({
   __esModule: true,
   MatrixSceneComponent: () => <div data-testid="matrix-scene" />,
   AIToolsComponent: ({
+    taskTitle,
+    taskDescription,
+    onApplyDescription,
+    onApplyQuadrant,
     onAnalysisComplete,
     onAnalysisTaskAdd,
     onOCRTasksExtracted,
     onClose,
   }: {
+    taskTitle: string;
+    taskDescription?: string;
+    onApplyDescription?: (description: string) => Promise<void> | void;
+    onApplyQuadrant?: (patch: { urgent: boolean; important: boolean }) => Promise<void> | void;
     onAnalysisComplete: (analysis: api.LangChainAnalysis) => void;
     onAnalysisTaskAdd: (analysis: api.LangChainAnalysis) => Promise<void>;
     onOCRTasksExtracted: (result: api.OCRResult, learn: boolean) => Promise<unknown>;
@@ -63,6 +71,21 @@ jest.mock('./components/matrixLazyComponents', () => ({
   }) => (
     <div>
       <p>AI tools</p>
+      <p data-testid="assistant-target">{`${taskTitle}|${taskDescription ?? ''}`}</p>
+      <button
+        type="button"
+        onClick={() => {
+          void Promise.resolve(onApplyDescription?.('AI description')).catch(() => undefined);
+        }}
+      >
+        Apply assistant description
+      </button>
+      <button
+        type="button"
+        onClick={() => void onApplyQuadrant?.({ urgent: true, important: false })}
+      >
+        Apply assistant quadrant
+      </button>
       <button
         type="button"
         onClick={() =>
@@ -754,6 +777,111 @@ describe('Matrix', () => {
     });
   });
 
+  it('opens the assistant for a draft and applies confirmed patches only to the form', async () => {
+    const onAddTask = jest.fn().mockResolvedValue(undefined);
+    const onUpdateTask = jest.fn().mockResolvedValue(undefined);
+    renderMatrix({ tasks: [], onAddTask, onUpdateTask });
+
+    fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
+      target: { value: 'Draft with AI' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/Opis/i), {
+      target: { value: 'Draft context' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Otwórz asystenta AI' }));
+
+    expect(await screen.findByTestId('assistant-target')).toHaveTextContent(
+      'Draft with AI|Draft context'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Apply assistant description' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply assistant quadrant' }));
+
+    expect(screen.getByPlaceholderText(/Opis/i)).toHaveValue('AI description');
+    const checkboxes = screen.getAllByRole('checkbox');
+    expect(checkboxes[0]).toBeChecked();
+    expect(checkboxes[1]).not.toBeChecked();
+    expect(onAddTask).not.toHaveBeenCalled();
+    expect(onUpdateTask).not.toHaveBeenCalled();
+  });
+
+  it('opens the assistant from an owned task and persists only the confirmed patch', async () => {
+    const onUpdateTask = jest.fn().mockResolvedValue(undefined);
+    renderMatrix({
+      tasks: [
+        {
+          _id: 'existing',
+          title: 'Existing task',
+          description: 'Existing description',
+          urgent: false,
+          important: true,
+          lifecycleState: 'active',
+        },
+      ],
+      onUpdateTask,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Otwórz asystenta AI dla Existing task' }));
+    expect(await screen.findByTestId('assistant-target')).toHaveTextContent(
+      'Existing task|Existing description'
+    );
+    expect(onUpdateTask).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Apply assistant description' }));
+    await waitFor(() =>
+      expect(onUpdateTask).toHaveBeenCalledWith('existing', { description: 'AI description' })
+    );
+  });
+
+  it('surfaces an assistant write failure on the task and keeps the assistant open', async () => {
+    const onUpdateTask = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('revision conflict'))
+      .mockRejectedValueOnce('offline');
+    renderMatrix({
+      tasks: [
+        {
+          _id: 'assistant-failure',
+          title: 'Conflicting task',
+          description: '',
+          urgent: false,
+          important: false,
+          lifecycleState: 'active',
+        },
+      ],
+      onUpdateTask,
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Otwórz asystenta AI dla Conflicting task' })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Apply assistant description' }));
+    await screen.findByRole('alert');
+    expect(screen.getByRole('alert')).toHaveTextContent('revision conflict');
+    expect(screen.getByTestId('assistant-target')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Apply assistant description' }));
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Nie udało się zapisać zmian')
+    );
+  });
+
+  it('does not offer mutating AI actions on delegated read-only tasks', () => {
+    renderMatrix({
+      taskView: 'delegated',
+      tasks: [
+        {
+          _id: 'delegated-ai',
+          title: 'Delegated AI task',
+          description: '',
+          urgent: true,
+          important: false,
+          lifecycleState: 'active',
+        },
+      ],
+    });
+
+    expect(
+      screen.queryByRole('button', { name: 'Otwórz asystenta AI dla Delegated AI task' })
+    ).not.toBeInTheDocument();
+  });
+
   it('imports OCR tasks into the matrix form pipeline', async () => {
     const onAddTask = jest.fn().mockResolvedValue(undefined);
 
@@ -772,7 +900,7 @@ describe('Matrix', () => {
     fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
       target: { value: 'dowolne zadanie' },
     });
-    fireEvent.click(screen.getByText(/Otwórz narzędzia AI/i));
+    fireEvent.click(screen.getByText(/Otwórz asystenta AI/i));
     fireEvent.click(await screen.findByText('Import OCR tasks'));
 
     await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(2));
@@ -815,7 +943,7 @@ describe('Matrix', () => {
     fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
       target: { value: 'dowolne zadanie' },
     });
-    fireEvent.click(screen.getByText(/Otwórz narzędzia AI/i));
+    fireEvent.click(screen.getByText(/Otwórz asystenta AI/i));
     fireEvent.click(await screen.findByText('Import OCR tasks'));
 
     await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(2));
@@ -838,7 +966,7 @@ describe('Matrix', () => {
     fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
       target: { value: 'draft' },
     });
-    fireEvent.click(screen.getByText(/Otwórz narzędzia AI/i));
+    fireEvent.click(screen.getByText(/Otwórz asystenta AI/i));
     fireEvent.click(await screen.findByText('Import OCR without feedback'));
 
     await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(1));
@@ -862,7 +990,7 @@ describe('Matrix', () => {
     fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
       target: { value: 'draft' },
     });
-    fireEvent.click(screen.getByText(/Otwórz narzędzia AI/i));
+    fireEvent.click(screen.getByText(/Otwórz asystenta AI/i));
     fireEvent.click(await screen.findByText('Import OCR tasks'));
 
     await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(2));
@@ -889,85 +1017,13 @@ describe('Matrix', () => {
     fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
       target: { value: 'draft' },
     });
-    fireEvent.click(screen.getByText(/Otwórz narzędzia AI/i));
+    fireEvent.click(screen.getByText(/Otwórz asystenta AI/i));
     fireEvent.click(await screen.findByText('Import OCR tasks'));
 
     await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(2));
     expect(learnFromAcceptedOCRTasks).toHaveBeenCalledWith([
       { text: 'Escalate outage', quadrant: 0 },
     ]);
-  });
-
-  it('adds the analyzed task to the matrix and resets the form', async () => {
-    const onAddTask = jest.fn().mockResolvedValue(undefined);
-
-    render(
-      <LanguageProvider>
-        <Matrix
-          tasks={[]}
-          loading={false}
-          onAddTask={onAddTask}
-          onUpdateTask={jest.fn()}
-          onDeleteTask={jest.fn()}
-        />
-      </LanguageProvider>
-    );
-
-    fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
-      target: { value: 'Przygotować plan kwartalny' },
-    });
-    fireEvent.change(screen.getByPlaceholderText(/Opis/i), {
-      target: { value: 'Do omówienia z zarządem' },
-    });
-    fireEvent.click(screen.getByText(/Otwórz narzędzia AI/i));
-    fireEvent.click(await screen.findByText('Add analyzed task'));
-
-    await waitFor(() =>
-      expect(onAddTask).toHaveBeenCalledWith({
-        title: 'Przygotować plan kwartalny',
-        description: 'Do omówienia z zarządem',
-        urgent: true,
-        important: false,
-      })
-    );
-    await waitFor(() => expect(screen.getByPlaceholderText(/Tytuł zadania/i)).toHaveValue(''));
-    await waitFor(() => expect(screen.queryByText(/AI tools/i)).not.toBeInTheDocument());
-  });
-
-  it('falls back to the analyzed title when the draft title is cleared before adding', async () => {
-    const onAddTask = jest.fn().mockResolvedValue(undefined);
-
-    render(
-      <LanguageProvider>
-        <Matrix
-          tasks={[]}
-          loading={false}
-          onAddTask={onAddTask}
-          onUpdateTask={jest.fn()}
-          onDeleteTask={jest.fn()}
-        />
-      </LanguageProvider>
-    );
-
-    fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
-      target: { value: 'tymczasowy tytuł' },
-    });
-    fireEvent.click(screen.getByText(/Otwórz narzędzia AI/i));
-    await screen.findByText('Add analyzed task');
-
-    fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
-      target: { value: '   ' },
-    });
-    fireEvent.click(screen.getByText('Add analyzed task'));
-
-    await waitFor(() =>
-      expect(onAddTask).toHaveBeenCalledWith({
-        title: 'critical task',
-        description: '',
-        urgent: true,
-        important: false,
-      })
-    );
   });
 
   it('ignores empty AI suggestions', async () => {
@@ -1050,12 +1106,12 @@ describe('Matrix', () => {
     fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
       target: { value: 'critical task' },
     });
-    fireEvent.click(screen.getByText(/Otwórz narzędzia AI/i));
+    fireEvent.click(screen.getByText(/Otwórz asystenta AI/i));
 
-    await screen.findByText(/Apply AI analysis/i);
+    await screen.findByTestId('assistant-target');
   });
 
-  it('applies AI analysis results back into the form and closes the drawer', async () => {
+  it('applies a reviewed quadrant result back into the form and closes the drawer', async () => {
     render(
       <LanguageProvider>
         <Matrix
@@ -1071,16 +1127,16 @@ describe('Matrix', () => {
     fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
       target: { value: 'critical task' },
     });
-    fireEvent.click(screen.getByText(/Otwórz narzędzia AI/i));
+    fireEvent.click(screen.getByText(/Otwórz asystenta AI/i));
 
-    await screen.findByText(/Apply AI analysis/i);
+    await screen.findByTestId('assistant-target');
 
-    fireEvent.click(screen.getByText(/Apply AI analysis/i));
+    fireEvent.click(screen.getByText(/Apply assistant quadrant/i));
 
     await waitFor(() => {
       const checkboxes = screen.getAllByRole('checkbox');
-      expect(checkboxes[0]).not.toBeChecked();
-      expect(checkboxes[1]).toBeChecked();
+      expect(checkboxes[0]).toBeChecked();
+      expect(checkboxes[1]).not.toBeChecked();
     });
 
     fireEvent.click(screen.getByText(/Close AI tools/i));
