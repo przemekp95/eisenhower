@@ -2,6 +2,35 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
+  await page.route('**/capabilities', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': 'http://127.0.0.1:4173' },
+      body: JSON.stringify({
+        classification: true,
+        reasoned_local_analysis: true,
+        knowledge_retrieval: true,
+        retrieval_augmented_generation: true,
+        langchain_analysis: false,
+        ocr: true,
+        batch_analysis: true,
+        training_management: true,
+        providers: { local_model: true, tesseract: true, ocr: true },
+        device: {
+          type: 'cpu',
+          name: 'CI CPU',
+          vendor: 'generic',
+          runtime: 'cpu',
+          runtime_version: null,
+          torch_device: 'cpu',
+          count: 1,
+          cuda_version: null,
+          accelerated: false,
+        },
+      }),
+    });
+  });
   await page.route('**/v2/knowledge/answer', async (route) => {
     const request = route.request();
     expect(request.method()).toBe('POST');
@@ -76,15 +105,16 @@ test('renders a sourced answer with escaped citations on desktop and mobile', as
 
   await page.getByPlaceholder('Task title').fill('Prepare the incident review');
   await page.getByPlaceholder('Description').fill('Existing context');
-  const opener = page.getByRole('button', { name: 'Open AI assistant' });
+  const opener = page.getByRole('button', { name: 'Open AI assistant', exact: true });
   await opener.click();
 
-  await expect(page.getByRole('button', { name: 'Close' })).toBeFocused();
-  await expect(page.getByRole('tab', { name: 'Task assistant' })).toHaveAttribute(
+  const assistant = page.getByRole('dialog', { name: 'AI task assistant' });
+  await expect(assistant.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+  await expect(assistant.getByRole('tab', { name: 'Task assistant' })).toHaveAttribute(
     'aria-selected',
     'true'
   );
-  await page.getByRole('button', { name: 'Check sources' }).click();
+  await assistant.getByRole('button', { name: 'Check sources' }).click();
 
   await expect(page.getByText('Answer with sources', { exact: true })).toBeVisible();
   await expect(
@@ -111,22 +141,22 @@ test('renders a sourced answer with escaped citations on desktop and mobile', as
     'Existing context\n\nThe approved incident procedure requires an immediate review.'
   );
 
-  const dialog = page.getByRole('dialog');
-  const box = await dialog.boundingBox();
+  const box = await assistant.boundingBox();
   const viewport = page.viewportSize();
   expect(box).not.toBeNull();
   expect(viewport).not.toBeNull();
   expect(box!.x).toBeGreaterThanOrEqual(0);
   expect(box!.x + box!.width).toBeLessThanOrEqual(viewport!.width);
 
-  await page.getByRole('button', { name: 'Close' }).click();
+  await assistant.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(opener).toBeFocused();
 });
 
 test('renders an honest no-answer without fabricated citations', async ({ page }) => {
   await page.getByPlaceholder('Task title').fill('Question outside approved knowledge');
-  await page.getByRole('button', { name: 'Open AI assistant' }).click();
-  await page.getByRole('button', { name: 'Check sources' }).click();
+  await page.getByRole('button', { name: 'Open AI assistant', exact: true }).click();
+  const assistant = page.getByRole('dialog', { name: 'AI task assistant' });
+  await assistant.getByRole('button', { name: 'Check sources' }).click();
 
   await expect(page.getByText('No answer', { exact: true })).toBeVisible();
   await expect(
