@@ -1,9 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  fetchAICapabilities,
-  learnFromAcceptedOCRTasks,
-  suggestTaskQuadrant,
-} from '../services/ai';
+import { fetchAICapabilities, suggestTaskQuadrant } from '../services/ai';
 import { scanTasksFromImage } from '../services/media';
 import {
   loadDelegatedTasks,
@@ -89,10 +85,15 @@ export default function useTaskSyncController() {
     () => groupTasksByQuadrant(taskView === 'delegated' ? delegatedTasks : tasks),
     [delegatedTasks, taskView, tasks]
   );
-  const providerControls = aiCapabilities?.provider_controls || {};
-  const aiConnected = Boolean(aiCapabilities);
-  const suggestDisabled = aiLoading || suggestLoading || !providerControls.local_model?.active;
-  const scanDisabled = !providerControls.tesseract?.active;
+  const aiConnected = Boolean(
+    aiCapabilities?.classification ||
+    aiCapabilities?.reasoned_local_analysis ||
+    aiCapabilities?.ocr ||
+    aiCapabilities?.batch_analysis
+  );
+  const suggestDisabled =
+    aiLoading || suggestLoading || aiCapabilities?.classification !== true;
+  const scanDisabled = aiLoading || aiCapabilities?.ocr !== true;
 
   useEffect(() => {
     tasksRef.current = tasks;
@@ -214,6 +215,7 @@ export default function useTaskSyncController() {
 
       setAiCapabilities(capabilitiesResult.status === 'fulfilled' ? capabilitiesResult.value : null);
       setAiLoading(false);
+
     };
 
     void bootstrap().catch(() => {
@@ -261,7 +263,7 @@ export default function useTaskSyncController() {
     setNewTask((current) => ({ ...current, [key]: value }));
   };
 
-  const importScannedTasks = async (scannedTasks, { learn = false } = {}) => {
+  const importScannedTasks = async (scannedTasks) => {
     const pendingTasks = scannedTasks.map((task) => {
       const clientOperationId = task.clientOperationId || createClientOperationId();
       return createTaskRecord(
@@ -293,17 +295,6 @@ export default function useTaskSyncController() {
     const remotelySavedTasks = createdTasks
       .filter((entry) => entry.savedRemotely)
       .map((entry) => entry.task);
-    let feedbackSaved = false;
-
-    if (learn && remotelySavedTasks.length > 0) {
-      try {
-        await learnFromAcceptedOCRTasks(remotelySavedTasks);
-        feedbackSaved = true;
-      } catch {
-        feedbackSaved = false;
-      }
-    }
-
     const withoutPendingCreates = createdTasks.reduce(
       (current, entry) => removeTask(current, entry.localTask),
       tasksRef.current,
@@ -318,7 +309,6 @@ export default function useTaskSyncController() {
       imported: importedTasks.length,
       savedRemotely: remotelySavedTasks.length,
       pending: importedTasks.length - remotelySavedTasks.length,
-      feedbackSaved,
     };
   };
 
@@ -748,7 +738,6 @@ export default function useTaskSyncController() {
     loading,
     newTask,
     notice,
-    providerControls,
     quadrantOptions,
     refreshCapabilities,
     retrySync,

@@ -393,12 +393,14 @@ services:
     environment:
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY is required}
       - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_RAG_HEADER_AUTH_CREDENTIAL_ID=${N8N_RAG_HEADER_AUTH_CREDENTIAL_ID:-}
       - EXECUTIONS_DATA_SAVE_ON_SUCCESS=none
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=168
       - EISENHOWER_INTERNAL_API_URL=${EISENHOWER_INTERNAL_API_URL:-http://api-service:3001}
       - EISENHOWER_INTERNAL_API_TOKEN=${EISENHOWER_INTERNAL_API_TOKEN:?EISENHOWER_INTERNAL_API_TOKEN is required}
       - EISENHOWER_NODE_INTERNAL_API_URL=${EISENHOWER_NODE_INTERNAL_API_URL:-http://api-service:3001}
+      - EISENHOWER_KNOWLEDGE_INTERNAL_API_URL=${EISENHOWER_KNOWLEDGE_INTERNAL_API_URL:-http://knowledge-service:8000}
       - CALENDAR_INTERNAL_HMAC_KEY=${CALENDAR_INTERNAL_HMAC_KEY:?CALENDAR_INTERNAL_HMAC_KEY is required}
       - GOOGLE_CALENDAR_WEBHOOK_URL=${GOOGLE_CALENDAR_WEBHOOK_URL:?GOOGLE_CALENDAR_WEBHOOK_URL is required}
       # Repository-owned Code nodes need these scoped values for HMAC-signed calls.
@@ -408,6 +410,9 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
       - ../../n8n/workflows:/workflows:ro
+      - ../../n8n:/repo-n8n:ro
+    tmpfs:
+      - /reconcile:mode=0700,uid=1000,gid=1000
 
   identity-db:
     <<: *common

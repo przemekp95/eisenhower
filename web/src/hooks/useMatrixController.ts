@@ -1,6 +1,6 @@
 import { FormEvent, useMemo, useRef, useState } from 'react';
 import { DropResult } from '@hello-pangea/dnd';
-import { classifyTask, learnFromAcceptedOCRTasks, OCRResult } from '../services/api';
+import { classifyTask, OCRResult } from '../services/api';
 import { TranslationKey } from '../i18n/translations';
 import { Task, TaskInput } from '../types';
 import { quadrantToTaskState } from '../components/matrixUtils';
@@ -32,6 +32,10 @@ export function useMatrixController({
   const [createError, setCreateError] = useState<string | null>(null);
   const createPendingRef = useRef(false);
   const createOperationKeyRef = useRef<string | null>(null);
+  const ocrOperationKeysRef = useRef(new Map<string, string>());
+
+  const newOperationKey = (source: string) =>
+    `${source}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
   const quadrants = useMemo(
     () => [
@@ -121,7 +125,7 @@ export function useMatrixController({
     }
   };
 
-  const handleOCRImport = async (result: OCRResult, learnFromAccepted: boolean) => {
+  const handleOCRImport = async (result: OCRResult) => {
     const importedTasks = result.classified_tasks.reduce<Array<{ text: string; quadrant: number }>>(
       (collection, detectedTask) => {
         const title = detectedTask.text.trim();
@@ -151,30 +155,27 @@ export function useMatrixController({
     let failed = 0;
 
     for (const detectedTask of importedTasks) {
+      const operation = `${detectedTask.text}\u0000${detectedTask.quadrant}`;
+      const idempotencyKey =
+        ocrOperationKeysRef.current.get(operation) ?? newOperationKey('web-ocr-import');
+      ocrOperationKeysRef.current.set(operation, idempotencyKey);
       try {
-        await onAddTask({
-          title: detectedTask.text,
-          description: '',
-          ...quadrantToTaskState(detectedTask.quadrant),
-        });
+        await onAddTask(
+          {
+            title: detectedTask.text,
+            description: '',
+            ...quadrantToTaskState(detectedTask.quadrant),
+          },
+          idempotencyKey
+        );
+        ocrOperationKeysRef.current.delete(operation);
         persistedTasks.push(detectedTask);
       } catch {
         failed += 1;
       }
     }
 
-    let learned = false;
-    let feedbackError: string | undefined;
-    if (learnFromAccepted && persistedTasks.length > 0) {
-      try {
-        await learnFromAcceptedOCRTasks(persistedTasks);
-        learned = true;
-      } catch {
-        feedbackError = translate('ai.manage.actionFailed');
-      }
-    }
-
-    return { imported: persistedTasks.length, failed, learned, feedbackError };
+    return { imported: persistedTasks.length, failed };
   };
 
   const handleDragEnd = async (result: DropResult) => {

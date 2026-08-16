@@ -194,7 +194,7 @@ test('sends an optional idempotency key for safe task creation retries', async (
 test('uses bounded calendar status, sync and conflict endpoints with safety headers', async () => {
   const calls = [];
   const responses = [
-    jsonResponse({ status: 'connected', connection: { id: 'connection-1', provider: 'google', calendarId: 'primary' }, syncState: null, openConflicts: 1, pendingOutbox: 0 }),
+    jsonResponse({ status: 'connected', canConnect: true, connection: { id: 'connection-1', provider: 'google', calendarId: 'primary' }, syncState: null, openConflicts: 1, pendingOutbox: 0, failedSyncCount: 0, syncProblem: false }),
     jsonResponse({ eventId: 'sync-1' }, { status: 202 }),
     jsonResponse([{ _id: 'conflict-1', taskId: 'task-1', providerSnapshot: { title: 'Google title', dueAt: '2026-08-20T12:00:00.000Z', timeZone: 'Europe/Warsaw' }, status: 'open', revision: 2 }]),
     jsonResponse({ _id: 'conflict-1', status: 'resolved_local', revision: 3 }),
@@ -217,6 +217,28 @@ test('uses bounded calendar status, sync and conflict endpoints with safety head
   assert.equal(calls[3][1].headers['If-Match'], '"2"');
   assert.equal(calls[3][1].headers['Idempotency-Key'], 'resolve-key-1');
   assert.deepEqual(JSON.parse(calls[3][1].body), { strategy: 'eisenhower' });
+});
+
+test('starts and disconnects Google Calendar through authenticated business endpoints', async () => {
+  const calls = [];
+  const responses = [
+    jsonResponse({ authorizationUrl: 'https://accounts.google.com/o/oauth2/auth?state=safe' }, { status: 201 }),
+    { ok: true, status: 204, json: async () => null },
+  ];
+  const api = createTaskApi('https://api.example.com', async (...args) => {
+    calls.push(args);
+    return responses.shift();
+  });
+
+  const started = await api.startCalendarConnection('/workspace?calendar=return');
+  await api.disconnectCalendar();
+
+  assert.equal(started.authorizationUrl, 'https://accounts.google.com/o/oauth2/auth?state=safe');
+  assert.equal(calls[0][0], 'https://api.example.com/calendar/oauth/start');
+  assert.equal(calls[0][1].method, 'POST');
+  assert.deepEqual(JSON.parse(calls[0][1].body), { returnPath: '/workspace?calendar=return' });
+  assert.equal(calls[1][0], 'https://api.example.com/calendar/oauth/disconnect');
+  assert.equal(calls[1][1].method, 'POST');
 });
 
 test('filters task lists by lifecycle and sends conflict-safe lifecycle transitions', async () => {
@@ -290,11 +312,11 @@ test('lists delegated work and sends revision-safe owner and assignee delegation
   const api = createTaskApi('https://api.example.com', async (...args) => {
     calls.push(args);
     return jsonResponse(
-      args[0].endsWith('/delegated') ? [taskFixture({ delegation })] : taskFixture({ delegation })
+      args[0].includes('/delegated?') ? [taskFixture({ delegation })] : taskFixture({ delegation })
     );
   });
 
-  const delegated = await api.listDelegatedTasks();
+  const delegated = await api.listDelegatedTasks('completed');
   await api.updateTaskDelegation(
     'task/1',
     { assigneeUserId: 'user-b', displayLabel: 'Pat', handoffNote: 'Use the release runbook.' },
@@ -303,7 +325,7 @@ test('lists delegated work and sends revision-safe owner and assignee delegation
   await api.transitionTaskDelegation('task/1', 'accepted', 5);
 
   assert.equal(delegated[0].delegation.status, 'offered');
-  assert.equal(calls[0][0], 'https://api.example.com/tasks/delegated');
+  assert.equal(calls[0][0], 'https://api.example.com/tasks/delegated?lifecycle=completed');
   assert.equal(calls[1][0], 'https://api.example.com/tasks/task%2F1/delegation');
   assert.equal(calls[1][1].headers['If-Match'], '"4"');
   assert.deepEqual(JSON.parse(calls[1][1].body), {
@@ -715,22 +737,12 @@ test('accepts representative payloads for every declared public response contrac
     }),
     jsonResponse({
       classification: true,
-      langchain_analysis: false,
+      reasoned_local_analysis: true,
+      retrieval_augmented_generation: false,
+      knowledge_retrieval: true,
+      local_similar_examples: true,
       ocr: true,
       batch_analysis: true,
-      training_management: true,
-      providers: { local_model: true, tesseract: true, ocr: true },
-      device: {
-        type: 'cpu',
-        name: 'cpu',
-        vendor: 'cpu',
-        runtime: 'cpu',
-        runtime_version: null,
-        torch_device: 'cpu',
-        count: 1,
-        cuda_version: null,
-        accelerated: false,
-      },
     }),
     jsonResponse({
       total_examples: 1,

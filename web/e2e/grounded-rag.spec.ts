@@ -12,22 +12,9 @@ test.beforeEach(async ({ page }) => {
         reasoned_local_analysis: true,
         knowledge_retrieval: true,
         retrieval_augmented_generation: true,
-        langchain_analysis: false,
+        local_similar_examples: true,
         ocr: true,
         batch_analysis: true,
-        training_management: true,
-        providers: { local_model: true, tesseract: true, ocr: true },
-        device: {
-          type: 'cpu',
-          name: 'CI CPU',
-          vendor: 'generic',
-          runtime: 'cpu',
-          runtime_version: null,
-          torch_device: 'cpu',
-          count: 1,
-          cuda_version: null,
-          accelerated: false,
-        },
       }),
     });
   });
@@ -105,12 +92,12 @@ test('renders a sourced answer with escaped citations on desktop and mobile', as
 
   await page.getByPlaceholder('Task title').fill('Prepare the incident review');
   await page.getByPlaceholder('Description').fill('Existing context');
-  const opener = page.getByRole('button', { name: 'Open AI assistant', exact: true });
+  const opener = page.getByRole('button', { name: 'Open task assistance', exact: true });
   await opener.click();
 
-  const assistant = page.getByRole('dialog', { name: 'AI task assistant' });
+  const assistant = page.getByRole('dialog', { name: 'Task assistance' });
   await expect(assistant.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
-  await expect(assistant.getByRole('tab', { name: 'Task assistant' })).toHaveAttribute(
+  await expect(assistant.getByRole('tab', { name: 'Task help' })).toHaveAttribute(
     'aria-selected',
     'true'
   );
@@ -154,8 +141,8 @@ test('renders a sourced answer with escaped citations on desktop and mobile', as
 
 test('renders an honest no-answer without fabricated citations', async ({ page }) => {
   await page.getByPlaceholder('Task title').fill('Question outside approved knowledge');
-  await page.getByRole('button', { name: 'Open AI assistant', exact: true }).click();
-  const assistant = page.getByRole('dialog', { name: 'AI task assistant' });
+  await page.getByRole('button', { name: 'Open task assistance', exact: true }).click();
+  const assistant = page.getByRole('dialog', { name: 'Task assistance' });
   await assistant.getByRole('button', { name: 'Check sources' }).click();
 
   await expect(page.getByText('No answer', { exact: true })).toBeVisible();

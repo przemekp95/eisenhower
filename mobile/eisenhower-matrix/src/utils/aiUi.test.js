@@ -1,9 +1,6 @@
 import {
   AI_TABS,
   QUADRANT_ACCENTS,
-  getProviderLabel,
-  getProviderStatus,
-  getProviderTone,
   getQuadrantOptions,
   getQuadrantTitleByValue,
   getSuggestedQuadrant,
@@ -19,7 +16,7 @@ describe('aiUi helpers', () => {
   it('returns quadrant options with the expected order and accents', () => {
     const options = getQuadrantOptions(t);
 
-    expect(AI_TABS).toEqual(['analysis', 'ocr', 'batch', 'manage']);
+    expect(AI_TABS).toEqual(['analysis', 'ocr', 'batch']);
     expect(options).toHaveLength(4);
     expect(options.map((entry) => entry.value)).toEqual([0, 1, 2, 3]);
     expect(options.map((entry) => entry.accent)).toEqual(QUADRANT_ACCENTS);
@@ -28,42 +25,30 @@ describe('aiUi helpers', () => {
     expect(options[1].hint).toBe('Pilne, ale nieważne');
   });
 
-  it('resolves provider labels, tones and statuses', () => {
-    expect(getProviderLabel('local_model', t)).toBe('Model lokalny');
-    expect(getProviderLabel('tesseract', t)).toBe('Tesseract OCR');
-
-    expect(getProviderStatus(null, t)).toBe('Niedostępny');
-    expect(getProviderStatus({ enabled: true, active: true }, t)).toBe('Aktywny');
-    expect(getProviderStatus({ enabled: false, active: false }, t)).toBe('Wyłączony');
-    expect(getProviderStatus({ enabled: true, active: false }, t)).toBe('Niedostępny');
-
-    expect(getProviderTone(null)).toBe('#475569');
-    expect(getProviderTone({ enabled: true, active: true })).toBe('#14b8a6');
-    expect(getProviderTone({ enabled: false, active: false })).toBe('#f59e0b');
-    expect(getProviderTone({ enabled: true, active: false })).toBe('#475569');
-  });
-
   it('maps notices for suggestion and OCR failures', () => {
     expect(resolveSuggestionNotice({ code: 'provider_disabled' }, t)).toBe(
-      'Centralny model AI jest wyłączony. AI jest teraz niedostępne. Nadal możesz ręcznie wybrać kwadrant i dodać zadanie.'
+      `${t.aiSuggestDisabled}. ${t.aiManualFallback}`
     );
     expect(resolveSuggestionNotice(new Error('x'), t)).toBe(
-      'AI jest teraz niedostępne. Nadal możesz ręcznie wybrać kwadrant i dodać zadanie.'
+      t.aiManualFallback
     );
-    expect(resolveSuggestionNotice({ code: 'request_timeout' }, t)).toContain('Wybierz kwadrant ręcznie');
+    expect(resolveSuggestionNotice({ code: 'request_timeout' }, t)).toBe(t.aiRequestTimedOut);
     expect(resolveAIActionNotice({ code: 'request_cancelled' }, t)).toBe('');
+    expect(resolveAIActionNotice({ code: 'request_timeout' }, t)).toBe(t.aiRequestTimedOut);
     expect(resolveAIActionNotice({ code: 'ai_unavailable' }, t)).toBe(t.aiManualFallback);
+    expect(resolveAIActionNotice(new Error('x'), t, 'business fallback')).toBe('business fallback');
+    expect(resolveAIActionNotice(new Error('x'), t)).toBe(t.aiManualFallback);
 
-    expect(resolveOCRNotice({ code: 'provider_disabled' }, t)).toBe('Centralny OCR jest wyłączony');
+    expect(resolveOCRNotice({ code: 'provider_disabled' }, t)).toBe('Skanowanie notatek jest chwilowo niedostępne');
     expect(resolveOCRNotice({ code: 'provider_unavailable' }, t)).toBe(
-      'Centralny OCR jest niedostępny'
+      'Skanowanie notatek jest chwilowo niedostępne'
     );
     expect(resolveOCRNotice({ code: 'ocr_request_failed' }, t)).toBe(
-      'Wysyłka do OCR nie powiodła się, nic nie dodano'
+      'Nie udało się odczytać obrazu, więc nic nie dodano'
     );
     expect(resolveOCRNotice({ code: 'request_timeout' }, t)).toBe(t.aiRequestTimedOut);
     expect(resolveOCRNotice({ code: 'request_cancelled' }, t)).toBe('');
-    expect(resolveOCRNotice(new Error('x'), t)).toBe('Centralny OCR jest niedostępny');
+    expect(resolveOCRNotice(new Error('x'), t)).toBe('Skanowanie notatek jest chwilowo niedostępne');
   });
 
   it('resolves the suggested quadrant and display title', () => {

@@ -274,7 +274,18 @@ export function createTasksRouter(repository: TaskRepository = new MongooseTaskR
 
   router.get('/delegated', async (req, res, next) => {
     try {
-      const tasks = await repository.listDelegated(principalScope(req), MAX_PAGE_LIMIT);
+      const lifecycleValue = req.query.lifecycle ?? 'active';
+      if (
+        typeof lifecycleValue !== 'string' ||
+        (lifecycleValue !== 'all' && !TASK_LIFECYCLE_STATES.includes(lifecycleValue as never))
+      ) {
+        return res.status(400).json({ error: 'Invalid lifecycle filter' });
+      }
+      const tasks = await repository.listDelegated(
+        principalScope(req),
+        MAX_PAGE_LIMIT,
+        lifecycleValue as TaskLifecycleFilter
+      );
       return res.json(tasks);
     } catch (error) {
       return next(error);

@@ -387,10 +387,10 @@ def create_app(
     ):
       raise HTTPException(status_code=403, detail="Invalid internal dispatch signature.")
 
-  def require_admin(request: Request) -> None:
+  def require_operator(request: Request) -> None:
     principal = request.state.principal
-    if "admin" not in principal.roles and "*" not in principal.scopes:
-      raise HTTPException(status_code=403, detail="Administrator access required.")
+    if "ai:operate" not in principal.scopes:
+      raise HTTPException(status_code=403, detail="Operator access required.")
 
   @app.middleware("http")
   async def log_requests(request: Request, call_next):
@@ -945,7 +945,7 @@ def create_app(
   def add_training_example(
     text: str = Form(..., min_length=1),
     quadrant: int = Form(..., ge=0, le=3),
-    _admin: None = Depends(require_admin),
+    _operator: None = Depends(require_operator),
   ):
     require_management_enabled()
     record = resolved_store.add_example(text=text, quadrant=quadrant)
@@ -955,7 +955,7 @@ def create_app(
     }
 
   @app.post("/retrain")
-  def retrain_model(preserve_experience: bool = Form(True), _admin: None = Depends(require_admin)):
+  def retrain_model(preserve_experience: bool = Form(True), _operator: None = Depends(require_operator)):
     require_management_enabled()
     return resolved_ai_service.retrain(preserve_experience=preserve_experience)
 
@@ -964,7 +964,7 @@ def create_app(
     task: str = Form(..., min_length=1),
     predicted_quadrant: int = Form(..., ge=0, le=3),
     correct_quadrant: int = Form(..., ge=0, le=3),
-    _admin: None = Depends(require_admin),
+    _operator: None = Depends(require_operator),
   ):
     require_management_enabled()
     return resolved_ai_service.learn_feedback(
@@ -975,7 +975,7 @@ def create_app(
     )
 
   @app.post("/learn-ocr-feedback")
-  def learn_from_ocr_feedback(request: OCRFeedbackRequest, _admin: None = Depends(require_admin)):
+  def learn_from_ocr_feedback(request: OCRFeedbackRequest, _operator: None = Depends(require_operator)):
     require_management_enabled()
     if not request.tasks:
       raise HTTPException(status_code=400, detail="At least one accepted OCR task is required.")
@@ -994,11 +994,11 @@ def create_app(
     )
 
   @app.get("/training-stats")
-  def get_training_stats(_admin: None = Depends(require_admin)):
+  def get_training_stats(_operator: None = Depends(require_operator)):
     return resolved_ai_service.get_training_stats()
 
   @app.delete("/training-data")
-  def clear_training_data(keep_defaults: bool = Query(True), _admin: None = Depends(require_admin)):
+  def clear_training_data(keep_defaults: bool = Query(True), _operator: None = Depends(require_operator)):
     require_management_enabled()
     records = resolved_store.clear(keep_defaults=keep_defaults)
     return {
@@ -1010,7 +1010,7 @@ def create_app(
   def get_examples_by_quadrant(
     quadrant: int,
     limit: int = Query(10, ge=1, le=100),
-    _admin: None = Depends(require_admin),
+    _operator: None = Depends(require_operator),
   ):
     if quadrant not in QUADRANT_NAMES:
       raise HTTPException(status_code=404, detail="Quadrant not found.")
@@ -1022,6 +1022,19 @@ def create_app(
 
   @app.get("/capabilities")
   def get_capabilities():
+    caps = resolved_ai_service.capabilities()
+    return {
+      "classification": caps["classification"],
+      "reasoned_local_analysis": caps["reasoned_local_analysis"],
+      "knowledge_retrieval": caps["knowledge_retrieval"],
+      "retrieval_augmented_generation": caps["retrieval_augmented_generation"],
+      "local_similar_examples": caps["local_similar_examples"],
+      "ocr": caps["ocr"],
+      "batch_analysis": caps["batch_analysis"],
+    }
+
+  @app.get("/operator/capabilities")
+  def get_operator_capabilities(_operator: None = Depends(require_operator)):
     caps = resolved_ai_service.capabilities()
     device = get_device()
     caps["device"] = {
@@ -1041,7 +1054,7 @@ def create_app(
   def update_provider(
     provider_name: Literal["local_model", "tesseract"],
     request: ProviderStateRequest,
-    _admin: None = Depends(require_admin),
+    _operator: None = Depends(require_operator),
   ):
     require_management_enabled()
     return resolved_ai_service.set_provider_enabled(provider_name, request.enabled)

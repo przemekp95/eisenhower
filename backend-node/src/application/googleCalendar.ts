@@ -18,6 +18,7 @@ export interface GoogleCalendarPort {
   watch(input: Record<string, unknown>): Promise<{ channelId: string; resourceId: string; expiresAt: Date }>;
 }
 export interface GoogleCalendarConfig { watchCallbackUrls: string[] }
+const MAX_CHANGE_PAGES = 20;
 export function loadGoogleCalendarConfig(env: NodeJS.ProcessEnv): GoogleCalendarConfig | null {
   const raw = env.GOOGLE_CALENDAR_WATCH_CALLBACK_URLS?.trim();
   if (!raw) return null;
@@ -188,23 +189,42 @@ export class GoogleCalendarService {
     const state = await CalendarSyncStateModel.findOne({ connectionId, tenantId: resolved.connection.tenantId, ownerId: resolved.connection.ownerId });
     const authoritative = state?.pageToken ?? state?.syncToken ?? 'full-resync';
     if (!authoritative || checkpoint !== authoritative) throw new Error('calendar_checkpoint_mismatch');
-    const result = await this.port.listChanges({
-      accessToken: resolved.tokens.accessToken, calendarId: resolved.connection.calendarId,
-      ...(state?.pageToken ? { pageToken: state.pageToken } : state?.syncToken ? { syncToken: state.syncToken } : {}),
-    });
-    // Establish the incremental baseline without importing unrelated historical
-    // calendar entries. Future watch-driven pulls return changes normally.
-    return checkpoint === 'full-resync' ? { ...result, events: [] } : result;
+    const baseline = checkpoint === 'full-resync';
+    const events: unknown[] = [];
+    let pageToken = state?.pageToken;
+    const syncToken = state?.syncToken;
+    for (let page = 0; page < MAX_CHANGE_PAGES; page += 1) {
+      const result = await this.port.listChanges({
+        accessToken: resolved.tokens.accessToken,
+        calendarId: resolved.connection.calendarId,
+        ...(pageToken ? { pageToken } : syncToken ? { syncToken } : {}),
+      });
+      if (result.resetRequired) return { events: [], resetRequired: true };
+      if (!baseline) events.push(...result.events);
+      if (result.nextPageToken) {
+        pageToken = result.nextPageToken;
+        continue;
+      }
+      if (!result.nextSyncToken) throw new Error('google_calendar_changes_checkpoint_missing');
+      return { events, nextSyncToken: result.nextSyncToken };
+    }
+    throw new Error('google_calendar_changes_page_limit_exceeded');
   }
 
   async watch(connectionId: string, address: string) {
     if (!this.config.watchCallbackUrls.includes(address)) throw new Error('calendar_watch_address_denied');
     const resolved = await this.resolveConnection(connectionId);
     const channelId = randomUUID();
+    const channelToken = randomBytes(32).toString('base64url');
     const result = await this.port.watch({
       accessToken: resolved.tokens.accessToken, calendarId: resolved.connection.calendarId,
-      address, channelId, channelToken: randomBytes(32).toString('base64url'),
+      address, channelId, channelToken,
     });
-    return { channelId: result.channelId, resourceId: result.resourceId, expiresAt: result.expiresAt.toISOString() };
+    return {
+      channelId: result.channelId,
+      resourceId: result.resourceId,
+      expiresAt: result.expiresAt.toISOString(),
+      verificationHash: createHash('sha256').update(channelToken).digest('hex'),
+    };
   }
 }

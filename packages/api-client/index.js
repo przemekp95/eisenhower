@@ -9,6 +9,8 @@ const CALENDAR_API_PATHS = Object.freeze({
   status: '/calendar/status',
   syncRequests: '/calendar/sync-requests',
   conflicts: '/calendar/conflicts',
+  oauthStart: '/calendar/oauth/start',
+  oauthDisconnect: '/calendar/oauth/disconnect',
 });
 
 const MAX_TASK_LIST_PAGES = 100;
@@ -320,8 +322,12 @@ function createTaskApi(baseUrl, optionsOrFetch) {
         code: 'invalid_response',
       });
     },
-    async listDelegatedTasks() {
-      const response = await request(buildUrl(baseUrl, TASK_API_PATHS.delegatedTasks));
+    async listDelegatedTasks(lifecycle = 'active') {
+      if (!TASK_LIFECYCLE_FILTERS.includes(lifecycle)) {
+        throw createRequestError('Task lifecycle filter is invalid', { code: 'invalid_request' });
+      }
+      const path = `${TASK_API_PATHS.delegatedTasks}?lifecycle=${encodeURIComponent(lifecycle)}`;
+      const response = await request(buildUrl(baseUrl, path));
       return readJson(response, {
         defaultError: 'Task request failed',
         errorCode: 'task_request_failed',
@@ -458,6 +464,30 @@ function createTaskApi(baseUrl, optionsOrFetch) {
         defaultError: 'Calendar request failed',
         errorCode: 'calendar_request_failed',
         validate: isCalendarStatusDto,
+        invalidResponse: 'Calendar API returned an invalid response',
+      });
+    },
+    async startCalendarConnection(returnPath) {
+      const response = await request(buildUrl(baseUrl, CALENDAR_API_PATHS.oauthStart), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ returnPath }),
+      });
+      return readJson(response, {
+        defaultError: 'Calendar request failed',
+        errorCode: 'calendar_request_failed',
+        validate: (value) => isRecord(value) && typeof value.authorizationUrl === 'string',
+        invalidResponse: 'Calendar API returned an invalid response',
+      });
+    },
+    async disconnectCalendar() {
+      const response = await request(buildUrl(baseUrl, CALENDAR_API_PATHS.oauthDisconnect), {
+        method: 'POST',
+      });
+      return readJson(response, {
+        defaultError: 'Calendar request failed',
+        errorCode: 'calendar_request_failed',
+        validate: isNullDto,
         invalidResponse: 'Calendar API returned an invalid response',
       });
     },
@@ -836,6 +866,7 @@ function isCalendarStatusDto(value) {
   if (!isRecord(value) || !['disconnected', 'connected', 'pending'].includes(value.status)) {
     return false;
   }
+  if (typeof value.canConnect !== 'boolean') return false;
   if (value.status === 'disconnected') return value.connection === null;
   return Boolean(
     isRecord(value.connection) &&
@@ -844,6 +875,8 @@ function isCalendarStatusDto(value) {
     typeof value.connection.calendarId === 'string' &&
     isNonNegativeInteger(value.openConflicts) &&
     isNonNegativeInteger(value.pendingOutbox) &&
+    isNonNegativeInteger(value.failedSyncCount) &&
+    typeof value.syncProblem === 'boolean' &&
     isOptional(value.syncState, (item) => item === null || isRecord(item))
   );
 }
@@ -1234,63 +1267,26 @@ function isProviderStateDto(value) {
 }
 
 function isCapabilitiesDto(value) {
-  const device = value?.device;
+  const fields = new Set([
+    'classification',
+    'reasoned_local_analysis',
+    'retrieval_augmented_generation',
+    'knowledge_retrieval',
+    'local_similar_examples',
+    'ocr',
+    'batch_analysis',
+  ]);
   return Boolean(
     isRecord(value) &&
+    Object.keys(value).length === fields.size &&
+    Object.keys(value).every((field) => fields.has(field)) &&
     typeof value.classification === 'boolean' &&
-    typeof value.langchain_analysis === 'boolean' &&
+    typeof value.reasoned_local_analysis === 'boolean' &&
+    typeof value.retrieval_augmented_generation === 'boolean' &&
+    typeof value.knowledge_retrieval === 'boolean' &&
+    typeof value.local_similar_examples === 'boolean' &&
     typeof value.ocr === 'boolean' &&
-    typeof value.batch_analysis === 'boolean' &&
-    typeof value.training_management === 'boolean' &&
-    isOptional(value.reasoned_local_analysis, (item) => typeof item === 'boolean') &&
-    isOptional(value.retrieval_augmented_generation, (item) => typeof item === 'boolean') &&
-    isOptional(value.knowledge_retrieval, (item) => typeof item === 'boolean') &&
-    isOptional(value.local_similar_examples, (item) => typeof item === 'boolean') &&
-    isRecord(value.providers) &&
-    typeof value.providers.local_model === 'boolean' &&
-    typeof value.providers.ocr === 'boolean' &&
-    isOptional(value.providers.tesseract, (item) => typeof item === 'boolean') &&
-    isOptional(
-      value.provider_controls,
-      (item) =>
-        isRecord(item) && isProviderStateDto(item.local_model) && isProviderStateDto(item.tesseract)
-    ) &&
-    isOptional(
-      value.legacy,
-      (item) =>
-        isRecord(item) &&
-        item.langchain_analysis === false &&
-        item.analyze_langchain_route === 'deprecated_alias' &&
-        item.use_rag_parameter === 'deprecated_alias_for_similar_examples'
-    ) &&
-    isOptional(
-      value.model,
-      (item) =>
-        isRecord(item) &&
-        typeof item.ready === 'boolean' &&
-        typeof item.name === 'string' &&
-        typeof item.encoder_name === 'string' &&
-        typeof item.artifact_path === 'string' &&
-        typeof item.index_path === 'string' &&
-        isOptional(item.trained_at, (entry) =>
-          isNullable(entry, (nested) => typeof nested === 'string')
-        ) &&
-        isOptional(item.validation_skipped, (entry) => typeof entry === 'boolean') &&
-        isOptional(item.last_error, (entry) =>
-          isNullable(entry, (nested) => typeof nested === 'string')
-        ) &&
-        isOptional(item.examples_seen, isNonNegativeInteger)
-    ) &&
-    isRecord(device) &&
-    typeof device.type === 'string' &&
-    typeof device.name === 'string' &&
-    typeof device.vendor === 'string' &&
-    typeof device.runtime === 'string' &&
-    isNullable(device.runtime_version, (item) => typeof item === 'string') &&
-    typeof device.torch_device === 'string' &&
-    isNonNegativeInteger(device.count) &&
-    isNullable(device.cuda_version, (item) => typeof item === 'string') &&
-    typeof device.accelerated === 'boolean'
+    typeof value.batch_analysis === 'boolean'
   );
 }
 

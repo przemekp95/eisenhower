@@ -172,7 +172,7 @@
       "typeVersion": 2,
       "position": [180, 180],
       "parameters": {
-        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/watch/renew';\nconst job = $('Split Reconciliation Jobs').item.json;\nconst body = { tenantId: job.tenantId, ownerId: job.ownerId, connectionId: job.connectionId, channelId: $json.channelId, resourceId: $json.resourceId, expiresAt: $json.expiresAt };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/watch/renew';\nconst job = $('Split Reconciliation Jobs').item.json;\nconst body = { tenantId: job.tenantId, ownerId: job.ownerId, connectionId: job.connectionId, channelId: $json.channelId, resourceId: $json.resourceId, verificationHash: $json.verificationHash, expiresAt: $json.expiresAt };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
       }
     },
     {

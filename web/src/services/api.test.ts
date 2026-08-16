@@ -1,13 +1,10 @@
 import { runtimeConfig } from '../config';
-import { getAdminToken, getApiToken, setAdminToken } from '../authSession';
+import { getApiToken } from '../authSession';
 import {
-  addTrainingExample,
   analyzeTask,
   analyzeTaskWithRag,
   answerKnowledge,
-  answerKnowledge,
   batchAnalyzeTasks,
-  clearTrainingData,
   classifyTask,
   createTask,
   deleteTask,
@@ -16,15 +13,10 @@ import {
   getCalendarConflicts,
   getCalendarStatus,
   getDelegatedTasks,
-  getExamplesByQuadrant,
   getTasks,
-  getTrainingStats,
-  learnFromAcceptedOCRTasks,
-  learnFromFeedback,
-  retrainModel,
   requestCalendarSync,
+  disconnectCalendar,
   resolveCalendarConflict,
-  setProviderEnabled,
   transitionTaskLifecycle,
   transitionTaskDelegation,
   updateTaskDelegation,
@@ -32,6 +24,7 @@ import {
   updateTask,
   clearApiToken,
   setApiToken,
+  startCalendarConnection,
 } from './api';
 
 const taskResponse = {
@@ -42,13 +35,6 @@ const taskResponse = {
   important: false,
   lifecycleState: 'active' as const,
   revision: 4,
-};
-
-const trainingExample = {
-  text: 'Task',
-  quadrant: 0,
-  source: 'user',
-  timestamp: '2026-08-11T12:00:00Z',
 };
 
 const classificationResponse = {
@@ -93,7 +79,6 @@ describe('api service', () => {
   beforeEach(() => {
     global.fetch = jest.fn();
     setApiToken('runtime-only-test-token');
-    setAdminToken('runtime-only-admin-token');
   });
 
   afterEach(() => {
@@ -158,32 +143,6 @@ describe('api service', () => {
     (global.fetch as jest.Mock).mockResolvedValue({ ok: true, status: 200, json: async () => [] });
     await getTasks();
     expect((global.fetch as jest.Mock).mock.calls[1][1]?.headers?.Authorization).toBeUndefined();
-  });
-
-  it('preserves admin credentials on authorization failures such as disabled management', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: false,
-      status: 403,
-      json: async () => ({ error: 'Administrator access required' }),
-    });
-
-    await expect(getTrainingStats()).rejects.toThrow('Administrator access required');
-
-    expect(getApiToken()).toBe('runtime-only-test-token');
-    expect(getAdminToken()).toBe('runtime-only-admin-token');
-  });
-
-  it('clears only the admin credential after an administrator authentication failure', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: false,
-      status: 401,
-      json: async () => ({ error: 'Invalid administrator code' }),
-    });
-
-    await expect(getTrainingStats()).rejects.toThrow('Invalid administrator code');
-
-    expect(getApiToken()).toBe('runtime-only-test-token');
-    expect(getAdminToken()).toBeNull();
   });
 
   it('uses runtime config for task CRUD', async () => {
@@ -269,6 +228,9 @@ describe('api service', () => {
         headers: new Headers({ 'content-type': 'application/json' }),
         json: async () => ({
           status: 'connected',
+          canConnect: true,
+          failedSyncCount: 0,
+          syncProblem: false,
           connection: { id: 'connection-1', provider: 'google', calendarId: 'primary' },
           openConflicts: 1,
           pendingOutbox: 0,
@@ -446,7 +408,7 @@ describe('api service', () => {
 
     expect(global.fetch).toHaveBeenNthCalledWith(
       1,
-      `${runtimeConfig.apiUrl}/tasks/delegated`,
+      `${runtimeConfig.apiUrl}/tasks/delegated?lifecycle=active`,
       expect.any(Object)
     );
     expect(global.fetch).toHaveBeenNthCalledWith(
@@ -509,50 +471,6 @@ describe('api service', () => {
           },
         },
       },
-      { message: 'Training example added.', example: trainingExample },
-      {
-        message: 'Feedback captured.',
-        predicted_quadrant: 1,
-        correct_quadrant: 2,
-        example: trainingExample,
-      },
-      { examples_added: 1, retrained: false },
-      { message: 'Retrained.', preserve_experience: false, status: 'completed' },
-      { message: 'Retrained.', preserve_experience: true, status: 'completed' },
-      {
-        total_examples: 1,
-        quadrant_distribution: { 0: 1 },
-        data_sources: { user: 1 },
-        data_file: '/tmp/training.json',
-        model_file: '/tmp/model.pt',
-        last_updated: '2026-08-11T12:00:00Z',
-        quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
-      },
-      { message: 'Training data cleared.', remaining_examples: 0 },
-      { message: 'Training data cleared.', remaining_examples: 1 },
-      { quadrant: 0, quadrant_name: 'Do Now', examples: [trainingExample] },
-      { quadrant: 0, quadrant_name: 'Do Now', examples: [trainingExample] },
-      {
-        classification: true,
-        langchain_analysis: false,
-        ocr: true,
-        batch_analysis: true,
-        training_management: true,
-        providers: { local_model: true, tesseract: true, ocr: true },
-        device: {
-          type: 'cpu',
-          name: 'cpu',
-          vendor: 'cpu',
-          runtime: 'cpu',
-          runtime_version: null,
-          torch_device: 'cpu',
-          count: 1,
-          cuda_version: null,
-          accelerated: false,
-        },
-      },
-      { provider: 'local_model', enabled: false, available: true, active: false },
-      { provider: 'tesseract', enabled: true, available: true, active: true },
     ];
     (global.fetch as jest.Mock).mockImplementation(async () => ({
       ok: true,
@@ -566,19 +484,6 @@ describe('api service', () => {
     await analyzeTask('urgent', 'pl');
     await batchAnalyzeTasks(['one']);
     await extractTasksFromImage(new File(['task'], 'tasks.txt', { type: 'text/plain' }));
-    await addTrainingExample('task', 1);
-    await learnFromFeedback('task', 1, 2);
-    await learnFromAcceptedOCRTasks([{ text: 'task', quadrant: 2 }], false);
-    await retrainModel(false);
-    await retrainModel();
-    await getTrainingStats();
-    await clearTrainingData(false);
-    await clearTrainingData();
-    await getExamplesByQuadrant(0);
-    await getExamplesByQuadrant(0, 5);
-    await getCapabilities();
-    await setProviderEnabled('local_model', false);
-    await setProviderEnabled('tesseract', true);
 
     expect((global.fetch as jest.Mock).mock.calls[0][0]).toContain(runtimeConfig.aiApiUrl);
     expect((global.fetch as jest.Mock).mock.calls[0][0]).toBe(`${runtimeConfig.aiApiUrl}/classify`);
@@ -591,40 +496,6 @@ describe('api service', () => {
     );
     expect((global.fetch as jest.Mock).mock.calls[2][1].body).toBe(
       JSON.stringify({ task: 'urgent', language: 'pl' })
-    );
-    expect((global.fetch as jest.Mock).mock.calls[7][0]).toContain('/learn-ocr-feedback');
-    expect((global.fetch as jest.Mock).mock.calls[7][1].body).toBe(
-      JSON.stringify({ tasks: [{ task: 'task', quadrant: 2 }], retrain: false })
-    );
-    expect((global.fetch as jest.Mock).mock.calls[8][1].body.toString()).toContain(
-      'preserve_experience=false'
-    );
-    expect((global.fetch as jest.Mock).mock.calls[9][1].body.toString()).toContain(
-      'preserve_experience=true'
-    );
-    expect((global.fetch as jest.Mock).mock.calls[11][0]).toContain(
-      '/training-data?keep_defaults=false'
-    );
-    expect((global.fetch as jest.Mock).mock.calls[12][0]).toContain(
-      '/training-data?keep_defaults=true'
-    );
-    expect((global.fetch as jest.Mock).mock.calls[13][0]).toContain('/examples/0?limit=10');
-    expect((global.fetch as jest.Mock).mock.calls[16][0]).toContain('/providers/local_model');
-    expect((global.fetch as jest.Mock).mock.calls[16][1].body).toBe(
-      JSON.stringify({ enabled: false })
-    );
-    expect((global.fetch as jest.Mock).mock.calls[17][0]).toContain('/providers/tesseract');
-    expect((global.fetch as jest.Mock).mock.calls[5][1].headers.Authorization).toBe(
-      'Bearer runtime-only-admin-token'
-    );
-    expect((global.fetch as jest.Mock).mock.calls[6][1].headers.Authorization).toBe(
-      'Bearer runtime-only-admin-token'
-    );
-    expect((global.fetch as jest.Mock).mock.calls[7][1].headers.Authorization).toBe(
-      'Bearer runtime-only-admin-token'
-    );
-    expect((global.fetch as jest.Mock).mock.calls[8][1].headers.Authorization).toBe(
-      'Bearer runtime-only-admin-token'
     );
   });
 
@@ -726,28 +597,56 @@ describe('api service', () => {
     );
   });
 
-  it('uses retrain=true by default for accepted OCR feedback', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      status: 200,
-      headers: new Headers({ 'content-type': 'application/json' }),
-      json: async () => ({ examples_added: 1, retrained: true }),
-    });
+  it('starts and disconnects a calendar connection through business-facing wrappers', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ authorizationUrl: 'https://accounts.google.com/o/oauth2/auth' }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 204, headers: new Headers() });
 
-    await learnFromAcceptedOCRTasks([{ text: 'task', quadrant: 0 }]);
+    await startCalendarConnection('/matrix?tab=calendar');
+    await disconnectCalendar();
 
-    expect((global.fetch as jest.Mock).mock.calls[0][1].body).toBe(
-      JSON.stringify({ tasks: [{ task: 'task', quadrant: 0 }], retrain: true })
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      `${runtimeConfig.apiUrl}/calendar/oauth/start`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ returnPath: '/matrix?tab=calendar' }),
+      })
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      `${runtimeConfig.apiUrl}/calendar/oauth/disconnect`,
+      expect.objectContaining({ method: 'POST' })
     );
   });
 
-  it('skips OCR feedback requests for empty accepted-task batches', async () => {
-    await expect(learnFromAcceptedOCRTasks([])).resolves.toEqual({
-      examples_added: 0,
-      retrained: false,
+  it('reads the public business capabilities', async () => {
+    const capabilities = {
+      classification: true,
+      reasoned_local_analysis: true,
+      knowledge_retrieval: true,
+      retrieval_augmented_generation: true,
+      local_similar_examples: true,
+      ocr: true,
+      batch_analysis: true,
+    };
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => capabilities,
     });
 
-    expect(global.fetch).not.toHaveBeenCalled();
+    await expect(getCapabilities()).resolves.toEqual(capabilities);
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${runtimeConfig.aiApiUrl}/capabilities`,
+      expect.objectContaining({ credentials: 'omit' })
+    );
   });
 
   it('throws JSON errors when requests fail', async () => {

@@ -169,7 +169,11 @@ export interface TaskRepository {
     expectedRevision: number,
     schedule: TaskSchedule | null
   ): Promise<StoredTask | null>;
-  listDelegated(scope: TaskPrincipalScope, limit: number): Promise<StoredTask[]>;
+  listDelegated(
+    scope: TaskPrincipalScope,
+    limit: number,
+    lifecycle: TaskLifecycleFilter
+  ): Promise<StoredTask[]>;
   updateDelegation(
     scope: TaskScope,
     id: string,
