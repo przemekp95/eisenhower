@@ -554,6 +554,32 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertNotIn("/health/", command)
     self.assertEqual(healthcheck["start_period"], "600s")
 
+  def test_async_ingestion_producer_and_worker_share_one_bounded_durable_queue(self):
+    producer = self.services["ai-service"]
+    worker = self.services["rag-worker"]
+
+    for service in (producer, worker):
+      self.assertIn("JOBS_DATABASE_PATH=/app/data/jobs.sqlite3", service["environment"])
+      self.assertIn("rag_jobs:/app/data", service["volumes"])
+
+    self.assertTrue(worker["init"])
+    self.assertEqual(worker["mem_limit"], "${RAG_WORKER_MEMORY_LIMIT:-5g}")
+    self.assertEqual(worker["cpus"], "${RAG_WORKER_CPUS:-2.0}")
+    self.assertEqual(worker["pids_limit"], 512)
+
+  def test_mongodb_has_explicit_small_host_resource_and_cache_bounds(self):
+    mongodb = self.services["mongodb"]
+
+    self.assertEqual(mongodb["mem_limit"], "${MONGODB_MEMORY_LIMIT:-1g}")
+    self.assertEqual(mongodb["cpus"], "${MONGODB_CPUS:-1.0}")
+    self.assertEqual(mongodb["pids_limit"], 512)
+    self.assertIn("--wiredTigerCacheSizeGB", mongodb["command"])
+    cache_option = mongodb["command"].index("--wiredTigerCacheSizeGB")
+    self.assertEqual(
+      mongodb["command"][cache_option + 1],
+      "${MONGODB_CACHE_SIZE_GB:-0.25}",
+    )
+
 
 if __name__ == "__main__":
   unittest.main()

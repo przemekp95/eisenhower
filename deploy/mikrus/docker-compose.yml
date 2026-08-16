@@ -4,6 +4,14 @@ services:
   mongodb:
     image: mongo:7-jammy@sha256:04582c3a144d088f841c446abfc19f79adcefa8bd00ad4a7fb18e27b9585c5d6
     restart: unless-stopped
+    command:
+      - mongod
+      - --bind_ip_all
+      - --wiredTigerCacheSizeGB
+      - ${MONGODB_CACHE_SIZE_GB:-0.25}
+    mem_limit: ${MONGODB_MEMORY_LIMIT:-1g}
+    cpus: ${MONGODB_CPUS:-1.0}
+    pids_limit: 512
     environment:
       MONGO_INITDB_DATABASE: eisenhower
     volumes:

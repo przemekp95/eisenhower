@@ -71,6 +71,20 @@ describe('production deployment boundaries', () => {
     expect(aiBlock).toContain('RELEASE_SHA:');
   });
 
+  it('bounds MongoDB cache and container resources on the small Mikrus host', () => {
+    const compose = fs.readFileSync(
+      path.join(repositoryRoot, 'deploy/mikrus/docker-compose.yml'),
+      'utf8'
+    );
+    const mongoBlock = compose.slice(compose.indexOf('  mongodb:'), compose.indexOf('  ai-service:'));
+
+    expect(mongoBlock).toContain('--wiredTigerCacheSizeGB');
+    expect(mongoBlock).toContain('${MONGODB_CACHE_SIZE_GB:-0.25}');
+    expect(mongoBlock).toContain('mem_limit: ${MONGODB_MEMORY_LIMIT:-1g}');
+    expect(mongoBlock).toContain('cpus: ${MONGODB_CPUS:-1.0}');
+    expect(mongoBlock).toContain('pids_limit: 512');
+  });
+
   it('activates private same-SHA metrics scraping and bounded alert rules on Mikrus', () => {
     const compose = fs.readFileSync(
       path.join(repositoryRoot, 'deploy/mikrus/docker-compose.yml'), 'utf8'

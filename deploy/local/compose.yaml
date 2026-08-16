@@ -74,7 +74,16 @@ services:
   mongodb:
     <<: *common
     image: ${MONGODB_IMAGE:-mongo:7.0.24-jammy}
-    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    command:
+      - mongod
+      - --replSet
+      - rs0
+      - --bind_ip_all
+      - --wiredTigerCacheSizeGB
+      - ${MONGODB_CACHE_SIZE_GB:-0.25}
+    mem_limit: ${MONGODB_MEMORY_LIMIT:-1g}
+    cpus: ${MONGODB_CPUS:-1.0}
+    pids_limit: 512
     ports:
       - "${MONGODB_BIND_ADDRESS:-127.0.0.1}:${MONGODB_BIND_PORT:-27017}:27017"
     environment:
@@ -134,6 +143,7 @@ services:
       - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/eisenhower?replicaSet=rs0}
       - MONGODB_DATABASE=${MONGODB_DATABASE:-eisenhower}
       - CANONICAL_DOCUMENTS_COLLECTION=${CANONICAL_DOCUMENTS_COLLECTION:-rag_documents}
+      - JOBS_DATABASE_PATH=/app/data/jobs.sqlite3
       - RERANKER_BASE_URL=${RERANKER_BASE_URL:-http://reranker:8000}
       - RERANKER_API_KEY=${RERANKER_API_KEY:-}
       - RERANKER_ALLOWED_HOSTS=${RERANKER_ALLOWED_HOSTS:-reranker}
@@ -142,6 +152,7 @@ services:
       - INFERENCE_MODEL=${INFERENCE_MODEL:-}
       - INFERENCE_ALLOWED_HOSTS=${INFERENCE_ALLOWED_HOSTS:-inference}
     volumes:
+      - rag_jobs:/app/data
       - model_cache:/home/app/.cache/huggingface
       - audit_data:/app/audit
       - ${AI_EVALUATION_FILE:?approved evaluation file is required}:/app/evaluation/production.json:ro
@@ -208,6 +219,10 @@ services:
     <<: *common
     image: ${AI_IMAGE:?AI_IMAGE must be a versioned tag or digest}
     command: ["python", "-m", "app.worker_runtime"]
+    init: true
+    mem_limit: ${RAG_WORKER_MEMORY_LIMIT:-5g}
+    cpus: ${RAG_WORKER_CPUS:-2.0}
+    pids_limit: 512
     healthcheck:
       test:
         - CMD

@@ -1,5 +1,25 @@
 # Done
 
+## TASK-050: Optimize MongoDB, SQLite and governed document extraction
+**Priority:** P0 | **Tags:** mongodb, sqlite, docling, unstructured, performance, reliability
+
+Repair the local asynchronous ingestion path and make the MongoDB, SQLite and Docling/Unstructured runtime bounded, observable and benchmarked without weakening canonical data, audit, idempotency or fail-closed extraction contracts.
+
+### Plan
+
+- Make the API producer and RAG worker share one durable SQLite queue and prove the Compose contract plus enqueue-to-claim behavior.
+- Add bounded SQLite retention and query-aligned indexes/WAL settings while preserving audit durability, replay protection, leases and single-site ownership.
+- Align MongoDB indexes, pool/timeouts and container resource bounds with observed query shapes; add explain-based and capacity verification.
+- Compose governed Docling/Unstructured extraction into the asynchronous worker behind the existing project port, reuse safe parser state and execute parsing in an isolated process with hard wall/RAM limits.
+- Add extraction, queue and database metrics plus reproducible cold/warm, concurrency and growth benchmarks with explicit local-only evidence boundaries.
+- Run focused red-green loops, broad repository verification, Compose validation and an isolated local runtime rehearsal before documenting the result.
+
+### Outcome
+
+Repaired the split SQLite queue by mounting one durable volume into producer and worker, added WAL/FULL durability, query-aligned claim/cleanup indexes, bounded retention with compact idempotency receipts, stale-heartbeat cleanup and bounded per-job-type metrics. Added strict signed `rag.extract_document` producer/worker contracts and composed manifest-governed Docling plus controlled Unstructured fallback into a reusable spawned child with enforced wall time, monitored RSS kill, a 5 GiB outer cgroup bound, converter reuse, quality gates and source spans. Bounded Mongo pools/timeouts, aligned task/calendar/RAG/memory indexes, stored memory expirations as BSON dates for TTL, and set explicit 0.25 GiB WiredTiger/1 GiB container defaults. Local evidence includes a shared-queue producer-to-worker run, Mongo `IXSCAN` without blocking sort, 50k-row SQLite smoke, 11-case cold/warm extraction smoke, real reused-child extraction and an over-cap kill. Full repository gates passed; no commit, merge, deployment, production traffic or representative private-document acceptance was performed.
+
+---
+
 ## TASK-045: Resolve default-branch Dependabot alerts and promote green dev
 **Priority:** P0 | **Tags:** security, dependencies, dependabot, release-gate
 

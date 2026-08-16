@@ -161,22 +161,38 @@ class WebhookReplayVerifier:
     secret: str,
     window_seconds: int = 300,
     replay_retention_seconds: int = WEBHOOK_REPLAY_RETENTION_SECONDS,
+    cleanup_batch_size: int = 1000,
     clock: Callable[[], int] | None = None,
   ):
     if not secret:
       raise ValueError("Webhook signing secret is required")
     if replay_retention_seconds <= window_seconds:
       raise ValueError("Replay retention must exceed the signature window")
+    if not 1 <= cleanup_batch_size <= 10_000:
+      raise ValueError("Replay cleanup batch size must be between 1 and 10000")
     self.path = path
     self.secret = secret.encode("utf-8")
     self.window_seconds = window_seconds
     self.replay_retention_seconds = replay_retention_seconds
+    self.cleanup_batch_size = cleanup_batch_size
     self.clock = clock or (lambda: int(datetime.now(timezone.utc).timestamp()))
     self.path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(self.path) as connection:
+    with self._connect() as connection:
       connection.execute(
         "CREATE TABLE IF NOT EXISTS webhook_events (event_id TEXT PRIMARY KEY, accepted_at INTEGER NOT NULL)"
       )
+      connection.execute(
+        "CREATE INDEX IF NOT EXISTS webhook_events_retention_idx "
+        "ON webhook_events(accepted_at, event_id)"
+      )
+
+  def _connect(self):
+    connection = sqlite3.connect(self.path, timeout=5)
+    connection.execute("PRAGMA busy_timeout = 5000")
+    connection.execute("PRAGMA journal_mode = WAL")
+    connection.execute("PRAGMA synchronous = FULL")
+    connection.execute("PRAGMA wal_autocheckpoint = 1000")
+    return connection
 
   @staticmethod
   def signature_message(
@@ -275,11 +291,18 @@ class WebhookReplayVerifier:
   def reserve_event(self, event_id: str) -> bool:
     now = self.clock()
     try:
-      with sqlite3.connect(self.path, timeout=5) as connection:
+      with self._connect() as connection:
         connection.execute("BEGIN IMMEDIATE")
         connection.execute(
-          "DELETE FROM webhook_events WHERE accepted_at < ?",
-          (now - self.replay_retention_seconds,),
+          """
+          DELETE FROM webhook_events WHERE event_id IN (
+            SELECT event_id FROM webhook_events
+            WHERE accepted_at < ?
+            ORDER BY accepted_at, event_id
+            LIMIT ?
+          )
+          """,
+          (now - self.replay_retention_seconds, self.cleanup_batch_size),
         )
         connection.execute(
           "INSERT INTO webhook_events (event_id, accepted_at) VALUES (?, ?)",

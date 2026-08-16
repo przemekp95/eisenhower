@@ -4,12 +4,30 @@ from hashlib import sha256
 import json
 from typing import Callable
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from ..document_extraction.models import OCRRequest
 from ..document_versions import DocumentVersionStore
 from ..job_worker import PermanentJobError
 from .errors import ProjectionUnavailable
-from .models import SourceDocument
+from .models import AccessScope, SourceDocument
+
+
+class _ExtractDocumentCommand(BaseModel):
+  model_config = ConfigDict(extra="forbid")
+
+  event_id: str = Field(..., min_length=1, max_length=256)
+  tenant_id: str = Field(..., min_length=1, max_length=128)
+  source: str = Field(..., min_length=1, max_length=4096)
+  scope: AccessScope
+  source_sequence: int = Field(..., ge=0, le=9_223_372_036_854_775_807)
+  ocr: OCRRequest | None = None
+
+  @model_validator(mode="after")
+  def validate_tenant_boundary(self):
+    if self.tenant_id != self.scope.tenant_id:
+      raise ValueError("command tenant does not match access scope")
+    return self
 
 
 def canonical_checksum(value) -> str:
@@ -33,12 +51,14 @@ class RagJobHandlers:
     chunking_version: str,
     reindex_project: Callable[[dict], None] | None = None,
     evaluate: Callable[[dict], None] | None = None,
+    extract_document=None,
   ):
     self.ingestion = ingestion_application
     self.versions = version_store
     self.chunking_version = chunking_version
     self._reindex_project = reindex_project
     self._evaluate = evaluate
+    self._extract_document = extract_document
 
   @property
   def registry(self) -> dict[str, Callable[[dict], None]]:
@@ -47,6 +67,7 @@ class RagJobHandlers:
       "rag.tombstone": self.tombstone,
       "rag.reindex_project": self.reindex_project,
       "rag.evaluate": self.evaluate,
+      "rag.extract_document": self.extract_document,
     }
 
   def upsert(self, payload: dict) -> None:
@@ -114,6 +135,21 @@ class RagJobHandlers:
     if self._evaluate is None:
       raise PermanentJobError("evaluation handler is not configured")
     self._evaluate(payload)
+
+  def extract_document(self, payload: dict) -> None:
+    if self._extract_document is None:
+      raise PermanentJobError("document extraction handler is not configured")
+    try:
+      command = _ExtractDocumentCommand.model_validate(payload)
+    except ValidationError as error:
+      raise PermanentJobError("invalid document extraction command") from error
+    result = self._extract_document.ingest(
+      command.source,
+      scope=command.scope,
+      source_sequence=command.source_sequence,
+      ocr=command.ocr,
+    )
+    self._require_projection_complete(result)
 
   @staticmethod
   def _source_document(envelope: dict, raw: dict) -> SourceDocument:

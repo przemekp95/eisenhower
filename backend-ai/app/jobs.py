@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256
 import json
 from pathlib import Path
 import sqlite3
@@ -9,6 +10,7 @@ from uuid import NAMESPACE_URL, uuid5
 
 
 ALLOWED_JOB_TYPES = {
+  "rag.extract_document",
   "rag.upsert",
   "rag.tombstone",
   "rag.reindex_project",
@@ -70,9 +72,33 @@ class SqliteJobQueue:
         """
       )
       self._migrate_legacy_schema(connection)
+      connection.execute("DROP INDEX IF EXISTS jobs_claim_idx")
       connection.execute(
-        "CREATE INDEX IF NOT EXISTS jobs_claim_idx "
-        "ON jobs(status, available_at, lease_expires_at, created_at)"
+        "CREATE INDEX IF NOT EXISTS jobs_queued_claim_idx "
+        "ON jobs(available_at, created_at, job_id) WHERE status = 'queued'"
+      )
+      connection.execute(
+        "CREATE INDEX IF NOT EXISTS jobs_running_claim_idx "
+        "ON jobs(lease_expires_at, created_at, job_id) WHERE status = 'running'"
+      )
+      connection.execute(
+        "CREATE INDEX IF NOT EXISTS jobs_terminal_cleanup_idx "
+        "ON jobs(updated_at, job_id) WHERE status IN ('completed', 'dead_letter')"
+      )
+      connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS job_terminal_receipts (
+          job_id TEXT PRIMARY KEY,
+          idempotency_key TEXT NOT NULL UNIQUE,
+          job_type TEXT NOT NULL,
+          request_fingerprint TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status IN ('completed', 'dead_letter')),
+          attempts INTEGER NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          last_error TEXT
+        )
+        """
       )
       connection.execute(
         """
@@ -81,6 +107,10 @@ class SqliteJobQueue:
           updated_at TEXT NOT NULL
         )
         """
+      )
+      connection.execute(
+        "CREATE INDEX IF NOT EXISTS worker_heartbeats_cleanup_idx "
+        "ON worker_heartbeats(updated_at, worker_id)"
       )
 
   @staticmethod
@@ -100,7 +130,12 @@ class SqliteJobQueue:
     connection.execute("UPDATE jobs SET available_at = created_at WHERE available_at IS NULL")
 
   def _connect(self):
-    return sqlite3.connect(self.path, timeout=5)
+    connection = sqlite3.connect(self.path, timeout=5)
+    connection.execute("PRAGMA busy_timeout = 5000")
+    connection.execute("PRAGMA journal_mode = WAL")
+    connection.execute("PRAGMA synchronous = FULL")
+    connection.execute("PRAGMA wal_autocheckpoint = 1000")
+    return connection
 
   def enqueue(self, idempotency_key: str, job_type: str, payload: dict) -> Job:
     if job_type not in ALLOWED_JOB_TYPES:
@@ -110,8 +145,32 @@ class SqliteJobQueue:
     job_id = str(uuid5(NAMESPACE_URL, f"{job_type}:{idempotency_key}"))
     created_at = datetime.now(timezone.utc).isoformat()
     serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    fingerprint = self._request_fingerprint(job_type, serialized)
     with self._connect() as connection:
       connection.execute("BEGIN IMMEDIATE")
+      receipt = connection.execute(
+        """
+        SELECT job_id, idempotency_key, job_type, request_fingerprint, status,
+          attempts, created_at, updated_at, last_error
+        FROM job_terminal_receipts WHERE idempotency_key = ?
+        """,
+        (idempotency_key,),
+      ).fetchone()
+      if receipt is not None:
+        if receipt[2] != job_type or receipt[3] != fingerprint:
+          raise JobConflictError()
+        return Job(
+          job_id=receipt[0],
+          idempotency_key=receipt[1],
+          job_type=receipt[2],
+          payload=payload,
+          status=receipt[4],
+          attempts=int(receipt[5]),
+          created_at=receipt[6],
+          updated_at=receipt[7],
+          available_at=receipt[7],
+          last_error=receipt[8],
+        )
       connection.execute(
         """
         INSERT OR IGNORE INTO jobs
@@ -150,6 +209,16 @@ class SqliteJobQueue:
         "SELECT status, COUNT(*) FROM jobs GROUP BY status"
       ).fetchall()
     return {str(status): int(count) for status, count in rows}
+
+  def counts_by_type_and_status(self) -> dict[tuple[str, str], int]:
+    with self._connect() as connection:
+      rows = connection.execute(
+        "SELECT job_type, status, COUNT(*) FROM jobs GROUP BY job_type, status"
+      ).fetchall()
+    return {
+      (str(job_type), str(status)): int(count)
+      for job_type, status, count in rows
+    }
 
   def record_worker_heartbeat(
     self,
@@ -197,9 +266,13 @@ class SqliteJobQueue:
       connection.execute("BEGIN IMMEDIATE")
       row = connection.execute(
         f"""
-        SELECT {JOB_COLUMNS} FROM jobs
-        WHERE (status = 'queued' AND available_at <= ?)
-           OR (status = 'running' AND lease_expires_at <= ?)
+        SELECT {JOB_COLUMNS} FROM (
+          SELECT {JOB_COLUMNS} FROM jobs
+          WHERE status = 'queued' AND available_at <= ?
+          UNION ALL
+          SELECT {JOB_COLUMNS} FROM jobs
+          WHERE status = 'running' AND lease_expires_at <= ?
+        )
         ORDER BY created_at, job_id
         LIMIT 1
         """,
@@ -220,6 +293,67 @@ class SqliteJobQueue:
         f"SELECT {JOB_COLUMNS} FROM jobs WHERE job_id = ?", (row[0],)
       ).fetchone()
     return self._row_to_job(claimed)
+
+  def prune_terminal_jobs(self, *, before: datetime, limit: int) -> int:
+    """Compact terminal jobs to receipts without touching retryable work."""
+    self._validate_cleanup_limit(limit)
+    with self._connect() as connection:
+      connection.execute("BEGIN IMMEDIATE")
+      rows = connection.execute(
+        """
+        SELECT job_id, idempotency_key, job_type, payload_json, status, attempts,
+          created_at, updated_at, last_error
+        FROM jobs
+        WHERE status IN ('completed', 'dead_letter') AND updated_at < ?
+        ORDER BY updated_at, job_id
+        LIMIT ?
+        """,
+        (before.isoformat(), limit),
+      ).fetchall()
+      connection.executemany(
+        """
+        INSERT INTO job_terminal_receipts (
+          job_id, idempotency_key, job_type, request_fingerprint, status,
+          attempts, created_at, updated_at, last_error
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+          (
+            row[0], row[1], row[2], self._request_fingerprint(row[2], row[3]),
+            row[4], row[5], row[6], row[7], row[8],
+          )
+          for row in rows
+        ],
+      )
+      connection.executemany("DELETE FROM jobs WHERE job_id = ?", [(row[0],) for row in rows])
+    return len(rows)
+
+  def prune_stale_worker_heartbeats(self, *, before: datetime, limit: int) -> int:
+    """Delete a bounded batch of heartbeat rows older than the supplied cutoff."""
+    self._validate_cleanup_limit(limit)
+    with self._connect() as connection:
+      connection.execute("BEGIN IMMEDIATE")
+      cursor = connection.execute(
+        """
+        DELETE FROM worker_heartbeats WHERE worker_id IN (
+          SELECT worker_id FROM worker_heartbeats
+          WHERE updated_at < ?
+          ORDER BY updated_at, worker_id
+          LIMIT ?
+        )
+        """,
+        (before.isoformat(), limit),
+      )
+    return int(cursor.rowcount)
+
+  @staticmethod
+  def _validate_cleanup_limit(limit: int) -> None:
+    if not 1 <= limit <= 10_000:
+      raise ValueError("Cleanup limit must be between 1 and 10000")
+
+  @staticmethod
+  def _request_fingerprint(job_type: str, serialized_payload: str) -> str:
+    return sha256(f"{job_type}\0{serialized_payload}".encode("utf-8")).hexdigest()
 
   def renew_lease(
     self,

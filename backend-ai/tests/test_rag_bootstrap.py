@@ -5,7 +5,7 @@ import pytest
 
 from app.config import Settings
 from app.rag.canonical import CanonicalRetriever
-from app.rag.bootstrap import build_rag_service, is_private_mongodb_uri
+from app.rag.bootstrap import build_rag_service, create_mongo_client, is_private_mongodb_uri
 from app.rag.adapters import SentenceTransformerEmbeddingProvider
 from app.rag.hybrid import HybridRetriever
 
@@ -47,6 +47,33 @@ class FakeMongo:
 
 class FakeQdrant:
   pass
+
+
+def test_mongo_client_has_bounded_driver_defaults_and_allows_overrides():
+  calls = []
+
+  def factory(uri, **options):
+    calls.append((uri, options))
+    return object()
+
+  create_mongo_client("mongodb://mongo:27017/db", client_factory=factory)
+  create_mongo_client(
+    "mongodb://mongo:27017/db",
+    client_factory=factory,
+    maxPoolSize=8,
+    socketTimeoutMS=12_000,
+  )
+
+  assert calls[0][1] == {
+    "connectTimeoutMS": 5_000,
+    "serverSelectionTimeoutMS": 5_000,
+    "socketTimeoutMS": 10_000,
+    "maxPoolSize": 20,
+    "minPoolSize": 0,
+    "maxIdleTimeMS": 30_000,
+  }
+  assert calls[1][1]["maxPoolSize"] == 8
+  assert calls[1][1]["socketTimeoutMS"] == 12_000
 
 
 @pytest.mark.parametrize("uri", [

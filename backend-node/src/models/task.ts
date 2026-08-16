@@ -122,6 +122,7 @@ const taskSchema = new Schema<Task>(
 );
 
 taskSchema.index({ tenantId: 1, ownerId: 1, createdAt: -1, _id: -1 });
+taskSchema.index({ tenantId: 1, ownerId: 1, lifecycleState: 1, createdAt: -1, _id: -1 });
 taskSchema.index({
   tenantId: 1,
   'delegation.assigneeUserId': 1,

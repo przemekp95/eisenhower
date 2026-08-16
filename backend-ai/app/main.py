@@ -17,6 +17,7 @@ from .audit import AuditAction, AuditEvent, AuditOutcome, SqliteAuditSink
 from .config import Settings, load_settings
 from .device import get_device
 from .defaults import QUADRANT_NAMES
+from .document_extraction.models import OCRRequest
 from .local_model import ModelNotReadyError
 from .generation.models import KnownStatement
 from .jobs import JobConflictError, SqliteJobQueue
@@ -57,6 +58,7 @@ SENSITIVE_ACTIONS = {
   "/internal/webhooks/n8n/verify": AuditAction.INGEST,
   "/internal/rag/ingestion/upsert": AuditAction.INGEST,
   "/internal/rag/ingestion/tombstone": AuditAction.INGEST,
+  "/internal/rag/ingestion/extract": AuditAction.INGEST,
   "/internal/rag/reindex": AuditAction.REINDEX,
   "/internal/rag/evaluations": AuditAction.ADMIN_OPERATION,
 }
@@ -127,6 +129,21 @@ class InternalJobRequest(StrictRequest):
   documents: list[dict] | None = Field(default=None, max_length=500)
   document_ids: list[str] | None = Field(default=None, max_length=5000)
   dataset_version: str | None = Field(default=None, max_length=128)
+
+
+class InternalExtractionJobRequest(StrictRequest):
+  event_id: str = Field(..., min_length=1, max_length=128)
+  tenant_id: str = Field(..., min_length=1, max_length=128)
+  source: str = Field(..., min_length=1, max_length=4096)
+  scope: AccessScope
+  source_sequence: int = Field(..., ge=0, le=9_223_372_036_854_775_807)
+  ocr: OCRRequest | None = None
+
+  @model_validator(mode="after")
+  def scope_must_match_envelope_tenant(self):
+    if self.tenant_id != self.scope.tenant_id:
+      raise ValueError("envelope tenant does not match access scope")
+    return self
 
 
 class BatchRequest(StrictRequest):
@@ -348,7 +365,7 @@ def create_app(
 
   def require_internal_dispatch(
     request: Request,
-    envelope: InternalJobRequest,
+    envelope: InternalJobRequest | InternalExtractionJobRequest,
     operation: str,
   ) -> None:
     principal = request.state.principal
@@ -406,8 +423,8 @@ def create_app(
   def prometheus_metrics():
     metrics.set_job_queue_enabled(job_queue is not None)
     if job_queue is not None:
-      for status, count in job_queue.counts_by_status().items():
-        metrics.set_job_depth(status, count)
+      metrics.set_job_depths(job_queue.counts_by_status())
+      metrics.set_job_depths_by_type(job_queue.counts_by_type_and_status())
       metrics.set_job_worker_heartbeat_age(job_queue.latest_worker_heartbeat_age_seconds())
     generation_status = (
       resolved_rag_service.generation_status()
@@ -826,8 +843,10 @@ def create_app(
   def enqueue_internal_job(
     operation: str,
     job_type: str,
-    envelope: InternalJobRequest,
+    envelope: InternalJobRequest | InternalExtractionJobRequest,
     http_request: Request,
+    *,
+    include_none: bool = False,
   ):
     if job_queue is None:
       raise HTTPException(status_code=503, detail="Durable job queue is disabled.")
@@ -836,7 +855,11 @@ def create_app(
     if idempotency_key != envelope.event_id:
       raise HTTPException(status_code=400, detail="Idempotency-Key must equal event_id.")
     try:
-      job = job_queue.enqueue(idempotency_key, job_type, envelope.model_dump(exclude_none=True))
+      job = job_queue.enqueue(
+        idempotency_key,
+        job_type,
+        envelope.model_dump(exclude_none=not include_none),
+      )
     except JobConflictError as exception:
       raise HTTPException(status_code=409, detail=str(exception)) from exception
     return JSONResponse(
@@ -855,6 +878,16 @@ def create_app(
     if not envelope.document_ids:
       raise HTTPException(status_code=422, detail="document_ids are required.")
     return enqueue_internal_job("tombstone", "rag.tombstone", envelope, http_request)
+
+  @app.post("/internal/rag/ingestion/extract", status_code=202)
+  def enqueue_extraction(envelope: InternalExtractionJobRequest, http_request: Request):
+    return enqueue_internal_job(
+      "extract_document",
+      "rag.extract_document",
+      envelope,
+      http_request,
+      include_none=True,
+    )
 
   @app.post("/internal/rag/reindex", status_code=202)
   def enqueue_reindex(envelope: InternalJobRequest, http_request: Request):

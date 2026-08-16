@@ -12,6 +12,7 @@ from app.audit import AuditAction, AuditOutcome
 from app.generation.models import InformationDelta, KnowledgeAnswerClaim, statement_checksum
 from app.local_model import LocalMiniLMClassifier, LocalPrediction, ModelNotReadyError, SimilarExample
 from app.jobs import SqliteJobQueue
+from app.job_worker import JobWorker
 from app.main import create_app
 from app.rag.hybrid import RerankerUnavailable
 from app.rag.models import (
@@ -1092,6 +1093,163 @@ def test_internal_job_idempotency_key_reuse_with_a_different_request_returns_con
   }
   assert changed_type.status_code == 409
   assert changed_type.json() == changed_payload.json()
+
+
+def test_internal_document_extraction_is_strictly_validated_and_durably_enqueued(
+  tmp_path: Path,
+):
+  secret = "webhook-secret"
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    internal_api_token="internal-token",
+    internal_allowed_tenants=("tenant-a",),
+    webhook_secret=secret,
+    jobs_database_path=tmp_path / "jobs.sqlite3",
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service),
+    headers={"Authorization": "Bearer internal-token"},
+  )
+  payload = {
+    "event_id": "extract-event-1",
+    "tenant_id": "tenant-a",
+    "source": "corpus://approved/handbook.pdf",
+    "scope": {
+      "tenant_id": "tenant-a",
+      "user_id": "user-1",
+      "project_ids": ["project-1"],
+      "roles": ["knowledge-reader"],
+    },
+    "source_sequence": 7,
+    "ocr": None,
+  }
+  signature = hmac.new(
+    secret.encode(),
+    b"extract-event-1|tenant-a|extract_document",
+    sha256,
+  ).hexdigest()
+
+  response = client.post(
+    "/internal/rag/ingestion/extract",
+    json=payload,
+    headers={
+      "Idempotency-Key": payload["event_id"],
+      "X-Eisenhower-Signature": signature,
+    },
+  )
+
+  assert response.status_code == 202
+  queued = SqliteJobQueue(settings.jobs_database_path).get(response.json()["job_id"])
+  assert queued is not None
+  assert queued.job_type == "rag.extract_document"
+  assert queued.payload == payload
+
+
+def test_internal_document_extraction_rejects_cross_tenant_scope_before_enqueue(
+  tmp_path: Path,
+):
+  secret = "webhook-secret"
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    internal_api_token="internal-token",
+    internal_allowed_tenants=("tenant-a",),
+    webhook_secret=secret,
+    jobs_database_path=tmp_path / "jobs.sqlite3",
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service),
+    headers={"Authorization": "Bearer internal-token"},
+  )
+  signature = hmac.new(
+    secret.encode(),
+    b"extract-event-cross-tenant|tenant-a|extract_document",
+    sha256,
+  ).hexdigest()
+
+  response = client.post(
+    "/internal/rag/ingestion/extract",
+    json={
+      "event_id": "extract-event-cross-tenant",
+      "tenant_id": "tenant-a",
+      "source": "corpus://approved/handbook.pdf",
+      "scope": {
+        "tenant_id": "tenant-b",
+        "user_id": "user-1",
+        "project_ids": [],
+        "roles": [],
+      },
+      "source_sequence": 7,
+      "ocr": None,
+    },
+    headers={
+      "Idempotency-Key": "extract-event-cross-tenant",
+      "X-Eisenhower-Signature": signature,
+    },
+  )
+
+  assert response.status_code == 422
+  assert SqliteJobQueue(settings.jobs_database_path).counts_by_status() == {}
+
+
+def test_internal_document_extraction_reaches_worker_over_the_same_sqlite_queue(
+  tmp_path: Path,
+):
+  secret = "webhook-secret"
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    internal_api_token="internal-token",
+    internal_allowed_tenants=("tenant-a",),
+    webhook_secret=secret,
+    jobs_database_path=tmp_path / "shared" / "jobs.sqlite3",
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(settings=settings, store=store, local_model=FakeLocalModel())
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service),
+    headers={"Authorization": "Bearer internal-token"},
+  )
+  payload = {
+    "event_id": "extract-runtime-1",
+    "tenant_id": "tenant-a",
+    "source": "corpus/approved-documents/extraction-golden-en.html",
+    "scope": {"tenant_id": "tenant-a", "user_id": "user-1"},
+    "source_sequence": 1,
+    "ocr": None,
+  }
+  signature = hmac.new(
+    secret.encode(),
+    b"extract-runtime-1|tenant-a|extract_document",
+    sha256,
+  ).hexdigest()
+
+  accepted = client.post(
+    "/internal/rag/ingestion/extract",
+    json=payload,
+    headers={
+      "Idempotency-Key": payload["event_id"],
+      "X-Eisenhower-Signature": signature,
+    },
+  )
+  observed = []
+  queue = SqliteJobQueue(settings.jobs_database_path)
+  worker = JobWorker(queue, {"rag.extract_document": observed.append})
+
+  processed = worker.run_once(worker_id="runtime-verifier")
+
+  assert accepted.status_code == 202
+  assert processed is True
+  assert observed == [{
+    **payload,
+    "scope": {**payload["scope"], "project_ids": [], "roles": []},
+  }]
+  assert queue.get(accepted.json()["job_id"]).status == "completed"
 
 
 def test_root_and_capabilities(real_model_bundle):
