@@ -129,6 +129,18 @@ def evaluation_approval_issues(
   return []
 
 
+def merge_production_reasons(
+  production_reasons: list[dict[str, Any]],
+  development_gate: dict[str, Any],
+) -> list[dict[str, Any]]:
+  """Make every failed model-quality gate part of the production decision."""
+  merged = list(production_reasons)
+  for reason in development_gate.get("reasons", []):
+    if reason not in merged:
+      merged.append(reason)
+  return merged
+
+
 def evaluate_incumbent(
   model: Any,
   *,
@@ -356,6 +368,7 @@ def run_benchmark() -> dict[str, Any]:
     production_reasons.append(
       {"code": "selective_operating_point_not_met", "actual": selective, "minimum_accuracy": 0.90, "minimum_coverage": 0.70}
     )
+  production_reasons = merge_production_reasons(production_reasons, gate)
   return {
     "scope": "local",
     "contract": {"0": "Do Now", "1": "Delegate", "2": "Schedule", "3": "Delete"},

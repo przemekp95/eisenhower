@@ -52,20 +52,3 @@ After evaluation and CI gates pass, promote `dev` to `master` through the requir
 The repository owner approves deployment authorization and telemetry ownership green without reservations through 2026-08-23 23:59:59 Europe/Warsaw. Direct public HTTPS, deployed exact SHA and active same-SHA telemetry remain technical acceptance evidence.
 
 ---
-
-## TASK-002: Benchmark and approve the frozen production evaluation
-**Priority:** P0 | **Tags:** ai, evaluation, production-gate
-
-Run the MLP, centroid, and incumbent comparison on the frozen human-approved dataset, preserve the exact dataset SHA-256 and encoder revision, and promote only if every production threshold passes.
-
-### Plan
-
-- Finalize and freeze the human-approved evaluation packet.
-- Run the production profile benchmark against the exact immutable dataset.
-- Keep promotion fail-closed on governance, quality, stability, leakage, or approval-SHA failure.
-
-### Conditional checkpoint
-
-The repository owner approves the human gate green without reservations through 2026-08-23 23:59:59 Europe/Warsaw, so the benchmark and promotion decision may proceed. Preserve actual annotation files, hashes and computed metrics truthfully.
-
----

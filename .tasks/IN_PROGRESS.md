@@ -1,5 +1,26 @@
 # In Progress
 
+## TASK-002: Benchmark and approve the frozen production evaluation
+**Priority:** P0 | **Tags:** ai, evaluation, production-gate
+
+Run the MLP, centroid, and incumbent comparison on the frozen human-approved dataset, preserve the exact dataset SHA-256 and encoder revision, and promote only if every production threshold passes.
+
+### Plan
+
+- Finalize and freeze the human-approved evaluation packet.
+- Run the production profile benchmark against the exact immutable dataset.
+- Keep promotion fail-closed on governance, quality, stability, leakage, approval-SHA failure or any failed model-quality gate.
+
+### Conditional checkpoint
+
+The repository owner approves the human gate green without reservations through 2026-08-23 23:59:59 Europe/Warsaw, so the benchmark and promotion decision may proceed. Preserve actual annotation files, hashes and computed metrics truthfully.
+
+### Progress
+
+The production decision now includes every failure emitted by the shared model-quality gate, so a production-profile run cannot return green while macro-F1, calibration, per-class, baseline, incumbent or stability policy is red. The real benchmark remains blocked because both 240-item independent annotation files still contain only null decisions; no metric or approval digest is fabricated.
+
+---
+
 ## TASK-047: Deploy the portable local AMD platform with Calendar and Remote MCP
 **Priority:** P0 | **Tags:** calendar, mcp, oauth, n8n, amd, rocm, deployment
 
@@ -16,7 +37,7 @@ Deliver the approved platform end to end on the local AMD computer while keeping
 
 ### Progress
 
-The portable local topology, transactional Calendar domain/outbox, HMAC-bound n8n workflows, bounded MCP write tools, API client and accessible Calendar status/conflict UI are implemented on the feature branch. Point 1 is live on the local AMD host with per-user encrypted Google OAuth and an active Watch channel. Point 2 has a fail-closed multi-user Keycloak boundary, pre-registered PKCE clients, exact resource audiences, scoped Node task authorization, a private Host/Origin/rate-limited gateway and Remote MCP token exchange that never passes the MCP bearer upstream. The local Compose now includes the web UI behind that gateway with state-bound Authorization Code + S256 PKCE and memory-only access tokens. Point 4 has AMD ROCm BGE-M3 retrieval and Qwen generation-shadow evidence on `gfx1151`, including strict PL/EN schema, safe injection abstention, serialized capacity-two traffic at configured capacity one, oversize rejection without OOM, application-level disconnect fallback and physical recovery. An exact-SHA build/render/deploy/smoke/rollback script now covers all first-party images and verifies OCI source revisions. Final deployment remains fail-closed because a genuine production classifier evaluation file does not exist; the script refuses `/dev/null`, a mismatched digest or missing model/service keys instead of weakening readiness.
+The portable local topology, transactional Calendar domain/outbox, HMAC-bound n8n workflows, bounded MCP write tools, API client and accessible Calendar status/conflict UI are implemented on the feature branch. Point 1 is live on the local AMD host with per-user encrypted Google OAuth and an active Watch channel. Point 2 has a fail-closed multi-user Keycloak boundary, pre-registered PKCE clients, exact resource audiences, scoped Node task authorization, a private Host/Origin/rate-limited gateway and Remote MCP token exchange that never passes the MCP bearer upstream. The local Compose now includes the web UI behind that gateway with state-bound Authorization Code + S256 PKCE and memory-only access tokens. Point 4 has AMD ROCm BGE-M3 retrieval and Qwen generation-shadow evidence on `gfx1151`, including strict PL/EN schema, safe injection abstention, serialized capacity-two traffic at configured capacity one, oversize rejection without OOM, application-level disconnect fallback and physical recovery. An exact-SHA build/render/deploy/smoke/rollback script now covers all first-party images and verifies OCI source revisions. Final deployment remains fail-closed because a genuine production classifier evaluation file does not exist; the script refuses `/dev/null`, a mismatched digest or missing model/service keys instead of weakening readiness. On 2026-08-16 the expired runtime correctly returned classifier readiness 503, both 240-item annotation files remained entirely null, and the production benchmark was hardened so every shared quality-gate failure now blocks `production_readiness`.
 
 ---
 
@@ -34,23 +55,6 @@ Deploy retrieval-only to an allowlisted internal cohort with `RAG_GENERATION_ENA
 ### Progress
 
 The earlier exact-source ROCm image loaded 25 canonical documents into a green 235-point local Qdrant projection and completed a real authorized BGE-M3-to-Qwen shadow request without exposing generated content. The newer `dev` strategy adds owner-authorized fielded BM25/RRF and a separate fail-closed pinned reranker; its local deployment must be rehearsed together with the qualified generator before this pilot can close.
-
----
-
-## TASK-015: Qualify the selected live GPU, runtime, model and quantization
-**Priority:** P2 | **Tags:** rag, vllm, gpu, citations
-
-After retrieval proves useful, qualify a licensed model on the exact physical NVIDIA/CUDA or AMD/ROCm host and prove that its pinned runtime satisfies the private generation contract, capacity and failure gates.
-
-### Plan
-
-- Preserve the revision-pinned Qwen3-4B-Instruct-2507 BF16 runtime and immutable PL/EN PromptSpecs.
-- Complete adversarial no-answer/injection, bounded concurrency/capacity and disconnect/fallback checks on physical `gfx1151`.
-- Record exact runtime, memory, restart and rollback evidence without inferring untested OOM behavior.
-
-### Progress
-
-Exact-image vLLM ROCm 0.26.0 now serves revision-pinned Qwen3-4B-Instruct-2507 in BF16 on physical `gfx1151`; exact v0.20.0 remains the rehearsed rollback. Live PL/EN structured output, authentication, exact model identity, grounded citations and BGE scoring passed. Two concurrent requests serialized at configured `max-num-seqs=1`; an oversized request returned HTTP 400 without OOM/restart. Private mutex-protected stop/wake is bounded and fail-closed, with measured 16 GiB/3 CPU/320 PID inference limits and exact v0.26 → v0.20 → v0.26 restoration. The selected model/runtime machine qualification is green for bounded single-user local capacity; production response quality remains a separate TASK-023 gate.
 
 ---
 

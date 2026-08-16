@@ -5,6 +5,7 @@ from scripts.benchmark_classifier import (
   evaluation_approval_issues,
   evaluation_sha256,
   evaluate_incumbent,
+  merge_production_reasons,
 )
 
 
@@ -39,3 +40,20 @@ def test_incumbent_comparison_reports_missing_artifact_instead_of_silently_skipp
 
   assert metrics is None
   assert report == {"available": False, "reason": "incumbent_artifact_missing"}
+
+
+def test_production_reasons_include_every_failed_model_quality_gate():
+  governance = [{"code": "evaluation_not_approved"}]
+  gate = {
+    "passed": False,
+    "reasons": [
+      {"code": "macro_f1_too_low", "actual": 0.79, "minimum": 0.80},
+      {"code": "calibration_ece_too_high", "actual": 0.11, "maximum": 0.10},
+    ],
+  }
+
+  assert merge_production_reasons(governance, gate) == [
+    {"code": "evaluation_not_approved"},
+    {"code": "macro_f1_too_low", "actual": 0.79, "minimum": 0.80},
+    {"code": "calibration_ece_too_high", "actual": 0.11, "maximum": 0.10},
+  ]

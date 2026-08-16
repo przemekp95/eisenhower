@@ -276,8 +276,8 @@ class LocalProductionContractTest(unittest.TestCase):
     rocm_dockerfile = (ROOT / "backend-ai" / "Dockerfile.rocm").read_text(encoding="utf-8")
     rocm_requirements = (ROOT / "backend-ai" / "requirements-knowledge-rocm.txt").read_text(encoding="utf-8")
     self.assertIn("ENTRYPOINT []", rocm_dockerfile)
-    self.assertIn("grpcio==1.78.0", rocm_requirements)
-    self.assertIn("protobuf>=6.31.1,<7", rocm_requirements)
+    self.assertIn("grpcio==1.83.0", rocm_requirements)
+    self.assertIn("protobuf>=7.35.1,<8", rocm_requirements)
     self.assertIn(
       "rocm/pytorch@sha256:4449f856653602317e4101a76fce599c7fcd58ccec2e539951fce5f73083179e",
       rocm_dockerfile,
