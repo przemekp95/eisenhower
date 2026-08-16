@@ -1,23 +1,5 @@
 # In Progress
 
-## TASK-060: Consolidate and qualify outstanding dependency updates
-**Priority:** P1 | **Tags:** dependencies, security, maintenance, ci
-
-Replace the stale and overlapping Dependabot branches with one compatible, reproducible dependency set. Preserve the existing FastAPI, Express, React, mobile, Android and release-security boundaries, and promote only an exact green result through `dev` to `master` without deployment or image publication.
-
-### Plan
-
-- Capture the concrete failures from every red Dependabot PR and classify older local or remote branches as included, incompatible or already superseded.
-- Consolidate compatible Python, Node, web, mobile and GitHub Actions updates while retaining explicit version constraints where upstream major releases are not yet compatible.
-- Run focused resolver, audit, unit, integration, build, Android and full repository verification without weakening security or functional assertions.
-- Promote the exact green SHA through reviewed `dev` and `master` PRs, close superseded Dependabot PRs with evidence, then verify synchronized branches and an empty alert dashboard.
-
-### Progress
-
-The consolidated graph now replaces the stale Dependabot branches: Node CI and the digest-pinned web build use Node 24, Cucumber 13 is qualified, unused direct Babel presets were removed, React and React Test Renderer are aligned, and compatible Python, npm and GitHub Actions updates are applied. A second coherent-stack pass qualified Vite 8 with its Rolldown/Babel peer graph, JOSE 6 through a lazy native ESM boundary, React Native Testing Library 14 with genuinely asynchronous interactions, Uvicorn 0.52.3 and NumPy 2.4.6. Jest stays on 29 only because the current `jest-expo` 55 package imports Jest 29 internals; Jest 30 is rejected as an upstream-incompatible isolated major rather than hidden with a resolver bypass. Full `make verify`, native Android `assembleRelease`, APK integrity and endpoint checks, both web Docker targets, npm/pip audits and all-severity Trivy scans are green. Promotion and Dependabot branch closeout remain.
-
----
-
 ## TASK-047: Deploy the portable local AMD platform with Calendar and Remote MCP
 **Priority:** P0 | **Tags:** calendar, mcp, oauth, n8n, amd, rocm, deployment
 

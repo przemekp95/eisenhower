@@ -1,5 +1,23 @@
 # Done
 
+## TASK-060: Consolidate and qualify outstanding dependency updates
+**Priority:** P1 | **Tags:** dependencies, security, maintenance, ci
+
+Replace the stale and overlapping Dependabot branches with one compatible, reproducible dependency set. Preserve the existing FastAPI, Express, React, mobile, Android and release-security boundaries, and promote only an exact green result through `dev` to `master` without deployment or image publication.
+
+### Plan
+
+- Capture the concrete failures from every red Dependabot PR and classify older local or remote branches as included, incompatible or already superseded.
+- Consolidate compatible Python, Node, web, mobile and GitHub Actions updates while retaining explicit version constraints where upstream major releases are not yet compatible.
+- Run focused resolver, audit, unit, integration, build, Android and full repository verification without weakening security or functional assertions.
+- Promote the exact green SHA through reviewed `dev` and `master` PRs, close superseded Dependabot PRs with evidence, then verify synchronized branches and an empty alert dashboard.
+
+### Progress
+
+The stale dependency branches were replaced by one qualified graph: Node 24, Cucumber 13, aligned React 19, compatible Python/npm/Actions patches, Vite 8 with its Rolldown/Babel peers, JOSE 6 behind a lazy native ESM boundary, React Native Testing Library 14 with asynchronous interactions, Uvicorn 0.52.3 and NumPy 2.4.6. Jest remains on 29 because `jest-expo` 55 still requires Jest 29-compatible internals; the isolated Jest 30 update was rejected with concrete failing evidence rather than hidden by a resolver bypass. Full repository verification, native Android, APK integrity/endpoints, both web Docker targets, npm/pip audits, all-severity Trivy, reviewed PRs #255/#256, post-merge CI and master-to-dev sync #257 passed. Dependabot security alerts are empty; no image was published and no deployment occurred.
+
+---
+
 ## TASK-059: Resolve new experimental LangChain Dependabot alerts
 **Priority:** P0 | **Tags:** security, dependencies, dependabot, langchain
 
