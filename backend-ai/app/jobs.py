@@ -44,11 +44,21 @@ class JobConflictError(RuntimeError):
     super().__init__("Idempotency key is already bound to a different job request.")
 
 
+class QueueCapacityExceeded(RuntimeError):
+  """Raised before accepting new work when the bounded durable queue is full."""
+
+  def __init__(self):
+    super().__init__("Durable job queue capacity has been reached.")
+
+
 class SqliteJobQueue:
   """Durable, leased command queue for a small single-site deployment."""
 
-  def __init__(self, path: Path):
+  def __init__(self, path: Path, *, max_queued_jobs: int = 1000):
+    if max_queued_jobs < 1:
+      raise ValueError("Queue capacity must be positive")
     self.path = path
+    self.max_queued_jobs = max_queued_jobs
     self.path.parent.mkdir(parents=True, exist_ok=True)
     with self._connect() as connection:
       connection.execute(
@@ -112,6 +122,22 @@ class SqliteJobQueue:
     serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     with self._connect() as connection:
       connection.execute("BEGIN IMMEDIATE")
+      existing = connection.execute(
+        f"SELECT {JOB_COLUMNS} FROM jobs WHERE idempotency_key = ?",
+        (idempotency_key,),
+      ).fetchone()
+      if existing is not None:
+        existing_payload = json.dumps(
+          json.loads(existing[3]), sort_keys=True, separators=(",", ":")
+        )
+        if existing[2] != job_type or existing_payload != serialized:
+          raise JobConflictError()
+        return self._row_to_job(existing)
+      pending = connection.execute(
+        "SELECT COUNT(*) FROM jobs WHERE status IN ('queued', 'running')"
+      ).fetchone()[0]
+      if int(pending) >= self.max_queued_jobs:
+        raise QueueCapacityExceeded()
       connection.execute(
         """
         INSERT OR IGNORE INTO jobs
@@ -127,13 +153,6 @@ class SqliteJobQueue:
       ).fetchone()
       if row is None:
         raise RuntimeError("Enqueued job could not be read back")
-      existing_payload = json.dumps(
-        json.loads(row[3]),
-        sort_keys=True,
-        separators=(",", ":"),
-      )
-      if row[2] != job_type or existing_payload != serialized:
-        raise JobConflictError()
     return self._row_to_job(row)
 
   def get(self, job_id: str) -> Job | None:

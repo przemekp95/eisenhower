@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from app.jobs import JobConflictError, SqliteJobQueue
+from app.jobs import JobConflictError, QueueCapacityExceeded, SqliteJobQueue
 from app.webhooks import (
   WEBHOOK_INGRESS_METHOD,
   WEBHOOK_INGRESS_PATH,
@@ -40,6 +40,17 @@ def test_sqlite_job_queue_treats_canonical_payload_as_the_idempotent_request(tmp
   )
 
   assert replay == created
+
+
+def test_sqlite_job_queue_is_bounded_without_breaking_idempotent_replay(tmp_path):
+  queue = SqliteJobQueue(tmp_path / "jobs.sqlite3", max_queued_jobs=1)
+  first = queue.enqueue("event-1", "rag.upsert", {"tenant_id": "tenant-a"})
+
+  assert queue.enqueue("event-1", "rag.upsert", {"tenant_id": "tenant-a"}) == first
+  with pytest.raises(QueueCapacityExceeded, match="capacity"):
+    queue.enqueue("event-2", "rag.upsert", {"tenant_id": "tenant-a"})
+
+  assert queue.get(first.job_id) == first
 
 
 @pytest.mark.parametrize(

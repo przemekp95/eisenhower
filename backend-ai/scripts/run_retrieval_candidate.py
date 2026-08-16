@@ -79,12 +79,13 @@ class VllmScoreReranker:
   model_name = "BAAI/bge-reranker-v2-m3"
   revision = "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e"
 
-  def __init__(self, base_url: str, api_key: str):
+  def __init__(self, base_url: str, api_key: str, *, client: httpx.Client | None = None):
     if not api_key:
       raise ValueError("reranker API key is required")
     self.base_url = base_url.rstrip("/")
+    self.client = client or httpx.Client()
     self.headers = {"Authorization": f"Bearer {api_key}"}
-    response = httpx.get(
+    response = self.client.get(
       f"{self.base_url}/v1/models",
       headers=self.headers,
       timeout=10,
@@ -97,8 +98,8 @@ class VllmScoreReranker:
       raise ValueError("reranker endpoint model length is outside the evaluated bounds")
 
   def score(self, query_text, ranked_candidates):
-    response = httpx.post(
-      f"{self.base_url}/score",
+    response = self.client.post(
+      f"{self.base_url}/v1/score",
       headers=self.headers,
       json={
         "text_1": query_text,
@@ -147,6 +148,7 @@ def run(
   mongo_uri: str = "mongodb://127.0.0.1:27017/?directConnection=true",
   qdrant_url: str = "http://127.0.0.1:6333",
   reranker_url: str | None = None,
+  reranker_api_key: str | None = None,
   allow_dirty: bool = False,
   chunk_size: int = 256,
   chunk_overlap: int = 32,
@@ -302,7 +304,7 @@ def run(
         "bge-v2-m3",
         VllmScoreReranker(
           reranker_url,
-          os.environ.get("EISENHOWER_RERANKER_API_KEY", ""),
+          reranker_api_key or os.environ.get("EISENHOWER_RERANKER_API_KEY", ""),
         ),
       ),)
     else:
@@ -445,6 +447,10 @@ def main() -> None:
     help="Use a loopback/private vLLM score endpoint exposing the pinned BGE revision.",
   )
   parser.add_argument(
+    "--reranker-api-key",
+    help="Bearer credential for the private vLLM /v1 score and model endpoints.",
+  )
+  parser.add_argument(
     "--mongo-uri", default="mongodb://127.0.0.1:27017/?directConnection=true",
     help="MongoDB URI for the isolated temporary candidate database.",
   )
@@ -469,6 +475,7 @@ def main() -> None:
     mongo_uri=args.mongo_uri,
     qdrant_url=args.qdrant_url,
     reranker_url=args.reranker_url,
+    reranker_api_key=args.reranker_api_key,
     allow_dirty=args.allow_dirty,
     chunk_size=args.chunk_size,
     chunk_overlap=args.chunk_overlap,

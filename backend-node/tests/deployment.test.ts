@@ -122,8 +122,11 @@ describe('production deployment boundaries', () => {
 
     expect(compose).toContain(':${IMAGE_TAG:?IMAGE_TAG is required}');
     expect(compose).not.toContain(':latest');
-    expect(release).toContain("github.event.workflow_run.conclusion == 'success'");
-    expect(release).toContain('IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}');
+    expect(release).not.toContain('workflow_run:');
+    expect(release).toContain('workflow_dispatch:');
+    expect(release).toContain('release_sha:');
+    expect(release).toContain("github.event.inputs.deploy == 'true'");
+    expect(release).toContain('IMAGE_TAG: ${{ inputs.release_sha }}');
     expect(release).toContain("format('{0}/{1}:{2}', env.DOCKER_HUB_USERNAME, matrix.tag, env.RELEASE_SHA)");
     expect(release).toMatch(/deploy-mikrus:[\s\S]*?needs:\s*docker-release/);
     expect(release).not.toMatch(/deploy-mikrus:[\s\S]*?needs:\s*\[docker-release, android-release\]/);
@@ -193,10 +196,18 @@ describe('production deployment boundaries', () => {
     expect(envExample).toContain('GRAFANA_ADMIN_PASSWORD=');
   });
 
-  it('builds AI runtime stages from the declared CPU dependency stage', () => {
+  it('builds isolated AI roles from their declared dependency stages', () => {
     const dockerfile = fs.readFileSync(path.join(repositoryRoot, 'backend-ai/Dockerfile'), 'utf8');
     const productionRequirements = fs.readFileSync(
       path.join(repositoryRoot, 'backend-ai/requirements.txt'),
+      'utf8'
+    );
+    const boundaryRequirements = fs.readFileSync(
+      path.join(repositoryRoot, 'backend-ai/requirements-boundary.txt'),
+      'utf8'
+    );
+    const knowledgeRequirements = fs.readFileSync(
+      path.join(repositoryRoot, 'backend-ai/requirements-knowledge.txt'),
       'utf8'
     );
     const experimentalRequirements = fs.readFileSync(
@@ -204,11 +215,16 @@ describe('production deployment boundaries', () => {
       'utf8'
     );
 
-    expect(dockerfile).toContain('FROM base AS dependencies-cpu');
-    expect(dockerfile).toContain('COPY --from=dependencies-cpu');
-    expect(dockerfile).toContain('FROM dependencies-cpu AS development');
+    expect(dockerfile).toContain('FROM requirements-source AS dependencies-boundary');
+    expect(dockerfile).toContain('FROM dependencies-boundary AS dependencies-ml');
+    expect(dockerfile).toContain('FROM dependencies-ml AS dependencies-classifier');
+    expect(dockerfile).toContain('FROM dependencies-ml AS dependencies-knowledge');
+    expect(dockerfile).toContain('FROM dependencies-knowledge AS dependencies-ingest');
     expect(dockerfile).not.toMatch(/(?:FROM|--from=) dependencies(?:\s|$)/);
-    expect(productionRequirements).toContain('qdrant-client');
+    expect(productionRequirements).toContain('-r requirements-ingest.txt');
+    expect(knowledgeRequirements).toContain('qdrant-client==1.19.0');
+    expect(knowledgeRequirements).toContain('llama-index-core==0.14.23');
+    expect(boundaryRequirements).not.toMatch(/qdrant|llama-index|torch/);
     expect(productionRequirements).not.toMatch(/minio|langchain/);
     expect(productionRequirements).not.toMatch(/pytest|pylint|pip-audit/);
     expect(experimentalRequirements).toContain('-r requirements.txt');

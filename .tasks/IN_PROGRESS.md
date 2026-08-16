@@ -1,5 +1,26 @@
 # In Progress
 
+## TASK-051: Promote the runtime-footprint work through green dev and master
+**Priority:** P0 | **Tags:** release, ci, runtime, rag, promotion
+
+Integrate every unpublished commit from `codex/runtime-footprint-20260815` with the current remote development
+line, extend the owner's active conditional checkpoints consistently through 2026-08-23 23:59:59
+Europe/Warsaw, and promote the exact verified source through the required PR-to-dev and dev-to-master workflow
+without deploying or changing production runtime state.
+
+### Plan
+
+- Reconcile the current `origin/dev`/`origin/master` ancestry and independently merged LlamaIndex work without
+  stash, history rewriting, contract regression or loss of either line's evidence.
+- Extend only active conditional checkpoints; preserve historical timestamps, consumed approvals and immutable
+  benchmark evidence.
+- Run the full local release gate and inspect the final security, HTTP/browser, async jobs/outbox, CQRS,
+  ports-and-adapters and TDD/DDD/BDD boundaries.
+- Push the feature branch, merge a green exact-head PR to `dev`, then merge a green dev-only PR to `master` and
+  verify post-merge CI for the exact remote SHA; do not deploy or modify production.
+
+---
+
 ## TASK-047: Deploy the portable local AMD platform with Calendar and Remote MCP
 **Priority:** P0 | **Tags:** calendar, mcp, oauth, n8n, amd, rocm, deployment
 
@@ -50,7 +71,7 @@ After retrieval proves useful, qualify a licensed model on the exact physical NV
 
 ### Progress
 
-Digest-pinned vLLM ROCm 0.20.0 serves revision-pinned Qwen3-4B-Instruct-2507 in BF16 on physical `gfx1151`. Live PL/EN structured output, authentication, exact model identity and grounded citations passed; adversarial task/context injection now produces a schema-valid abstention with null classification and empty citations/evidence. Two concurrent requests completed deterministically with configured `max-num-seqs=1`; an oversized request was rejected with HTTP 400, `OOMKilled=false`, no restart. A physical application drill proved RAG before disconnect, `generation_connection_error` classifier fallback with zero citations while vLLM was stopped, and RAG after healthy restart. Post-load use was about 2.98 GiB visible VRAM plus 45.09 GiB GTT. The selected model/runtime machine qualification is green for the bounded single-user local capacity; production response quality remains a separate TASK-023 gate.
+Exact-image vLLM ROCm 0.26.0 now serves revision-pinned Qwen3-4B-Instruct-2507 in BF16 on physical `gfx1151`; exact v0.20.0 remains the rehearsed rollback. Live PL/EN structured output, authentication, exact model identity, grounded citations and BGE scoring passed. Two concurrent requests serialized at configured `max-num-seqs=1`; an oversized request returned HTTP 400 without OOM/restart. Private mutex-protected stop/wake is bounded and fail-closed, with measured 16 GiB/3 CPU/320 PID inference limits and exact v0.26 → v0.20 → v0.26 restoration. The selected model/runtime machine qualification is green for bounded single-user local capacity; production response quality remains a separate TASK-023 gate.
 
 ---
 
@@ -68,7 +89,7 @@ Deploy the qualified private inference matrix behind FastAPI, discard validated 
 - Freeze a separate balanced knowledge-answer holdout and immutable policy before its first live execution; score answerability, required facts, citations, schema and injection resistance without model-as-judge labels.
 - Run that sealed packet once through the physical AMD/Qwen path, publish checksum-bound aggregate evidence and connect only the automated result to the response quality gate.
 - Bind the response endpoint to the atomic promotion pointer, stable per-user percentage assignment and an expiring owner approval receipt; fail closed on stale, malformed or mismatched state.
-- Apply the independently granted owner approval only through 2026-08-15, keep the existing tenant/user allowlists and rehearse automatic expiry plus rollback before local enablement.
+- Apply the independently granted owner approval only through 2026-08-23 23:59:59 Europe/Warsaw, keep the existing tenant/user allowlists and rehearse automatic expiry plus rollback before local enablement.
 - Keep user-visible responses disabled unless every zero-tolerance gate and explicit tenant/user allowlist is satisfied.
 
 ### Progress
@@ -138,6 +159,6 @@ Collect two blind, independent human annotations for the 240-item PL/EN packet, 
 
 ### Conditional checkpoint
 
-The repository owner approves this human gate green without reservations through 2026-08-15 23:59:59 Europe/Warsaw, so it does not block downstream work. Preserve the annotation files and metrics truthfully; owner approval does not require inventing file contents or computed kappa.
+The repository owner approves this human gate green without reservations through 2026-08-23 23:59:59 Europe/Warsaw, so it does not block downstream work. Preserve the annotation files and metrics truthfully; owner approval does not require inventing file contents or computed kappa.
 
 ---

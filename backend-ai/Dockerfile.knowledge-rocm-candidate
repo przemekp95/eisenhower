@@ -1,0 +1,27 @@
+FROM rocm/pytorch@sha256:4449f856653602317e4101a76fce599c7fcd58ccec2e539951fce5f73083179e
+
+ARG RELEASE_SHA
+LABEL org.opencontainers.image.revision=$RELEASE_SHA \
+      eisenhower.runtime.role=knowledge-rocm-candidate
+
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PIP_NO_CACHE_DIR=on \
+    PIP_DISABLE_PIP_VERSION_CHECK=on HF_HOME=/home/ubuntu/.cache/huggingface \
+    TOKENIZERS_PARALLELISM=false
+WORKDIR /app
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends curl libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip install --no-cache-dir --upgrade setuptools==84.0.0 wheel==0.46.3 \
+    && test "$(id -u ubuntu)" = 1000 \
+    && mkdir -p /app/data /app/logs /home/ubuntu/.cache/huggingface \
+    && chown -R ubuntu:ubuntu /app /home/ubuntu
+COPY requirements-boundary.txt requirements-knowledge-rocm.txt ./
+RUN python -m pip install --no-cache-dir -r requirements-knowledge-rocm.txt
+COPY --chown=ubuntu:ubuntu . .
+USER ubuntu
+HEALTHCHECK --interval=30s --timeout=5s --start-period=300s --retries=5 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"
+EXPOSE 8000
+ENTRYPOINT []
+CMD ["python", "-m", "uvicorn", "app.knowledge_runtime:from_environment", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
