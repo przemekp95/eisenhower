@@ -12,22 +12,9 @@ test.beforeEach(async ({ page }) => {
         reasoned_local_analysis: true,
         knowledge_retrieval: true,
         retrieval_augmented_generation: true,
-        langchain_analysis: false,
+        local_similar_examples: true,
         ocr: true,
         batch_analysis: true,
-        training_management: true,
-        providers: { local_model: true, tesseract: true, ocr: true },
-        device: {
-          type: 'cpu',
-          name: 'CI CPU',
-          vendor: 'generic',
-          runtime: 'cpu',
-          runtime_version: null,
-          torch_device: 'cpu',
-          count: 1,
-          cuda_version: null,
-          accelerated: false,
-        },
       }),
     });
   });
@@ -110,7 +97,7 @@ test('renders a sourced answer with escaped citations on desktop and mobile', as
 
   const assistant = page.getByRole('dialog', { name: 'Task assistance' });
   await expect(assistant.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
-  await expect(assistant.getByRole('tab', { name: 'Task assistant' })).toHaveAttribute(
+  await expect(assistant.getByRole('tab', { name: 'Task help' })).toHaveAttribute(
     'aria-selected',
     'true'
   );

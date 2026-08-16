@@ -29,11 +29,11 @@ test('keeps manual task flow available when optional AI capabilities are offline
   await page.getByRole('button', { name: 'Otwórz pomoc w porządkowaniu', exact: true }).click();
 
   const assistant = page.getByRole('dialog', { name: 'Pomoc w porządkowaniu' });
-  await expect(assistant.getByText('Nie udało się sprawdzić dostępności AI.')).toBeVisible();
+  await expect(assistant.getByText('Nie udało się sprawdzić dostępności pomocy.')).toBeVisible();
   await expect(assistant.getByRole('button', { name: 'Zasugeruj kwadrant' })).toHaveCount(0);
   await expect(assistant.getByRole('button', { name: 'Sprawdź źródła' })).toHaveCount(0);
   await expect(
-    assistant.getByText(/możesz kontynuować bez AI i ręcznie wybrać kwadrant/i)
+    assistant.getByText(/zadanie jest bezpieczne.*ręcznie wybrać kwadrant/i)
   ).toBeVisible();
   const accessibility = await new AxeBuilder({ page })
     .include('[role="dialog"]')
