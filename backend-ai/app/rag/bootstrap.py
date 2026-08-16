@@ -24,6 +24,23 @@ from .qdrant_llamaindex import LlamaIndexQdrantProjection
 from .mongo_document_store import MongoCanonicalDocumentStore
 
 
+DEFAULT_MONGO_CLIENT_OPTIONS = {
+  "connectTimeoutMS": 5_000,
+  "serverSelectionTimeoutMS": 5_000,
+  "socketTimeoutMS": 10_000,
+  "maxPoolSize": 20,
+  "minPoolSize": 0,
+  "maxIdleTimeMS": 30_000,
+}
+
+
+def create_mongo_client(uri: str, *, client_factory=None, **overrides):
+  if client_factory is None:
+    from pymongo import MongoClient
+    client_factory = MongoClient
+  return client_factory(uri, **{**DEFAULT_MONGO_CLIENT_OPTIONS, **overrides})
+
+
 def is_private_mongodb_uri(uri: str) -> bool:
   parsed = urlparse(uri)
   if parsed.scheme not in {"mongodb", "mongodb+srv"} or not parsed.hostname:
@@ -67,9 +84,7 @@ def build_rag_service(
     collection_name=settings.qdrant_collection_alias,
   )
   if mongo_client is None:
-    from pymongo import MongoClient
-
-    mongo_client = MongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=5000)
+    mongo_client = create_mongo_client(settings.mongodb_uri)
   mongo_client.admin.command("ping")
   canonical_store = MongoCanonicalDocumentStore(
     mongo_client[settings.mongodb_database][settings.canonical_documents_collection]
@@ -208,9 +223,7 @@ def build_ingestion_application(
     collection_name=settings.qdrant_collection_alias,
   )
   if mongo_client is None:
-    from pymongo import MongoClient
-
-    mongo_client = MongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=5000)
+    mongo_client = create_mongo_client(settings.mongodb_uri)
   mongo_client.admin.command("ping")
   canonical_store = MongoCanonicalDocumentStore(
     mongo_client[settings.mongodb_database][settings.canonical_documents_collection]
