@@ -194,6 +194,7 @@ def test_freeze_requires_named_human_approval_and_makes_governance_auditable():
     annotator_b_sha256="b" * 64,
     pool_sha256="c" * 64,
   )
+  candidate["governance"]["annotation_evidence"]["evidence_manifest_sha256"] = "d" * 64
 
   with pytest.raises(ValueError, match="human approver"):
     freeze_evaluation_candidate(candidate, approver_id="", approved_at="2026-08-10T12:00:00Z")
