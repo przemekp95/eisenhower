@@ -4,7 +4,7 @@ pillow==12.3.0
 pytesseract==0.3.13
 torchvision==0.28.0+cpu
 docling==2.119.0
-onnxruntime==1.27.0
+onnxruntime==1.28.0
 unstructured[docx,pptx]==0.25.2
 unstructured-inference==1.6.13
 https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85

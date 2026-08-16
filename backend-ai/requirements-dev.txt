@@ -1,7 +1,7 @@
 -r requirements.txt
 -r requirements-knowledge.txt
 
-pytest==9.0.3
-pytest-cov==7.0.0
-pylint==4.0.5
+pytest==9.1.1
+pytest-cov==7.1.0
+pylint==4.0.7
 pip-audit==2.10.1
