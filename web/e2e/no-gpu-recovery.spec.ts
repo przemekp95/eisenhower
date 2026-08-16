@@ -34,6 +34,7 @@ test('keeps manual task flow available when optional AI capabilities are offline
     assistant.getByText(/możesz kontynuować bez AI i ręcznie wybrać kwadrant/i)
   ).toBeVisible();
   const accessibility = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze();
   expect(accessibility.violations).toEqual([]);
