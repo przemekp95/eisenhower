@@ -1,5 +1,28 @@
 # Done
 
+## TASK-058: Eliminate all release-image vulnerability findings
+**Priority:** P0 | **Tags:** security, dependencies, docker, release-gate
+
+Bring all six first-party production images to a fail-closed zero-finding Trivy result across LOW, MEDIUM, HIGH and CRITICAL severities without suppressions, accepted exceptions or reverting the split runtime roles.
+
+### Plan
+
+- Rebuild and scan the current exact-source six-image matrix, classify every finding by installed origin and fixed-version availability, and freeze executable remediation contracts before implementation.
+- Remove unnecessary vulnerable runtime contents and update base images, OS packages and language dependencies to patched compatible versions while preserving boundary, classifier, knowledge, ingest, Node API and web behavior.
+- Generate retained per-image Trivy JSON and CycloneDX evidence, verify exact-SHA OCI labels and required Torch/Torchvision role contents, and require zero LOW/MEDIUM/HIGH/CRITICAL findings for all six images.
+- Run focused red-green checks and complete repository verification, documenting any measured image/runtime impact without weakening functional, security or provenance controls.
+- Promote the exact green source through reviewed PRs to `dev` and `master`, close the task, and verify final branch equality and post-merge CI without publishing or deploying images.
+
+### Outcome
+
+Rebased the four split Python runtimes and Node API on digest-pinned Wolfi stages, installed only role-specific package-managed runtimes and copied role-specific Python dependencies into clean final stages. Preserved the boundary, classifier, knowledge and ingest split, exact revision labels, non-root execution, classifier/ingest OCR support and the governed dependency-source audit without suppressions, broad exceptions or `--ignore-unfixed`.
+
+Built all six production images at implementation SHA `e740485043297b119740252c9b6454f712ff26b2`. Fail-closed Trivy 0.71.1 scans reported zero LOW, MEDIUM, HIGH and CRITICAL findings in every image, and retained six JSON reports plus six complete CycloneDX SBOMs. Role-content checks, physical PDF/DOCX/PPTX/HTML PL/EN and owner-approved OCR extraction, focused deployment/auditor/runtime tests and the complete repository verification passed; measured size and single-sample runtime results were retained without hiding the Node RSS regression.
+
+Promoted reviewed PRs #237 and #238 through a green exact-head feature run, green post-merge `dev` CI and green master-PR CI to master `dff9f2e837be54610bf5d419097396afd5efec6d`. Final master push-CI passed and the governed workflow fast-forwarded `dev` to the same exact commit. No image was published or deployed, and no running or public-production environment was changed.
+
+---
+
 ## TASK-057: Gate release publication on complete all-severity image scans
 **Priority:** P0 | **Tags:** security, dependencies, docker, release-gate
 
