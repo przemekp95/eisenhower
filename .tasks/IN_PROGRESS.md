@@ -1,5 +1,20 @@
 # In Progress
 
+## TASK-056: Gate release publication on complete all-severity image scans
+**Priority:** P0 | **Tags:** security, dependencies, docker, release-gate
+
+Prevent publication of any first-party production image until its complete installed contents pass a fail-closed LOW, MEDIUM, HIGH and CRITICAL vulnerability scan and produce retained SBOM evidence.
+
+### Plan
+
+- Add a failing release contract that preserves the current six-role image matrix and requires local builds, all-severity image scans, CycloneDX SBOMs and publication only after every gate passes.
+- Adapt the earlier unpromoted gate to the current split runtime without reverting role targets, exact-SHA labels, deployment ordering or existing CI controls.
+- Update operational and acceptance documentation to distinguish repository scanning, built-image release evidence, publication and deployment.
+- Run focused red-green checks, full repository verification and fresh scans of the current images; preserve red findings rather than weakening the policy.
+- Promote the exact green source through reviewed PRs to `dev` and `master`, then verify branch equality and post-merge CI without claiming a release or deployment.
+
+---
+
 ## TASK-047: Deploy the portable local AMD platform with Calendar and Remote MCP
 **Priority:** P0 | **Tags:** calendar, mcp, oauth, n8n, amd, rocm, deployment
 

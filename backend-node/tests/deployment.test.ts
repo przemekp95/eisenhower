@@ -190,6 +190,54 @@ describe('production deployment boundaries', () => {
     expect(deployScript).not.toMatch(/curl --fail[^\n]*MIKRUS_PUBLIC_URL/);
   });
 
+  it('blocks publication until every complete release image passes an all-severity scan', () => {
+    const release = fs.readFileSync(
+      path.join(repositoryRoot, '.github/workflows/release.yml'),
+      'utf8'
+    );
+    const dockerRelease = release.slice(
+      release.indexOf('  docker-release:'),
+      release.indexOf('  android-release:')
+    );
+
+    for (const [name, target] of [
+      ['backend-ai-boundary', 'boundary'],
+      ['backend-ai-classifier', 'classifier'],
+      ['backend-ai-knowledge', 'knowledge'],
+      ['backend-ai-ingest', 'ingest'],
+      ['backend-node', 'production'],
+      ['web', 'production'],
+    ]) {
+      expect(dockerRelease).toMatch(new RegExp(`- name: ${name}[\\s\\S]*?target: ${target}`));
+    }
+    expect(dockerRelease).toContain('target: ${{ matrix.target }}');
+    expect(dockerRelease).toMatch(/- name: Build image[\s\S]*?load:\s*true/);
+    expect(dockerRelease).toMatch(/- name: Build image[\s\S]*?push:\s*false/);
+    expect(dockerRelease).toMatch(/TRIVY_IMAGE:\s*aquasec\/trivy:[^\s]+@sha256:[a-f0-9]{64}/);
+    expect(dockerRelease).toMatch(/- name: Scan complete image for vulnerabilities/);
+    expect(dockerRelease).toContain('--severity LOW,MEDIUM,HIGH,CRITICAL');
+    expect(dockerRelease).toContain('--exit-code 1');
+    expect(dockerRelease).not.toContain('--ignore-unfixed');
+    expect(dockerRelease).toMatch(/- name: Generate image SBOM[\s\S]*?--format cyclonedx/);
+    expect(dockerRelease).toMatch(/- name: Verify role-specific SBOM coverage/);
+    expect(dockerRelease).toContain('REQUIRE_TORCH: ${{ matrix.require_torch }}');
+    expect(dockerRelease).toContain('REQUIRE_TORCHVISION: ${{ matrix.require_torchvision }}');
+    expect(dockerRelease).toContain('--arg version "2.13.0+cpu"');
+    expect(dockerRelease).toContain('--arg version "0.28.0+cpu"');
+    expect(dockerRelease).toMatch(/- name: Verify image security evidence[\s\S]*?\.trivy\.json[\s\S]*?\.cdx\.json/);
+    expect(dockerRelease).toMatch(/- name: Preserve image security evidence\n\s+if: \$\{\{ always\(\)/);
+    expect(dockerRelease).toMatch(/if-no-files-found:\s*error/);
+    expect(dockerRelease).toMatch(/- name: Publish verified image\n\s+if: \$\{\{ success\(\) \}\}/);
+
+    const buildAt = dockerRelease.indexOf('- name: Build image');
+    const scanAt = dockerRelease.indexOf('- name: Scan complete image for vulnerabilities');
+    const sbomAt = dockerRelease.indexOf('- name: Generate image SBOM');
+    const publishAt = dockerRelease.indexOf('- name: Publish verified image');
+    expect(scanAt).toBeGreaterThan(buildAt);
+    expect(sbomAt).toBeGreaterThan(scanAt);
+    expect(publishAt).toBeGreaterThan(sbomAt);
+  });
+
   it('accepts only the exact public HTTP status and rejects a redirect to a success page', async () => {
     const server = http.createServer((request, response) => {
       if (request.url === '/redirect') {
