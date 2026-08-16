@@ -8,6 +8,7 @@ Run the MLP, centroid, and incumbent comparison on the frozen human-approved dat
 ### Plan
 
 - Finalize and freeze the human-approved evaluation packet.
+- Measure and freeze agreement before adjudication, binding both human passes, guide, coverage manifest, pseudonyms and completion times by SHA-256.
 - Run the production profile benchmark against the exact immutable dataset.
 - Keep promotion fail-closed on governance, quality, stability, leakage, approval-SHA failure or any failed model-quality gate.
 
@@ -17,7 +18,7 @@ The repository owner approves the human gate green without reservations through 
 
 ### Progress
 
-The production decision now includes every failure emitted by the shared model-quality gate, so a production-profile run cannot return green while macro-F1, calibration, per-class, baseline, incumbent or stability policy is red. The real benchmark remains blocked because both 240-item independent annotation files still contain only null decisions; no metric or approval digest is fabricated.
+The production decision now includes every failure emitted by the shared model-quality gate, so a production-profile run cannot return green while macro-F1, calibration, per-class, baseline, incumbent or stability policy is red. The human workflow now freezes a private pre-adjudication agreement report from single-read hashed inputs, requires exact disagreement decisions with rationale, emits an immutable evidence manifest binding the candidate to all inputs, and requires that manifest at final approval; production governance rejects a missing or invalid manifest digest. Full repository verification is green. The real benchmark remains blocked because both 240-item independent annotation files still contain only null decisions; no metric or approval digest is fabricated.
 
 ---
 
