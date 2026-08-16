@@ -28,7 +28,7 @@
     "react-native-safe-area-context": "~5.9.0"
   },
   "devDependencies": {
-    "@testing-library/react-native": "^13.3.3",
+    "@testing-library/react-native": "^14.0.1",
     "babel-preset-expo": "^55.0.24",
     "jest": "^29.7.0",
     "jest-expo": "^55.0.20",

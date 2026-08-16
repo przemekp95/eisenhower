@@ -87,9 +87,27 @@ function capabilities(overrides = {}) {
   };
 }
 
+function findHandler(instance, handlerName) {
+  let current = instance;
+  while (current) {
+    if (typeof current.props?.[handlerName] === 'function') {
+      return current.props[handlerName];
+    }
+    let fiber = current.unstable_fiber;
+    while (fiber) {
+      if (typeof fiber.memoizedProps?.[handlerName] === 'function') {
+        return fiber.memoizedProps[handlerName];
+      }
+      fiber = fiber.return;
+    }
+    current = current.parent;
+  }
+  throw new Error(`Missing ${handlerName} handler`);
+}
+
 describe('Mobile App', () => {
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  await cleanup();
   clearApiToken();
 });
 
@@ -169,11 +187,11 @@ afterEach(() => {
   it('keeps remote data locked until a runtime-only token is entered', async () => {
     clearApiToken();
 
-    const { getByTestId, queryByText } = render(<App />);
+    const { getByTestId, queryByText } = await render(<App />);
 
     expect(queryByText('Seed task')).toBeNull();
-    fireEvent.changeText(getByTestId('auth-token-input'), 'entered-at-runtime');
-    fireEvent.press(getByTestId('auth-submit-button'));
+    await fireEvent.changeText(getByTestId('auth-token-input'), 'entered-at-runtime');
+    await fireEvent.press(getByTestId('auth-submit-button'));
 
     await waitFor(() => expect(tasksApi.fetchRemoteTasks).toHaveBeenCalled(), {
       timeout: ASYNC_TIMEOUT,
@@ -189,10 +207,10 @@ afterEach(() => {
       })
     );
 
-    const view = render(<App />);
-    fireEvent.changeText(view.getByTestId('auth-token-input'), 'runtime-token');
-    fireEvent.press(view.getByTestId('auth-submit-button'));
-    view.unmount();
+    const view = await render(<App />);
+    await fireEvent.changeText(view.getByTestId('auth-token-input'), 'runtime-token');
+    await fireEvent.press(view.getByTestId('auth-submit-button'));
+    await view.unmount();
     await act(async () => resolveLanguage('pl'));
 
     expect(tasksApi.fetchRemoteTasks).not.toHaveBeenCalled();
@@ -200,23 +218,23 @@ afterEach(() => {
 
   it('requires only an access token for CRUD and supports explicit logout', async () => {
     clearApiToken();
-    const { getByTestId, queryByTestId } = render(<App />);
+    const { getByTestId, queryByTestId } = await render(<App />);
 
     expect(queryByTestId('admin-token-input')).toBeNull();
-    fireEvent.changeText(getByTestId('auth-token-input'), 'access-only');
-    fireEvent.press(getByTestId('auth-submit-button'));
+    await fireEvent.changeText(getByTestId('auth-token-input'), 'access-only');
+    await fireEvent.press(getByTestId('auth-submit-button'));
     await waitFor(() => expect(getByTestId('logout-button')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
-    fireEvent.press(getByTestId('logout-button'));
+    await fireEvent.press(getByTestId('logout-button'));
     await waitFor(() => expect(getByTestId('auth-token-input')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
   });
 
   it('offers manual retry and preserves pending work when retry still fails', async () => {
     storage.loadTasks.mockResolvedValue([{ id: 'local-retry', title: 'Pending', urgent: true, important: false }]);
     tasksApi.fetchRemoteTasks.mockRejectedValue(new Error('offline'));
-    const { getByTestId } = render(<App />);
+    const { getByTestId } = await render(<App />);
 
     await waitFor(() => expect(getByTestId('retry-sync-button')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
-    fireEvent.press(getByTestId('retry-sync-button'));
+    await fireEvent.press(getByTestId('retry-sync-button'));
     await waitFor(() => expect(tasksApi.fetchRemoteTasks).toHaveBeenCalledTimes(2), { timeout: ASYNC_TIMEOUT });
     expect(getByTestId('sync-pending-local-retry')).toBeTruthy();
   });
@@ -233,7 +251,7 @@ afterEach(() => {
       .mockResolvedValueOnce([]);
     tasksApi.createRemoteTask.mockResolvedValueOnce(remoteTask({ title: 'Pending foreground' }));
 
-    const { getByText } = render(<App />);
+    const { getByText } = await render(<App />);
     await waitFor(() => expect(onAppStateChange).toBeDefined(), { timeout: ASYNC_TIMEOUT });
     await waitFor(() => expect(tasksApi.fetchRemoteTasks).toHaveBeenCalledTimes(1), { timeout: ASYNC_TIMEOUT });
     await waitFor(() => expect(getByText('Pending foreground')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
@@ -258,7 +276,7 @@ afterEach(() => {
       .mockResolvedValueOnce([]);
     tasksApi.createRemoteTask.mockResolvedValueOnce(remoteTask({ title: 'Pending network' }));
 
-    const { getByText } = render(<App />);
+    const { getByText } = await render(<App />);
     await waitFor(() => expect(tasksApi.fetchRemoteTasks).toHaveBeenCalledTimes(1), { timeout: ASYNC_TIMEOUT });
     await waitFor(() => expect(getByText('Pending network')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
     expect(onNetworkStateChange).toBeDefined();
@@ -294,21 +312,19 @@ afterEach(() => {
     }));
     tasksApi.createRemoteTask.mockResolvedValue(remoteTask({ title: 'One operation' }));
 
-    const { getByTestId } = render(<App />);
+    const { getByTestId } = await render(<App />);
     await waitFor(() => expect(tasksApi.fetchRemoteTasks).toHaveBeenCalledTimes(1), { timeout: ASYNC_TIMEOUT });
     await waitFor(() => expect(onAppStateChange).toBeDefined(), { timeout: ASYNC_TIMEOUT });
     await waitFor(() => expect(onNetworkStateChange).toBeDefined(), { timeout: ASYNC_TIMEOUT });
 
-    fireEvent.press(getByTestId('retry-sync-button'));
     await act(async () => {
+      const retryPromise = findHandler(getByTestId('retry-sync-button'), 'onPress')();
       onAppStateChange('active');
       onNetworkStateChange({ isConnected: false, isInternetReachable: false });
       onNetworkStateChange({ isConnected: true, isInternetReachable: true });
-    });
-    expect(tasksApi.fetchRemoteTasks).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
+      expect(tasksApi.fetchRemoteTasks).toHaveBeenCalledTimes(1);
       resolveRemoteTasks([]);
+      await retryPromise;
     });
     await waitFor(() => expect(tasksApi.createRemoteTask).toHaveBeenCalledTimes(1), { timeout: ASYNC_TIMEOUT });
     appStateSpy.mockRestore();
@@ -341,9 +357,9 @@ afterEach(() => {
       revision: 8,
     })]);
 
-    const { getByTestId, getByText, queryByTestId } = render(<App />);
+    const { getByTestId, getByText, queryByTestId } = await render(<App />);
     await waitFor(() => expect(getByText('Server value')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
-    fireEvent.press(getByTestId(`conflict-keep-remote-${id}`));
+    await fireEvent.press(getByTestId(`conflict-keep-remote-${id}`));
 
     await waitFor(() => expect(queryByTestId(`conflict-keep-remote-${id}`)).toBeNull(), { timeout: ASYNC_TIMEOUT });
     expect(storage.saveTasks).toHaveBeenLastCalledWith([
@@ -382,9 +398,9 @@ afterEach(() => {
       revision: 9,
     }));
 
-    const { getByTestId, getByText } = render(<App />);
+    const { getByTestId, getByText } = await render(<App />);
     await waitFor(() => expect(getByText('Server value')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
-    fireEvent.press(getByTestId(`conflict-retry-local-${id}`));
+    await fireEvent.press(getByTestId(`conflict-retry-local-${id}`));
 
     await waitFor(() => expect(tasksApi.updateRemoteTask).toHaveBeenCalledWith(
       id,
@@ -409,15 +425,15 @@ afterEach(() => {
     }]);
     tasksApi.fetchRemoteTasks.mockResolvedValue([]);
 
-    const { getByTestId, getByText, queryByText } = render(<App />);
+    const { getByTestId, getByText, queryByText } = await render(<App />);
     await waitFor(() => expect(getByText('Gone remotely')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
-    fireEvent.press(getByTestId(`conflict-keep-remote-${id}`));
+    await fireEvent.press(getByTestId(`conflict-keep-remote-${id}`));
     await waitFor(() => expect(queryByText('Gone remotely')).toBeNull(), { timeout: ASYNC_TIMEOUT });
     expect(storage.saveTasks).toHaveBeenLastCalledWith([]);
   });
 
   it('loads cached state, matrix and AI summary from the remote runtimes', async () => {
-    const { getAllByText, getByText, getByTestId } = render(<App />);
+    const { getAllByText, getByText, getByTestId } = await render(<App />);
 
     await waitFor(() => expect(getByText('Seed task')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
@@ -460,7 +476,7 @@ afterEach(() => {
       })
     );
 
-    const { getByText, getByTestId, queryByTestId } = render(<App />);
+    const { getByText, getByTestId, queryByTestId } = await render(<App />);
 
     await waitFor(() => expect(tasksApi.createRemoteTask).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -490,28 +506,28 @@ afterEach(() => {
       remoteTask({ id: '507f1f77bcf86cd799439012', title: 'Nowe zadanie', description: 'desc', important: true })
     );
 
-    const { getAllByText, getByPlaceholderText, getByTestId, queryByText } = render(<App />);
+    const { getAllByText, getByPlaceholderText, getByTestId, queryByText } = await render(<App />);
 
     await waitFor(() => expect(getAllByText('Brak zadań w tym kwadrancie.').length).toBe(4), {
       timeout: ASYNC_TIMEOUT,
     });
 
-    fireEvent.changeText(getByPlaceholderText('Tytuł zadania'), 'Nowe zadanie');
-    fireEvent.changeText(getByPlaceholderText('Opis'), 'desc');
-    fireEvent(getByTestId('new-task-urgent-switch'), 'valueChange', true);
-    fireEvent(getByTestId('new-task-important-switch'), 'valueChange', true);
-    fireEvent.press(getByTestId('add-task-button'));
+    await fireEvent.changeText(getByPlaceholderText('Tytuł zadania'), 'Nowe zadanie');
+    await fireEvent.changeText(getByPlaceholderText('Opis'), 'desc');
+    await fireEvent(getByTestId('new-task-urgent-switch'), 'valueChange', true);
+    await fireEvent(getByTestId('new-task-important-switch'), 'valueChange', true);
+    await fireEvent.press(getByTestId('add-task-button'));
 
     await waitFor(() => expect(queryByText('Nowe zadanie')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
 
-    fireEvent.press(getByTestId('lifecycle-trash-507f1f77bcf86cd799439012'));
+    await fireEvent.press(getByTestId('lifecycle-trash-507f1f77bcf86cd799439012'));
     await waitFor(() => expect(getByTestId('delete-task-507f1f77bcf86cd799439012')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
-    fireEvent.press(getByTestId('delete-task-507f1f77bcf86cd799439012'));
-    fireEvent.press(getByTestId('confirm-delete-507f1f77bcf86cd799439012'));
+    await fireEvent.press(getByTestId('delete-task-507f1f77bcf86cd799439012'));
+    await fireEvent.press(getByTestId('confirm-delete-507f1f77bcf86cd799439012'));
 
     await waitFor(() => expect(queryByText('Nowe zadanie')).toBeNull(), {
       timeout: ASYNC_TIMEOUT,
@@ -544,33 +560,33 @@ afterEach(() => {
     storage.loadTasks.mockResolvedValue([]);
     tasksApi.fetchRemoteTasks.mockResolvedValue([remoteTask({ id, title: 'Lifecycle task' })]);
 
-    const { getByTestId, queryByText } = render(<App />);
+    const { getByTestId, queryByText } = await render(<App />);
 
     await waitFor(() => expect(queryByText('Lifecycle task')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
-    fireEvent.press(getByTestId(`lifecycle-complete-${id}`));
+    await fireEvent.press(getByTestId(`lifecycle-complete-${id}`));
     await waitFor(() => expect(getByTestId(`lifecycle-reopen-${id}`)).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
-    fireEvent.press(getByTestId(`lifecycle-reopen-${id}`));
+    await fireEvent.press(getByTestId(`lifecycle-reopen-${id}`));
     await waitFor(() => expect(getByTestId(`lifecycle-archive-${id}`)).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
-    fireEvent.press(getByTestId(`lifecycle-archive-${id}`));
+    await fireEvent.press(getByTestId(`lifecycle-archive-${id}`));
     await waitFor(() => expect(getByTestId(`lifecycle-restore-${id}`)).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
-    fireEvent.press(getByTestId(`lifecycle-restore-${id}`));
+    await fireEvent.press(getByTestId(`lifecycle-restore-${id}`));
     await waitFor(() => expect(getByTestId(`lifecycle-trash-${id}`)).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
-    fireEvent.press(getByTestId(`lifecycle-trash-${id}`));
+    await fireEvent.press(getByTestId(`lifecycle-trash-${id}`));
     await waitFor(() => expect(getByTestId(`delete-task-${id}`)).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
-    fireEvent.press(getByTestId(`delete-task-${id}`));
-    fireEvent.press(getByTestId(`confirm-delete-${id}`));
+    await fireEvent.press(getByTestId(`delete-task-${id}`));
+    await fireEvent.press(getByTestId(`confirm-delete-${id}`));
 
     await waitFor(() => expect(queryByText('Lifecycle task')).toBeNull(), {
       timeout: ASYNC_TIMEOUT,
@@ -580,16 +596,16 @@ afterEach(() => {
   it('saves a revision-safe schedule and requests a private local reminder', async () => {
     const id = '507f1f77bcf86cd799439077';
     tasksApi.fetchRemoteTasks.mockResolvedValue([remoteTask({ id, revision: 4 })]);
-    const { getByTestId } = render(<App />);
+    const { getByTestId } = await render(<App />);
 
     await waitFor(() => expect(getByTestId(`schedule-edit-${id}`)).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
-    fireEvent.press(getByTestId(`schedule-edit-${id}`));
-    fireEvent.changeText(getByTestId(`schedule-due-${id}`), '2026-08-15T12:00:00.000Z');
-    fireEvent.changeText(getByTestId(`schedule-timezone-${id}`), 'Europe/Warsaw');
-    fireEvent.changeText(getByTestId(`schedule-reminder-${id}`), '2026-08-15T10:00:00.000Z');
-    fireEvent.press(getByTestId(`schedule-save-${id}`));
+    await fireEvent.press(getByTestId(`schedule-edit-${id}`));
+    await fireEvent.changeText(getByTestId(`schedule-due-${id}`), '2026-08-15T12:00:00.000Z');
+    await fireEvent.changeText(getByTestId(`schedule-timezone-${id}`), 'Europe/Warsaw');
+    await fireEvent.changeText(getByTestId(`schedule-reminder-${id}`), '2026-08-15T10:00:00.000Z');
+    await fireEvent.press(getByTestId(`schedule-save-${id}`));
 
     const schedule = {
       dueAt: '2026-08-15T12:00:00.000Z',
@@ -608,15 +624,15 @@ afterEach(() => {
     const id = '507f1f77bcf86cd799439076';
     tasksApi.fetchRemoteTasks.mockResolvedValue([remoteTask({ id, revision: 2 })]);
     tasksApi.updateRemoteTaskSchedule.mockRejectedValueOnce(new Error('offline'));
-    const { getByTestId } = render(<App />);
+    const { getByTestId } = await render(<App />);
 
     await waitFor(() => expect(getByTestId(`schedule-edit-${id}`)).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
-    fireEvent.press(getByTestId(`schedule-edit-${id}`));
-    fireEvent.changeText(getByTestId(`schedule-due-${id}`), '2026-08-15T12:00:00.000Z');
-    fireEvent.changeText(getByTestId(`schedule-timezone-${id}`), 'Europe/Warsaw');
-    fireEvent.press(getByTestId(`schedule-save-${id}`));
+    await fireEvent.press(getByTestId(`schedule-edit-${id}`));
+    await fireEvent.changeText(getByTestId(`schedule-due-${id}`), '2026-08-15T12:00:00.000Z');
+    await fireEvent.changeText(getByTestId(`schedule-timezone-${id}`), 'Europe/Warsaw');
+    await fireEvent.press(getByTestId(`schedule-save-${id}`));
 
     await waitFor(() => expect(storage.saveTasks).toHaveBeenLastCalledWith(expect.arrayContaining([
       expect.objectContaining({
@@ -641,15 +657,15 @@ afterEach(() => {
         assigneeUserId: 'local-user', displayLabel: 'Local', handoffNote: 'Use runbook', status: 'offered',
       },
     })]);
-    const { getByTestId, queryByTestId } = render(<App />);
+    const { getByTestId, queryByTestId } = await render(<App />);
 
     await waitFor(() => expect(getByTestId(`delegation-edit-${ownedId}`)).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
-    fireEvent.press(getByTestId(`delegation-edit-${ownedId}`));
-    fireEvent.changeText(getByTestId(`delegation-user-${ownedId}`), 'user-b');
-    fireEvent.changeText(getByTestId(`delegation-label-${ownedId}`), 'Pat');
-    fireEvent.press(getByTestId(`delegation-save-${ownedId}`));
+    await fireEvent.press(getByTestId(`delegation-edit-${ownedId}`));
+    await fireEvent.changeText(getByTestId(`delegation-user-${ownedId}`), 'user-b');
+    await fireEvent.changeText(getByTestId(`delegation-label-${ownedId}`), 'Pat');
+    await fireEvent.press(getByTestId(`delegation-save-${ownedId}`));
     await waitFor(() => expect(tasksApi.updateRemoteTaskDelegation).toHaveBeenCalledWith(
       ownedId,
       { assigneeUserId: 'user-b', displayLabel: 'Pat', handoffNote: '' },
@@ -657,13 +673,13 @@ afterEach(() => {
       2,
     ), { timeout: ASYNC_TIMEOUT });
 
-    fireEvent.press(getByTestId('task-view-delegated'));
+    await fireEvent.press(getByTestId('task-view-delegated'));
     await waitFor(() => expect(getByTestId(`delegation-status-accepted-${delegatedId}`)).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
     expect(queryByTestId(`toggle-urgent-${delegatedId}`)).toBeNull();
     expect(queryByTestId(`schedule-edit-${delegatedId}`)).toBeNull();
-    fireEvent.press(getByTestId(`delegation-status-accepted-${delegatedId}`));
+    await fireEvent.press(getByTestId(`delegation-status-accepted-${delegatedId}`));
     await waitFor(() => expect(tasksApi.transitionRemoteTaskDelegation)
       .toHaveBeenCalledWith(delegatedId, 'accepted', 'pl', 1), { timeout: ASYNC_TIMEOUT });
   });
@@ -672,12 +688,12 @@ afterEach(() => {
     const id = '507f1f77bcf86cd799439073';
     tasksApi.fetchRemoteTasks.mockResolvedValue([remoteTask({ id, revision: 3 })]);
     tasksApi.updateRemoteTaskDelegation.mockRejectedValueOnce({ status: 412 });
-    const { getByTestId } = render(<App />);
+    const { getByTestId } = await render(<App />);
     await waitFor(() => expect(getByTestId(`delegation-edit-${id}`)).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
-    fireEvent.press(getByTestId(`delegation-edit-${id}`));
-    fireEvent.changeText(getByTestId(`delegation-user-${id}`), 'user-c');
-    fireEvent.changeText(getByTestId(`delegation-label-${id}`), 'Casey');
-    fireEvent.press(getByTestId(`delegation-save-${id}`));
+    await fireEvent.press(getByTestId(`delegation-edit-${id}`));
+    await fireEvent.changeText(getByTestId(`delegation-user-${id}`), 'user-c');
+    await fireEvent.changeText(getByTestId(`delegation-label-${id}`), 'Casey');
+    await fireEvent.press(getByTestId(`delegation-save-${id}`));
 
     await waitFor(() => expect(tasksApi.updateRemoteTaskDelegation).toHaveBeenCalledTimes(2), {
       timeout: ASYNC_TIMEOUT,
@@ -703,13 +719,13 @@ afterEach(() => {
     tasksApi.fetchRemoteTasks.mockResolvedValue([]);
     tasksApi.fetchRemoteDelegatedTasks.mockResolvedValue([delegated]);
     tasksApi.transitionRemoteTaskDelegation.mockRejectedValueOnce(new Error('offline'));
-    const view = render(<App />);
+    const view = await render(<App />);
     await waitFor(() => expect(view.getByTestId('task-view-delegated')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
-    fireEvent.press(view.getByTestId('task-view-delegated'));
+    await fireEvent.press(view.getByTestId('task-view-delegated'));
     await waitFor(() => expect(view.getByTestId(`delegation-status-accepted-${id}`)).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
-    fireEvent.press(view.getByTestId(`delegation-status-accepted-${id}`));
+    await fireEvent.press(view.getByTestId(`delegation-status-accepted-${id}`));
     await waitFor(() => expect(storage.saveDelegatedTasks).toHaveBeenLastCalledWith(expect.arrayContaining([
       expect.objectContaining({
         syncState: 'pending_delegation_status',
@@ -738,15 +754,15 @@ afterEach(() => {
       pendingIntent: { type: 'delegation_status', status: 'accepted', baseRevision: 2 },
     }]);
     tasksApi.fetchRemoteDelegatedTasks.mockResolvedValueOnce([{ ...delegated, revision: 3 }]);
-    const conflictView = render(<App />);
+    const conflictView = await render(<App />);
     await waitFor(() => expect(conflictView.getByTestId('task-view-delegated')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
-    fireEvent.press(conflictView.getByTestId('task-view-delegated'));
+    await fireEvent.press(conflictView.getByTestId('task-view-delegated'));
     await waitFor(() => expect(conflictView.getByTestId(`conflict-keep-remote-${id}`)).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
-    fireEvent.press(conflictView.getByTestId(`conflict-keep-remote-${id}`));
+    await fireEvent.press(conflictView.getByTestId(`conflict-keep-remote-${id}`));
     await waitFor(() => expect(storage.saveDelegatedTasks).toHaveBeenLastCalledWith(expect.arrayContaining([
       expect.objectContaining({ id, revision: 3, syncState: 'synced' }),
     ])), { timeout: ASYNC_TIMEOUT });
@@ -754,9 +770,9 @@ afterEach(() => {
 
   it('falls back to an empty delegated cache when its local snapshot cannot be loaded', async () => {
     storage.loadDelegatedTasks.mockRejectedValueOnce(new Error('storage unavailable'));
-    const { getByTestId } = render(<App />);
+    const { getByTestId } = await render(<App />);
     await waitFor(() => expect(getByTestId('task-view-delegated')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
-    fireEvent.press(getByTestId('task-view-delegated'));
+    await fireEvent.press(getByTestId('task-view-delegated'));
     expect(getByTestId('quadrant-0')).toBeTruthy();
   });
 
@@ -768,12 +784,12 @@ afterEach(() => {
     ]);
     tasksApi.transitionRemoteTaskLifecycle.mockRejectedValue({ status: 412 });
 
-    const { getByTestId, getByText } = render(<App />);
+    const { getByTestId, getByText } = await render(<App />);
 
     await waitFor(() => expect(getByText('Lifecycle conflict')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
-    fireEvent.press(getByTestId(`lifecycle-complete-${lifecycleId}`));
+    await fireEvent.press(getByTestId(`lifecycle-complete-${lifecycleId}`));
     await waitFor(() => expect(getByTestId(`conflict-keep-remote-${lifecycleId}`)).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
@@ -786,29 +802,29 @@ afterEach(() => {
       remoteTask({ id: purgeId, title: 'Purge conflict', revision: 3, lifecycleState: 'trashed' }),
     ]);
     tasksApi.deleteRemoteTask.mockRejectedValue({ response: { status: 412 } });
-    const purgeView = render(<App />);
+    const purgeView = await render(<App />);
 
     await waitFor(() => expect(purgeView.getByTestId(`delete-task-${purgeId}`)).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
-    fireEvent.press(purgeView.getByTestId(`delete-task-${purgeId}`));
-    fireEvent.press(purgeView.getByTestId(`confirm-delete-${purgeId}`));
+    await fireEvent.press(purgeView.getByTestId(`delete-task-${purgeId}`));
+    await fireEvent.press(purgeView.getByTestId(`confirm-delete-${purgeId}`));
     await waitFor(() => expect(purgeView.getByTestId(`conflict-keep-remote-${purgeId}`)).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
   });
 
   it('requests quick AI suggestions, toggles remote flags and changes language', async () => {
-    const { getByPlaceholderText, getByTestId, getByText } = render(<App />);
+    const { getByPlaceholderText, getByTestId, getByText } = await render(<App />);
 
     await waitFor(() => expect(getByText('Seed task')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
 
-    fireEvent.changeText(getByPlaceholderText('Tytuł zadania'), 'Pilny termin');
-    fireEvent.press(getByTestId('suggest-task-button'));
-    fireEvent.press(getByTestId('toggle-urgent-507f1f77bcf86cd799439011'));
-    fireEvent.press(getByText('EN'));
+    await fireEvent.changeText(getByPlaceholderText('Tytuł zadania'), 'Pilny termin');
+    await fireEvent.press(getByTestId('suggest-task-button'));
+    await fireEvent.press(getByTestId('toggle-urgent-507f1f77bcf86cd799439011'));
+    await fireEvent.press(getByText('EN'));
 
     await waitFor(() => expect(ai.suggestTaskQuadrant).toHaveBeenCalledWith('Pilny termin'), {
       timeout: ASYNC_TIMEOUT,
@@ -841,13 +857,13 @@ afterEach(() => {
       })
     );
 
-    const { getByTestId, queryByTestId } = render(<App />);
+    const { getByTestId, queryByTestId } = await render(<App />);
     await waitFor(() => expect(getByTestId('scan-task-button').props.accessibilityState.disabled).toBe(false), {
       timeout: ASYNC_TIMEOUT,
     });
 
     expect(getByTestId('suggest-task-button').props.accessibilityState.disabled).toBe(true);
-    fireEvent.press(getByTestId('open-ai-tools-button'));
+    await fireEvent.press(getByTestId('open-ai-tools-button'));
     expect(getByTestId('ai-ocr-run-button')).toBeTruthy();
     expect(queryByTestId('ai-analysis-run-button')).toBeNull();
     expect(queryByTestId('ai-batch-run-button')).toBeNull();
@@ -866,11 +882,11 @@ afterEach(() => {
       })
     );
 
-    const { getByTestId, queryByTestId } = render(<App />);
+    const { getByTestId, queryByTestId } = await render(<App />);
     await waitFor(() => expect(getByTestId('open-ai-tools-button').props.accessibilityState.disabled).toBe(true), {
       timeout: ASYNC_TIMEOUT,
     });
-    fireEvent.press(getByTestId('open-ai-tools-button'));
+    await fireEvent.press(getByTestId('open-ai-tools-button'));
     expect(queryByTestId('ai-tools-close-button')).toBeNull();
   });
 
@@ -888,15 +904,15 @@ afterEach(() => {
         })
       );
 
-    const { getByTestId, getByText } = render(<App />);
+    const { getByTestId, getByText } = await render(<App />);
 
     await waitFor(() => expect(getByTestId('open-ai-tools-button')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
 
-    fireEvent.press(getByTestId('open-ai-tools-button'));
-    fireEvent.changeText(getByTestId('ai-analysis-input'), 'Prepare roadmap');
-    fireEvent.press(getByTestId('ai-analysis-run-button'));
+    await fireEvent.press(getByTestId('open-ai-tools-button'));
+    await fireEvent.changeText(getByTestId('ai-analysis-input'), 'Prepare roadmap');
+    await fireEvent.press(getByTestId('ai-analysis-run-button'));
 
     await waitFor(() => expect(ai.analyzeTaskAdvanced).toHaveBeenCalledWith(
       'Prepare roadmap',
@@ -912,7 +928,7 @@ afterEach(() => {
     });
     expect(getByTestId('ai-analysis-suggested').props.children).toContain('Zrób teraz');
 
-    fireEvent.press(getByTestId('ai-analysis-add-button'));
+    await fireEvent.press(getByTestId('ai-analysis-add-button'));
 
     await waitFor(() => expect(tasksApi.createRemoteTask).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -931,15 +947,15 @@ afterEach(() => {
     storage.loadTasks.mockResolvedValue([]);
     tasksApi.fetchRemoteTasks.mockResolvedValue([]);
 
-    const { getByTestId } = render(<App />);
+    const { getByTestId } = await render(<App />);
 
     await waitFor(() => expect(getByTestId('open-ai-tools-button')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
 
-    fireEvent.press(getByTestId('open-ai-tools-button'));
-    fireEvent.changeText(getByTestId('ai-analysis-input'), 'Prepare roadmap');
-    fireEvent.press(getByTestId('ai-analysis-run-button'));
+    await fireEvent.press(getByTestId('open-ai-tools-button'));
+    await fireEvent.changeText(getByTestId('ai-analysis-input'), 'Prepare roadmap');
+    await fireEvent.press(getByTestId('ai-analysis-run-button'));
 
     await waitFor(() => expect(getByTestId('ai-analysis-add-button')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
@@ -947,7 +963,7 @@ afterEach(() => {
 
     tasksApi.createRemoteTask.mockRejectedValueOnce(new Error('offline'));
     storage.saveTasks.mockRejectedValueOnce(new Error('disk full'));
-    fireEvent.press(getByTestId('ai-analysis-add-button'));
+    await fireEvent.press(getByTestId('ai-analysis-add-button'));
 
     await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe(
       'Nie udało się dodać wyniku analizy do macierzy'
@@ -957,19 +973,19 @@ afterEach(() => {
   });
 
   it('opens and closes the AI tools modal from the dedicated close button', async () => {
-    const { getByTestId, queryByTestId } = render(<App />);
+    const { getByTestId, queryByTestId } = await render(<App />);
 
     await waitFor(() => expect(getByTestId('open-ai-tools-button')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
 
-    fireEvent.press(getByTestId('open-ai-tools-button'));
+    await fireEvent.press(getByTestId('open-ai-tools-button'));
 
     await waitFor(() => expect(getByTestId('ai-analysis-input')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
 
-    fireEvent.press(getByTestId('ai-tools-close-button'));
+    await fireEvent.press(getByTestId('ai-tools-close-button'));
 
     await waitFor(() => expect(queryByTestId('ai-analysis-input')).toBeNull(), {
       timeout: ASYNC_TIMEOUT,
@@ -980,14 +996,19 @@ afterEach(() => {
     ai.analyzeTaskAdvanced.mockImplementation((_task, _language, { signal }) => new Promise((_resolve, reject) => {
       signal.addEventListener('abort', () => reject({ code: 'request_cancelled' }));
     }));
-    const { getByTestId, queryByTestId } = render(<App />);
+    const { getByTestId, queryByTestId } = await render(<App />);
     await waitFor(() => expect(getByTestId('open-ai-tools-button')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
-    fireEvent.press(getByTestId('open-ai-tools-button'));
-    fireEvent.changeText(getByTestId('ai-analysis-input'), 'Cancel analysis');
-    fireEvent.press(getByTestId('ai-analysis-run-button'));
-    const signal = ai.analyzeTaskAdvanced.mock.calls[0][2].signal;
-
-    fireEvent.press(getByTestId('ai-tools-close-button'));
+    await fireEvent.press(getByTestId('open-ai-tools-button'));
+    await fireEvent.changeText(getByTestId('ai-analysis-input'), 'Cancel analysis');
+    let signal;
+    await act(async () => {
+      const analysisPromise = findHandler(getByTestId('ai-analysis-run-button'), 'onPress')();
+      await Promise.resolve();
+      expect(ai.analyzeTaskAdvanced).toHaveBeenCalledTimes(1);
+      signal = ai.analyzeTaskAdvanced.mock.calls[0][2].signal;
+      const closePromise = findHandler(getByTestId('ai-tools-close-button'), 'onPress')();
+      await Promise.all([analysisPromise, closePromise]);
+    });
 
     expect(signal.aborted).toBe(true);
     await waitFor(() => expect(queryByTestId('ai-analysis-input')).toBeNull());
@@ -999,40 +1020,52 @@ afterEach(() => {
     ai.analyzeTaskAdvanced
       .mockImplementationOnce(() => new Promise((resolve) => { resolveStale = resolve; }))
       .mockImplementationOnce(() => new Promise((resolve) => { resolveCurrent = resolve; }));
-    const { getByTestId, queryByText } = render(<App />);
+    const { getByTestId, queryByText } = await render(<App />);
     await waitFor(() => expect(getByTestId('open-ai-tools-button')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
-    fireEvent.press(getByTestId('open-ai-tools-button'));
-    fireEvent.changeText(getByTestId('ai-analysis-input'), 'Old input');
-    fireEvent.press(getByTestId('ai-analysis-run-button'));
-    const staleSignal = ai.analyzeTaskAdvanced.mock.calls[0][2].signal;
+    await fireEvent.press(getByTestId('open-ai-tools-button'));
+    await fireEvent.changeText(getByTestId('ai-analysis-input'), 'Old input');
+    let staleSignal;
+    await act(async () => {
+      const staleAnalysisPromise = findHandler(getByTestId('ai-analysis-run-button'), 'onPress')();
+      await Promise.resolve();
+      expect(ai.analyzeTaskAdvanced).toHaveBeenCalledTimes(1);
+      staleSignal = ai.analyzeTaskAdvanced.mock.calls[0][2].signal;
 
-    fireEvent.changeText(getByTestId('ai-analysis-input'), 'Current input');
-    expect(staleSignal.aborted).toBe(true);
-    fireEvent.press(getByTestId('ai-analysis-run-button'));
-    await act(async () => resolveStale({
-      task: 'Old input',
-      langchain_analysis: { quadrant: 3, reasoning: 'STALE RESULT' },
-    }));
+      findHandler(getByTestId('ai-analysis-input'), 'onChangeText')('Current input');
+      await Promise.resolve();
+      expect(staleSignal.aborted).toBe(true);
+      resolveStale({
+        task: 'Old input',
+        langchain_analysis: { quadrant: 3, reasoning: 'STALE RESULT' },
+      });
+      await staleAnalysisPromise;
+    });
     expect(queryByText('STALE RESULT')).toBeNull();
 
-    await act(async () => resolveCurrent({
-      task: 'Current input',
-      langchain_analysis: { quadrant: 2, reasoning: 'CURRENT RESULT' },
-    }));
+    await act(async () => {
+      const currentAnalysisPromise = findHandler(getByTestId('ai-analysis-run-button'), 'onPress')();
+      await Promise.resolve();
+      expect(ai.analyzeTaskAdvanced).toHaveBeenCalledTimes(2);
+      resolveCurrent({
+        task: 'Current input',
+        langchain_analysis: { quadrant: 2, reasoning: 'CURRENT RESULT' },
+      });
+      await currentAnalysisPromise;
+    });
     await waitFor(() => expect(getByTestId('ai-analysis-reasoning').props.children).toBe('CURRENT RESULT'));
   });
 
   it('opens bulk analysis in AI tools and renders reviewed tasks', async () => {
-    const { getAllByText, getByTestId } = render(<App />);
+    const { getAllByText, getByTestId } = await render(<App />);
 
     await waitFor(() => expect(getByTestId('open-ai-tools-button')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
 
-    fireEvent.press(getByTestId('open-ai-tools-button'));
-    fireEvent.press(getByTestId('ai-tab-batch'));
-    fireEvent.changeText(getByTestId('ai-batch-input'), 'Task A\nTask B');
-    fireEvent.press(getByTestId('ai-batch-run-button'));
+    await fireEvent.press(getByTestId('open-ai-tools-button'));
+    await fireEvent.press(getByTestId('ai-tab-batch'));
+    await fireEvent.changeText(getByTestId('ai-batch-input'), 'Task A\nTask B');
+    await fireEvent.press(getByTestId('ai-batch-run-button'));
 
     await waitFor(() => expect(ai.batchAnalyzeTasks).toHaveBeenCalledWith(
       ['Task A', 'Task B'],
@@ -1062,14 +1095,14 @@ afterEach(() => {
       remoteTask({ id: '507f1f77bcf86cd799439013', title: 'Scanned task', description: '', urgent: false, important: true })
     );
 
-    const { getAllByText, getByTestId } = render(<App />);
+    const { getAllByText, getByTestId } = await render(<App />);
 
     await waitFor(() => expect(getAllByText('Brak zadań w tym kwadrancie.').length).toBe(4), {
       timeout: ASYNC_TIMEOUT,
     });
-    fireEvent.press(getByTestId('scan-task-button'));
+    await fireEvent.press(getByTestId('scan-task-button'));
     await waitFor(() => expect(getByTestId('ocr-title-ocr-review-0')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
-    fireEvent.press(getByTestId('ocr-import-button'));
+    await fireEvent.press(getByTestId('ocr-import-button'));
 
     await waitFor(() => expect(tasksApi.createRemoteTask).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1100,7 +1133,7 @@ afterEach(() => {
     ai.fetchAICapabilities.mockResolvedValue(capabilities());
     ai.suggestTaskQuadrant.mockRejectedValue(new Error('offline'));
 
-    const { getByPlaceholderText, getByTestId, getByText, getAllByText, queryByText } = render(<App />);
+    const { getByPlaceholderText, getByTestId, getByText, getAllByText, queryByText } = await render(<App />);
 
     await waitFor(() => expect(getByText('Local task')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
@@ -1109,27 +1142,27 @@ afterEach(() => {
       timeout: ASYNC_TIMEOUT,
     });
 
-    fireEvent.changeText(getByPlaceholderText('Tytuł zadania'), 'Offline task');
-    fireEvent.press(getByTestId('suggest-task-button'));
+    await fireEvent.changeText(getByPlaceholderText('Tytuł zadania'), 'Offline task');
+    await fireEvent.press(getByTestId('suggest-task-button'));
     await waitFor(() => expect(getByTestId('notice-banner').props.children).toBe(
       'Pomoc jest chwilowo niedostępna. Nadal możesz ręcznie wybrać kwadrant i dodać zadanie.'
     ), {
       timeout: ASYNC_TIMEOUT,
     });
 
-    fireEvent.press(getByTestId('add-task-button'));
+    await fireEvent.press(getByTestId('add-task-button'));
     await waitFor(() => expect(getByText('Offline task')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
 
-    fireEvent.press(getByTestId('toggle-important-local-1'));
+    await fireEvent.press(getByTestId('toggle-important-local-1'));
     await waitFor(() => expect(getAllByText('Ważne: wł.').length).toBeGreaterThan(0), {
       timeout: ASYNC_TIMEOUT,
     });
 
-    fireEvent.press(getByTestId('lifecycle-trash-local-1'));
-    fireEvent.press(getByTestId('delete-task-local-1'));
-    fireEvent.press(getByTestId('confirm-delete-local-1'));
+    await fireEvent.press(getByTestId('lifecycle-trash-local-1'));
+    await fireEvent.press(getByTestId('delete-task-local-1'));
+    await fireEvent.press(getByTestId('confirm-delete-local-1'));
     await waitFor(() => expect(queryByText('Local task')).toBeNull(), {
       timeout: ASYNC_TIMEOUT,
     });
@@ -1142,33 +1175,33 @@ afterEach(() => {
     storage.loadTasks.mockResolvedValue([]);
     tasksApi.fetchRemoteTasks.mockResolvedValue([]);
 
-    const { getByTestId } = render(<App />);
+    const { getByTestId } = await render(<App />);
 
     await waitFor(() => expect(getByTestId('scan-task-button')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
 
-    fireEvent.press(getByTestId('scan-task-button'));
+    await fireEvent.press(getByTestId('scan-task-button'));
     await waitFor(() => expect(getByTestId('ai-tools-message').props.children).toBe('Na obrazie nie znaleziono żadnych zadań'), {
       timeout: ASYNC_TIMEOUT,
     });
 
     media.scanTasksFromImage.mockRejectedValueOnce({ code: 'ocr_request_failed' });
-    fireEvent.press(getByTestId('scan-task-button'));
+    await fireEvent.press(getByTestId('scan-task-button'));
     await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe('Nie udało się odczytać obrazu, więc nic nie dodano'), {
       timeout: ASYNC_TIMEOUT,
     });
   });
 
   it('ignores blank add and suggest actions', async () => {
-    const { getByText, getByTestId } = render(<App />);
+    const { getByText, getByTestId } = await render(<App />);
 
     await waitFor(() => expect(getByText('Seed task')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
 
-    fireEvent.press(getByTestId('add-task-button'));
-    fireEvent.press(getByTestId('suggest-task-button'));
+    await fireEvent.press(getByTestId('add-task-button'));
+    await fireEvent.press(getByTestId('suggest-task-button'));
 
     expect(tasksApi.createRemoteTask).not.toHaveBeenCalled();
     expect(ai.suggestTaskQuadrant).not.toHaveBeenCalled();
@@ -1179,7 +1212,7 @@ afterEach(() => {
     storage.loadTasks.mockRejectedValueOnce(new Error('storage down'));
     tasksApi.fetchRemoteTasks.mockRejectedValueOnce(new Error('offline'));
 
-    const { getByText } = render(<App />);
+    const { getByText } = await render(<App />);
 
     await waitFor(() => expect(getByText(getSampleTasks('pl')[0].title)).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
@@ -1191,7 +1224,7 @@ afterEach(() => {
     storage.loadTasks.mockRejectedValueOnce(new Error('bad cache'));
     tasksApi.fetchRemoteTasks.mockRejectedValueOnce(new Error('offline'));
 
-    const { getByText, getByTestId } = render(<App />);
+    const { getByText, getByTestId } = await render(<App />);
 
     await waitFor(() => expect(getByText(getSampleTasks('en')[0].title)).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
@@ -1205,19 +1238,19 @@ afterEach(() => {
     tasksApi.updateRemoteTask.mockRejectedValueOnce(new Error('offline'));
     tasksApi.transitionRemoteTaskLifecycle.mockRejectedValueOnce(new Error('offline'));
 
-    const { getByTestId, getByText, queryByText } = render(<App />);
+    const { getByTestId, getByText, queryByText } = await render(<App />);
 
     await waitFor(() => expect(getByText('Seed task')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
 
-    fireEvent.press(getByTestId('toggle-urgent-507f1f77bcf86cd799439011'));
+    await fireEvent.press(getByTestId('toggle-urgent-507f1f77bcf86cd799439011'));
     await waitFor(() => expect(getByText('Pilne: wył.')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
     expect(getByTestId('sync-pending-507f1f77bcf86cd799439011')).toBeTruthy();
 
-    fireEvent.press(getByTestId('lifecycle-trash-507f1f77bcf86cd799439011'));
+    await fireEvent.press(getByTestId('lifecycle-trash-507f1f77bcf86cd799439011'));
     await waitFor(() => expect(getByTestId('lifecycle-state-507f1f77bcf86cd799439011').props.children)
       .toContain('Kosz'), {
       timeout: ASYNC_TIMEOUT,
@@ -1233,7 +1266,7 @@ afterEach(() => {
       throw new Error('sync bootstrap failure');
     });
 
-    const { getByText } = render(<App />);
+    const { getByText } = await render(<App />);
 
     await waitFor(() => expect(getByText('Seed task')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
@@ -1241,15 +1274,15 @@ afterEach(() => {
   });
 
   it('shows validation and request errors across advanced analysis, OCR and batch AI flows', async () => {
-    const { getByTestId } = render(<App />);
+    const { getByTestId } = await render(<App />);
 
     await waitFor(() => expect(getByTestId('open-ai-tools-button')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,
     });
 
-    fireEvent.press(getByTestId('open-ai-tools-button'));
-    fireEvent.changeText(getByTestId('ai-analysis-input'), '');
-    fireEvent.press(getByTestId('ai-analysis-run-button'));
+    await fireEvent.press(getByTestId('open-ai-tools-button'));
+    await fireEvent.changeText(getByTestId('ai-analysis-input'), '');
+    await fireEvent.press(getByTestId('ai-analysis-run-button'));
     await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe(
       'Wpisz zadanie przed poproszeniem o sugestię'
     ), {
@@ -1257,17 +1290,17 @@ afterEach(() => {
     });
 
     ai.analyzeTaskAdvanced.mockRejectedValueOnce({ code: 'unavailable' });
-    fireEvent.changeText(getByTestId('ai-analysis-input'), 'Roadmap');
-    fireEvent.press(getByTestId('ai-analysis-run-button'));
+    await fireEvent.changeText(getByTestId('ai-analysis-input'), 'Roadmap');
+    await fireEvent.press(getByTestId('ai-analysis-run-button'));
     await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe(
       'Pomoc jest chwilowo niedostępna. Nadal możesz ręcznie wybrać kwadrant i dodać zadanie.'
     ), {
       timeout: ASYNC_TIMEOUT,
     });
 
-    fireEvent.press(getByTestId('ai-tab-ocr'));
+    await fireEvent.press(getByTestId('ai-tab-ocr'));
     media.scanTasksFromImage.mockResolvedValueOnce([]);
-    fireEvent.press(getByTestId('ai-ocr-run-button'));
+    await fireEvent.press(getByTestId('ai-ocr-run-button'));
     await waitFor(() => expect(getByTestId('ai-tools-message').props.children).toBe(
       'Na obrazie nie znaleziono żadnych zadań'
     ), {
@@ -1275,16 +1308,16 @@ afterEach(() => {
     });
 
     media.scanTasksFromImage.mockRejectedValueOnce({ code: 'provider_disabled' });
-    fireEvent.press(getByTestId('ai-ocr-run-button'));
+    await fireEvent.press(getByTestId('ai-ocr-run-button'));
     await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe(
       'Skanowanie notatek jest chwilowo niedostępne'
     ), {
       timeout: ASYNC_TIMEOUT,
     });
 
-    fireEvent.press(getByTestId('ai-tab-batch'));
-    fireEvent.changeText(getByTestId('ai-batch-input'), '');
-    fireEvent.press(getByTestId('ai-batch-run-button'));
+    await fireEvent.press(getByTestId('ai-tab-batch'));
+    await fireEvent.changeText(getByTestId('ai-batch-input'), '');
+    await fireEvent.press(getByTestId('ai-batch-run-button'));
     await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe(
       'Wpisz przynajmniej jedno zadanie'
     ), {
@@ -1292,8 +1325,8 @@ afterEach(() => {
     });
 
     ai.batchAnalyzeTasks.mockRejectedValueOnce(new Error('batch down'));
-    fireEvent.changeText(getByTestId('ai-batch-input'), 'Task A');
-    fireEvent.press(getByTestId('ai-batch-run-button'));
+    await fireEvent.changeText(getByTestId('ai-batch-input'), 'Task A');
+    await fireEvent.press(getByTestId('ai-batch-run-button'));
     await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe(
       'Pomoc jest chwilowo niedostępna. Nadal możesz ręcznie wybrać kwadrant i dodać zadanie.'
     ), {
@@ -1316,14 +1349,14 @@ afterEach(() => {
     ]);
     tasksApi.createRemoteTask.mockRejectedValue(new Error('offline'));
 
-    const { getAllByText, getByText, getByTestId } = render(<App />);
+    const { getAllByText, getByText, getByTestId } = await render(<App />);
 
     await waitFor(() => expect(getAllByText('Brak zadań w tym kwadrancie.').length).toBe(4), {
       timeout: ASYNC_TIMEOUT,
     });
-    fireEvent.press(getByTestId('scan-task-button'));
+    await fireEvent.press(getByTestId('scan-task-button'));
     await waitFor(() => expect(getByTestId('ocr-title-ocr-1')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
-    fireEvent.press(getByTestId('ocr-import-button'));
+    await fireEvent.press(getByTestId('ocr-import-button'));
 
     await waitFor(() => expect(getByText('Offline scan')).toBeTruthy(), {
       timeout: ASYNC_TIMEOUT,

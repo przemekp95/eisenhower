@@ -22,6 +22,7 @@ describe('taskUtils', () => {
   it('maps quadrants to task flags', () => {
     expect(quadrantToFlags(0)).toEqual({ urgent: true, important: true });
     expect(quadrantToFlags(3)).toEqual({ urgent: false, important: false });
+    expect(quadrantToFlags(99)).toEqual({ urgent: false, important: false });
   });
 
   it('maps task flags back to a quadrant index', () => {

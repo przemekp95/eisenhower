@@ -6,8 +6,8 @@ import { translations } from '../i18n/translations';
 describe('AIStatusPanel', () => {
   const t = translations.pl;
 
-  it('renders business availability without provider or model details', () => {
-    const { getByText, queryByText } = render(
+  it('renders business availability without provider or model details', async () => {
+    const { getByText, queryByText } = await render(
       <AIStatusPanel
         aiLoading={false}
         aiConnected
@@ -24,8 +24,8 @@ describe('AIStatusPanel', () => {
     expect(queryByText('Tesseract OCR')).toBeNull();
   });
 
-  it('renders loading and unavailable states', () => {
-    const { getByText } = render(
+  it('renders loading and unavailable states', async () => {
+    const { getByText } = await render(
       <AIStatusPanel
         aiLoading
         aiConnected={false}
@@ -37,8 +37,8 @@ describe('AIStatusPanel', () => {
     expect(getByText('Ładowanie...')).toBeTruthy();
   });
 
-  it('renders the offline message when the runtime is disconnected after loading', () => {
-    const { getByText } = render(
+  it('renders the offline message when the runtime is disconnected after loading', async () => {
+    const { getByText } = await render(
       <AIStatusPanel
         aiLoading={false}
         aiConnected={false}

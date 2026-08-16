@@ -14,7 +14,7 @@ Replace the stale and overlapping Dependabot branches with one compatible, repro
 
 ### Progress
 
-The consolidated graph now replaces the stale Dependabot branches: Node CI and the digest-pinned web build use Node 24, Cucumber 13 is qualified, unused direct Babel presets were removed, React and React Test Renderer are aligned, and compatible Python, npm and GitHub Actions updates are applied. Full `make verify`, native Android `assembleRelease`, APK integrity checks, both web Docker targets and an all-severity Trivy scan are green. NumPy remains capped below 2.5 only on the supported Python 3.11 release runtime; moving that boundary requires a separate image and physical-runtime requalification rather than a resolver bypass. Promotion and Dependabot branch closeout remain.
+The consolidated graph now replaces the stale Dependabot branches: Node CI and the digest-pinned web build use Node 24, Cucumber 13 is qualified, unused direct Babel presets were removed, React and React Test Renderer are aligned, and compatible Python, npm and GitHub Actions updates are applied. A second coherent-stack pass qualified Vite 8 with its Rolldown/Babel peer graph, JOSE 6 through a lazy native ESM boundary, React Native Testing Library 14 with genuinely asynchronous interactions, Uvicorn 0.52.3 and NumPy 2.4.6. Jest stays on 29 only because the current `jest-expo` 55 package imports Jest 29 internals; Jest 30 is rejected as an upstream-incompatible isolated major rather than hidden with a resolver bypass. Full `make verify`, native Android `assembleRelease`, APK integrity and endpoint checks, both web Docker targets, npm/pip audits and all-severity Trivy scans are green. Promotion and Dependabot branch closeout remain.
 
 ---
 
