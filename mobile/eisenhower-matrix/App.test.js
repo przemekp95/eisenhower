@@ -845,6 +845,25 @@ afterEach(() => {
     );
   });
 
+  it('prevents overlapping quick suggestions and restores the action after failure', async () => {
+    let rejectSuggestion;
+    ai.suggestTaskQuadrant.mockReturnValue(new Promise((_resolve, reject) => {
+      rejectSuggestion = reject;
+    }));
+    const { getByPlaceholderText, getByTestId } = render(<App />);
+    await waitFor(() => expect(getByTestId('suggest-task-button')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    fireEvent.changeText(getByPlaceholderText('Tytuł zadania'), 'Slow suggestion');
+
+    fireEvent.press(getByTestId('suggest-task-button'));
+    fireEvent.press(getByTestId('suggest-task-button'));
+    expect(ai.suggestTaskQuadrant).toHaveBeenCalledTimes(1);
+    expect(getByTestId('suggest-task-button').props.accessibilityState.disabled).toBe(true);
+
+    await act(async () => rejectSuggestion({ code: 'request_timeout' }));
+    await waitFor(() => expect(getByTestId('suggest-task-button').props.accessibilityState.disabled).toBe(false));
+    expect(getByTestId('notice-banner').props.children).toContain('Wybierz kwadrant ręcznie');
+  });
+
   it('opens AI tools, runs advanced analysis and adds the analyzed task to the matrix', async () => {
     storage.loadTasks.mockResolvedValue([]);
     tasksApi.fetchRemoteTasks.mockResolvedValue([]);
@@ -869,7 +888,11 @@ afterEach(() => {
     fireEvent.changeText(getByTestId('ai-analysis-input'), 'Prepare roadmap');
     fireEvent.press(getByTestId('ai-analysis-run-button'));
 
-    await waitFor(() => expect(ai.analyzeTaskAdvanced).toHaveBeenCalledWith('Prepare roadmap', 'pl'), {
+    await waitFor(() => expect(ai.analyzeTaskAdvanced).toHaveBeenCalledWith(
+      'Prepare roadmap',
+      'pl',
+      expect.objectContaining({ signal: expect.any(Object) })
+    ), {
       timeout: ASYNC_TIMEOUT,
     });
     await waitFor(() => expect(getByTestId('ai-analysis-reasoning').props.children).toBe(
@@ -894,6 +917,29 @@ afterEach(() => {
     });
   });
 
+  it('clears stale advanced and batch results before a retry and hides internal errors', async () => {
+    const { getByTestId, queryByTestId } = render(<App />);
+    await waitFor(() => expect(getByTestId('open-ai-tools-button')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    fireEvent.press(getByTestId('open-ai-tools-button'));
+    fireEvent.changeText(getByTestId('ai-analysis-input'), 'Prepare roadmap');
+    fireEvent.press(getByTestId('ai-analysis-run-button'));
+    await waitFor(() => expect(getByTestId('ai-analysis-reasoning')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+
+    ai.analyzeTaskAdvanced.mockRejectedValueOnce(new Error('private upstream: 10.0.0.5'));
+    fireEvent.press(getByTestId('ai-analysis-run-button'));
+    expect(queryByTestId('ai-analysis-reasoning')).toBeNull();
+    await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toContain('ręcznie'));
+    expect(getByTestId('ai-tools-error').props.children).not.toContain('10.0.0.5');
+
+    fireEvent.press(getByTestId('ai-tab-batch'));
+    fireEvent.changeText(getByTestId('ai-batch-input'), 'Task A');
+    fireEvent.press(getByTestId('ai-batch-run-button'));
+    await waitFor(() => expect(getByTestId('ai-tools-message')).toBeTruthy());
+    ai.batchAnalyzeTasks.mockRejectedValueOnce(new Error('private batch host'));
+    fireEvent.press(getByTestId('ai-batch-run-button'));
+    await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toContain('ręcznie'));
+  });
+
   it('surfaces add-to-matrix errors when the local persistence fallback also fails', async () => {
     storage.loadTasks.mockResolvedValue([]);
     tasksApi.fetchRemoteTasks.mockResolvedValue([]);
@@ -916,7 +962,9 @@ afterEach(() => {
     storage.saveTasks.mockRejectedValueOnce(new Error('disk full'));
     fireEvent.press(getByTestId('ai-analysis-add-button'));
 
-    await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe('disk full'), {
+    await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe(
+      'Nie udało się dodać wyniku analizy do macierzy'
+    ), {
       timeout: ASYNC_TIMEOUT,
     });
   });
@@ -941,6 +989,84 @@ afterEach(() => {
     });
   });
 
+  it('cancels an in-flight analysis when the AI tools modal closes', async () => {
+    ai.analyzeTaskAdvanced.mockImplementation((_task, _language, { signal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject({ code: 'request_cancelled' }));
+    }));
+    const { getByTestId, queryByTestId } = render(<App />);
+    await waitFor(() => expect(getByTestId('open-ai-tools-button')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    fireEvent.press(getByTestId('open-ai-tools-button'));
+    fireEvent.changeText(getByTestId('ai-analysis-input'), 'Cancel analysis');
+    fireEvent.press(getByTestId('ai-analysis-run-button'));
+    const signal = ai.analyzeTaskAdvanced.mock.calls[0][2].signal;
+
+    fireEvent.press(getByTestId('ai-tools-close-button'));
+
+    expect(signal.aborted).toBe(true);
+    await waitFor(() => expect(queryByTestId('ai-analysis-input')).toBeNull());
+  });
+
+  it('ignores a stale analysis response after editing and keeps the replacement request loading', async () => {
+    let resolveStale;
+    let resolveCurrent;
+    ai.analyzeTaskAdvanced
+      .mockImplementationOnce(() => new Promise((resolve) => {
+        resolveStale = resolve;
+      }))
+      .mockImplementationOnce(() => new Promise((resolve) => {
+        resolveCurrent = resolve;
+      }));
+    const { getByTestId, queryByText } = render(<App />);
+    await waitFor(() => expect(getByTestId('open-ai-tools-button')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    fireEvent.press(getByTestId('open-ai-tools-button'));
+    fireEvent.changeText(getByTestId('ai-analysis-input'), 'Old input');
+    fireEvent.press(getByTestId('ai-analysis-run-button'));
+    const staleSignal = ai.analyzeTaskAdvanced.mock.calls[0][2].signal;
+
+    fireEvent.changeText(getByTestId('ai-analysis-input'), 'Current input');
+    expect(staleSignal.aborted).toBe(true);
+    expect(getByTestId('ai-analysis-run-button').props.accessibilityState.disabled).toBe(false);
+    fireEvent.press(getByTestId('ai-analysis-run-button'));
+
+    await act(async () => resolveStale({
+      task: 'Old input',
+      langchain_analysis: { quadrant: 3, reasoning: 'STALE RESULT' },
+    }));
+    expect(queryByText('STALE RESULT')).toBeNull();
+    expect(getByTestId('ai-analysis-run-button').props.accessibilityState.disabled).toBe(true);
+
+    await act(async () => resolveCurrent({
+      task: 'Current input',
+      langchain_analysis: { quadrant: 2, reasoning: 'CURRENT RESULT' },
+    }));
+    await waitFor(() => expect(getByTestId('ai-analysis-reasoning').props.children).toBe('CURRENT RESULT'));
+    expect(getByTestId('ai-analysis-run-button').props.accessibilityState.disabled).toBe(false);
+  });
+
+  it('does not restore a stale analysis result after closing and reopening the modal', async () => {
+    let resolveClosedRequest;
+    ai.analyzeTaskAdvanced.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveClosedRequest = resolve;
+    }));
+    const { getByTestId, queryByText } = render(<App />);
+    await waitFor(() => expect(getByTestId('open-ai-tools-button')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    fireEvent.press(getByTestId('open-ai-tools-button'));
+    fireEvent.changeText(getByTestId('ai-analysis-input'), 'Request before close');
+    fireEvent.press(getByTestId('ai-analysis-run-button'));
+    const closedSignal = ai.analyzeTaskAdvanced.mock.calls[0][2].signal;
+    fireEvent.press(getByTestId('ai-tools-close-button'));
+    expect(closedSignal.aborted).toBe(true);
+
+    fireEvent.press(getByTestId('open-ai-tools-button'));
+    await act(async () => resolveClosedRequest({
+      task: 'Request before close',
+      langchain_analysis: { quadrant: 0, reasoning: 'CLOSED STALE RESULT' },
+    }));
+
+    expect(queryByText('CLOSED STALE RESULT')).toBeNull();
+    expect(getByTestId('ai-analysis-run-button').props.accessibilityState.disabled).toBe(false);
+  });
+
   it('opens bulk analysis in AI tools and renders reviewed tasks', async () => {
     const { getAllByText, getByTestId } = render(<App />);
 
@@ -953,7 +1079,10 @@ afterEach(() => {
     fireEvent.changeText(getByTestId('ai-batch-input'), 'Task A\nTask B');
     fireEvent.press(getByTestId('ai-batch-run-button'));
 
-    await waitFor(() => expect(ai.batchAnalyzeTasks).toHaveBeenCalledWith(['Task A', 'Task B']), {
+    await waitFor(() => expect(ai.batchAnalyzeTasks).toHaveBeenCalledWith(
+      ['Task A', 'Task B'],
+      expect.objectContaining({ signal: expect.any(Object) })
+    ), {
       timeout: ASYNC_TIMEOUT,
     });
     await waitFor(() => expect(getAllByText('Task A').length).toBeGreaterThan(0), {
@@ -1112,7 +1241,11 @@ afterEach(() => {
     ), {
       timeout: ASYNC_TIMEOUT,
     });
-    expect(media.scanTasksFromImage).toHaveBeenCalledWith('pl');
+    expect(media.scanTasksFromImage).toHaveBeenCalledWith(
+      'pl',
+      null,
+      expect.objectContaining({ signal: expect.any(Object) })
+    );
   });
 
   it('uses local fallback for add, toggle, delete and reports unavailable central AI when the network is down', async () => {
@@ -1135,7 +1268,9 @@ afterEach(() => {
 
     fireEvent.changeText(getByPlaceholderText('Tytuł zadania'), 'Offline task');
     fireEvent.press(getByTestId('suggest-task-button'));
-    await waitFor(() => expect(getByTestId('notice-banner').props.children).toBe('Centralna sugestia AI jest niedostępna'), {
+    await waitFor(() => expect(getByTestId('notice-banner').props.children).toBe(
+      'AI jest teraz niedostępne. Nadal możesz ręcznie wybrać kwadrant i dodać zadanie.'
+    ), {
       timeout: ASYNC_TIMEOUT,
     });
 
@@ -1281,7 +1416,9 @@ afterEach(() => {
     ai.analyzeTaskAdvanced.mockRejectedValueOnce(new Error('analysis down'));
     fireEvent.changeText(getByTestId('ai-analysis-input'), 'Roadmap');
     fireEvent.press(getByTestId('ai-analysis-run-button'));
-    await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe('analysis down'), {
+    await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe(
+      'AI jest teraz niedostępne. Nadal możesz ręcznie wybrać kwadrant i dodać zadanie.'
+    ), {
       timeout: ASYNC_TIMEOUT,
     });
 
@@ -1314,7 +1451,9 @@ afterEach(() => {
     ai.batchAnalyzeTasks.mockRejectedValueOnce(new Error('batch down'));
     fireEvent.changeText(getByTestId('ai-batch-input'), 'Task A');
     fireEvent.press(getByTestId('ai-batch-run-button'));
-    await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe('batch down'), {
+    await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe(
+      'AI jest teraz niedostępne. Nadal możesz ręcznie wybrać kwadrant i dodać zadanie.'
+    ), {
       timeout: ASYNC_TIMEOUT,
     });
   });
@@ -1359,7 +1498,9 @@ afterEach(() => {
     });
 
     fireEvent(getByTestId('modal-provider-switch-local_model'), 'valueChange', false);
-    await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe('toggle down'), {
+    await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe(
+      'Nie udało się zaktualizować providera AI'
+    ), {
       timeout: ASYNC_TIMEOUT,
     });
 
@@ -1429,7 +1570,9 @@ afterEach(() => {
     fireEvent.changeText(getByTestId('manage-example-input'), 'Nie zapisuj');
     fireEvent.press(getByTestId('manage-add-example-button'));
 
-    await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe('management failed'), {
+    await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe(
+      'Operacja zarządzania nie powiodła się'
+    ), {
       timeout: ASYNC_TIMEOUT,
     });
   });

@@ -21,7 +21,7 @@ import {
   setAIProviderEnabled,
 } from './src/services/ai';
 import { scanTasksFromImage } from './src/services/media';
-import { getSuggestedQuadrant, resolveOCRNotice } from './src/utils/aiUi';
+import { getSuggestedQuadrant, resolveAIActionNotice, resolveOCRNotice } from './src/utils/aiUi';
 import { flagsToQuadrant, quadrantToFlags } from './src/utils/taskUtils';
 import styles from './src/styles/appStyles';
 import {
@@ -104,11 +104,16 @@ function AuthenticatedApp() {
   const [refreshing, setRefreshing] = useState(false);
   const [clearConfirmationOpen, setClearConfirmationOpen] = useState(false);
   const retrySyncRef = useRef(retrySync);
+  const refreshCapabilitiesRef = useRef(refreshCapabilities);
   const networkReachableRef = useRef(null);
+  const analysisRequestRef = useRef(null);
+  const batchRequestRef = useRef(null);
+  const ocrRequestRef = useRef(null);
 
   useEffect(() => {
     retrySyncRef.current = retrySync;
-  }, [retrySync]);
+    refreshCapabilitiesRef.current = refreshCapabilities;
+  }, [refreshCapabilities, retrySync]);
 
   useEffect(
     () => subscribeToApiToken(() => setAdminAuthenticated(Boolean(getAdminToken()))),
@@ -119,6 +124,7 @@ function AuthenticatedApp() {
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
         void retrySyncRef.current();
+        void refreshCapabilitiesRef.current().catch(() => {});
       }
     });
     return () => subscription?.remove?.();
@@ -132,9 +138,16 @@ function AuthenticatedApp() {
 
       if (recovered) {
         void retrySyncRef.current();
+        void refreshCapabilitiesRef.current().catch(() => {});
       }
     });
     return () => subscription?.remove?.();
+  }, []);
+
+  useEffect(() => () => {
+    analysisRequestRef.current?.abort();
+    batchRequestRef.current?.abort();
+    ocrRequestRef.current?.abort();
   }, []);
 
   useEffect(() => {
@@ -169,6 +182,24 @@ function AuthenticatedApp() {
     setAiToolsMessage('');
   };
 
+  const cancelAnalysisRequest = () => {
+    analysisRequestRef.current?.abort();
+    analysisRequestRef.current = null;
+    setAnalysisLoading(false);
+  };
+
+  const cancelBatchRequest = () => {
+    batchRequestRef.current?.abort();
+    batchRequestRef.current = null;
+    setBatchLoading(false);
+  };
+
+  const cancelOcrRequest = () => {
+    ocrRequestRef.current?.abort();
+    ocrRequestRef.current = null;
+    setOcrLoading(false);
+  };
+
   const openAITools = (tab = 'analysis') => {
     resetAIToolFeedback();
     setAiToolsOpen(true);
@@ -177,6 +208,12 @@ function AuthenticatedApp() {
   };
 
   const closeAITools = () => {
+    cancelAnalysisRequest();
+    cancelBatchRequest();
+    cancelOcrRequest();
+    setAdvancedAnalysis(null);
+    setBatchResult(null);
+    setOcrResult(null);
     setAiToolsOpen(false);
     resetAIToolFeedback();
   };
@@ -187,15 +224,30 @@ function AuthenticatedApp() {
       return;
     }
 
-    setAnalysisLoading(true);
+    cancelAnalysisRequest();
+    setAdvancedAnalysis(null);
     resetAIToolFeedback();
+    const controller = new AbortController();
+    analysisRequestRef.current = controller;
+    setAnalysisLoading(true);
 
     try {
-      setAdvancedAnalysis(await analyzeTaskAdvanced(analysisTask.trim(), language));
+      const result = await analyzeTaskAdvanced(analysisTask.trim(), language, {
+        signal: controller.signal,
+      });
+      if (analysisRequestRef.current === controller && !controller.signal.aborted) {
+        setAdvancedAnalysis(result);
+      }
     } catch (error) {
-      setAiToolsError(error instanceof Error ? error.message : t.aiAnalysisFailed);
+      if (analysisRequestRef.current === controller) {
+        const message = resolveAIActionNotice(error, t, t.aiManualFallback);
+        if (message) setAiToolsError(message);
+      }
     } finally {
-      setAnalysisLoading(false);
+      if (analysisRequestRef.current === controller) {
+        analysisRequestRef.current = null;
+        setAnalysisLoading(false);
+      }
     }
   };
 
@@ -211,18 +263,25 @@ function AuthenticatedApp() {
       await addAnalysisTaskToMatrix(advancedAnalysis);
       setAiToolsMessage(t.aiAnalysisAdded);
     } catch (error) {
-      setAiToolsError(error instanceof Error ? error.message : t.aiAnalysisAddFailed);
+      setAiToolsError(t.aiAnalysisAddFailed);
     } finally {
       setAnalysisAdding(false);
     }
   };
 
   const handleOcrFromTools = async () => {
-    setOcrLoading(true);
+    cancelOcrRequest();
+    setOcrResult(null);
     resetAIToolFeedback();
+    const controller = new AbortController();
+    ocrRequestRef.current = controller;
+    setOcrLoading(true);
 
     try {
-      const scanned = await scanTasksFromImage(language);
+      const scanned = await scanTasksFromImage(language, null, { signal: controller.signal });
+      if (ocrRequestRef.current !== controller || controller.signal.aborted) {
+        return;
+      }
       if (scanned.length === 0) {
         setOcrResult({ count: 0, items: [] });
         setAiToolsMessage(t.ocrEmpty);
@@ -240,9 +299,15 @@ function AuthenticatedApp() {
       setOcrLearningConsent(false);
       setAiToolsMessage(t.aiOcrReviewReady.replace('{count}', String(scanned.length)));
     } catch (error) {
-      setAiToolsError(resolveOCRNotice(error, t));
+      if (ocrRequestRef.current === controller) {
+        const message = resolveOCRNotice(error, t);
+        if (message) setAiToolsError(message);
+      }
     } finally {
-      setOcrLoading(false);
+      if (ocrRequestRef.current === controller) {
+        ocrRequestRef.current = null;
+        setOcrLoading(false);
+      }
     }
   };
 
@@ -273,7 +338,7 @@ function AuthenticatedApp() {
       setOcrResult(null);
       setOcrLearningConsent(false);
     } catch (error) {
-      setAiToolsError(error instanceof Error ? error.message : t.ocrFailed);
+      setAiToolsError(t.ocrFailed);
     } finally {
       setOcrLoading(false);
     }
@@ -299,17 +364,29 @@ function AuthenticatedApp() {
       return;
     }
 
-    setBatchLoading(true);
+    cancelBatchRequest();
+    setBatchResult(null);
     resetAIToolFeedback();
+    const controller = new AbortController();
+    batchRequestRef.current = controller;
+    setBatchLoading(true);
 
     try {
-      const result = await batchAnalyzeTasks(entries);
-      setBatchResult(result);
-      setAiToolsMessage(t.aiBatchComplete.replace('{count}', String(result.summary.total_tasks)));
+      const result = await batchAnalyzeTasks(entries, { signal: controller.signal });
+      if (batchRequestRef.current === controller && !controller.signal.aborted) {
+        setBatchResult(result);
+        setAiToolsMessage(t.aiBatchComplete.replace('{count}', String(result.summary.total_tasks)));
+      }
     } catch (error) {
-      setAiToolsError(error instanceof Error ? error.message : t.aiBatchFailed);
+      if (batchRequestRef.current === controller) {
+        const message = resolveAIActionNotice(error, t, t.aiManualFallback);
+        if (message) setAiToolsError(message);
+      }
     } finally {
-      setBatchLoading(false);
+      if (batchRequestRef.current === controller) {
+        batchRequestRef.current = null;
+        setBatchLoading(false);
+      }
     }
   };
 
@@ -325,7 +402,7 @@ function AuthenticatedApp() {
       }
       setAiToolsMessage(typeof successMessage === 'function' ? successMessage(result) : successMessage);
     } catch (error) {
-      setAiToolsError(error instanceof Error ? error.message : t.aiManageActionFailed);
+      setAiToolsError(t.aiManageActionFailed);
     } finally {
       setManageAction('');
     }
@@ -344,7 +421,7 @@ function AuthenticatedApp() {
       await refreshAIManagement();
       setAiToolsMessage(t.aiProviderToggleSaved);
     } catch (error) {
-      setAiToolsError(error instanceof Error ? error.message : t.aiProviderToggleFailed);
+      setAiToolsError(t.aiProviderToggleFailed);
     } finally {
       setProviderBusy((current) => ({ ...current, [providerName]: false }));
     }
@@ -504,7 +581,11 @@ function AuthenticatedApp() {
         onClose={closeAITools}
         quadrantOptions={quadrantOptions}
         analysisTask={analysisTask}
-        onChangeAnalysisTask={setAnalysisTask}
+        onChangeAnalysisTask={(value) => {
+          cancelAnalysisRequest();
+          setAnalysisTask(value);
+          setAdvancedAnalysis(null);
+        }}
         onRunAdvancedAnalysis={handleRunAdvancedAnalysis}
         analysisLoading={analysisLoading}
         advancedAnalysis={advancedAnalysis}
@@ -519,7 +600,11 @@ function AuthenticatedApp() {
         ocrLearningConsent={ocrLearningConsent}
         onChangeOcrLearningConsent={setOcrLearningConsent}
         batchInput={batchInput}
-        onChangeBatchInput={setBatchInput}
+        onChangeBatchInput={(value) => {
+          cancelBatchRequest();
+          setBatchInput(value);
+          setBatchResult(null);
+        }}
         onRunBatchAnalyze={handleBatchAnalyze}
         batchLoading={batchLoading}
         batchResult={batchResult}

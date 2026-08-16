@@ -25,6 +25,7 @@ the Node process; there is intentionally no invented outbox service.
 | Action | Starts | Explicitly excludes |
 | --- | --- | --- |
 | `deploy` / `deploy-core` | core | Qdrant, knowledge, worker, vLLM, reranker, n8n, Keycloak |
+| `deploy-access-core` | core + identity/access + web + MCP | Qdrant, knowledge, worker, vLLM, reranker, n8n, Calendar |
 | `deploy-retrieval` | core + Qdrant + knowledge + one worker + reranker | generation, n8n, Keycloak |
 | `deploy-response` | retrieval + private generation + identity/access/web/MCP | n8n and Calendar |
 | `deploy-full` | the former complete local topology | nothing |
@@ -76,14 +77,31 @@ Each matching `render-*` action renders only its graph. All first-party images a
 
    ```bash
    deploy/local/deploy.sh render-core
+   deploy/local/deploy.sh render-access-core
    deploy/local/deploy.sh render-retrieval
    deploy/local/deploy.sh render-response
    deploy/local/deploy.sh render-full
    deploy/local/deploy.sh deploy-core
+   deploy/local/deploy.sh deploy-access-core
    ```
 
 This binds host ports to `127.0.0.1` by default. Compose DNS names provide same-host service-to-service
 URLs. A reverse proxy or private client may reach only the endpoints explicitly selected by the owner.
+
+## User-facing core rollout without GPU
+
+`deploy-access-core` extends the CPU-only core with Keycloak, the web UI, Remote MCP and the access gateway,
+without starting Qdrant, the knowledge/ingest roles, vLLM generation, reranking, n8n or the Calendar gateway:
+
+```bash
+deploy/local/deploy.sh render-access-core
+deploy/local/deploy.sh deploy-access-core
+```
+
+The CPU classifier remains available when its existing production approval gate passes. Node task readiness is
+independent of AI health, and the UI reports optional AI failures with retry and a manual quadrant path. AI and
+knowledge requests retain the same OIDC, bearer, CORS/origin, audit and proxy allowlist controls; missing private
+retrieval or GPU roles cannot produce an ungrounded answer.
 
 ## Private vLLM lifecycle
 

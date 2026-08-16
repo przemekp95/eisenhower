@@ -172,6 +172,17 @@ def create_boundary_app(
       return JSONResponse(status_code=503, content={"status": "not_ready", "role": "knowledge"})
     return {"status": "ready"}
 
+  @app.get("/metrics")
+  async def metrics():
+    body = (
+      "# HELP eisenhower_release_info Exact source revision exposed by this process.\n"
+      "# TYPE eisenhower_release_info gauge\n"
+      f'eisenhower_release_info{{sha="{resolved.release_sha}"}} 1\n'
+      "# TYPE eisenhower_ai_boundary_info gauge\n"
+      "eisenhower_ai_boundary_info 1\n"
+    )
+    return Response(content=body, media_type="text/plain; version=0.0.4")
+
   @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
   async def proxy(path: str, request: Request):
     body = await request.body()

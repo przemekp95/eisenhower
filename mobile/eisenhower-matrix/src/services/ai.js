@@ -21,12 +21,12 @@ export async function suggestTaskQuadrant(title) {
   };
 }
 
-export async function analyzeTaskAdvanced(task, language = 'pl') {
-  return getAiApi().analyzeTask(task, language);
+export async function analyzeTaskAdvanced(task, language = 'pl', options = {}) {
+  return getAiApi().analyzeTask(task, language, options);
 }
 
-export async function batchAnalyzeTasks(tasks) {
-  return getAiApi().batchAnalyzeTasks(tasks);
+export async function batchAnalyzeTasks(tasks, options = {}) {
+  return getAiApi().batchAnalyzeTasks(tasks, options);
 }
 
 export async function fetchAICapabilities() {

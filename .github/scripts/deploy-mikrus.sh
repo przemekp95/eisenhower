@@ -269,7 +269,7 @@ echo "Waiting for container readiness."
 deadline=$((SECONDS + 180))
 while (( SECONDS < deadline )); do
   ready=true
-  for service in mongodb ai-service api-service frontend prometheus; do
+  for service in mongodb api-service frontend prometheus; do
     container_id="$(docker compose --env-file .env -f docker-compose.yml ps -q "$service")"
     if [[ -z "$container_id" ]]; then
       ready=false
@@ -298,14 +298,17 @@ fi
 echo "Running public HTTPS smoke checks."
 ./assert-http-status.sh "$MIKRUS_PUBLIC_URL/health" 200
 ./assert-http-status.sh "$MIKRUS_PUBLIC_URL/api/health" 200
-./assert-http-status.sh "$MIKRUS_PUBLIC_URL/ai/" 200
-./assert-http-status.sh "$MIKRUS_PUBLIC_URL/ai/health/live" 200
-./assert-http-status.sh "$MIKRUS_PUBLIC_URL/ai/health/ready" 200
+
+if ./assert-http-status.sh "$MIKRUS_PUBLIC_URL/ai/health/ready" 200; then
+  echo "Optional AI boundary is ready."
+  expected_release_metric="eisenhower_release_info{sha=\"$IMAGE_TAG\"} 1"
+  docker compose --env-file .env -f docker-compose.yml exec -T ai-service \
+    curl -fsS http://127.0.0.1:8000/metrics | grep -F "$expected_release_metric"
+else
+  echo "Optional AI boundary is degraded; core web/API deployment remains ready." >&2
+fi
 
 echo "Verifying exact-SHA process metrics and active Prometheus rules."
-expected_release_metric="eisenhower_release_info{sha=\"$IMAGE_TAG\"} 1"
-docker compose --env-file .env -f docker-compose.yml exec -T ai-service \
-  curl -fsS http://127.0.0.1:8000/metrics | grep -F "$expected_release_metric"
 docker compose --env-file .env -f docker-compose.yml exec -T prometheus \
   wget -qO- http://127.0.0.1:9090/api/v1/rules | grep -F 'EisenhowerAuditWriteFailed'
 

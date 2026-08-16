@@ -102,6 +102,7 @@ function resolveClientOptions(optionsOrFetch) {
     adminToken: optionsOrFetch.adminToken,
     onUnauthorized: optionsOrFetch.onUnauthorized,
     onAdminUnauthorized: optionsOrFetch.onAdminUnauthorized,
+    aiTimeoutMs: optionsOrFetch.aiTimeoutMs,
   };
 }
 
@@ -143,6 +144,47 @@ function createRequestError(message, details = {}) {
   }
 
   return error;
+}
+
+function createBoundedAiRequest(optionsOrFetch, credential = 'access') {
+  const options = resolveClientOptions(optionsOrFetch);
+  const request = createAuthorizedRequest(optionsOrFetch, credential);
+  const configuredTimeout = Number(options.aiTimeoutMs);
+  const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0
+    ? configuredTimeout
+    : 8_000;
+
+  return async (url, init = {}) => {
+    const controller = new AbortController();
+    const callerSignal = init.signal;
+    let timedOut = false;
+    const cancel = () => controller.abort();
+
+    if (callerSignal?.aborted) {
+      cancel();
+    } else {
+      callerSignal?.addEventListener('abort', cancel, { once: true });
+    }
+
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      cancel();
+    }, timeoutMs);
+
+    try {
+      return await request(url, { ...init, signal: controller.signal });
+    } catch (error) {
+      if (controller.signal.aborted || error?.name === 'AbortError') {
+        throw createRequestError(timedOut ? 'Request timed out' : 'Request cancelled', {
+          code: timedOut ? 'request_timeout' : 'request_cancelled',
+        });
+      }
+      throw createRequestError('AI service is unavailable', { code: 'ai_unavailable' });
+    } finally {
+      clearTimeout(timeout);
+      callerSignal?.removeEventListener('abort', cancel);
+    }
+  };
 }
 
 function stripTrailingSlash(baseUrl) {
@@ -483,14 +525,15 @@ function createTaskApi(baseUrl, optionsOrFetch) {
 }
 
 function createAiApi(baseUrl, optionsOrFetch) {
-  const request = createAuthorizedRequest(optionsOrFetch);
-  const adminRequest = createAuthorizedRequest(optionsOrFetch, 'admin');
+  const request = createBoundedAiRequest(optionsOrFetch);
+  const adminRequest = createBoundedAiRequest(optionsOrFetch, 'admin');
 
-  const analyzeTask = async (task, language = 'en') => {
+  const analyzeTask = async (task, language = 'en', requestOptions = {}) => {
     const response = await request(buildUrl(baseUrl, getAnalyzeTaskPath(task, language)), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ task, language }),
+      signal: requestOptions.signal,
     });
     return readJson(response, {
       defaultError: 'AI request failed',
@@ -520,11 +563,12 @@ function createAiApi(baseUrl, optionsOrFetch) {
     },
     analyzeTask,
     analyzeWithLangChain: analyzeTask,
-    async analyzeTaskWithRag(task) {
+    async analyzeTaskWithRag(task, requestOptions = {}) {
       const response = await request(buildUrl(baseUrl, AI_API_PATHS.analyzeTaskWithRag), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task }),
+        signal: requestOptions.signal,
       });
       return readJson(response, {
         defaultError: 'Grounded AI request failed',
@@ -533,11 +577,12 @@ function createAiApi(baseUrl, optionsOrFetch) {
         invalidResponse: 'AI API returned an invalid response',
       });
     },
-    async searchKnowledge(query, projectId = null, limit = 5) {
+    async searchKnowledge(query, projectId = null, limit = 5, requestOptions = {}) {
       const response = await request(buildUrl(baseUrl, AI_API_PATHS.knowledgeSearch), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query, project_id: projectId, limit }),
+        signal: requestOptions.signal,
       });
       return readJson(response, {
         defaultError: 'Knowledge search failed',
@@ -546,11 +591,12 @@ function createAiApi(baseUrl, optionsOrFetch) {
         invalidResponse: 'AI API returned an invalid response',
       });
     },
-    async answerKnowledge(query, language = 'en', projectId = null, limit = 5) {
+    async answerKnowledge(query, language = 'en', projectId = null, limit = 5, requestOptions = {}) {
       const response = await request(buildUrl(baseUrl, AI_API_PATHS.knowledgeAnswer), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query, language, project_id: projectId, limit }),
+        signal: requestOptions.signal,
       });
       return readJson(response, {
         defaultError: 'Knowledge answer failed',
@@ -559,13 +605,14 @@ function createAiApi(baseUrl, optionsOrFetch) {
         invalidResponse: 'AI API returned an invalid response',
       });
     },
-    async extractTasksFromImage(file) {
+    async extractTasksFromImage(file, requestOptions = {}) {
       const formData = new FormData();
       formData.append('file', file);
 
       const response = await request(buildUrl(baseUrl, AI_API_PATHS.extractTasksFromImage), {
         method: 'POST',
         body: formData,
+        signal: requestOptions.signal,
       });
       return readJson(response, {
         defaultError: 'OCR request failed',
@@ -574,11 +621,12 @@ function createAiApi(baseUrl, optionsOrFetch) {
         invalidResponse: 'AI API returned an invalid response',
       });
     },
-    async batchAnalyzeTasks(tasks) {
+    async batchAnalyzeTasks(tasks, requestOptions = {}) {
       const response = await request(buildUrl(baseUrl, AI_API_PATHS.batchAnalyzeTasks), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tasks }),
+        signal: requestOptions.signal,
       });
       return readJson(response, {
         defaultError: 'AI request failed',
@@ -587,8 +635,10 @@ function createAiApi(baseUrl, optionsOrFetch) {
         invalidResponse: 'AI API returned an invalid response',
       });
     },
-    async fetchCapabilities() {
-      const response = await request(buildUrl(baseUrl, AI_API_PATHS.capabilities));
+    async fetchCapabilities(requestOptions = {}) {
+      const response = await request(buildUrl(baseUrl, AI_API_PATHS.capabilities), {
+        signal: requestOptions.signal,
+      });
       return readJson(response, {
         defaultError: 'AI request failed',
         errorCode: 'ai_request_failed',

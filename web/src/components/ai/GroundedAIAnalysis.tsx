@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { answerKnowledge, KnowledgeAnswer } from '../../services/api';
 import { useLanguage } from '../../i18n/LanguageContext';
 
@@ -26,14 +26,21 @@ export default function GroundedAIAnalysis({
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [applyStatus, setApplyStatus] = useState<string | null>(null);
+  const requestRef = useRef<AbortController | null>(null);
   const { language, t } = useLanguage();
 
   useEffect(() => {
+    requestRef.current?.abort();
     setResult(null);
     setError(null);
     setDescriptionPreview(null);
     setApplyError(null);
     setApplyStatus(null);
+    return () => {
+      const request = requestRef.current;
+      requestRef.current = null;
+      request?.abort();
+    };
   }, [language, taskTitle]);
 
   useEffect(() => {
@@ -41,6 +48,9 @@ export default function GroundedAIAnalysis({
   }, [taskTitle]);
 
   const runAnalysis = async () => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
     setError(null);
     setResult(null);
@@ -49,12 +59,18 @@ export default function GroundedAIAnalysis({
     setApplyStatus(null);
 
     try {
-      setResult(await answerKnowledge(question.trim(), language));
-    } catch {
-      setResult(null);
-      setError(t('ai.grounded.failed'));
+      setResult(await answerKnowledge(question.trim(), language, { signal: controller.signal }));
+    } catch (issue) {
+      const code = issue && typeof issue === 'object' && 'code' in issue ? issue.code : undefined;
+      if (code !== 'request_cancelled') {
+        setResult(null);
+        setError(t('ai.grounded.failed'));
+      }
     } finally {
-      setLoading(false);
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        setLoading(false);
+      }
     }
   };
 

@@ -14,7 +14,7 @@ describe('production deployment boundaries', () => {
     const environment = {
       ...process.env,
       DOCKER_HUB_USERNAME: 'example',
-      IMAGE_TAG: 'sha256-test',
+      IMAGE_TAG: 'a'.repeat(40),
       EISENHOWER_API_TOKEN: 'production-api-token-at-least-32-characters',
       EISENHOWER_ADMIN_TOKEN: 'production-admin-token-at-least-32-characters',
       CORS_ALLOW_ORIGINS: 'https://tasks.example.com',
@@ -47,11 +47,19 @@ describe('production deployment boundaries', () => {
     });
     expect(() => loadConfig(apiEnvironment)).not.toThrow();
     expect(rendered.services['ai-service'].environment).toMatchObject({
-      KNOWLEDGE_SERVICE_BASE_URL: environment.KNOWLEDGE_SERVICE_BASE_URL,
-      KNOWLEDGE_SERVICE_ALLOWED_HOSTS: environment.KNOWLEDGE_SERVICE_ALLOWED_HOSTS,
+      APP_ENV: 'production',
+      AUTH_MODE: 'static',
+      EISENHOWER_API_TOKEN: environment.EISENHOWER_API_TOKEN,
+      EISENHOWER_ADMIN_TOKEN: environment.EISENHOWER_ADMIN_TOKEN,
+      AUDIT_HMAC_KEY: environment.AUDIT_HMAC_KEY,
+      AUDIT_DATABASE_PATH: '/app/audit/ai-boundary.sqlite3',
+      CLASSIFIER_SERVICE_URL: environment.KNOWLEDGE_SERVICE_BASE_URL,
+      KNOWLEDGE_SERVICE_URL: environment.KNOWLEDGE_SERVICE_BASE_URL,
+      AI_ROLE_ALLOWED_HOSTS: environment.KNOWLEDGE_SERVICE_ALLOWED_HOSTS,
       CORS_ALLOW_ORIGINS: environment.CORS_ALLOW_ORIGINS,
+      RELEASE_SHA: environment.IMAGE_TAG,
     });
-    expect(rendered.services['ai-service'].volumes).toBeUndefined();
+    expect(JSON.stringify(rendered.services['ai-service'].volumes)).toContain('/app/audit');
     expect(JSON.stringify(rendered.services['api-service'].volumes)).toContain('/app/audit');
   });
 
@@ -68,8 +76,10 @@ describe('production deployment boundaries', () => {
     expect(apiBlock).not.toMatch(/^\s+ports:/m);
     expect(compose).toMatch(/\$\{WEB_PORT:-8080\}:3000/);
     expect(aiBlock).toContain('eisenhower-ai-boundary');
-    expect(aiBlock).toContain('KNOWLEDGE_SERVICE_BASE_URL:');
-    expect(aiBlock).toContain('KNOWLEDGE_SERVICE_ALLOWED_HOSTS:');
+    expect(aiBlock).toContain('CLASSIFIER_SERVICE_URL:');
+    expect(aiBlock).toContain('KNOWLEDGE_SERVICE_URL:');
+    expect(aiBlock).toContain('AI_ROLE_ALLOWED_HOSTS:');
+    expect(aiBlock).toContain('/health/live');
     expect(aiBlock).not.toMatch(/LOCAL_MODEL|TRAINING_DATA|TESSERACT|QDRANT/);
   });
 
@@ -85,6 +95,33 @@ describe('production deployment boundaries', () => {
     expect(mongoBlock).toContain('mem_limit: ${MONGODB_MEMORY_LIMIT:-1g}');
     expect(mongoBlock).toContain('cpus: ${MONGODB_CPUS:-1.0}');
     expect(mongoBlock).toContain('pids_limit: 512');
+  });
+
+  it('keeps the Mikrus core web and API bootable when optional AI is unavailable', () => {
+    const compose = fs.readFileSync(
+      path.join(repositoryRoot, 'deploy/mikrus/docker-compose.yml'),
+      'utf8'
+    );
+    const deployScript = fs.readFileSync(
+      path.join(repositoryRoot, '.github/scripts/deploy-mikrus.sh'),
+      'utf8'
+    );
+    const apiBlock = compose.slice(compose.indexOf('  api-service:'), compose.indexOf('  frontend:'));
+    const frontendBlock = compose.slice(compose.indexOf('  frontend:'), compose.indexOf('  prometheus:'));
+    const prometheusBlock = compose.slice(compose.indexOf('  prometheus:'), compose.indexOf('\nvolumes:'));
+    const apiDependencies = apiBlock.slice(apiBlock.indexOf('    depends_on:'), apiBlock.indexOf('    expose:'));
+    const frontendDependencies = frontendBlock.slice(
+      frontendBlock.indexOf('    depends_on:'),
+      frontendBlock.indexOf('    ports:'),
+    );
+
+    expect(apiDependencies).toContain('mongodb:');
+    expect(apiDependencies).not.toContain('ai-service:');
+    expect(frontendDependencies).toContain('api-service:');
+    expect(frontendDependencies).not.toContain('ai-service:');
+    expect(prometheusBlock).not.toContain('depends_on:');
+    expect(deployScript).toContain('for service in mongodb api-service frontend prometheus; do');
+    expect(deployScript).toContain('if ./assert-http-status.sh "$MIKRUS_PUBLIC_URL/ai/health/ready" 200; then');
   });
 
   it('activates private same-SHA metrics scraping and bounded alert rules on Mikrus', () => {

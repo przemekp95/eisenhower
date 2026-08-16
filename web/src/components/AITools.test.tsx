@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AITools from './AITools';
 import { LanguageProvider } from '../i18n/LanguageContext';
 import * as api from '../services/api';
@@ -14,9 +14,28 @@ function renderTools(overrides: Partial<React.ComponentProps<typeof AITools>> = 
   );
 }
 
+async function waitForCapabilityCheck() {
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('status', { name: /checking AI availability|sprawdzam dostępność AI/i })
+    ).not.toBeInTheDocument()
+  );
+}
+
 describe('AITools task assistant', () => {
   beforeEach(() => {
     localStorage.setItem('eisenhower-language', 'en');
+    mockedApi.getCapabilities.mockResolvedValue({
+      classification: true,
+      reasoned_local_analysis: true,
+      knowledge_retrieval: true,
+      retrieval_augmented_generation: true,
+      langchain_analysis: false,
+      ocr: true,
+      batch_analysis: true,
+      training_management: true,
+      providers: { local_model: true, tesseract: true, ocr: true },
+    } as api.AICapabilities);
     mockedApi.answerKnowledge.mockResolvedValue({
       status: 'answered',
       answer: 'Approved incident guidance.',
@@ -54,6 +73,7 @@ describe('AITools task assistant', () => {
 
   it('combines task context, priority and grounded answers in one tab', async () => {
     renderTools({ taskDescription: 'Current context' });
+    await waitForCapabilityCheck();
     expect(screen.getByRole('tab', { name: 'Task assistant' })).toHaveAttribute(
       'aria-selected',
       'true'
@@ -86,6 +106,7 @@ describe('AITools task assistant', () => {
 
   it('applies the default no-op priority callback safely', async () => {
     renderTools();
+    await waitForCapabilityCheck();
     fireEvent.click(screen.getByRole('button', { name: 'Suggest quadrant' }));
     await screen.findByText('Suggested quadrant: Do Now');
     fireEvent.click(screen.getByRole('button', { name: 'Review quadrant change' }));
@@ -106,11 +127,12 @@ describe('AITools task assistant', () => {
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
-  it('locks scroll, traps focus and restores the opener', () => {
+  it('locks scroll, traps focus and restores the opener', async () => {
     const opener = document.createElement('button');
     document.body.appendChild(opener);
     opener.focus();
     const view = renderTools();
+    await waitForCapabilityCheck();
     const close = screen.getByRole('button', { name: 'Close' });
     const lastAction = screen.getByRole('button', { name: 'Check sources' });
     expect(close).toHaveFocus();
@@ -204,6 +226,7 @@ describe('AITools task assistant', () => {
       timestamp: new Date().toISOString(),
     });
     renderTools({ onOCRTasksExtracted });
+    await waitForCapabilityCheck();
     fireEvent.click(screen.getByRole('tab', { name: 'Read an image' }));
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [new File(['urgent outage'], 'tasks.txt', { type: 'text/plain' })] },
@@ -232,6 +255,7 @@ describe('AITools task assistant', () => {
       timestamp: new Date().toISOString(),
     });
     renderTools({ onOCRTasksExtracted: jest.fn().mockResolvedValue(2) });
+    await waitForCapabilityCheck();
     fireEvent.click(screen.getByRole('tab', { name: 'Read an image' }));
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [new File(['urgent outage'], 'tasks.txt', { type: 'text/plain' })] },
@@ -260,6 +284,7 @@ describe('AITools task assistant', () => {
       timestamp: new Date().toISOString(),
     });
     renderTools();
+    await waitForCapabilityCheck();
     fireEvent.click(screen.getByRole('tab', { name: 'Read an image' }));
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [new File(['urgent outage'], 'tasks.txt', { type: 'text/plain' })] },
@@ -271,6 +296,7 @@ describe('AITools task assistant', () => {
 
   it('reports completed batch review', async () => {
     renderTools();
+    await waitForCapabilityCheck();
     fireEvent.click(screen.getByRole('tab', { name: 'Bulk review' }));
     fireEvent.change(screen.getByPlaceholderText(/One task per line/i), {
       target: { value: 'urgent outage' },
@@ -303,6 +329,7 @@ describe('AITools task assistant', () => {
       timestamp: new Date().toISOString(),
     });
     renderTools({ onOCRTasksExtracted: jest.fn().mockResolvedValue(count) });
+    await waitForCapabilityCheck();
     fireEvent.click(screen.getByRole('tab', { name: 'Odczytaj obraz' }));
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [new File(['zadanie'], 'tasks.txt', { type: 'text/plain' })] },
@@ -310,5 +337,147 @@ describe('AITools task assistant', () => {
     await screen.findByDisplayValue('zadanie');
     fireEvent.click(screen.getByRole('button', { name: 'Importuj wybrane' }));
     await screen.findByText(summary);
+  });
+
+  it('keeps manual task recovery available when every optional AI capability is offline', async () => {
+    mockedApi.getCapabilities.mockResolvedValueOnce({
+      classification: false,
+      reasoned_local_analysis: false,
+      knowledge_retrieval: false,
+      retrieval_augmented_generation: false,
+      langchain_analysis: false,
+      ocr: false,
+      batch_analysis: false,
+      training_management: false,
+      providers: { local_model: false, tesseract: false, ocr: false },
+    } as api.AICapabilities);
+    const onClose = jest.fn();
+
+    renderTools({ onClose });
+
+    await screen.findByText(/AI help is currently unavailable/i);
+    expect(screen.queryByRole('button', { name: 'Suggest quadrant' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Check sources' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /choose the quadrant manually/i }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['classification', true, false],
+    ['knowledge', false, true],
+  ])(
+    'keeps the available %s part of the combined assistant usable',
+    async (_name, classification, knowledge) => {
+      mockedApi.getCapabilities.mockResolvedValueOnce({
+        classification,
+        reasoned_local_analysis: classification,
+        knowledge_retrieval: knowledge,
+        retrieval_augmented_generation: knowledge,
+        langchain_analysis: false,
+        ocr: false,
+        batch_analysis: false,
+        training_management: false,
+        providers: { local_model: classification, tesseract: false, ocr: false },
+      } as api.AICapabilities);
+
+      renderTools();
+      await waitForCapabilityCheck();
+
+      expect(screen.queryByRole('button', { name: 'Suggest quadrant' }) !== null).toBe(
+        classification
+      );
+      expect(screen.queryByRole('button', { name: 'Check sources' }) !== null).toBe(knowledge);
+    }
+  );
+
+  it('shows recovery instead of mounting unavailable OCR and batch tools', async () => {
+    mockedApi.getCapabilities.mockResolvedValueOnce({
+      classification: true,
+      reasoned_local_analysis: true,
+      knowledge_retrieval: false,
+      retrieval_augmented_generation: false,
+      langchain_analysis: false,
+      ocr: false,
+      batch_analysis: false,
+      training_management: false,
+      providers: { local_model: true, tesseract: false, ocr: false },
+    } as api.AICapabilities);
+
+    renderTools();
+    await waitForCapabilityCheck();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Read an image' }));
+    expect(screen.queryByTestId('image-upload-input')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /choose the quadrant manually/i })).toBeVisible();
+    fireEvent.click(screen.getByRole('tab', { name: 'Bulk review' }));
+    expect(screen.queryByRole('button', { name: 'Review task list' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /choose the quadrant manually/i })).toBeVisible();
+  });
+
+  it('gates every tool while capability availability is still being checked', async () => {
+    let resolveCapabilities!: (capabilities: api.AICapabilities) => void;
+    mockedApi.getCapabilities.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveCapabilities = resolve;
+        })
+    );
+
+    renderTools();
+
+    expect(screen.getByRole('status', { name: /checking AI availability/i })).toHaveAttribute(
+      'aria-busy',
+      'true'
+    );
+    expect(screen.queryByRole('button', { name: 'Suggest quadrant' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Read an image' }));
+    expect(screen.queryByTestId('image-upload-input')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Bulk review' }));
+    expect(screen.queryByRole('button', { name: 'Review task list' })).not.toBeInTheDocument();
+
+    await act(async () => resolveCapabilities(await mockedApi.getCapabilities()));
+    await waitForCapabilityCheck();
+  });
+
+  it('retries an unavailable capability check without exposing provider details', async () => {
+    mockedApi.getCapabilities
+      .mockRejectedValueOnce(new Error('private provider details'))
+      .mockResolvedValueOnce({
+        classification: true,
+        reasoned_local_analysis: true,
+        knowledge_retrieval: true,
+        retrieval_augmented_generation: true,
+        langchain_analysis: false,
+        ocr: true,
+        batch_analysis: true,
+        training_management: true,
+        providers: { local_model: true, tesseract: true, ocr: true },
+      } as api.AICapabilities);
+
+    renderTools();
+
+    await screen.findByText(/AI availability could not be checked/i);
+    expect(screen.queryByText('private provider details')).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: /check AI availability again/i })[0]);
+    await screen.findByText(/AI help is available/i);
+    expect(screen.getByRole('button', { name: 'Suggest quadrant' })).toBeEnabled();
+  });
+
+  it('ignores a capability rejection after unmount cancels the request', async () => {
+    let rejectCapabilities!: (reason: unknown) => void;
+    mockedApi.getCapabilities.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectCapabilities = reject;
+        })
+    );
+    const view = renderTools();
+
+    view.unmount();
+    await act(async () => {
+      rejectCapabilities(
+        Object.assign(new Error('Request cancelled'), { code: 'request_cancelled' })
+      );
+    });
   });
 });

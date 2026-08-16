@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { applyAdvancedAnalysisResult, runAdvancedTaskAnalysis } from '../../lib/uiState';
 import { resolveQuadrantLabel, resolveSuggestedQuadrant } from '../matrixUtils';
 import { analyzeTask, LangChainAnalysis } from '../../services/api';
@@ -19,6 +19,7 @@ export default function AdvancedAIAnalysis({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
+  const requestRef = useRef<AbortController | null>(null);
   const { language, t } = useLanguage();
 
   const quadrantLabels = {
@@ -29,24 +30,44 @@ export default function AdvancedAIAnalysis({
   };
 
   useEffect(() => {
+    requestRef.current?.abort();
     setAnalysis(null);
     setError(null);
+    return () => {
+      const request = requestRef.current;
+      requestRef.current = null;
+      request?.abort();
+    };
   }, [language, taskTitle]);
 
   const runAnalysis = async () => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
     setError(null);
+    setAnalysis(null);
 
     try {
-      const result = await runAdvancedTaskAnalysis(taskTitle, language, analyzeTask);
+      const result = await runAdvancedTaskAnalysis(taskTitle, language, (task, nextLanguage) =>
+        analyzeTask(task, nextLanguage, { signal: controller.signal })
+      );
       applyAdvancedAnalysisResult(result, (analysis) => {
         setAnalysis(analysis);
         onAnalysisComplete(analysis);
       });
-    } catch {
-      setError(t('ai.analysis.failed'));
+    } catch (issue) {
+      const code = issue && typeof issue === 'object' && 'code' in issue ? issue.code : undefined;
+      if (code !== 'request_cancelled') {
+        setError(
+          code === 'request_timeout' ? t('ai.analysis.timeout') : t('ai.analysis.unavailable')
+        );
+      }
     } finally {
-      setLoading(false);
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        setLoading(false);
+      }
     }
   };
 
@@ -76,9 +97,10 @@ export default function AdvancedAIAnalysis({
         {loading ? t('ai.analysis.running') : t('ai.analysis.run')}
       </button>
       {error ? (
-        <p role="alert" className="text-sm text-red-200">
-          {error}
-        </p>
+        <div role="alert" className="space-y-1 text-sm text-red-200">
+          <p>{error}</p>
+          <p>{t('ai.analysis.manual')}</p>
+        </div>
       ) : null}
       {analysis ? (
         <div

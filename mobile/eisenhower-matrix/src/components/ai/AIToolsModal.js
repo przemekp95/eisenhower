@@ -84,6 +84,10 @@ export default function AIToolsModal({
   onRequestClear,
   onCancelClear,
 }) {
+  const modelAvailable = Boolean(providerControls.local_model?.active);
+  const ocrAvailable = Boolean(providerControls.tesseract?.active);
+  const activeCapabilityAvailable = activeTab === 'ocr' ? ocrAvailable : modelAvailable;
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.modalBackdrop}>
@@ -119,6 +123,9 @@ export default function AIToolsModal({
             {activeTab === 'analysis' ? (
               <View style={styles.toolCard}>
                 <Text style={styles.toolTitle}>{t.aiAnalysisTitle}</Text>
+                {!activeCapabilityAvailable ? (
+                  <Text accessibilityRole="alert" style={styles.manageHint}>{t.aiManualFallback}</Text>
+                ) : null}
                 <TextInput
                   testID="ai-analysis-input"
                   value={analysisTask}
@@ -130,9 +137,11 @@ export default function AIToolsModal({
                 />
                 <Pressable
                   testID="ai-analysis-run-button"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: analysisLoading || !modelAvailable }}
                   onPress={onRunAdvancedAnalysis}
-                  disabled={analysisLoading}
-                  style={[styles.primaryButton, analysisLoading && styles.disabledButton]}
+                  disabled={analysisLoading || !modelAvailable}
+                  style={[styles.primaryButton, (analysisLoading || !modelAvailable) && styles.disabledButton]}
                 >
                   <Text style={styles.primaryButtonText}>
                     {analysisLoading ? t.aiAnalysisRunning : t.aiAnalysisRun}
@@ -167,11 +176,16 @@ export default function AIToolsModal({
             {activeTab === 'ocr' ? (
               <View style={styles.toolCard}>
                 <Text style={styles.toolTitle}>{t.aiOcrTitle}</Text>
+                {!activeCapabilityAvailable ? (
+                  <Text accessibilityRole="alert" style={styles.manageHint}>{t.aiManualFallback}</Text>
+                ) : null}
                 <Pressable
                   testID="ai-ocr-run-button"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: ocrLoading || !ocrAvailable }}
                   onPress={onRunOcr}
-                  disabled={ocrLoading}
-                  style={[styles.primaryButton, ocrLoading && styles.disabledButton]}
+                  disabled={ocrLoading || !ocrAvailable}
+                  style={[styles.primaryButton, (ocrLoading || !ocrAvailable) && styles.disabledButton]}
                 >
                   <Text style={styles.primaryButtonText}>
                     {ocrLoading ? t.aiOcrRunning : t.aiOcrRun}
@@ -243,6 +257,9 @@ export default function AIToolsModal({
             {activeTab === 'batch' ? (
               <View style={styles.toolCard}>
                 <Text style={styles.toolTitle}>{t.aiBatchTitle}</Text>
+                {!activeCapabilityAvailable ? (
+                  <Text accessibilityRole="alert" style={styles.manageHint}>{t.aiManualFallback}</Text>
+                ) : null}
                 <TextInput
                   testID="ai-batch-input"
                   value={batchInput}
@@ -255,9 +272,11 @@ export default function AIToolsModal({
                 />
                 <Pressable
                   testID="ai-batch-run-button"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: batchLoading || !modelAvailable }}
                   onPress={onRunBatchAnalyze}
-                  disabled={batchLoading}
-                  style={[styles.primaryButton, batchLoading && styles.disabledButton]}
+                  disabled={batchLoading || !modelAvailable}
+                  style={[styles.primaryButton, (batchLoading || !modelAvailable) && styles.disabledButton]}
                 >
                   <Text style={styles.primaryButtonText}>
                     {batchLoading ? t.aiBatchRunning : t.aiBatchRun}

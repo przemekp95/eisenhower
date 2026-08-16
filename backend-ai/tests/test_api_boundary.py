@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import httpx
 from fastapi.testclient import TestClient
 
@@ -43,6 +45,27 @@ def test_boundary_preserves_bearer_origin_and_routes_only_to_private_role_upstre
   assert knowledge.json()["upstream"] == "knowledge-service"
   assert all(request.headers["authorization"] == "Bearer user-token" for request in observed)
   assert all(request.headers["origin"] == "https://app.example" for request in observed)
+
+
+def test_boundary_metrics_expose_the_exact_release_sha_without_probing_optional_ai(tmp_path):
+  release_sha = "a" * 40
+  calls = []
+  app = create_boundary_app(
+    settings=replace(settings(tmp_path), release_sha=release_sha),
+    classifier_url="http://classifier-service:8000",
+    knowledge_url="http://knowledge-service:8000",
+    allowed_upstream_hosts=("classifier-service", "knowledge-service"),
+    client=httpx.AsyncClient(transport=httpx.MockTransport(
+      lambda request: calls.append(request) or httpx.Response(503)
+    )),
+  )
+
+  response = TestClient(app).get("/metrics")
+
+  assert response.status_code == 200
+  assert f'eisenhower_release_info{{sha="{release_sha}"}} 1' in response.text
+  assert "eisenhower_ai_boundary_info 1" in response.text
+  assert calls == []
 
 
 def test_boundary_rejects_untrusted_browser_mutation_before_proxying(tmp_path):
