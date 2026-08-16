@@ -40,6 +40,11 @@ compose_base() {
   docker compose --env-file "$env_file" -f "$compose_base" "$@"
 }
 
+compose_access_core() {
+  docker compose --env-file "$env_file" -f "$compose_base" \
+    --profile access --profile identity "$@"
+}
+
 compose() {
   compose_full "$@"
 }
@@ -136,9 +141,38 @@ build_images() {
   build_response_images
 }
 
+build_access_core_images() {
+  build_core_images
+  docker build --build-arg RELEASE_SHA="$release_sha" \
+    -f mcp/eisenhower_adapter/Dockerfile -t "$MCP_IMAGE" .
+  docker build --build-arg RELEASE_SHA="$release_sha" --target production \
+    -f web/Dockerfile -t "$WEB_IMAGE" .
+  for image_ref in "$MCP_IMAGE" "$WEB_IMAGE"; do
+    verify_image "$image_ref"
+  done
+}
+
+prepare_access_core_render_inputs() {
+  # Compose interpolates the whole base file before applying profiles. These
+  # values are scoped to services that access-core never starts; retrieval
+  # actions still require measured limits and approved artifacts explicitly.
+  export AI_DOCLING_ARTIFACT_ROOT="${AI_DOCLING_ARTIFACT_ROOT:-/nonexistent/access-core-disabled}"
+  export DOCLING_ARTIFACTS_MANIFEST_SHA256="${DOCLING_ARTIFACTS_MANIFEST_SHA256:-0000000000000000000000000000000000000000000000000000000000000000}"
+  export AI_INGEST_MEMORY_LIMIT="${AI_INGEST_MEMORY_LIMIT:-1m}"
+  export AI_INGEST_CPU_LIMIT="${AI_INGEST_CPU_LIMIT:-0.01}"
+  export AI_INGEST_PID_LIMIT="${AI_INGEST_PID_LIMIT:-1}"
+  export AI_INGEST_OMP_THREADS="${AI_INGEST_OMP_THREADS:-1}"
+  export AI_INGEST_TORCH_THREADS="${AI_INGEST_TORCH_THREADS:-1}"
+  export AI_KNOWLEDGE_MEMORY_LIMIT="${AI_KNOWLEDGE_MEMORY_LIMIT:-1m}"
+  export AI_KNOWLEDGE_CPU_LIMIT="${AI_KNOWLEDGE_CPU_LIMIT:-0.01}"
+  export AI_KNOWLEDGE_PID_LIMIT="${AI_KNOWLEDGE_PID_LIMIT:-1}"
+  export AI_KNOWLEDGE_OMP_THREADS="${AI_KNOWLEDGE_OMP_THREADS:-1}"
+  export AI_KNOWLEDGE_TORCH_THREADS="${AI_KNOWLEDGE_TORCH_THREADS:-1}"
+}
+
 record_rollback() {
   requested_topology="${1:-full}"
-  case "$requested_topology" in core|retrieval|response|full) ;; *)
+  case "$requested_topology" in core|access-core|retrieval|response|full) ;; *)
     echo "Unknown rollback topology: $requested_topology" >&2; exit 1 ;;
   esac
   rollback_topology="$requested_topology"
@@ -146,6 +180,10 @@ record_rollback() {
     core)
       rollback_compose=compose_base
       rollback_services="api-service ai-service classifier-service"
+      ;;
+    access-core)
+      rollback_compose=compose_access_core
+      rollback_services="api-service ai-service classifier-service mcp-service web"
       ;;
     retrieval)
       rollback_compose=compose_retrieval
@@ -206,6 +244,10 @@ record_rollback() {
       rollback_topology=retrieval
       rollback_compose=compose_retrieval
       rollback_services="api-service ai-service classifier-service knowledge-service rag-worker"
+    elif test -n "$(compose_access_core ps -q web 2>/dev/null || true)"; then
+      rollback_topology=access-core
+      rollback_compose=compose_access_core
+      rollback_services="api-service ai-service classifier-service mcp-service web"
     else
       rollback_topology=core
       rollback_compose=compose_base
@@ -327,7 +369,7 @@ configure_identity_profile() {
   # Forward the current owner-only environment explicitly. The long-lived
   # Keycloak container may still carry bootstrap credentials from an older
   # deployment even though the local .env has been rotated.
-  compose_base exec -T \
+  compose_access_core exec -T \
     -e KC_BOOTSTRAP_ADMIN_USERNAME \
     -e KC_BOOTSTRAP_ADMIN_PASSWORD \
     identity-service sh -eu -c '
@@ -468,6 +510,15 @@ smoke_core() {
   curl -fsS "http://127.0.0.1:${AI_BIND_PORT:-8000}/health/ready" >/dev/null
 }
 
+smoke_access_core() {
+  compose_access_core ps mongodb identity-db identity-service ai-service classifier-service \
+    api-service web mcp-service access-gateway
+  curl -fsS "http://127.0.0.1:${ACCESS_GATEWAY_BIND_PORT:-8790}/" \
+    -H "Host: ${ACCESS_GATEWAY_HOST}" >/dev/null
+  curl -fsS "http://127.0.0.1:${NODE_BIND_PORT:-3001}/health/ready" >/dev/null
+  curl -fsS "http://127.0.0.1:${AI_BIND_PORT:-8000}/health/ready" >/dev/null
+}
+
 smoke_retrieval() {
   smoke_core
   compose_retrieval ps qdrant knowledge-service rag-worker reranker
@@ -492,6 +543,21 @@ deploy_core() {
   compose_base up --no-deps -d --wait classifier-service
   compose_base up --no-deps -d --wait ai-service api-service
   smoke_core
+}
+
+deploy_access_core() {
+  validate_core_inputs
+  prepare_access_core_render_inputs
+  build_access_core_images
+  compose_access_core config --quiet
+  record_rollback access-core
+  compose_access_core up --no-deps audit-volume-init
+  compose_access_core up -d --wait mongodb identity-db identity-service
+  configure_identity_profile
+  compose_access_core up --no-deps -d --wait classifier-service
+  compose_access_core up --no-deps -d --wait ai-service api-service web mcp-service
+  compose_access_core up --no-deps -d --wait access-gateway
+  smoke_access_core
 }
 
 deploy_retrieval() {
@@ -597,6 +663,16 @@ rollback() {
       compose_base up -d --wait
       smoke_core
       ;;
+    access-core)
+      prepare_access_core_render_inputs
+      export MCP_IMAGE="${ROLLBACK_MCP_SERVICE_IMAGE_ID:?missing MCP rollback image}"
+      export WEB_IMAGE="${ROLLBACK_WEB_IMAGE_ID:?missing web rollback image}"
+      compose_full stop knowledge-service rag-worker inference reranker >/dev/null 2>&1 || true
+      compose_access_core config --quiet
+      compose_access_core up -d --wait
+      configure_identity_profile
+      smoke_access_core
+      ;;
     retrieval)
       export AI_KNOWLEDGE_IMAGE="${ROLLBACK_KNOWLEDGE_SERVICE_IMAGE_ID:?missing knowledge rollback image}"
       export AI_INGEST_IMAGE="${ROLLBACK_RAG_WORKER_IMAGE_ID:?missing ingest rollback image}"
@@ -634,11 +710,13 @@ case "$action" in
   build) build_images ;;
   render) render ;;
   render-core) compose_base config --quiet ;;
+  render-access-core) prepare_access_core_render_inputs; compose_access_core config --quiet ;;
   render-retrieval) compose_retrieval config --quiet ;;
   render-response) compose_response config --quiet ;;
   render-full) compose_full config --quiet ;;
   deploy) deploy_core ;;
   deploy-core) deploy_core ;;
+  deploy-access-core) deploy_access_core ;;
   deploy-retrieval) deploy_retrieval ;;
   deploy-response) deploy_response ;;
   deploy-full) deploy_full ;;
@@ -651,7 +729,7 @@ case "$action" in
   wake-response) wake_response ;;
   rollback) rollback ;;
   *)
-    echo "Usage: $0 {build|render|render-core|render-retrieval|render-response|render-full|deploy|deploy-core|deploy-retrieval|deploy-response|deploy-full|sleep-response|wake-response|smoke|rollback}" >&2
+    echo "Usage: $0 {build|render|render-core|render-access-core|render-retrieval|render-response|render-full|deploy|deploy-core|deploy-access-core|deploy-retrieval|deploy-response|deploy-full|sleep-response|wake-response|smoke|rollback}" >&2
     exit 2
     ;;
 esac

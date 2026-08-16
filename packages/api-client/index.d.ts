@@ -491,24 +491,34 @@ export interface TaskApiClient {
 export interface AiApiClient {
   paths: typeof AI_API_PATHS;
   classifyTask(title: string, includeSimilarExamples?: boolean): Promise<ClassificationResultDto>;
-  analyzeTask(task: string, language?: string): Promise<TaskAnalysisDto>;
+  analyzeTask(
+    task: string,
+    language?: string,
+    options?: AIRequestOptions
+  ): Promise<TaskAnalysisDto>;
   /** @deprecated Use analyzeTask. Retained for compatibility with older clients. */
-  analyzeWithLangChain(task: string, language?: string): Promise<LangChainAnalysisDto>;
-  analyzeTaskWithRag(task: string): Promise<GroundedAnalysisDto>;
+  analyzeWithLangChain(
+    task: string,
+    language?: string,
+    options?: AIRequestOptions
+  ): Promise<LangChainAnalysisDto>;
+  analyzeTaskWithRag(task: string, options?: AIRequestOptions): Promise<GroundedAnalysisDto>;
   searchKnowledge(
     query: string,
     projectId?: string | null,
-    limit?: number
+    limit?: number,
+    options?: AIRequestOptions
   ): Promise<KnowledgeSearchDto>;
   answerKnowledge(
     query: string,
     language?: 'pl' | 'en',
     projectId?: string | null,
-    limit?: number
+    limit?: number,
+    options?: AIRequestOptions
   ): Promise<KnowledgeAnswerDto>;
-  extractTasksFromImage(file: unknown): Promise<OcrResultDto>;
-  batchAnalyzeTasks(tasks: string[]): Promise<BatchAnalysisResultDto>;
-  fetchCapabilities(): Promise<AICapabilitiesDto>;
+  extractTasksFromImage(file: unknown, options?: AIRequestOptions): Promise<OcrResultDto>;
+  batchAnalyzeTasks(tasks: string[], options?: AIRequestOptions): Promise<BatchAnalysisResultDto>;
+  fetchCapabilities(options?: AIRequestOptions): Promise<AICapabilitiesDto>;
   fetchTrainingStats(): Promise<TrainingStatsDto>;
   setProviderEnabled(
     provider: AIProviderName,
@@ -555,6 +565,12 @@ export interface ApiClientOptions {
   adminToken?: string | (() => string | null);
   onUnauthorized?: () => void;
   onAdminUnauthorized?: () => void;
+  /** Maximum duration for AI calls only. Task and calendar calls are not affected. */
+  aiTimeoutMs?: number;
+}
+
+export interface AIRequestOptions {
+  signal?: AbortSignal;
 }
 
 export function createTaskApi(

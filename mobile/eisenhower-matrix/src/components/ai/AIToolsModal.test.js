@@ -111,6 +111,10 @@ describe('AIToolsModal', () => {
     const ocrProps = createProps({
       activeTab: 'ocr',
       ocrLoading: false,
+      providerControls: {
+        local_model: { enabled: true, active: true },
+        tesseract: { enabled: true, active: true },
+      },
       ocrResult: {
         items: [
           { id: '1', title: 'Task one', selected: true, quadrant: 0 },
@@ -153,6 +157,26 @@ describe('AIToolsModal', () => {
     expect(getByText('Usuń (kwadrant, nie kasowanie)')).toBeTruthy();
     expect(batchProps.onChangeBatchInput).toHaveBeenCalledWith('Task A\nTask B');
     expect(batchProps.onRunBatchAnalyze).toHaveBeenCalled();
+  });
+
+  it('gates unavailable AI actions inside the modal with accessible guidance', () => {
+    const unavailable = {
+      local_model: { enabled: true, available: false, active: false },
+      tesseract: { enabled: true, available: false, active: false },
+    };
+    const props = createProps({ providerControls: unavailable, advancedAnalysis: null });
+    const { getByTestId, getByText, rerender } = render(<AIToolsModal {...props} />);
+
+    expect(getByTestId('ai-analysis-run-button').props.accessibilityState.disabled).toBe(true);
+    expect(getByText('AI jest teraz niedostępne. Nadal możesz ręcznie wybrać kwadrant i dodać zadanie.')).toBeTruthy();
+    fireEvent.press(getByTestId('ai-analysis-run-button'));
+    expect(props.onRunAdvancedAnalysis).not.toHaveBeenCalled();
+
+    rerender(<AIToolsModal {...createProps({ activeTab: 'ocr', providerControls: unavailable })} />);
+    expect(getByTestId('ai-ocr-run-button').props.accessibilityState.disabled).toBe(true);
+
+    rerender(<AIToolsModal {...createProps({ activeTab: 'batch', providerControls: unavailable })} />);
+    expect(getByTestId('ai-batch-run-button').props.accessibilityState.disabled).toBe(true);
   });
 
   it('renders manage tab states and all management actions', () => {

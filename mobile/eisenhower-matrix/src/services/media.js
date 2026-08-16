@@ -49,7 +49,7 @@ export function mapOcrResponseToTasks(language, payload, idFactory = Date.now) {
   );
 }
 
-export async function scanTasksFromImage(language = 'pl', adapter = null) {
+export async function scanTasksFromImage(language = 'pl', adapter = null, options = {}) {
   if (adapter && typeof adapter.scan === 'function') {
     return adapter.scan();
   }
@@ -68,6 +68,6 @@ export async function scanTasksFromImage(language = 'pl', adapter = null) {
       uri: image.uri,
       name: image.name,
       type: image.type,
-    })
+    }, options)
   );
 }

@@ -5,7 +5,7 @@ import TaskPrioritySuggestion from './ai/TaskPrioritySuggestion';
 import BatchAnalysis from './ai/BatchAnalysis';
 import ImageUpload from './ai/ImageUpload';
 import type { OCRImportSummary } from './ai/ImageUpload';
-import { BatchAnalysisResult, OCRResult } from '../services/api';
+import { AICapabilities, BatchAnalysisResult, getCapabilities, OCRResult } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
 
 interface Props {
@@ -24,6 +24,23 @@ interface Props {
 }
 
 type Tab = 'assistant' | 'ocr' | 'batch';
+type CapabilityState = 'checking' | 'ready' | 'error';
+
+function hasKnowledgeCapability(capabilities: AICapabilities) {
+  return !(
+    capabilities.knowledge_retrieval === false &&
+    capabilities.retrieval_augmented_generation === false
+  );
+}
+
+function isTabAvailable(tab: Tab, capabilities: AICapabilities | null, state: CapabilityState) {
+  if (state !== 'ready' || !capabilities) return false;
+  if (tab === 'assistant') {
+    return capabilities.classification || hasKnowledgeCapability(capabilities);
+  }
+  if (tab === 'ocr') return capabilities.ocr;
+  return capabilities.batch_analysis;
+}
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -41,9 +58,38 @@ export default function AITools({
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [lastSummary, setLastSummary] = useState('');
+  const [capabilities, setCapabilities] = useState<AICapabilities | null>(null);
+  const [capabilityState, setCapabilityState] = useState<CapabilityState>('checking');
+  const capabilityRequestRef = useRef<AbortController | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const { language, t } = useLanguage();
+
+  const refreshCapabilities = () => {
+    capabilityRequestRef.current?.abort();
+    const controller = new AbortController();
+    capabilityRequestRef.current = controller;
+    setCapabilityState('checking');
+    void getCapabilities({ signal: controller.signal })
+      .then((nextCapabilities) => {
+        if (!controller.signal.aborted) {
+          setCapabilities(nextCapabilities);
+          setCapabilityState('ready');
+        }
+      })
+      .catch((issue) => {
+        const code = issue && typeof issue === 'object' && 'code' in issue ? issue.code : undefined;
+        if (!controller.signal.aborted && code !== 'request_cancelled') {
+          setCapabilities(null);
+          setCapabilityState('error');
+        }
+      });
+  };
+
+  useEffect(() => {
+    refreshCapabilities();
+    return () => capabilityRequestRef.current?.abort();
+  }, []);
 
   useEffect(() => {
     const previousBodyOverflow = document.body.style.overflow;
@@ -147,6 +193,47 @@ export default function AITools({
     setLastSummary(format(t('ai.summary.batch'), { count: result.summary.total_tasks }));
   };
 
+  const activeFeatureAvailable = isTabAvailable(activeTab, capabilities, capabilityState);
+  const anyUserFeatureAvailable = (['assistant', 'ocr', 'batch'] as Tab[]).some((tab) =>
+    isTabAvailable(tab, capabilities, capabilityState)
+  );
+  const classificationAvailable = Boolean(capabilities?.classification);
+  const knowledgeAvailable = Boolean(capabilities && hasKnowledgeCapability(capabilities));
+
+  const unavailablePanel = (
+    <div className="space-y-3 rounded-2xl border border-amber-200/25 bg-amber-200/10 p-4">
+      <p className="font-medium text-amber-100">{t('ai.availability.featureUnavailable')}</p>
+      <p className="text-sm leading-6 text-white/70">{t('ai.availability.manualHint')}</p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={refreshCapabilities}
+          className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold"
+        >
+          {t('ai.availability.retry')}
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950"
+        >
+          {t('ai.availability.manualAction')}
+        </button>
+      </div>
+    </div>
+  );
+
+  const checkingPanel = (
+    <div
+      role="status"
+      aria-label={t('ai.availability.checking')}
+      aria-busy="true"
+      className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70"
+    >
+      {t('ai.availability.checking')}
+    </div>
+  );
+
   return createPortal(
     <div
       className="fixed inset-0 z-50 bg-slate-950/70 px-2 py-2 sm:p-4"
@@ -220,6 +307,21 @@ export default function AITools({
                 </button>
               ))}
             </div>
+            <div aria-live="polite" className="mt-3 text-sm text-white/70">
+              {capabilityState === 'error' ? (
+                <span>
+                  {t('ai.availability.checkFailed')}{' '}
+                  <button type="button" onClick={refreshCapabilities} className="underline">
+                    {t('ai.availability.retry')}
+                  </button>
+                </span>
+              ) : null}
+              {capabilityState === 'ready'
+                ? anyUserFeatureAvailable
+                  ? t('ai.availability.available')
+                  : t('ai.availability.unavailable')
+                : null}
+            </div>
           </div>
           <div className="px-4 pb-4 pt-4 sm:px-6 sm:pb-6 sm:pt-5">
             {activeTab === 'assistant' ? (
@@ -229,36 +331,60 @@ export default function AITools({
                 aria-labelledby="ai-tab-assistant"
                 className="space-y-5"
               >
-                <section className="rounded-3xl border border-cyan-200/15 bg-cyan-300/5 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100/70">
-                    {t('ai.task.context')}
-                  </p>
-                  <h3 className="mt-2 text-lg font-semibold">{taskTitle}</h3>
-                  {taskDescription ? (
-                    <p className="mt-1 text-sm leading-6 text-white/65">{taskDescription}</p>
-                  ) : null}
-                </section>
-                <TaskPrioritySuggestion
-                  taskTitle={taskTitle}
-                  currentUrgent={currentUrgent}
-                  currentImportant={currentImportant}
-                  onApply={onApplyQuadrant ?? (() => undefined)}
-                />
-                <GroundedAIAnalysis
-                  taskTitle={taskTitle}
-                  taskDescription={taskDescription}
-                  onApplyDescription={onApplyDescription}
-                />
+                {capabilityState === 'checking' ? (
+                  checkingPanel
+                ) : activeFeatureAvailable ? (
+                  <>
+                    <section className="rounded-3xl border border-cyan-200/15 bg-cyan-300/5 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100/70">
+                        {t('ai.task.context')}
+                      </p>
+                      <h3 className="mt-2 text-lg font-semibold">{taskTitle}</h3>
+                      {taskDescription ? (
+                        <p className="mt-1 text-sm leading-6 text-white/65">{taskDescription}</p>
+                      ) : null}
+                    </section>
+                    {classificationAvailable ? (
+                      <TaskPrioritySuggestion
+                        taskTitle={taskTitle}
+                        currentUrgent={currentUrgent}
+                        currentImportant={currentImportant}
+                        onApply={onApplyQuadrant ?? (() => undefined)}
+                      />
+                    ) : null}
+                    {knowledgeAvailable ? (
+                      <GroundedAIAnalysis
+                        taskTitle={taskTitle}
+                        taskDescription={taskDescription}
+                        onApplyDescription={onApplyDescription}
+                      />
+                    ) : null}
+                  </>
+                ) : (
+                  unavailablePanel
+                )}
               </div>
             ) : null}
             {activeTab === 'ocr' ? (
               <div role="tabpanel" id="ai-panel-ocr" aria-labelledby="ai-tab-ocr">
-                <ImageUpload onTasksExtracted={handleOCR} />
+                {capabilityState === 'checking' ? (
+                  checkingPanel
+                ) : activeFeatureAvailable ? (
+                  <ImageUpload onTasksExtracted={handleOCR} />
+                ) : (
+                  unavailablePanel
+                )}
               </div>
             ) : null}
             {activeTab === 'batch' ? (
               <div role="tabpanel" id="ai-panel-batch" aria-labelledby="ai-tab-batch">
-                <BatchAnalysis onBatchComplete={handleBatch} />
+                {capabilityState === 'checking' ? (
+                  checkingPanel
+                ) : activeFeatureAvailable ? (
+                  <BatchAnalysis onBatchComplete={handleBatch} />
+                ) : (
+                  unavailablePanel
+                )}
               </div>
             ) : null}
             {lastSummary ? (

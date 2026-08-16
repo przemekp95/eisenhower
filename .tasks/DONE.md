@@ -1,5 +1,28 @@
 # Done
 
+## TASK-055: Preserve a usable product experience without GPU inference
+**Priority:** P0 | **Tags:** ux, reliability, ai, gpu, web, mobile, deployment
+
+Make the ordinary task product remain available and self-explanatory when GPU inference or reranking is absent, slow or interrupted. Keep AI optional, preserve the bounded CPU classifier fallback, and prevent unavailable AI dependencies from blocking core web/API startup or leaving users with indefinite, stale or misleading states.
+
+### Plan
+
+- Add regression contracts for independent core startup, a supported CPU/no-GPU topology, bounded AI HTTP requests, cancellation, recovery and stale-result removal.
+- Decouple core task API/web readiness from optional knowledge and GPU services while keeping AI security, CORS, Bearer authorization and fail-closed grounding unchanged.
+- Add shared timeout/error semantics plus accessible web and mobile capability, progress, retry and manual-recovery UX without exposing provider or infrastructure details.
+- Rehearse inference and reranker absence against a real local CPU/no-GPU runtime, then restore the existing stack and verify its exact state separately.
+- Run focused red-green loops, browser E2E, Compose contracts, broad repository verification and documentation checks; distinguish source/tests, local runtime, deployment and public acceptance.
+
+### Outcome
+
+Made core task readiness independent of optional AI on Node and Mikrus, retained the approved CPU classifier fallback, and added the exact-SHA `deploy-access-core` profile for Mongo, CPU classifier, AI boundary, API, Keycloak, web, MCP and access gateway without Qdrant, knowledge/ingest, vLLM, reranking, n8n or Calendar. The shared client now bounds and cancels AI HTTP requests with stable business-safe errors; web and mobile capability-gate optional tools, clear stale results, ignore late responses and provide accessible retry/manual-quadrant recovery without exposing provider details. Existing bearer/OIDC, CORS/origin, audit, redirect, allowlist and grounded-response fail-closed controls remain in place.
+
+Fresh repository verification passed 794 backend-AI tests with 12 opt-in skips at 87.95% coverage, 246 Node tests at 100%, 21 BDD scenarios/107 steps, 211 web tests at 100% plus two integrations, 198 mobile tests, 50 MCP tests, dependency audits, builds, typechecks and Pylint 10.00/10. Browser E2E passed the no-AI manual task flow and Axe scan at 1440, 390 and 320 px. A disposable loopback boundary used no CUDA/ROCm/torch mappings, reached liveness at about 56 MiB RSS, exposed exact-SHA metrics, and returned bounded 503 readiness/capability responses with both private upstreams absent; the current access-core Compose contract also rendered successfully from isolated placeholder inputs.
+
+The pre-existing 15-container local stack was not restarted or modified and still includes GPU roles; its older operator `.env` needs the new explicit boundary/classifier limits before a future access-core rollout. No image publication, deployment or public/physical acceptance was performed.
+
+---
+
 ## TASK-054: Integrate grounded AI into the task workflow
 **Priority:** P1 | **Tags:** web, ux, ai, rag, accessibility
 

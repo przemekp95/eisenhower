@@ -212,9 +212,11 @@ OIDC, does not establish per-person accounts, and must not be described as multi
 An OIDC deployment must instead supply the issuer, audience and same-origin HTTPS JWKS settings and
 isolate every task by both the authenticated tenant and subject.
 
-Node readiness calls the AI service's `/health/ready` endpoint with a bounded timeout. The Mikrus
-API container healthcheck also uses `/health/ready`, so liveness alone cannot admit a container whose
-MongoDB or AI dependency is unready.
+Node readiness calls the AI service's `/health/ready` endpoint with a bounded timeout. MongoDB remains a
+required readiness dependency; unavailable AI is reported as degraded but does not block web/task CRUD.
+The Mikrus rollout applies the same boundary: core web/API readiness and smoke checks can succeed without
+private knowledge or GPU, while AI readiness remains separately observable and AI requests still fail
+closed when their grounded upstream is unavailable.
 
 ### Task HTTP concurrency and pagination
 

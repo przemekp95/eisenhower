@@ -7,6 +7,7 @@ import {
   getQuadrantOptions,
   getQuadrantTitleByValue,
   getSuggestedQuadrant,
+  resolveAIActionNotice,
   resolveOCRNotice,
   resolveSuggestionNotice,
 } from './aiUi';
@@ -44,11 +45,14 @@ describe('aiUi helpers', () => {
 
   it('maps notices for suggestion and OCR failures', () => {
     expect(resolveSuggestionNotice({ code: 'provider_disabled' }, t)).toBe(
-      'Centralny model AI jest wyłączony'
+      'Centralny model AI jest wyłączony. AI jest teraz niedostępne. Nadal możesz ręcznie wybrać kwadrant i dodać zadanie.'
     );
     expect(resolveSuggestionNotice(new Error('x'), t)).toBe(
-      'Centralna sugestia AI jest niedostępna'
+      'AI jest teraz niedostępne. Nadal możesz ręcznie wybrać kwadrant i dodać zadanie.'
     );
+    expect(resolveSuggestionNotice({ code: 'request_timeout' }, t)).toContain('Wybierz kwadrant ręcznie');
+    expect(resolveAIActionNotice({ code: 'request_cancelled' }, t)).toBe('');
+    expect(resolveAIActionNotice({ code: 'ai_unavailable' }, t)).toBe(t.aiManualFallback);
 
     expect(resolveOCRNotice({ code: 'provider_disabled' }, t)).toBe('Centralny OCR jest wyłączony');
     expect(resolveOCRNotice({ code: 'provider_unavailable' }, t)).toBe(
@@ -57,6 +61,8 @@ describe('aiUi helpers', () => {
     expect(resolveOCRNotice({ code: 'ocr_request_failed' }, t)).toBe(
       'Wysyłka do OCR nie powiodła się, nic nie dodano'
     );
+    expect(resolveOCRNotice({ code: 'request_timeout' }, t)).toBe(t.aiRequestTimedOut);
+    expect(resolveOCRNotice({ code: 'request_cancelled' }, t)).toBe('');
     expect(resolveOCRNotice(new Error('x'), t)).toBe('Centralny OCR jest niedostępny');
   });
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { resolveQuadrantLabel } from '../matrixUtils';
 import { BatchAnalysisResult, batchAnalyzeTasks } from '../../services/api';
 import { useLanguage } from '../../i18n/LanguageContext';
@@ -12,12 +12,32 @@ export default function BatchAnalysis({ onBatchComplete }: Props) {
   const [result, setResult] = useState<BatchAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const requestRef = useRef<AbortController | null>(null);
   const { t } = useLanguage();
   const quadrantLabels = {
     0: t('matrix.do'),
     1: t('matrix.delegate'),
     2: t('matrix.schedule'),
     3: t('matrix.delete'),
+  };
+
+  useEffect(
+    () => () => {
+      const request = requestRef.current;
+      requestRef.current = null;
+      request?.abort();
+    },
+    []
+  );
+
+  const updateTaskList = (value: string) => {
+    const request = requestRef.current;
+    requestRef.current = null;
+    request?.abort();
+    setLoading(false);
+    setResult(null);
+    setError(null);
+    setTaskList(value);
   };
 
   const submit = async () => {
@@ -31,17 +51,27 @@ export default function BatchAnalysis({ onBatchComplete }: Props) {
       return;
     }
 
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
     setError(null);
+    setResult(null);
 
     try {
-      const payload = await batchAnalyzeTasks(tasks);
+      const payload = await batchAnalyzeTasks(tasks, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       setResult(payload);
       onBatchComplete(payload);
-    } catch {
-      setError(t('ai.batch.failed'));
+    } catch (issue) {
+      if (controller.signal.aborted) return;
+      const code = issue && typeof issue === 'object' && 'code' in issue ? issue.code : undefined;
+      if (code !== 'request_cancelled') setError(t('ai.batch.failed'));
     } finally {
-      setLoading(false);
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        setLoading(false);
+      }
     }
   };
 
@@ -49,7 +79,7 @@ export default function BatchAnalysis({ onBatchComplete }: Props) {
     <section className="space-y-3">
       <textarea
         value={taskList}
-        onChange={(event) => setTaskList(event.target.value)}
+        onChange={(event) => updateTaskList(event.target.value)}
         className="min-h-32 w-full rounded-2xl border border-white/15 bg-black/15 p-3 text-white"
         placeholder={t('ai.batch.placeholder')}
       />

@@ -98,6 +98,65 @@ test('clears credentials only for authentication failures, not authorization fai
   assert.equal(adminClears, 1);
 });
 
+test('bounds AI requests and maps timeouts to a business-safe error without changing task calls', async () => {
+  let aiSignal;
+  const ai = createAiApi('https://ai.example.com', {
+    aiTimeoutMs: 5,
+    fetch: async (_url, init) => {
+      aiSignal = init.signal;
+      return new Promise((_resolve, reject) => {
+        init.signal.addEventListener('abort', () => {
+          const error = new Error('implementation-specific abort details');
+          error.name = 'AbortError';
+          reject(error);
+        });
+      });
+    },
+  });
+
+  await assert.rejects(() => ai.analyzeTask('slow task'), (error) => {
+    assert.equal(error.code, 'request_timeout');
+    assert.equal(error.message, 'Request timed out');
+    return true;
+  });
+  assert.equal(aiSignal.aborted, true);
+
+  const taskCalls = [];
+  const task = createTaskApi('https://api.example.com', {
+    aiTimeoutMs: 5,
+    fetch: async (...args) => {
+      taskCalls.push(args);
+      return jsonResponse([], { headers: { get: () => null } });
+    },
+  });
+  await task.listTasks();
+  assert.equal(taskCalls[0][1]?.signal, undefined);
+});
+
+test('honours caller cancellation for AI requests and returns a stable cancellation code', async () => {
+  const controller = new AbortController();
+  const ai = createAiApi('https://ai.example.com', {
+    aiTimeoutMs: 1000,
+    fetch: async (_url, init) =>
+      new Promise((_resolve, reject) => {
+        init.signal.addEventListener('abort', () => {
+          const error = new Error('browser abort wording');
+          error.name = 'AbortError';
+          reject(error);
+        });
+      }),
+  });
+
+  const pending = ai.analyzeTask('cancelled task', 'en', { signal: controller.signal });
+  controller.abort();
+
+  await assert.rejects(() => pending, (error) => {
+    assert.equal(error.code, 'request_cancelled');
+    assert.equal(error.message, 'Request cancelled');
+    return true;
+  });
+});
+
 test('sends optional task revisions through If-Match without breaking legacy calls', async () => {
   const calls = [];
   const api = createTaskApi('https://api.example.com', async (...args) => {

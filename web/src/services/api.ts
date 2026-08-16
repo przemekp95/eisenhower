@@ -169,8 +169,12 @@ export async function classifyTask(title: string): Promise<ClassificationResult>
   return getAiApi().classifyTask(title, true);
 }
 
-export async function analyzeTask(task: string, language: Language = 'en'): Promise<TaskAnalysis> {
-  return getAiApi().analyzeTask(task, language);
+export async function analyzeTask(
+  task: string,
+  language: Language = 'en',
+  options: { signal?: AbortSignal } = {}
+): Promise<TaskAnalysis> {
+  return getAiApi().analyzeTask(task, language, options);
 }
 
 export async function analyzeTaskWithRag(task: string): Promise<GroundedAnalysis> {
@@ -179,20 +183,27 @@ export async function analyzeTaskWithRag(task: string): Promise<GroundedAnalysis
 
 export async function answerKnowledge(
   query: string,
-  language: Language = 'en'
+  language: Language = 'en',
+  options: { signal?: AbortSignal } = {}
 ): Promise<KnowledgeAnswer> {
-  return getAiApi().answerKnowledge(query, language);
+  return getAiApi().answerKnowledge(query, language, null, 5, options);
 }
 
 /** @deprecated Use analyzeTask. */
 export const analyzeWithLangChain = analyzeTask;
 
-export async function extractTasksFromImage(file: File): Promise<OCRResult> {
-  return getAiApi().extractTasksFromImage(file);
+export async function extractTasksFromImage(
+  file: File,
+  options: { signal?: AbortSignal } = {}
+): Promise<OCRResult> {
+  return getAiApi().extractTasksFromImage(file, options);
 }
 
-export async function batchAnalyzeTasks(tasks: string[]): Promise<BatchAnalysisResult> {
-  return getAiApi().batchAnalyzeTasks(tasks);
+export async function batchAnalyzeTasks(
+  tasks: string[],
+  options: { signal?: AbortSignal } = {}
+): Promise<BatchAnalysisResult> {
+  return getAiApi().batchAnalyzeTasks(tasks, options);
 }
 
 export async function addTrainingExample(text: string, quadrant: number): Promise<void> {
@@ -235,8 +246,10 @@ export async function getExamplesByQuadrant(
   return getAiApi().getExamplesByQuadrant(quadrant, limit);
 }
 
-export async function getCapabilities(): Promise<AICapabilities> {
-  return getAiApi().fetchCapabilities();
+export async function getCapabilities(
+  options: { signal?: AbortSignal } = {}
+): Promise<AICapabilities> {
+  return getAiApi().fetchCapabilities(options);
 }
 
 export async function setProviderEnabled(
