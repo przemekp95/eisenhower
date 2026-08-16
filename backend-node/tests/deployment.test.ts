@@ -238,6 +238,64 @@ describe('production deployment boundaries', () => {
     expect(publishAt).toBeGreaterThan(sbomAt);
   });
 
+  it('builds production runtimes from digest-pinned, scanner-visible Wolfi packages', () => {
+    const aiDockerfile = fs.readFileSync(
+      path.join(repositoryRoot, 'backend-ai/Dockerfile'),
+      'utf8'
+    );
+    const nodeDockerfile = fs.readFileSync(
+      path.join(repositoryRoot, 'backend-node/Dockerfile'),
+      'utf8'
+    );
+    const extractionAdapter = fs.readFileSync(
+      path.join(repositoryRoot, 'backend-ai/app/document_extraction/adapters.py'),
+      'utf8'
+    );
+    const corpusManifest = JSON.parse(fs.readFileSync(
+      path.join(repositoryRoot, 'docs/ai-rebuild/corpus-manifest-v1.json'),
+      'utf8'
+    ));
+    const compose = fs.readFileSync(path.join(repositoryRoot, 'docker-compose.yml'), 'utf8');
+
+    const wolfiDigest = 'cgr.dev/chainguard/wolfi-base@sha256:0a8fd427de5882aed77471b0a432c3675eda6b6a0ae952b5d640b46da628cdbe';
+
+    expect(aiDockerfile).toContain(`FROM ${wolfiDigest} AS python-builder`);
+    expect(aiDockerfile).toContain(`FROM ${wolfiDigest} AS runtime-base`);
+    expect(aiDockerfile).toContain('python-3.11=3.11.16-r1');
+    expect(aiDockerfile).toContain('py3.11-pip=26.2.1-r0');
+    expect(aiDockerfile).not.toContain('python:3.11-slim');
+    expect(aiDockerfile).not.toContain('apt-get');
+    expect(aiDockerfile.match(/tesseract-eng=5\.5\.2-r8/g)).toHaveLength(2);
+    expect(aiDockerfile.match(/tesseract-osd=5\.5\.2-r8/g)).toHaveLength(2);
+    expect(aiDockerfile.match(/tesseract-pol=5\.5\.2-r8/g)).toHaveLength(2);
+    expect(extractionAdapter).toContain('TESSERACT_CLI_VERSION = "5.5.2"');
+    expect(corpusManifest.document_policy.parser_runtime.tesseract_cli_version).toBe('5.5.2');
+    expect(aiDockerfile).toContain('FROM runtime-base AS boundary');
+    expect(aiDockerfile).toContain('FROM runtime-base AS classifier');
+    expect(aiDockerfile).toContain('FROM runtime-base AS knowledge');
+    expect(aiDockerfile).toContain('FROM runtime-base AS ingest');
+    expect(aiDockerfile).toContain('COPY --from=dependencies-boundary /opt/python /opt/python');
+    expect(aiDockerfile).toContain('COPY --from=dependencies-classifier /opt/python /opt/python');
+    expect(aiDockerfile).toContain('COPY --from=dependencies-knowledge /opt/python /opt/python');
+    expect(aiDockerfile).toContain('COPY --from=dependencies-ingest /opt/python /opt/python');
+
+    expect(nodeDockerfile).toContain(`FROM ${wolfiDigest} AS build`);
+    expect(nodeDockerfile).toContain(`FROM ${wolfiDigest} AS production`);
+    expect(nodeDockerfile).toContain('nodejs-24=24.19.0-r0');
+    expect(nodeDockerfile).toContain('nodejs-24-minimal=24.19.0-r0');
+    expect(nodeDockerfile).not.toContain('node:20-alpine');
+    expect(nodeDockerfile).not.toContain('curl');
+    expect(nodeDockerfile).toMatch(/HEALTHCHECK[^\n]*\n\s+CMD \["node", "-e",/);
+    expect(compose).not.toContain('["CMD", "curl", "-f", "http://127.0.0.1:3001/health"]');
+    expect(compose).toContain('["CMD", "node", "-e", "fetch(\'http://127.0.0.1:3001/health/ready\')');
+
+    const nodeProduction = nodeDockerfile.slice(
+      nodeDockerfile.indexOf(`FROM ${wolfiDigest} AS production`),
+      nodeDockerfile.indexOf('# Development stage')
+    );
+    expect(nodeProduction).not.toMatch(/\bnpm\b/);
+  });
+
   it('accepts only the exact public HTTP status and rejects a redirect to a success page', async () => {
     const server = http.createServer((request, response) => {
       if (request.url === '/redirect') {

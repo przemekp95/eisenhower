@@ -1,5 +1,20 @@
 # In Progress
 
+## TASK-058: Eliminate all release-image vulnerability findings
+**Priority:** P0 | **Tags:** security, dependencies, docker, release-gate
+
+Bring all six first-party production images to a fail-closed zero-finding Trivy result across LOW, MEDIUM, HIGH and CRITICAL severities without suppressions, accepted exceptions or reverting the split runtime roles.
+
+### Plan
+
+- Rebuild and scan the current exact-source six-image matrix, classify every finding by installed origin and fixed-version availability, and freeze executable remediation contracts before implementation.
+- Remove unnecessary vulnerable runtime contents and update base images, OS packages and language dependencies to patched compatible versions while preserving boundary, classifier, knowledge, ingest, Node API and web behavior.
+- Generate retained per-image Trivy JSON and CycloneDX evidence, verify exact-SHA OCI labels and required Torch/Torchvision role contents, and require zero LOW/MEDIUM/HIGH/CRITICAL findings for all six images.
+- Run focused red-green checks and complete repository verification, documenting any measured image/runtime impact without weakening functional, security or provenance controls.
+- Promote the exact green source through reviewed PRs to `dev` and `master`, close the task, and verify final branch equality and post-merge CI without publishing or deploying images.
+
+---
+
 ## TASK-047: Deploy the portable local AMD platform with Calendar and Remote MCP
 **Priority:** P0 | **Tags:** calendar, mcp, oauth, n8n, amd, rocm, deployment
 

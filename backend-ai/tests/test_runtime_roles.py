@@ -24,8 +24,9 @@ def test_ai_images_install_role_specific_dependencies_without_model_prefetch():
   assert "docling" in requirements["ingest"]
   assert "en_core_web_sm-3.8.0-py3-none-any.whl" in requirements["ingest"]
   assert "sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85" in requirements["ingest"]
-  ingest_stage = dockerfile.split("FROM dependencies-ingest AS ingest", maxsplit=1)[1]
-  assert "libgl1" in ingest_stage
+  ingest_stage = dockerfile.split("FROM runtime-base AS ingest", maxsplit=1)[1]
+  assert "COPY --from=dependencies-ingest /opt/python /opt/python" in ingest_stage
+  assert "mesa-gl=26.2.0-r0" in ingest_stage
 
 
 def test_rocm_knowledge_image_is_dedicated_and_does_not_include_vllm_or_ingest_tools():

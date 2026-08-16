@@ -35,7 +35,7 @@ DOCLING_LAYOUT_MODEL_REPOSITORY = "docling-project/docling-layout-heron-onnx"
 DOCLING_LAYOUT_MODEL_REVISION = "40bde044036bb181c130ddf6c51792187268748f"
 DOCLING_TABLE_MODEL_REPOSITORY = "docling-project/docling-models"
 DOCLING_TABLE_MODEL_REVISION = "fc0f2d45e2218ea24bce5045f58a389aed16dc23"
-TESSERACT_CLI_VERSION = "5.3.4"
+TESSERACT_CLI_VERSION = "5.5.2"
 
 
 def resolve_docling_artifacts(
