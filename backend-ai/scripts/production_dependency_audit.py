@@ -14,9 +14,7 @@ from urllib.parse import unquote, urlsplit
 PYPI_INDEX = "https://pypi.org/simple"
 PYTORCH_CPU_INDEX = "https://download.pytorch.org/whl/cpu"
 PYTORCH_WHEEL_HOSTS = frozenset({"download.pytorch.org", "download-r2.pytorch.org"})
-PATCHED_BUILD_TOOLCHAIN = (
-  "RUN pip install --no-cache-dir --upgrade setuptools==84.0.0 wheel==0.46.3"
-)
+PATCHED_BUILD_TOOLCHAIN = "py3.11-pip=26.2.1-r0"
 ALLOWED_UNAUDITED = {
   "torch": "2.13.0+cpu",
   "torchvision": "0.28.0+cpu",
@@ -122,28 +120,27 @@ def validate_dockerfile_policy(dockerfile_text: str) -> None:
   pip_install_lines = [
     line.strip()
     for line in production_dependency_stage.splitlines()
-    if re.search(r"\b(?:python\s+-m\s+)?pip\s+install\b", line)
+    if re.search(r"\b(?:python(?:3(?:\.\d+)?)?\s+-m\s+)?pip\s+install\b", line)
   ]
-  if PATCHED_BUILD_TOOLCHAIN not in pip_install_lines:
+  if PATCHED_BUILD_TOOLCHAIN not in dockerfile_text:
     raise AuditPolicyError("Dockerfile must install the pinned patched build toolchain.")
   expected_lines = (
     [
-      PATCHED_BUILD_TOOLCHAIN,
-      "RUN pip install --user -r requirements-boundary.txt",
-      "RUN pip install --user -r requirements-ml.txt",
-      "RUN pip install --user -r requirements-classifier.txt",
-      "RUN pip install --user -r requirements-knowledge.txt",
-      "RUN pip install --user -r requirements-ingest.txt",
+      "RUN python3.11 -m pip install --target /opt/python --requirement requirements-boundary.txt",
+      "RUN python3.11 -m pip install --target /opt/python --upgrade --requirement requirements-ml.txt",
+      "RUN python3.11 -m pip install --target /opt/python --upgrade --requirement requirements-classifier.txt",
+      "RUN python3.11 -m pip install --target /opt/python --upgrade --requirement requirements-knowledge.txt",
+      "RUN python3.11 -m pip install --target /opt/python --upgrade --requirement requirements-ingest.txt",
     ]
     if role_build
-    else [PATCHED_BUILD_TOOLCHAIN, "RUN pip install --user -r requirements.txt"]
+    else ["RUN python3.11 -m pip install --target /opt/python --requirement requirements.txt"]
   )
   if pip_install_lines != expected_lines:
     raise AuditPolicyError(
       "Dockerfile production dependencies must use exactly the checked role requirements installs."
     )
   production_stage = re.split(r"(?m)^FROM\s+", following_stages, maxsplit=1)[0]
-  if re.search(r"\b(?:python\s+-m\s+)?pip\s+install\b", production_stage):
+  if re.search(r"\b(?:python(?:3(?:\.\d+)?)?\s+-m\s+)?pip\s+install\b", production_stage):
     raise AuditPolicyError(
       "Dockerfile production target must not install dependencies outside requirements.txt."
     )

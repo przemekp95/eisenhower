@@ -77,7 +77,7 @@
       "layout_model_revision": "40bde044036bb181c130ddf6c51792187268748f",
       "torch_version": "2.13.0+cpu",
       "torchvision_version": "0.28.0+cpu",
-      "tesseract_cli_version": "5.3.4",
+      "tesseract_cli_version": "5.5.2",
       "remote_services": false,
       "external_plugins": false
     },

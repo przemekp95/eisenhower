@@ -350,7 +350,7 @@ def test_real_ocr_uses_the_exact_owner_frozen_receipt_and_local_tesseract_cli():
   )
   assert result.provenance.ocr.performed is True
   assert result.provenance.ocr.engine_name == "tesseract-cli"
-  assert result.provenance.ocr.engine_version == "5.3.4"
+  assert result.provenance.ocr.engine_version == "5.5.2"
   assert result.provenance.ocr.human_approval_id == approval.approval_id
 
 

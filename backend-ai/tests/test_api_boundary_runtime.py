@@ -30,8 +30,10 @@ def test_dockerfile_has_dedicated_boundary_and_knowledge_role_targets():
   dockerfile = ROOT.joinpath("Dockerfile").read_text(encoding="utf-8")
 
   assert "FROM requirements-source AS dependencies-boundary" in dockerfile
-  assert "FROM dependencies-boundary AS boundary" in dockerfile
-  assert "FROM dependencies-knowledge AS knowledge" in dockerfile
+  assert "FROM runtime-base AS boundary" in dockerfile
+  assert "COPY --from=dependencies-boundary /opt/python /opt/python" in dockerfile
+  assert "FROM runtime-base AS knowledge" in dockerfile
+  assert "COPY --from=dependencies-knowledge /opt/python /opt/python" in dockerfile
   assert 'app.api_boundary:from_environment' in dockerfile
   assert "requirements-knowledge.txt" in dockerfile
 

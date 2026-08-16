@@ -30,14 +30,14 @@ SPACY_MODEL_WHEEL = (
 )
 
 DOCKERFILE = """\
-FROM base AS dependencies-cpu
-RUN pip install --no-cache-dir --upgrade setuptools==84.0.0 wheel==0.46.3
+FROM wolfi AS dependencies-cpu
+RUN apk add --no-cache python-3.11=3.11.16-r1 py3.11-pip=26.2.1-r0
 COPY requirements.txt .
-RUN pip install --user -r requirements.txt
+RUN python3.11 -m pip install --target /opt/python --requirement requirements.txt
 FROM base AS production
 COPY --from=dependencies-cpu /runtime /runtime
 FROM dependencies-cpu AS development
-RUN pip install --user pytest
+RUN python3.11 -m pip install --target /opt/python pytest
 """
 
 
@@ -229,7 +229,7 @@ def test_keeps_the_docker_build_on_the_single_checked_requirements_source():
   with pytest.raises(AuditPolicyError, match="patched build toolchain"):
     validate_dockerfile_policy(
       DOCKERFILE.replace(
-        "RUN pip install --no-cache-dir --upgrade setuptools==84.0.0 wheel==0.46.3\n",
+        " py3.11-pip=26.2.1-r0",
         "",
       )
     )

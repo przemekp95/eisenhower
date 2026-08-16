@@ -1,7 +1,7 @@
 {
   "candidate_sha256": "3d15da58a87ce5653f6c67a696532cbeec4d14de0c88851e0bec45a4d8097100",
   "completed_at": "PENDING",
-  "corpus_manifest_sha256": "a5fa40a4a6ffadb784533eb4b5bff63035b51672c83bb86757d9c098535d1111",
+  "corpus_manifest_sha256": "3b1d6ede0c4b9428f72fbad7364be65e5845669b8e985fd74d1e3791464a2e92",
   "corpus_snapshot_sha256": "2994f809649d3dd155faf09419557de7af70c7a77dae9aa4d3cf67f717ac70a8",
   "decisions": [
     {
