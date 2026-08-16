@@ -105,10 +105,10 @@ test('renders a sourced answer with escaped citations on desktop and mobile', as
 
   await page.getByPlaceholder('Task title').fill('Prepare the incident review');
   await page.getByPlaceholder('Description').fill('Existing context');
-  const opener = page.getByRole('button', { name: 'Open AI assistant', exact: true });
+  const opener = page.getByRole('button', { name: 'Open task assistance', exact: true });
   await opener.click();
 
-  const assistant = page.getByRole('dialog', { name: 'AI task assistant' });
+  const assistant = page.getByRole('dialog', { name: 'Task assistance' });
   await expect(assistant.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
   await expect(assistant.getByRole('tab', { name: 'Task assistant' })).toHaveAttribute(
     'aria-selected',
@@ -154,8 +154,8 @@ test('renders a sourced answer with escaped citations on desktop and mobile', as
 
 test('renders an honest no-answer without fabricated citations', async ({ page }) => {
   await page.getByPlaceholder('Task title').fill('Question outside approved knowledge');
-  await page.getByRole('button', { name: 'Open AI assistant', exact: true }).click();
-  const assistant = page.getByRole('dialog', { name: 'AI task assistant' });
+  await page.getByRole('button', { name: 'Open task assistance', exact: true }).click();
+  const assistant = page.getByRole('dialog', { name: 'Task assistance' });
   await assistant.getByRole('button', { name: 'Check sources' }).click();
 
   await expect(page.getByText('No answer', { exact: true })).toBeVisible();

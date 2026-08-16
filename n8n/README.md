@@ -1,6 +1,6 @@
 # n8n asynchronous integration workflows
 
-These inactive importable workflows keep n8n out of every synchronous analysis request. n8n is an orchestration boundary for source polling/webhooks, normalization handoff, reindexing, tombstones, evaluation launches, retry, and alerting. FastAPI remains the owner of domain validation, ACL enforcement, deterministic chunk production, checksums, vector writes, and online retrieval/generation.
+These source-controlled workflows keep n8n out of every synchronous analysis request. n8n is an orchestration boundary for source polling/webhooks, normalization handoff, reindexing, tombstones, evaluation launches, retry, and alerting. FastAPI remains the owner of domain validation, ACL enforcement, deterministic chunk production, checksums, vector writes, and online retrieval/generation. Source JSON stays inactive; the deployment reconciler decides which reviewed definitions are published in the private runtime.
 
 Calendar automation follows the same boundary: Node owns task and calendar rules, per-user encrypted OAuth grants, bindings, conflicts, sync tokens, idempotency and the transactional outbox. n8n is tokenless: it owns no Google credential and performs only bounded, HMAC-signed calls to Node's Calendar provider adapter. A Google push notification is a signal to pull changes; it is never trusted as event data.
 
@@ -15,16 +15,36 @@ Calendar automation follows the same boundary: Node owns task and calendar rules
 
 There is no generic workflow executor and no n8n MCP server in this scaffold. If n8n MCP is added later, allowlist only individually reviewed workflows such as `sync_calendar`, `reindex_project`, or `start_rag_evaluation`; never expose arbitrary workflow selection, arbitrary URLs, code, commands, or credential access.
 
+## Deterministic runtime reconciliation
+
+`scripts/reconcile-runtime-container.sh` is the only supported import path for the local production topology. It assigns stable repository IDs to the five allowlisted definitions, exports the installed state, detects definition drift, removes exact-name legacy duplicates, imports only changed definitions, publishes the intended set and then exports again to prove convergence. The n8n process is stopped while the CLI and the narrowly scoped SQLite duplicate cleanup run, so there are no concurrent database writers. An unrelated workflow is never deleted.
+
+Calendar inbound, outbound and reconciliation are published together. The two RAG workflows stay unpublished unless `N8N_RAG_WORKFLOWS_ENABLED=true`, `knowledge-service` passes its live check immediately before reconciliation, and `N8N_RAG_HEADER_AUTH_CREDENTIAL_ID` names an existing n8n `httpHeaderAuth` credential. The reconciler substitutes that runtime ID and the stable error-workflow ID without committing credentials to Git. A failed export, import, publish or post-reconcile comparison restores the pre-reconcile SQLite snapshot, restarts the last known n8n runtime, and aborts deployment before the gateways and smoke checks; the disposable rehearsal separately proves graph activation on n8n 2.4.6.
+
+The full local deploy performs reconciliation automatically. An operator can repeat only that guarded step with:
+
+```bash
+deploy/local/deploy.sh reconcile-n8n
+```
+
+For a disposable compatibility rehearsal against the pinned image, with no Google request and no access to the deployed n8n volume, run:
+
+```bash
+n8n/scripts/rehearse-runtime.sh
+```
+
+The rehearsal starts from an empty temporary SQLite database, runs reconciliation twice, injects and repairs active drift plus a stale duplicate, verifies that only the three Calendar workflows are published, and starts n8n 2.4.6 long enough to register their trigger graphs. Internal HTTP targets are loopback discard addresses and the public Calendar URL is `example.invalid`.
+
 ## Google Calendar activation
 
-The three Calendar workflows are deliberately imported inactive. Before activation:
+The three Calendar source files are deliberately inactive in Git and are published by reconciliation. Before deploying them:
 
 1. Complete the user-facing Google OAuth flow in Node. Node must store the refresh/access grant encrypted and bind it to the authenticated tenant, owner and Calendar connection. No OAuth client secret, access token or refresh token belongs in n8n, Git or workflow JSON.
 2. Set only `EISENHOWER_NODE_INTERNAL_API_URL`, `CALENDAR_INTERNAL_HMAC_KEY` and `GOOGLE_CALENDAR_WEBHOOK_URL` for Calendar orchestration. The HMAC key must be the same dedicated value configured in Node and contain at least 32 bytes. The private Node base URL must not have a trailing slash because the exact request path is signed; the Google webhook URL must be HTTPS and expose only the inbound path through the gateway.
 3. Calendar signing uses the Code node's Node.js `crypto` module. Self-hosted n8n must explicitly set `NODE_FUNCTION_ALLOW_BUILTIN=crypto`; do not allow additional built-ins or external modules for these workflows.
-4. Import and inspect the three shared workflows, run a two-user isolation rehearsal, then activate outbound, inbound and reconciliation together. There is no workflow or Google credential per user to clone or administer in n8n.
+4. Run the contract and disposable-runtime rehearsals, then let deployment reconcile outbound, inbound and reconciliation together. There is no workflow or Google credential per user to clone or administer in n8n.
 
-The checked-in JSON proves source and contract shape only. Until users grant Google OAuth consent to Node and the workflows are imported and activated, live Calendar synchronization is not deployed.
+The checked-in JSON and disposable rehearsal prove source, import and n8n graph compatibility only. Until users grant Google OAuth consent to Node and the reconciled runtime is deployed, live Calendar synchronization is not deployed.
 
 ### Calendar internal HTTP signing
 
@@ -61,7 +81,7 @@ scope and encrypted OAuth grant. n8n must never receive the decrypted grant or c
 Before activating the workflow:
 
 1. Replace import placeholders and create a dedicated Header Auth credential. Keep n8n private; expose only the single ingress path through the application gateway.
-2. Configure `EISENHOWER_INTERNAL_API_URL` to a private HTTPS/mTLS endpoint and provide a narrowly scoped `EISENHOWER_INTERNAL_API_TOKEN` through n8n credentials/secrets, not workflow JSON.
+2. Configure `EISENHOWER_INTERNAL_API_URL` for the private Node business API and `EISENHOWER_KNOWLEDGE_INTERNAL_API_URL` for the private knowledge runtime. Provide a narrowly scoped `EISENHOWER_INTERNAL_API_TOKEN` through n8n credentials/secrets, not workflow JSON.
 3. The source must send `X-Eisenhower-Signature-Version: v1` and calculate lower-case hex HMAC-SHA256 over `v1 + "\\n" + timestamp + "\\n" + "POST" + "\\n" + "/webhook/eisenhower-rag-ingestion" + "\\n" + exact_raw_body`. The timestamp is Unix seconds in `X-Eisenhower-Timestamp`; the digest is `X-Eisenhower-Signature`. Method, production ingress path, version and every body byte are therefore bound by the signature.
 4. The Webhook node has **Raw Body** enabled and exposes those bytes as binary field `data`; the verification HTTP node forwards that binary field without JSON parsing/reserialization. FastAPI accepts only `application/json`, enforces an 8 MiB application limit, rejects invalid UTF-8, duplicate keys, non-finite numbers, unknown fields and schema-invalid envelopes, then uses constant-time comparison, a five-minute signature window and an atomic 24-hour `event_id` reservation. Set self-hosted `N8N_PAYLOAD_SIZE_MAX=8` and the gateway body limit to the same or a smaller value; the app limit remains the final fail-closed check. A signature alone does not stop replay.
 5. Validate the body before accepting it. Recompute `content_checksum`; never trust a connector-supplied checksum as proof of content integrity.
@@ -94,4 +114,6 @@ Focused contract tests:
 
 ```bash
 python3 -m unittest discover -s n8n/tests -v
+node --test n8n/tests/reconcile-runtime.test.mjs
+n8n/scripts/rehearse-runtime.sh
 ```

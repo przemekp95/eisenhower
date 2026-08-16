@@ -11,6 +11,7 @@ export default function TaskComposer({
   onOpenAITools,
   suggestDisabled,
   scanDisabled,
+  toolsDisabled,
   t,
 }) {
   return (
@@ -79,8 +80,10 @@ export default function TaskComposer({
           testID="open-ai-tools-button"
           accessibilityRole="button"
           accessibilityLabel={t.aiTools}
+          accessibilityState={{ disabled: toolsDisabled }}
           onPress={onOpenAITools}
-          style={styles.toolsButton}
+          disabled={toolsDisabled}
+          style={[styles.toolsButton, toolsDisabled && styles.disabledButton]}
         >
           <Text style={styles.toolsButtonText}>{t.aiTools}</Text>
         </Pressable>

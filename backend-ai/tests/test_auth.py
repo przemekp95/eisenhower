@@ -12,7 +12,8 @@ def test_static_token_verifier_uses_constant_server_side_identity_mapping():
   assert user.tenant_id == "local"
   assert user.user_id == "local-user"
   assert user.roles == ["user"]
-  assert admin.roles == ["admin"]
+  assert admin.roles == ["operator", "admin"]
+  assert admin.scopes == ["ai:operate", "ai:analyze", "knowledge:read"]
 
 
 def test_static_token_verifier_rejects_unknown_tokens():

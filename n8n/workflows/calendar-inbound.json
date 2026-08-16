@@ -27,7 +27,7 @@
       "typeVersion": 2,
       "position": [-880, 40],
       "parameters": {
-        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/notifications/validate';\nconst headers = $json.headers || {};\nconst body = { channelId: headers['x-goog-channel-id'], resourceId: headers['x-goog-resource-id'], messageNumber: headers['x-goog-message-number'] };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/notifications/validate';\nconst headers = $json.headers || {};\nconst body = { channelId: headers['x-goog-channel-id'], resourceId: headers['x-goog-resource-id'], channelToken: headers['x-goog-channel-token'], messageNumber: headers['x-goog-message-number'] };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
       }
     },
     {
@@ -94,7 +94,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [-190, 40],
-      "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.statusCode }}", "rightValue": 410, "operator": { "type": "number", "operation": "equals" } }], "combinator": "and" }, "options": {} }
+      "parameters": { "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" }, "conditions": [{ "id": "calendar-reset-required", "leftValue": "={{ $json.resetRequired }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true", "singleValue": true } }], "combinator": "and" }, "options": {} }
     },
     {
       "id": "inbound-sign-reset",
@@ -134,7 +134,7 @@
       "typeVersion": 2,
       "position": [40, 160],
       "parameters": {
-        "jsCode": "const signal = $('Validate Channel And Claim Signal').item.json;\nconst payload = $json.body ?? {};\nconst page = typeof payload === 'string' ? JSON.parse(payload) : payload;\nconst commands = [];\nif (page.resetRequired) commands.push({ operationId: `${signal.signalId}:reset`, tenantId: signal.tenantId, ownerId: signal.ownerId, connectionId: signal.connectionId, kind: 'sync_token_gone' });\nfor (const event of (page.events || [])) {\n  const base = { operationId: `${signal.signalId}:event:${event.id}:${event.etag}`, tenantId: signal.tenantId, ownerId: signal.ownerId, connectionId: signal.connectionId, providerEventId: event.id, providerEtag: event.etag };\n  if (event.status === 'cancelled') commands.push({ ...base, kind: 'event_deleted' });\n  else if (event.start && event.start.dateTime) commands.push({ ...base, kind: 'event_changed', title: event.summary || '', dueAt: event.start.dateTime, timeZone: event.start.timeZone || 'UTC' });\n}\nconst token = page.nextPageToken || page.nextSyncToken;\nif (token) commands.push({ operationId: `${signal.signalId}:checkpoint:${token}`, tenantId: signal.tenantId, ownerId: signal.ownerId, connectionId: signal.connectionId, kind: 'sync_checkpoint', ...(page.nextPageToken ? { nextPageToken: page.nextPageToken } : {}), ...(page.nextSyncToken ? { nextSyncToken: page.nextSyncToken } : {}) });\nreturn commands.map(command => ({ json: { command } }));"
+        "jsCode": "const signal = $('Validate Channel And Claim Signal').item.json;\nconst payload = $json.body ?? $json;\nconst page = typeof payload === 'string' ? JSON.parse(payload) : payload;\nconst commands = [];\nif (page.resetRequired) commands.push({ operationId: `${signal.signalId}:reset`, tenantId: signal.tenantId, ownerId: signal.ownerId, connectionId: signal.connectionId, kind: 'sync_token_gone' });\nfor (const event of (page.events || [])) {\n  const base = { operationId: `${signal.signalId}:event:${event.id}:${event.etag}`, tenantId: signal.tenantId, ownerId: signal.ownerId, connectionId: signal.connectionId, providerEventId: event.id, providerEtag: event.etag };\n  if (event.status === 'cancelled') commands.push({ ...base, kind: 'event_deleted' });\n  else if (event.start && event.start.dateTime) commands.push({ ...base, kind: 'event_changed', title: event.summary || '', dueAt: event.start.dateTime, timeZone: event.start.timeZone || 'UTC' });\n}\nconst token = page.nextPageToken || page.nextSyncToken;\nif (token) commands.push({ operationId: `${signal.signalId}:checkpoint:${token}`, tenantId: signal.tenantId, ownerId: signal.ownerId, connectionId: signal.connectionId, kind: 'sync_checkpoint', ...(page.nextPageToken ? { nextPageToken: page.nextPageToken } : {}), ...(page.nextSyncToken ? { nextSyncToken: page.nextSyncToken } : {}) });\nreturn commands.map(command => ({ json: { command } }));"
       }
     },
     {

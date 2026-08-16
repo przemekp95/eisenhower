@@ -12,6 +12,14 @@ import { TaskModel } from '../models/task';
 
 export interface CalendarScope { tenantId: string; ownerId: string }
 
+export interface CalendarConflictResolutionCommand extends CalendarScope {
+  operationId: string;
+  actorId: string;
+  conflictId: string;
+  expectedRevision: number;
+  strategy: 'eisenhower' | 'google';
+}
+
 export type CalendarInboundCommand =
   | (CalendarScope & { operationId: string; connectionId: string; kind: 'sync_token_gone' })
   | (CalendarScope & {
@@ -163,11 +171,108 @@ export class CalendarApplicationService {
       return existing.result;
     }
     const eventId = randomUUID();
-    await CalendarMutationReceiptModel.create({ ...scope, operationId, fingerprint: digest, outcome: 'accepted', result: { eventId } });
-    await CalendarOutboxModel.create({
-      eventId, ...scope, aggregateId: connectionId, aggregateRevision: 0,
-      type: 'calendar.sync.requested', payload: { connectionId }, status: 'pending',
-    });
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await CalendarOutboxModel.updateMany(
+          { ...scope, status: 'dead_letter' },
+          {
+            $set: { status: 'pending', attempts: 0, availableAt: new Date() },
+            $unset: { leaseId: 1, leaseUntil: 1, lastError: 1 },
+          },
+          { session },
+        );
+        await CalendarMutationReceiptModel.create([{
+          ...scope, operationId, fingerprint: digest, outcome: 'accepted', result: { eventId },
+        }], { session });
+        await CalendarOutboxModel.create([{
+          eventId, ...scope, aggregateId: connectionId, aggregateRevision: 0,
+          type: 'calendar.sync.requested', payload: { connectionId }, status: 'pending',
+        }], { session });
+        await CalendarSyncStateModel.findOneAndUpdate(
+          { ...scope, connectionId },
+          { $set: { lastRequestedAt: new Date() } },
+          { upsert: true, setDefaultsOnInsert: true, session },
+        );
+      });
+    } finally {
+      await session.endSession();
+    }
     return { eventId };
+  }
+
+  async resolveConflict(command: CalendarConflictResolutionCommand) {
+    const digest = fingerprint({ ...command, kind: 'conflict_resolution' });
+    const existing = await CalendarMutationReceiptModel.findOne({
+      tenantId: command.tenantId, ownerId: command.ownerId, operationId: command.operationId,
+    }).lean();
+    if (existing) {
+      if (existing.fingerprint !== digest) throw new Error('calendar_operation_reused');
+      return existing.result as { conflict: Record<string, unknown>; revision: number };
+    }
+
+    const session = await mongoose.startSession();
+    let result: { conflict: Record<string, unknown>; revision: number } | undefined;
+    try {
+      await session.withTransaction(async () => {
+        const conflict = await CalendarConflictModel.findOne({
+          _id: command.conflictId, tenantId: command.tenantId,
+          ownerId: command.ownerId, status: 'open',
+        }).session(session);
+        if (!conflict) throw new Error('calendar_conflict_not_found');
+        if ((conflict.get('revision') ?? 0) !== command.expectedRevision) {
+          throw new Error('calendar_conflict_revision_mismatch');
+        }
+        const binding = await CalendarBindingModel.findOne({
+          _id: conflict.bindingId, tenantId: command.tenantId, ownerId: command.ownerId,
+        }).session(session);
+        const task = await TaskModel.findOne({
+          _id: conflict.taskId, tenantId: command.tenantId, ownerId: command.ownerId,
+        }).session(session);
+        if (!binding || !task) throw new Error('calendar_conflict_target_unavailable');
+
+        if (command.strategy === 'google') {
+          const snapshot = conflict.providerSnapshot as { title: string; dueAt: string; timeZone: string };
+          task.title = snapshot.title;
+          task.schedule = { dueAt: new Date(snapshot.dueAt), timeZone: snapshot.timeZone };
+          task.revision = (task.revision ?? 0) + 1;
+          await task.save({ session });
+          binding.lastTaskRevision = task.revision;
+          binding.lastProviderRevision = conflict.providerRevision;
+          binding.providerEtag = conflict.providerRevision;
+          await binding.save({ session });
+        } else {
+          await CalendarOutboxModel.create([{
+            eventId: `conflict:${conflict.id}:${command.expectedRevision}`,
+            tenantId: command.tenantId, ownerId: command.ownerId,
+            aggregateId: task.id, aggregateRevision: task.revision ?? 0,
+            type: 'event_update',
+            payload: { taskId: task.id, title: task.title, schedule: task.schedule, bindingId: binding.id },
+            status: 'pending',
+          }], { session });
+        }
+        conflict.status = command.strategy === 'google' ? 'resolved_provider' : 'resolved_local';
+        conflict.resolvedAt = new Date();
+        conflict.set('revision', command.expectedRevision + 1);
+        await conflict.save({ session });
+        const nextRevision = command.expectedRevision + 1;
+        result = { conflict: conflict.toObject(), revision: nextRevision };
+        await CalendarMutationReceiptModel.create([{
+          tenantId: command.tenantId, ownerId: command.ownerId,
+          operationId: command.operationId, fingerprint: digest,
+          outcome: 'success', result,
+        }], { session });
+        await CalendarDomainAuditModel.create([{
+          eventId: `resolve:${conflict.id}:${command.expectedRevision}`,
+          tenantId: command.tenantId, ownerId: command.ownerId, actorId: command.actorId,
+          action: 'calendar.conflict.resolve', outcome: 'success', resourceId: conflict.id,
+          beforeRevision: command.expectedRevision, afterRevision: nextRevision,
+        }], { session });
+      });
+      if (!result) throw new Error('calendar_conflict_resolution_incomplete');
+      return result;
+    } finally {
+      await session.endSession();
+    }
   }
 }

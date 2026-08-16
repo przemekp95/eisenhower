@@ -26,9 +26,9 @@ test('keeps manual task flow available when optional AI capabilities are offline
 
   const title = `Ręcznie bez GPU ${Date.now()}`;
   await page.getByLabel('Tytuł zadania').fill(title);
-  await page.getByRole('button', { name: 'Otwórz asystenta AI', exact: true }).click();
+  await page.getByRole('button', { name: 'Otwórz pomoc w porządkowaniu', exact: true }).click();
 
-  const assistant = page.getByRole('dialog', { name: 'Asystent AI zadania' });
+  const assistant = page.getByRole('dialog', { name: 'Pomoc w porządkowaniu' });
   await expect(assistant.getByText('Nie udało się sprawdzić dostępności AI.')).toBeVisible();
   await expect(assistant.getByRole('button', { name: 'Zasugeruj kwadrant' })).toHaveCount(0);
   await expect(assistant.getByRole('button', { name: 'Sprawdź źródła' })).toHaveCount(0);

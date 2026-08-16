@@ -1,8 +1,7 @@
-import { FormEvent, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { FormEvent, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import LanguageSwitcher from './components/LanguageSwitcher';
 import Matrix from './components/Matrix';
 import CalendarSyncPanel from './components/CalendarSyncPanel';
-import { AIAdministrationComponent } from './components/matrixLazyComponents';
 import {
   clearTokens,
   getAccessRejection,
@@ -153,7 +152,6 @@ function AppContent() {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [loadError, setLoadError] = useState('');
   const [lastSyncedAt, setLastSyncedAt] = useState(() => new Date());
-  const [showAdministration, setShowAdministration] = useState(false);
   const [lifecycleFilter, setLifecycleFilter] = useState<TaskLifecycleFilter>('active');
   const [taskView, setTaskView] = useState<TaskView>('owned');
 
@@ -164,7 +162,8 @@ function AppContent() {
     setLoadState('loading');
     setLoadError('');
     try {
-      const nextTasks = view === 'delegated' ? await getDelegatedTasks() : await getTasks(filter);
+      const nextTasks =
+        view === 'delegated' ? await getDelegatedTasks(filter) : await getTasks(filter);
       setTasks(nextTasks);
       setLastSyncedAt(new Date());
       setLoadState('ready');
@@ -292,13 +291,6 @@ function AppContent() {
               <p className="mt-1 max-w-2xl text-sm text-slate-300">{t('app.instruction')}</p>
             </div>
             <nav aria-label={t('nav.account')} className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowAdministration(true)}
-                className="min-h-11 rounded-xl border border-amber-200/30 bg-amber-300/10 px-4 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-300/20"
-              >
-                {t('nav.administration')}
-              </button>
               <LanguageSwitcher />
               <button
                 type="button"
@@ -393,12 +385,6 @@ function AppContent() {
           <CalendarSyncPanel />
         </div>
       </div>
-
-      {showAdministration ? (
-        <Suspense fallback={<div role="status">{t('ai.loading')}</div>}>
-          <AIAdministrationComponent onClose={() => setShowAdministration(false)} />
-        </Suspense>
-      ) : null}
     </main>
   );
 }

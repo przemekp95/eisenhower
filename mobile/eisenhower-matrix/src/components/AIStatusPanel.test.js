@@ -6,8 +6,8 @@ import { translations } from '../i18n/translations';
 describe('AIStatusPanel', () => {
   const t = translations.pl;
 
-  it('renders connected provider statuses', () => {
-    const { getByText } = render(
+  it('renders business availability without provider or model details', () => {
+    const { getByText, queryByText } = render(
       <AIStatusPanel
         aiLoading={false}
         aiConnected
@@ -19,14 +19,13 @@ describe('AIStatusPanel', () => {
       />
     );
 
-    expect(getByText('Połączono z centralnym runtime AI')).toBeTruthy();
-    expect(getByText('Model lokalny')).toBeTruthy();
-    expect(getByText('Aktywny')).toBeTruthy();
-    expect(getByText('Wyłączony')).toBeTruthy();
+    expect(getByText('Pomoc w porządkowaniu zadań jest dostępna')).toBeTruthy();
+    expect(queryByText('Model lokalny')).toBeNull();
+    expect(queryByText('Tesseract OCR')).toBeNull();
   });
 
   it('renders loading and unavailable states', () => {
-    const { getAllByText, getByText } = render(
+    const { getByText } = render(
       <AIStatusPanel
         aiLoading
         aiConnected={false}
@@ -36,7 +35,6 @@ describe('AIStatusPanel', () => {
     );
 
     expect(getByText('Ładowanie...')).toBeTruthy();
-    expect(getAllByText('Niedostępny').length).toBeGreaterThan(0);
   });
 
   it('renders the offline message when the runtime is disconnected after loading', () => {
@@ -49,6 +47,6 @@ describe('AIStatusPanel', () => {
       />
     );
 
-    expect(getByText('Centralny runtime AI jest niedostępny')).toBeTruthy();
+    expect(getByText('Pomoc w porządkowaniu zadań jest chwilowo niedostępna')).toBeTruthy();
   });
 });

@@ -81,18 +81,6 @@ jest.mock('./components/Matrix', () => ({
     </section>
   ),
 }));
-jest.mock('./components/matrixLazyComponents', () => ({
-  __esModule: true,
-  AIAdministrationComponent: ({ onClose }: { onClose: () => void }) => (
-    <div>
-      <p>Administration panel</p>
-      <button type="button" onClick={onClose}>
-        close-admin
-      </button>
-    </div>
-  ),
-}));
-
 const mockedApi = jest.mocked(api);
 const mockedOidcSession = jest.mocked(oidcSession);
 const initialTask = {
@@ -116,7 +104,11 @@ describe('App', () => {
     setApiToken('runtime-only-code');
     mockedApi.getTasks.mockResolvedValue([initialTask]);
     mockedApi.getDelegatedTasks.mockResolvedValue([]);
-    mockedApi.getCalendarStatus.mockResolvedValue({ status: 'disconnected', connection: null });
+    mockedApi.getCalendarStatus.mockResolvedValue({
+      status: 'disconnected',
+      canConnect: true,
+      connection: null,
+    });
     mockedApi.getCalendarConflicts.mockResolvedValue([]);
     mockedApi.createTask.mockResolvedValue({
       _id: '2',
@@ -259,7 +251,7 @@ describe('App', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/nieprawidłowy lub wygasł/i);
   });
 
-  it('loads tasks, reports a confirmed fresh state and opens administration independently', async () => {
+  it('loads tasks, reports a confirmed fresh state and keeps technical administration hidden', async () => {
     render(<App />);
     expect(screen.getByText('board-loading')).toBeInTheDocument();
     expect(await screen.findByText('Existing task')).toBeInTheDocument();
@@ -267,10 +259,8 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Odśwież tablicę' }));
     await waitFor(() => expect(mockedApi.getTasks).toHaveBeenCalledTimes(2));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Administracja' }));
-    expect(screen.getByText('Administration panel')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('close-admin'));
-    expect(screen.queryByText('Administration panel')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Administracja' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/provider|model|retrain|n8n|outbox/i)).not.toBeInTheDocument();
   });
 
   it('shows offline state, never claims freshness and retries locally', async () => {

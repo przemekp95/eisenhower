@@ -368,9 +368,19 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Setup Node.js
+        if: ${{ needs.resolve-run-mode.outputs.n8n == 'true' }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
       - name: Test n8n webhook and job contracts
         if: ${{ needs.resolve-run-mode.outputs.n8n == 'true' }}
-        run: python -m unittest discover -s n8n/tests -v
+        run: make test-n8n
+
+      - name: Rehearse import and activation on n8n 2.4.6
+        if: ${{ needs.resolve-run-mode.outputs.n8n == 'true' }}
+        run: make test-n8n-runtime
 
   test-frontend:
     name: test-frontend

@@ -249,13 +249,55 @@ class CalendarWorkflowContractTest(unittest.TestCase):
         self.assertIn("/internal/calendar/provider/outbound", serialized)
         self.assertIn("Continue Only With Claimed Event", nodes)
         self.assertIn("typeof $json.eventId", nodes["Continue Only With Claimed Event"]["parameters"]["jsCode"])
-        for binding_field in ("eventId", "delivered", "providerEventId", "providerEtag", "connectionId"):
+        for binding_field in ("eventId", "leaseId", "delivered", "providerEventId", "providerEtag", "connectionId"):
             self.assertIn(binding_field, serialized)
         provider = nodes["Dispatch Outbound Through Node"]
         self.assertTrue(provider["retryOnFail"])
         self.assertGreaterEqual(provider["maxTries"], 3)
         self.assertNotIn("client_secret", serialized.lower())
         self.assertNotIn("refresh_token", serialized.lower())
+
+        self.assertIn("Route Claimed Calendar Work", nodes)
+        sync_signer = nodes["Sign Manual Sync Changes Pull"]["parameters"]["jsCode"]
+        self.assertIn("/internal/calendar/provider/changes", sync_signer)
+        self.assertIn("checkpoint", sync_signer)
+        self.assertIn("Expand Manual Sync Changes", nodes)
+        self.assertIn("/internal/calendar/sync/apply", serialized)
+
+        provider_connections = workflow["connections"]["Dispatch Outbound Through Node"]["main"]
+        self.assertGreaterEqual(len(provider_connections), 2)
+        self.assertEqual(
+            provider_connections[1][0]["node"],
+            "Sign Outbox Failure Acknowledgement",
+        )
+        self.assertIn(
+            "delivered: false",
+            nodes["Sign Outbox Failure Acknowledgement"]["parameters"]["jsCode"],
+        )
+
+    def test_manual_sync_splits_large_change_sets_before_apply_batch(self) -> None:
+        workflow = load_workflow("calendar-outbound.json")
+        nodes = {node["name"]: node for node in workflow["nodes"]}
+        expander = nodes["Expand Manual Sync Changes"]["parameters"]["jsCode"]
+
+        self.assertIn("const batchSize = 250", expander)
+        self.assertIn("commands.slice", expander)
+        self.assertIn("return batches.map", expander)
+        success_target = workflow["connections"]["Apply Manual Sync Page"]["main"][0][0]["node"]
+        self.assertEqual(success_target, "Confirm Every Manual Sync Batch")
+        confirmation = nodes[success_target]["parameters"]["jsCode"]
+        self.assertIn("$('Expand Manual Sync Changes').all().length", confirmation)
+        self.assertIn("$input.all().length", confirmation)
+        self.assertEqual(
+            workflow["connections"][success_target]["main"][0][0]["node"],
+            "Sign Outbox Acknowledgement",
+        )
+        failure_target = workflow["connections"]["Apply Manual Sync Page"]["main"][1][0]["node"]
+        self.assertEqual(failure_target, "Collapse Manual Sync Failures")
+        self.assertEqual(
+            workflow["connections"][failure_target]["main"][0][0]["node"],
+            "Sign Outbox Failure Acknowledgement",
+        )
 
     def test_inbound_notification_is_signal_only_and_uses_incremental_pull(self) -> None:
         workflow = load_workflow("calendar-inbound.json")
@@ -274,10 +316,25 @@ class CalendarWorkflowContractTest(unittest.TestCase):
         self.assertIn("syncToken", serialized)
         self.assertIn("nextPageToken", serialized)
         self.assertIn("nextSyncToken", serialized)
-        self.assertIn("410", serialized)
+        self.assertIn("resetRequired", serialized)
         for kind in ("event_changed", "event_deleted", "sync_checkpoint"):
             self.assertIn(kind, serialized)
         self.assertNotIn("task_delete", serialized)
+
+        reset_if = nodes["Sync Token Is Gone"]
+        self.assertEqual(reset_if["typeVersion"], 2.2)
+        condition_options = reset_if["parameters"]["conditions"]["options"]
+        self.assertEqual(condition_options["caseSensitive"], True)
+        self.assertEqual(condition_options["typeValidation"], "strict")
+        condition = reset_if["parameters"]["conditions"]["conditions"][0]
+        self.assertEqual(condition["leftValue"], "={{ $json.resetRequired }}")
+        self.assertEqual(condition["operator"]["type"], "boolean")
+        self.assertEqual(condition["operator"]["operation"], "true")
+        self.assertIn("$json.body ?? $json", nodes["Expand Provider Changes"]["parameters"]["jsCode"])
+
+        validation = nodes["Sign Notification Validation"]["parameters"]["jsCode"]
+        self.assertIn("x-goog-channel-token", validation)
+        self.assertIn("channelToken", validation)
 
     def test_reconciliation_and_watch_renewal_are_scheduled(self) -> None:
         workflow = load_workflow("calendar-reconciliation.json")

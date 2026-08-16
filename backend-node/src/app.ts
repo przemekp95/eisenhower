@@ -12,6 +12,7 @@ import { createHealthRouter } from './routes/health';
 import { createTasksRouter } from './routes/tasks';
 import { createCalendarInternalRouter } from './routes/calendarInternal';
 import { createCalendarRouter } from './routes/calendar';
+import { CalendarApplicationService } from './application/calendar';
 import { createGoogleOAuthCallbackRouter, createGoogleOAuthUserRouter } from './routes/googleOAuth';
 import {
   GoogleOAuthConfig, GoogleOAuthHttpClient, GoogleOAuthPort, GoogleOAuthService, loadGoogleOAuthConfig,
@@ -207,7 +208,11 @@ export function createApp(options: CreateAppOptions = {}) {
 
   app.use(requireTrustedBrowserOrigin(config.corsAllowOrigins, auditRejection));
   app.use('/tasks', requireTaskScope(auditRejection), createTasksRouter());
-  app.use('/calendar', createCalendarRouter(auditRejection));
+  app.use('/calendar', createCalendarRouter(
+    auditRejection,
+    new CalendarApplicationService(),
+    Boolean(googleOAuthService),
+  ));
   if (googleOAuthService) {
     app.use('/calendar/oauth', createGoogleOAuthUserRouter(googleOAuthService, auditRejection));
   }

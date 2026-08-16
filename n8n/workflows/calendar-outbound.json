@@ -56,6 +56,114 @@
       }
     },
     {
+      "id": "outbound-route-work",
+      "name": "Route Claimed Calendar Work",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-200, 0],
+      "parameters": { "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" }, "conditions": [{ "id": "manual-sync", "leftValue": "={{ $json.type }}", "rightValue": "calendar.sync.requested", "operator": { "type": "string", "operation": "equals" } }], "combinator": "and" }, "options": {} }
+    },
+    {
+      "id": "outbound-sign-sync-changes",
+      "name": "Sign Manual Sync Changes Pull",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [20, -180],
+      "parameters": {
+        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/provider/changes';\nconst body = { connectionId: $json.provider.connectionId, checkpoint: $json.checkpoint };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+      }
+    },
+    {
+      "id": "outbound-pull-sync-changes",
+      "name": "Pull Manual Sync Changes Through Node",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, -180],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EISENHOWER_NODE_INTERNAL_API_URL + '/internal/calendar/provider/changes' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
+        ] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.signedBody }}",
+        "options": { "timeout": 15000 }
+      }
+    },
+    {
+      "id": "outbound-expand-sync-changes",
+      "name": "Expand Manual Sync Changes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, -180],
+      "parameters": {
+        "jsCode": "const claimed = $('Claim Calendar Outbox Batch').item.json;\nconst payload = $json.body ?? $json;\nconst page = typeof payload === 'string' ? JSON.parse(payload) : payload;\nconst commands = [];\nif (page.resetRequired) commands.push({ operationId: `${claimed.eventId}:reset`, tenantId: claimed.tenantId, ownerId: claimed.ownerId, connectionId: claimed.provider.connectionId, kind: 'sync_token_gone' });\nfor (const event of (page.events || [])) {\n  const base = { operationId: `${claimed.eventId}:event:${event.id}:${event.etag}`, tenantId: claimed.tenantId, ownerId: claimed.ownerId, connectionId: claimed.provider.connectionId, providerEventId: event.id, providerEtag: event.etag };\n  if (event.status === 'cancelled') commands.push({ ...base, kind: 'event_deleted' });\n  else if (event.start && event.start.dateTime) commands.push({ ...base, kind: 'event_changed', title: event.summary || '', dueAt: event.start.dateTime, timeZone: event.start.timeZone || 'UTC' });\n}\nconst token = page.nextPageToken || page.nextSyncToken;\nif (token) commands.push({ operationId: `${claimed.eventId}:checkpoint:${token}`, tenantId: claimed.tenantId, ownerId: claimed.ownerId, connectionId: claimed.provider.connectionId, kind: 'sync_checkpoint', ...(page.nextPageToken ? { nextPageToken: page.nextPageToken } : {}), ...(page.nextSyncToken ? { nextSyncToken: page.nextSyncToken } : {}) });\nif (!commands.length) throw new Error('calendar_sync_page_empty');\nconst batchSize = 250;\nconst batches = [];\nfor (let offset = 0; offset < commands.length; offset += batchSize) batches.push(commands.slice(offset, offset + batchSize));\nreturn batches.map((batch) => ({ json: { commands: batch } }));"
+      }
+    },
+    {
+      "id": "outbound-sign-sync-apply",
+      "name": "Sign Manual Sync Apply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [740, -180],
+      "parameters": {
+        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/sync/apply-batch';\nconst body = { commands: $json.commands };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+      }
+    },
+    {
+      "id": "outbound-apply-sync",
+      "name": "Apply Manual Sync Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [980, -180],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EISENHOWER_NODE_INTERNAL_API_URL + '/internal/calendar/sync/apply-batch' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
+        ] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.signedBody }}",
+        "options": { "timeout": 15000 }
+      }
+    },
+    {
+      "id": "outbound-confirm-manual-sync",
+      "name": "Confirm Every Manual Sync Batch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1220, -180],
+      "parameters": {
+        "jsCode": "const expected = $('Expand Manual Sync Changes').all().length;\nconst applied = $input.all().length;\nif (applied !== expected) throw new Error('calendar_sync_batch_incomplete');\nreturn [{ json: { manualSyncApplied: true } }];"
+      }
+    },
+    {
+      "id": "outbound-collapse-manual-sync-failures",
+      "name": "Collapse Manual Sync Failures",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1220, -40],
+      "parameters": {
+        "jsCode": "return [{ json: { manualSyncFailed: true } }];"
+      }
+    },
+    {
       "id": "outbound-sign-provider",
       "name": "Sign Outbound Provider Dispatch",
       "type": "n8n-nodes-base.code",
@@ -74,6 +182,7 @@
       "retryOnFail": true,
       "maxTries": 5,
       "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput",
       "parameters": {
         "method": "POST",
         "url": "={{ $env.EISENHOWER_NODE_INTERNAL_API_URL + '/internal/calendar/provider/outbound' }}",
@@ -90,13 +199,47 @@
       }
     },
     {
+      "id": "outbound-sign-failure-ack",
+      "name": "Sign Outbox Failure Acknowledgement",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [560, 180],
+      "parameters": {
+        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/outbox/acknowledge';\nconst claimed = $('Claim Calendar Outbox Batch').item.json;\nconst body = { eventId: claimed.eventId, leaseId: claimed.leaseId, delivered: false, error: 'provider_dispatch_failed' };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+      }
+    },
+    {
+      "id": "outbound-failure-ack",
+      "name": "Acknowledge Calendar Outbox Failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, 180],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EISENHOWER_NODE_INTERNAL_API_URL + '/internal/calendar/outbox/acknowledge' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
+        ] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.signedBody }}",
+        "options": { "timeout": 5000 }
+      }
+    },
+    {
       "id": "outbound-sign-ack",
       "name": "Sign Outbox Acknowledgement",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [320, 0],
       "parameters": {
-        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/outbox/acknowledge';\nconst claimed = $('Claim Calendar Outbox Batch').item.json;\nconst body = { eventId: claimed.eventId, delivered: true, providerEventId: $json.providerEventId, providerEtag: $json.providerEtag, connectionId: $json.connectionId };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/outbox/acknowledge';\nconst claimed = $('Claim Calendar Outbox Batch').item.json;\nconst body = { eventId: claimed.eventId, leaseId: claimed.leaseId, delivered: true, providerEventId: $json.providerEventId, providerEtag: $json.providerEtag, connectionId: $json.connectionId };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
       }
     },
     {
@@ -128,10 +271,19 @@
     "Poll Calendar Outbox": { "main": [[{ "node": "Sign Outbox Claim", "type": "main", "index": 0 }]] },
     "Sign Outbox Claim": { "main": [[{ "node": "Claim Calendar Outbox Batch", "type": "main", "index": 0 }]] },
     "Claim Calendar Outbox Batch": { "main": [[{ "node": "Continue Only With Claimed Event", "type": "main", "index": 0 }]] },
-    "Continue Only With Claimed Event": { "main": [[{ "node": "Sign Outbound Provider Dispatch", "type": "main", "index": 0 }]] },
+    "Continue Only With Claimed Event": { "main": [[{ "node": "Route Claimed Calendar Work", "type": "main", "index": 0 }]] },
+    "Route Claimed Calendar Work": { "main": [[{ "node": "Sign Manual Sync Changes Pull", "type": "main", "index": 0 }], [{ "node": "Sign Outbound Provider Dispatch", "type": "main", "index": 0 }]] },
+    "Sign Manual Sync Changes Pull": { "main": [[{ "node": "Pull Manual Sync Changes Through Node", "type": "main", "index": 0 }]] },
+    "Pull Manual Sync Changes Through Node": { "main": [[{ "node": "Expand Manual Sync Changes", "type": "main", "index": 0 }], [{ "node": "Sign Outbox Failure Acknowledgement", "type": "main", "index": 0 }]] },
+    "Expand Manual Sync Changes": { "main": [[{ "node": "Sign Manual Sync Apply", "type": "main", "index": 0 }]] },
+    "Sign Manual Sync Apply": { "main": [[{ "node": "Apply Manual Sync Page", "type": "main", "index": 0 }]] },
+    "Apply Manual Sync Page": { "main": [[{ "node": "Confirm Every Manual Sync Batch", "type": "main", "index": 0 }], [{ "node": "Collapse Manual Sync Failures", "type": "main", "index": 0 }]] },
+    "Confirm Every Manual Sync Batch": { "main": [[{ "node": "Sign Outbox Acknowledgement", "type": "main", "index": 0 }]] },
+    "Collapse Manual Sync Failures": { "main": [[{ "node": "Sign Outbox Failure Acknowledgement", "type": "main", "index": 0 }]] },
     "Sign Outbound Provider Dispatch": { "main": [[{ "node": "Dispatch Outbound Through Node", "type": "main", "index": 0 }]] },
-    "Dispatch Outbound Through Node": { "main": [[{ "node": "Sign Outbox Acknowledgement", "type": "main", "index": 0 }]] },
-    "Sign Outbox Acknowledgement": { "main": [[{ "node": "Acknowledge Calendar Outbox Result", "type": "main", "index": 0 }]] }
+    "Dispatch Outbound Through Node": { "main": [[{ "node": "Sign Outbox Acknowledgement", "type": "main", "index": 0 }], [{ "node": "Sign Outbox Failure Acknowledgement", "type": "main", "index": 0 }]] },
+    "Sign Outbox Acknowledgement": { "main": [[{ "node": "Acknowledge Calendar Outbox Result", "type": "main", "index": 0 }]] },
+    "Sign Outbox Failure Acknowledgement": { "main": [[{ "node": "Acknowledge Calendar Outbox Failure", "type": "main", "index": 0 }]] }
   },
   "pinData": {},
   "meta": {},

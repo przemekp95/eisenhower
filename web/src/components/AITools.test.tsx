@@ -17,7 +17,9 @@ function renderTools(overrides: Partial<React.ComponentProps<typeof AITools>> = 
 async function waitForCapabilityCheck() {
   await waitFor(() =>
     expect(
-      screen.queryByRole('status', { name: /checking AI availability|sprawdzam dostępność AI/i })
+      screen.queryByRole('status', {
+        name: /checking task assistance availability|sprawdzam dostępność pomocy/i,
+      })
     ).not.toBeInTheDocument()
   );
 }
@@ -74,10 +76,7 @@ describe('AITools task assistant', () => {
   it('combines task context, priority and grounded answers in one tab', async () => {
     renderTools({ taskDescription: 'Current context' });
     await waitForCapabilityCheck();
-    expect(screen.getByRole('tab', { name: 'Task assistant' })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
+    expect(screen.getByRole('tab', { name: 'Task help' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('heading', { name: 'urgent roadmap' })).toBeInTheDocument();
     expect(screen.getByText('Current context')).toBeInTheDocument();
     expect(screen.getByText('Task priority')).toBeInTheDocument();
@@ -87,8 +86,8 @@ describe('AITools task assistant', () => {
 
   it('navigates utility tabs with arrow keys', () => {
     renderTools();
-    const assistant = screen.getByRole('tab', { name: 'Task assistant' });
-    const ocr = screen.getByRole('tab', { name: 'Read an image' });
+    const assistant = screen.getByRole('tab', { name: 'Task help' });
+    const ocr = screen.getByRole('tab', { name: 'Scan notes' });
     fireEvent.keyDown(assistant, { key: 'ArrowRight' });
     expect(ocr).toHaveAttribute('aria-selected', 'true');
     expect(ocr).toHaveFocus();
@@ -227,7 +226,7 @@ describe('AITools task assistant', () => {
     });
     renderTools({ onOCRTasksExtracted });
     await waitForCapabilityCheck();
-    fireEvent.click(screen.getByRole('tab', { name: 'Read an image' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Scan notes' }));
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [new File(['urgent outage'], 'tasks.txt', { type: 'text/plain' })] },
     });
@@ -256,13 +255,13 @@ describe('AITools task assistant', () => {
     });
     renderTools({ onOCRTasksExtracted: jest.fn().mockResolvedValue(2) });
     await waitForCapabilityCheck();
-    fireEvent.click(screen.getByRole('tab', { name: 'Read an image' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Scan notes' }));
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [new File(['urgent outage'], 'tasks.txt', { type: 'text/plain' })] },
     });
     await screen.findByDisplayValue('urgent outage');
     fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
-    await screen.findByText('OCR added 2 tasks to the matrix.');
+    await screen.findByText('Added 2 scanned tasks to the matrix.');
   });
 
   it('falls back safely when no OCR import callback is provided', async () => {
@@ -285,13 +284,13 @@ describe('AITools task assistant', () => {
     });
     renderTools();
     await waitForCapabilityCheck();
-    fireEvent.click(screen.getByRole('tab', { name: 'Read an image' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Scan notes' }));
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [new File(['urgent outage'], 'tasks.txt', { type: 'text/plain' })] },
     });
     await screen.findByDisplayValue('urgent outage');
     fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
-    await screen.findByText('Added: 0. Not added: 1. Improve suggestions: no.');
+    await screen.findByText('Added: 0. Not added: 1.');
   });
 
   it('reports completed batch review', async () => {
@@ -306,9 +305,9 @@ describe('AITools task assistant', () => {
   });
 
   it.each([
-    [1, 'OCR dodał 1 zadanie do macierzy.'],
-    [3, 'OCR dodał 3 zadania do macierzy.'],
-    [12, 'OCR dodał 12 zadań do macierzy.'],
+    [1, 'Dodano 1 zeskanowane zadanie do macierzy.'],
+    [3, 'Dodano 3 zeskanowane zadania do macierzy.'],
+    [12, 'Dodano 12 zeskanowanych zadań do macierzy.'],
   ])('uses Polish OCR pluralization for %i imported tasks', async (count, summary) => {
     localStorage.setItem('eisenhower-language', 'pl');
     mockedApi.extractTasksFromImage.mockResolvedValue({
@@ -330,7 +329,7 @@ describe('AITools task assistant', () => {
     });
     renderTools({ onOCRTasksExtracted: jest.fn().mockResolvedValue(count) });
     await waitForCapabilityCheck();
-    fireEvent.click(screen.getByRole('tab', { name: 'Odczytaj obraz' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Skanuj notatki' }));
     fireEvent.change(screen.getByTestId('image-upload-input'), {
       target: { files: [new File(['zadanie'], 'tasks.txt', { type: 'text/plain' })] },
     });
@@ -355,7 +354,7 @@ describe('AITools task assistant', () => {
 
     renderTools({ onClose });
 
-    await screen.findByText(/AI help is currently unavailable/i);
+    await screen.findByText(/Task assistance is currently unavailable/i);
     expect(screen.queryByRole('button', { name: 'Suggest quadrant' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Check sources' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /choose the quadrant manually/i }));
@@ -406,7 +405,7 @@ describe('AITools task assistant', () => {
     renderTools();
     await waitForCapabilityCheck();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Read an image' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Scan notes' }));
     expect(screen.queryByTestId('image-upload-input')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /choose the quadrant manually/i })).toBeVisible();
     fireEvent.click(screen.getByRole('tab', { name: 'Bulk review' }));
@@ -425,12 +424,11 @@ describe('AITools task assistant', () => {
 
     renderTools();
 
-    expect(screen.getByRole('status', { name: /checking AI availability/i })).toHaveAttribute(
-      'aria-busy',
-      'true'
-    );
+    expect(
+      screen.getByRole('status', { name: /checking task assistance availability/i })
+    ).toHaveAttribute('aria-busy', 'true');
     expect(screen.queryByRole('button', { name: 'Suggest quadrant' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Read an image' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Scan notes' }));
     expect(screen.queryByTestId('image-upload-input')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: 'Bulk review' }));
     expect(screen.queryByRole('button', { name: 'Review task list' })).not.toBeInTheDocument();
@@ -456,10 +454,10 @@ describe('AITools task assistant', () => {
 
     renderTools();
 
-    await screen.findByText(/AI availability could not be checked/i);
+    await screen.findByText(/Task assistance availability could not be checked/i);
     expect(screen.queryByText('private provider details')).not.toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole('button', { name: /check AI availability again/i })[0]);
-    await screen.findByText(/AI help is available/i);
+    fireEvent.click(screen.getAllByRole('button', { name: /check availability again/i })[0]);
+    await screen.findByText(/Task assistance is available/i);
     expect(screen.getByRole('button', { name: 'Suggest quadrant' })).toBeEnabled();
   });
 

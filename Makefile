@@ -7,7 +7,7 @@ BACKEND_AI_PIP ?= $(BACKEND_AI_VENV)/bin/pip
 BACKEND_AI_PYTHONPATH ?=
 BACKEND_AI_TEST_ENV = $(if $(BACKEND_AI_PYTHONPATH),PYTHONPATH=$(BACKEND_AI_PYTHONPATH),)
 
-.PHONY: setup test test-bdd test-ai test-api-client test-mcp typecheck-node lint lint-ai format format-web format-check format-check-web build audit-production verify dev-web dev-api dev-ai dev-mobile
+.PHONY: setup test test-bdd test-ai test-api-client test-mcp test-n8n test-n8n-runtime typecheck-node lint lint-ai format format-web format-check format-check-web build audit-production verify dev-web dev-api dev-ai dev-mobile
 
 setup:
 	cd backend-node && $(NPM) ci
@@ -35,6 +35,13 @@ test-api-client:
 
 test-mcp:
 	UV_LINK_MODE=copy $(UV) run --project mcp/eisenhower_adapter --locked python -W error -m unittest discover -s mcp/eisenhower_adapter/tests -v
+
+test-n8n:
+	$(PYTHON) -m unittest discover -s n8n/tests -p 'test_*.py' -v
+	node --test n8n/tests/*.test.mjs
+
+test-n8n-runtime:
+	n8n/scripts/rehearse-runtime.sh
 
 typecheck-node:
 	cd backend-node && $(NPM) exec -- tsc --noEmit -p tsconfig.json
@@ -74,6 +81,7 @@ verify:
 	$(MAKE) audit-production
 	$(MAKE) test-api-client
 	$(MAKE) test-mcp
+	$(MAKE) test-n8n
 	cd backend-node && $(NPM) run build && $(NPM) run test:coverage
 	$(MAKE) test-bdd
 	cd web && $(NPM) run format:check && $(NPM) run build && $(NPM) run test:coverage && $(NPM) run test:integration

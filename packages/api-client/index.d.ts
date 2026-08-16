@@ -51,10 +51,17 @@ export interface TaskInputDto {
 
 export interface CalendarStatusDto {
   status: 'disconnected' | 'connected' | 'pending';
+  canConnect: boolean;
   connection: null | { id: string; provider: 'google'; calendarId: string };
-  syncState?: Record<string, unknown> | null;
+  syncState?: {
+    fullResyncRequired: boolean;
+    lastRequestedAt?: string;
+    lastCompletedAt?: string;
+  } | null;
   openConflicts?: number;
   pendingOutbox?: number;
+  failedSyncCount?: number;
+  syncProblem?: boolean;
 }
 
 export interface CalendarConflictDto {
@@ -309,51 +316,12 @@ export type AIProviderName = 'local_model' | 'tesseract';
 
 export interface AICapabilitiesDto {
   classification: boolean;
-  reasoned_local_analysis?: boolean;
-  retrieval_augmented_generation?: boolean;
-  knowledge_retrieval?: boolean;
-  local_similar_examples?: boolean;
-  /** @deprecated Always false; no production LangChain analysis provider exists. */
-  langchain_analysis: boolean;
+  reasoned_local_analysis: boolean;
+  retrieval_augmented_generation: boolean;
+  knowledge_retrieval: boolean;
+  local_similar_examples: boolean;
   ocr: boolean;
   batch_analysis: boolean;
-  training_management: boolean;
-  providers: {
-    local_model: boolean;
-    tesseract?: boolean;
-    ocr: boolean;
-  };
-  provider_controls?: {
-    local_model: AIProviderControlDto;
-    tesseract: AIProviderControlDto;
-  };
-  legacy?: {
-    langchain_analysis: false;
-    analyze_langchain_route: 'deprecated_alias';
-    use_rag_parameter: 'deprecated_alias_for_similar_examples';
-  };
-  model?: {
-    ready: boolean;
-    name: string;
-    encoder_name: string;
-    artifact_path: string;
-    index_path: string;
-    trained_at?: string | null;
-    validation_skipped?: boolean;
-    last_error?: string | null;
-    examples_seen?: number;
-  };
-  device: {
-    type: string;
-    name: string;
-    vendor: string;
-    runtime: string;
-    runtime_version: string | null;
-    torch_device: string;
-    count: number;
-    cuda_version: string | null;
-    accelerated: boolean;
-  };
 }
 
 export interface TrainingDataClearResultDto {
@@ -446,12 +414,14 @@ export const CALENDAR_API_PATHS: {
   readonly status: '/calendar/status';
   readonly syncRequests: '/calendar/sync-requests';
   readonly conflicts: '/calendar/conflicts';
+  readonly oauthStart: '/calendar/oauth/start';
+  readonly oauthDisconnect: '/calendar/oauth/disconnect';
 };
 
 export interface TaskApiClient {
   paths: typeof TASK_API_PATHS;
   listTasks(lifecycle?: TaskLifecycleFilter): Promise<TaskDto[]>;
-  listDelegatedTasks(): Promise<TaskDto[]>;
+  listDelegatedTasks(lifecycle?: TaskLifecycleFilter): Promise<TaskDto[]>;
   createTask(task: TaskInputDto, idempotencyKey?: string): Promise<TaskDto>;
   updateTask(id: string, patch: Partial<TaskInputDto>, revision?: number): Promise<TaskDto>;
   transitionTaskLifecycle(
@@ -476,6 +446,8 @@ export interface TaskApiClient {
   ): Promise<TaskDto>;
   deleteTask(id: string, revision?: number): Promise<null>;
   getCalendarStatus(): Promise<CalendarStatusDto>;
+  startCalendarConnection(returnPath: string): Promise<{ authorizationUrl: string }>;
+  disconnectCalendar(): Promise<null>;
   requestCalendarSync(idempotencyKey: string): Promise<{ eventId: string }>;
   listCalendarConflicts(): Promise<CalendarConflictDto[]>;
   resolveCalendarConflict(

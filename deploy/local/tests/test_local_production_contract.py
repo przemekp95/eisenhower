@@ -13,6 +13,7 @@ GATEWAY_CONFIG_PATH = ROOT / "deploy" / "local" / "calendar-gateway.conf.templat
 ACCESS_GATEWAY_CONFIG_PATH = ROOT / "deploy" / "local" / "access-gateway.conf.template"
 DEPLOY_SCRIPT_PATH = ROOT / "deploy" / "local" / "deploy.sh"
 LOCAL_README_PATH = ROOT / "deploy" / "local" / "README.md"
+N8N_RECONCILE_SCRIPT_PATH = ROOT / "n8n" / "scripts" / "reconcile-runtime-container.sh"
 KEYCLOAK_REALM_PATH = ROOT / "deploy" / "local" / "identity" / "eisenhower-realm.json"
 KEYCLOAK_USER_PROFILE_PATH = (
   ROOT / "deploy" / "local" / "identity" / "eisenhower-user-profile.json"
@@ -219,6 +220,19 @@ class LocalProductionContractTest(unittest.TestCase):
     render_case = script[script.index("  render-access-core)"):script.index("  render-retrieval)")]
     self.assertIn("prepare_access_core_render_inputs", render_case)
     self.assertNotIn("prepare_access_core_render_inputs", script[script.index("render() {"):script.index("validate_lifecycle_auth() {")])
+
+  def test_n8n_reconcile_restores_the_database_and_restarts_service_on_failure(self):
+    deploy_script = DEPLOY_SCRIPT_PATH.read_text()
+    reconcile_script = N8N_RECONCILE_SCRIPT_PATH.read_text()
+
+    self.assertIn('if ! compose_base run --rm --no-deps', deploy_script)
+    self.assertGreaterEqual(
+      deploy_script.count('compose_base up --no-deps -d --wait n8n'),
+      2,
+    )
+    self.assertIn('database.sqlite.before-reconcile', reconcile_script)
+    self.assertIn('trap restore_database EXIT HUP INT TERM', reconcile_script)
+    self.assertIn('cp "$database_backup" "$database_path"', reconcile_script)
 
   def test_amd_inference_is_opt_in_and_uses_the_pinned_rocm_model_contract(self):
     inference = self.amd_services["inference"]

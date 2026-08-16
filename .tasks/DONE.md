@@ -1,5 +1,29 @@
 # Done
 
+## TASK-056: Make Calendar and automation a coherent business-only product flow
+**Priority:** P0 | **Tags:** product, calendar, n8n, web, reliability, accessibility
+
+Close the verified gaps between the web product, Node/FastAPI contracts and live n8n orchestration. Every ordinary user and business administrator must see only business concepts and actions; provider, model, workflow, queue, token, index and infrastructure controls remain outside the product UI.
+
+### Plan
+
+- Freeze regression contracts for the real n8n 2.4.6 workflow shape, Calendar manual/inbound/outbound behavior, lease recovery, failure acknowledgement and idempotent conflict resolution.
+- Make workflow import/activation reproducible and drift-detectable, while keeping n8n, queues, dead letters and provider diagnostics private to operators.
+- Add a complete accessible Google Calendar connect, disconnect, sync, progress and conflict flow expressed only in business language.
+- Integrate the task-centered assistant behind business capability flags while removing browser administration, training and operator credentials.
+- Correct delegated lifecycle filtering and retry-safe AI/OCR task creation, then cover the affected desktop/mobile-width behavior with contract, integration and Playwright tests.
+- Run focused red-green loops, broad repository verification and a real imported-n8n runtime rehearsal without deploying or changing public production.
+
+### Outcome
+
+Removed technical administration, provider, model, training and operator credentials from the web and mobile product clients. Public AI capabilities expose only business feature availability; technical endpoints require the separate `ai:operate` scope, and a business administrator without that scope is explicitly denied. Preserved the task-centered assistant merged independently on `dev`, with explicit preview/confirmation for sourced descriptions and priority changes, while capability-gating each business action. Added accessible PL/EN Google Calendar connect, disconnect, bounded progress polling, status refresh, conflict decisions, truthful permanent-failure state and business retry across desktop, 390 px and 320 px.
+
+Hardened Calendar end to end: incremental Google pulls drain bounded pagination, large change sets are applied in safe 250-command batches with one success acknowledgement only after every batch, dead letters are visible without technical details and are transactionally requeued on retry, leases prevent overlapping workers, conflict resolution increments task revisions, and outbox delivery plus binding persistence is atomic. Deterministic n8n reconciliation imports five stable workflow identities, publishes only eligible workflows, removes exact-name duplicates, detects active drift, restores the SQLite database on failed reconciliation and converges to a no-op second pass.
+
+Fresh verification passed after integration with current `dev`, including the complete repository gate, a disposable real n8n 2.4.6 import/publish/drift/reconcile rehearsal and Playwright across desktop, 390 px and 320 px. No deployment, public production change or human usability acceptance was performed.
+
+---
+
 ## TASK-055: Preserve a usable product experience without GPU inference
 **Priority:** P0 | **Tags:** ux, reliability, ai, gpu, web, mobile, deployment
 

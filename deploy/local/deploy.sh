@@ -396,6 +396,32 @@ configure_identity_profile() {
   '
 }
 
+reconcile_n8n_workflows() {
+  rag_ready=false
+  if test "${N8N_RAG_WORKFLOWS_ENABLED:-false}" = true; then
+    test -n "${N8N_RAG_HEADER_AUTH_CREDENTIAL_ID:-}" || {
+      echo "N8N_RAG_HEADER_AUTH_CREDENTIAL_ID is required to publish RAG workflows" >&2
+      exit 1
+    }
+    compose exec -T knowledge-service \
+      curl -fsS http://127.0.0.1:8000/health/live >/dev/null
+    rag_ready=true
+  fi
+
+  # The CLI and the n8n process must never write the SQLite database
+  # concurrently. Reconciliation validates convergence before restart.
+  compose_base stop n8n
+  if ! compose_base run --rm --no-deps \
+      --entrypoint /repo-n8n/scripts/reconcile-runtime-container.sh \
+      n8n "$rag_ready"; then
+    # The container script restores its pre-reconcile database snapshot.
+    # Bring the last known runtime back before reporting the failed deployment.
+    compose_base up --no-deps -d --wait n8n
+    return 1
+  fi
+  compose_base up --no-deps -d --wait n8n
+}
+
 render() {
   compose_base config --quiet
   compose_retrieval config --quiet
@@ -602,6 +628,7 @@ deploy_full() {
   compose up --no-deps -d --wait knowledge-service
   compose_full up --no-deps -d --wait ai-service classifier-service api-service web mcp-service
   compose_full up --no-deps -d rag-worker
+  reconcile_n8n_workflows
   compose_full up --no-deps -d --wait access-gateway calendar-gateway
   smoke
 }
@@ -727,9 +754,13 @@ case "$action" in
     ;;
   sleep-response) sleep_response ;;
   wake-response) wake_response ;;
+  reconcile-n8n)
+    render
+    reconcile_n8n_workflows
+    ;;
   rollback) rollback ;;
   *)
-    echo "Usage: $0 {build|render|render-core|render-access-core|render-retrieval|render-response|render-full|deploy|deploy-core|deploy-access-core|deploy-retrieval|deploy-response|deploy-full|sleep-response|wake-response|smoke|rollback}" >&2
+    echo "Usage: $0 {build|render|render-core|render-access-core|render-retrieval|render-response|render-full|deploy|deploy-core|deploy-access-core|deploy-retrieval|deploy-response|deploy-full|sleep-response|wake-response|reconcile-n8n|smoke|rollback}" >&2
     exit 2
     ;;
 esac
