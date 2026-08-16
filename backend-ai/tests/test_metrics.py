@@ -14,6 +14,7 @@ def test_prometheus_metrics_are_aggregate_and_do_not_leak_tenant_or_prompt():
   metrics.observe_memory("reconcile", "success", duration_seconds=0.02)
   metrics.set_generation_status("open", failures=3)
   metrics.set_job_depth("queued", 3)
+  metrics.set_job_depths_by_type({("rag.extract_document", "queued"): 2})
   metrics.set_release_sha("a" * 40)
   metrics.observe_audit("success")
 
@@ -35,6 +36,10 @@ def test_prometheus_metrics_are_aggregate_and_do_not_leak_tenant_or_prompt():
   assert 'eisenhower_generation_circuit_state{state="open"} 1' in rendered
   assert "eisenhower_generation_circuit_failures 3" in rendered
   assert 'eisenhower_job_queue_depth{status="queued"} 3' in rendered
+  assert (
+    'eisenhower_job_queue_depth_by_type{job_type="rag.extract_document",status="queued"} 2'
+    in rendered
+  )
   assert f'eisenhower_release_info{{sha="{"a" * 40}"}} 1' in rendered
   assert 'eisenhower_audit_events_total{outcome="success"} 1' in rendered
   assert "tenant" not in rendered
@@ -50,6 +55,17 @@ def test_prometheus_metrics_exposes_durable_worker_heartbeat_age():
   assert "eisenhower_job_worker_heartbeat_age_seconds 7.250000" in metrics.render()
 
 
+def test_prometheus_queue_snapshots_replace_stale_lifecycle_series():
+  metrics = MetricsRegistry()
+  metrics.set_job_depths({"queued": 2})
+  metrics.set_job_depths({"completed": 1})
+
+  rendered = metrics.render()
+
+  assert 'eisenhower_job_queue_depth{status="completed"} 1' in rendered
+  assert 'eisenhower_job_queue_depth{status="queued"}' not in rendered
+
+
 def test_prometheus_labels_are_bounded_instead_of_accepting_private_or_cardinal_values():
   metrics = MetricsRegistry()
   metrics.observe_rag_result("private-user-id", "private-document-title")
@@ -58,6 +74,7 @@ def test_prometheus_labels_are_bounded_instead_of_accepting_private_or_cardinal_
   metrics.observe_memory("private-memory-id", "private-content", duration_seconds=1)
   metrics.observe_information_delta("private-known-statement")
   metrics.observe_response_canary("private-user-id")
+  metrics.set_job_depths_by_type({("private-job-name", "private-state"): 1})
 
   rendered = metrics.render()
 
@@ -78,3 +95,4 @@ def test_prometheus_labels_are_bounded_instead_of_accepting_private_or_cardinal_
   assert 'operation="other",outcome="other"' in rendered
   assert 'eisenhower_response_canary_decisions_total{outcome="other"} 1' in rendered
   assert 'status="other"' in rendered
+  assert 'job_type="other",status="other"' in rendered

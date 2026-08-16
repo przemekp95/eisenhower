@@ -844,6 +844,13 @@ describe('task routes', () => {
     ]);
   });
 
+  it('defines a lifecycle-aware pagination index matching filtered task pages', () => {
+    expect(TaskModel.schema.indexes()).toContainEqual([
+      { tenantId: 1, ownerId: 1, lifecycleState: 1, createdAt: -1, _id: -1 },
+      expect.any(Object),
+    ]);
+  });
+
   it('returns 404 for a missing task on update', async () => {
     const id = new mongoose.Types.ObjectId().toString();
     const response = await api.put(`/tasks/${id}`).set('If-Match', '"0"').send({ urgent: true });

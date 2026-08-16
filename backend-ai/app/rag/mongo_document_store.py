@@ -24,8 +24,19 @@ class MongoCanonicalDocumentStore:
       name="canonical_tenant_document_unique",
     )
     self.collection.create_index(
-      [("tenant_id", 1), ("project_id", 1), ("projection_pending", 1)],
-      name="canonical_projection_pending",
+      [("tenant_id", 1), ("projection_pending", 1), ("source_sequence", 1), ("document_id", 1)],
+      name="canonical_pending_by_tenant",
+    )
+    self.collection.create_index(
+      [
+        ("tenant_id", 1), ("project_id", 1), ("projection_pending", 1),
+        ("source_sequence", 1), ("document_id", 1),
+      ],
+      name="canonical_pending_by_project",
+    )
+    self.collection.create_index(
+      [("tenant_id", 1), ("project_id", 1), ("document_id", 1)],
+      name="canonical_project_documents",
     )
 
   def stage(self, document: SourceDocument) -> CanonicalWriteStatus:

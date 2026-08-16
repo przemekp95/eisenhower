@@ -1,5 +1,6 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
+import sqlite3
 
 import pytest
 
@@ -23,6 +24,41 @@ def test_sqlite_job_queue_is_durable_and_idempotent(tmp_path):
 
   assert created.job_id == duplicate.job_id
   assert reopened.get(created.job_id).status == "queued"
+
+
+def test_sqlite_job_queue_uses_durable_wal_connection_settings(tmp_path):
+  path = tmp_path / "jobs.sqlite3"
+  queue = SqliteJobQueue(path)
+
+  with sqlite3.connect(path) as connection:
+    assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+  with queue._connect() as connection:
+    assert connection.execute("PRAGMA synchronous").fetchone()[0] == 2
+    assert connection.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
+    assert connection.execute("PRAGMA wal_autocheckpoint").fetchone()[0] == 1000
+
+
+def test_sqlite_job_queue_accepts_document_extraction_commands(tmp_path):
+  queue = SqliteJobQueue(tmp_path / "jobs.sqlite3")
+
+  queued = queue.enqueue(
+    "extract-event-1",
+    "rag.extract_document",
+    {"tenant_id": "tenant-a", "document_id": "doc-1"},
+  )
+
+  assert queued.job_type == "rag.extract_document"
+
+
+def test_sqlite_job_queue_reports_bounded_depth_by_job_type_and_status(tmp_path):
+  queue = SqliteJobQueue(tmp_path / "jobs.sqlite3")
+  queue.enqueue("extract-event-1", "rag.extract_document", {"tenant_id": "tenant-a"})
+  queue.enqueue("upsert-event-1", "rag.upsert", {"tenant_id": "tenant-a"})
+
+  assert queue.counts_by_type_and_status() == {
+    ("rag.extract_document", "queued"): 1,
+    ("rag.upsert", "queued"): 1,
+  }
 
 
 def test_sqlite_job_queue_treats_canonical_payload_as_the_idempotent_request(tmp_path):
@@ -51,6 +87,25 @@ def test_sqlite_job_queue_is_bounded_without_breaking_idempotent_replay(tmp_path
     queue.enqueue("event-2", "rag.upsert", {"tenant_id": "tenant-a"})
 
   assert queue.get(first.job_id) == first
+
+
+def test_pruned_terminal_replay_bypasses_capacity_but_rejects_changed_payload(tmp_path):
+  queue = SqliteJobQueue(tmp_path / "jobs.sqlite3", max_queued_jobs=1)
+  completed_at = datetime.now(timezone.utc) + timedelta(seconds=1)
+  original_payload = {"tenant_id": "tenant-a"}
+  first = queue.enqueue("event-1", "rag.upsert", original_payload)
+  claimed = queue.claim_next("worker-a", now=completed_at)
+  assert claimed is not None
+  queue.complete(first.job_id, "worker-a", now=completed_at)
+  assert queue.prune_terminal_jobs(before=completed_at + timedelta(seconds=1), limit=1) == 1
+  queue.enqueue("event-2", "rag.upsert", {"tenant_id": "tenant-b"})
+
+  replay = queue.enqueue("event-1", "rag.upsert", original_payload)
+
+  assert replay.job_id == first.job_id
+  assert replay.status == "completed"
+  with pytest.raises(JobConflictError, match="already bound"):
+    queue.enqueue("event-1", "rag.upsert", {"tenant_id": "tenant-c"})
 
 
 @pytest.mark.parametrize(
@@ -119,6 +174,43 @@ def test_webhook_replay_records_outlive_the_signature_window(tmp_path):
   retry_signature = verifier.sign_webhook(retry_timestamp, raw_body)
 
   assert verifier.verify(retry_timestamp, retry_signature, "event-1", raw_body, **context) is False
+
+
+def test_webhook_replay_cleanup_is_indexed_bounded_and_uses_wal(tmp_path):
+  path = tmp_path / "replay.sqlite3"
+  now = 1_800_000_000
+  verifier = WebhookReplayVerifier(
+    path,
+    secret="test-webhook-secret",
+    window_seconds=300,
+    replay_retention_seconds=3600,
+    cleanup_batch_size=2,
+    clock=lambda: now,
+  )
+  with sqlite3.connect(path) as connection:
+    connection.executemany(
+      "INSERT INTO webhook_events(event_id, accepted_at) VALUES (?, ?)",
+      [(f"old-{sequence}", now - 3601) for sequence in range(5)],
+    )
+
+  assert verifier.reserve_event("current") is True
+
+  with sqlite3.connect(path) as connection:
+    assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+    assert connection.execute(
+      "SELECT COUNT(*) FROM webhook_events WHERE accepted_at < ?", (now - 3600,)
+    ).fetchone()[0] == 3
+    plan = connection.execute(
+      "EXPLAIN QUERY PLAN SELECT event_id FROM webhook_events "
+      "WHERE accepted_at < ? ORDER BY accepted_at, event_id LIMIT 2",
+      (now - 3600,),
+    ).fetchall()
+  with verifier._connect() as connection:
+    assert connection.execute("PRAGMA synchronous").fetchone()[0] == 2
+    assert connection.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
+    assert connection.execute("PRAGMA wal_autocheckpoint").fetchone()[0] == 1000
+
+  assert "webhook_events_retention_idx" in " ".join(str(row) for row in plan)
 
 
 def test_webhook_parser_rejects_duplicate_non_finite_and_extra_fields():

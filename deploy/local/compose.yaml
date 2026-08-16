@@ -75,7 +75,16 @@ services:
   mongodb:
     <<: *common
     image: ${MONGODB_IMAGE:-mongo:7.0.24-jammy}
-    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    command:
+      - mongod
+      - --replSet
+      - rs0
+      - --bind_ip_all
+      - --wiredTigerCacheSizeGB
+      - ${MONGODB_CACHE_SIZE_GB:-0.25}
+    mem_limit: ${MONGODB_MEMORY_LIMIT:-1g}
+    cpus: ${MONGODB_CPUS:-1.0}
+    pids_limit: 512
     ports:
       - "${MONGODB_BIND_ADDRESS:-127.0.0.1}:${MONGODB_BIND_PORT:-27017}:27017"
     environment:
@@ -279,6 +288,7 @@ services:
     <<: *common
     image: ${AI_INGEST_IMAGE:?AI_INGEST_IMAGE must be a versioned tag or digest}
     command: ["python", "-m", "app.worker_runtime"]
+    init: true
     profiles: [retrieval, response, full]
     environment:
       - APP_ENV=production

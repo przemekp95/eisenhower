@@ -55,14 +55,19 @@ class MongoMemoryRepository:
       name="memory_scope_unique",
     )
     self.records.create_index(
-      [("tenant_id", 1), ("user_id", 1), ("updated_at", -1)],
-      name="memory_scope_export",
+      [("tenant_id", 1), ("user_id", 1), ("created_at", 1), ("memory_id", 1)],
+      name="memory_scope_list",
     )
     self.records.create_index(
       [("tenant_id", 1), ("user_id", 1), ("conflict_key", 1)],
       unique=True,
       partialFilterExpression={"status": MemoryStatus.ACTIVE.value},
       name="memory_active_conflict_unique",
+    )
+    self.records.create_index(
+      [("expires_at", 1)],
+      expireAfterSeconds=0,
+      name="memory_expiration_ttl",
     )
     self.idempotency.create_index(
       [("idempotency_key", 1)],
@@ -260,6 +265,10 @@ class MongoMemoryRepository:
     scope = stored.pop("scope")
     stored["tenant_id"] = scope["tenant_id"]
     stored["user_id"] = scope["user_id"]
+    for field in ("created_at", "updated_at", "expires_at"):
+      value = stored.get(field)
+      if isinstance(value, str):
+        stored[field] = datetime.fromisoformat(value)
     return stored
 
   @staticmethod

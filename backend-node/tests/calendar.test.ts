@@ -24,6 +24,24 @@ function signed(requestPath: string, body: unknown, method = 'POST') {
 }
 
 describe('calendar integration boundary', () => {
+  it('defines indexes matching scoped conflict and connection queries', () => {
+    expect(CalendarConnectionModel.schema.indexes()).toContainEqual([
+      { tenantId: 1, ownerId: 1, status: 1 },
+      expect.any(Object),
+    ]);
+    expect(CalendarConflictModel.schema.indexes()).toContainEqual([
+      { tenantId: 1, ownerId: 1, status: 1, createdAt: 1 },
+      expect.any(Object),
+    ]);
+    expect(CalendarConflictModel.schema.indexes()).toContainEqual([
+      { tenantId: 1, ownerId: 1, connectionId: 1, status: 1 },
+      expect.any(Object),
+    ]);
+    expect(CalendarOutboxModel.schema.indexes()).toContainEqual([
+      { tenantId: 1, ownerId: 1, status: 1 },
+      expect.any(Object),
+    ]);
+  });
   const app = createApp({
     aiHealthChecker: async () => 'healthy',
     databaseStatusResolver: () => 'connected',

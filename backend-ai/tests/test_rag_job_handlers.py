@@ -37,9 +37,91 @@ class RecordingVersions:
     self.versions[(tenant_id, document_id)] = source_sequence
 
 
+class RecordingDocumentExtraction:
+  def __init__(self, result=None):
+    self.calls = []
+    self.result = result or {"accepted": 1, "projected": 1, "pending": 0}
+
+  def ingest(self, source, *, scope, source_sequence, ocr=None):
+    self.calls.append((source, scope, source_sequence, ocr))
+    return self.result
+
+
 def test_handler_registry_exactly_matches_queue_allowlist():
   handlers = RagJobHandlers(RecordingIngestion(), None, chunking_version="char-v1")
   assert set(handlers.registry) == ALLOWED_JOB_TYPES
+
+
+def test_extract_document_validates_command_and_preserves_raw_upsert_contract():
+  extraction = RecordingDocumentExtraction()
+  handlers = RagJobHandlers(
+    RecordingIngestion(),
+    None,
+    chunking_version="char-v1",
+    extract_document=extraction,
+  )
+
+  handlers.extract_document({
+    "event_id": "event-extract-8",
+    "tenant_id": "tenant-a",
+    "source": "corpus/approved-documents/extraction-golden-en.html",
+    "scope": {
+      "tenant_id": "tenant-a",
+      "user_id": "owner-a",
+      "project_ids": ["project-a"],
+      "roles": [],
+    },
+    "source_sequence": 8,
+    "ocr": None,
+  })
+
+  source, scope, sequence, ocr = extraction.calls[0]
+  assert source.endswith("extraction-golden-en.html")
+  assert scope.tenant_id == "tenant-a"
+  assert scope.acl_subjects == [
+    "tenant:tenant-a", "user:owner-a", "project:project-a",
+  ]
+  assert sequence == 8
+  assert ocr is None
+
+
+@pytest.mark.parametrize("payload", [
+  {},
+  {"event_id": "e", "tenant_id": "t", "source": "approved.html", "scope": {"tenant_id": "t", "user_id": "u"}, "source_sequence": -1},
+  {"event_id": "e", "tenant_id": "other", "source": "approved.html", "scope": {"tenant_id": "t", "user_id": "u"}, "source_sequence": 1},
+  {"event_id": "e", "tenant_id": "t", "source": "approved.html", "scope": {"tenant_id": "t", "user_id": "u"}, "source_sequence": 1, "unexpected": True},
+])
+def test_extract_document_rejects_invalid_or_drifting_command(payload):
+  handlers = RagJobHandlers(
+    RecordingIngestion(),
+    None,
+    chunking_version="char-v1",
+    extract_document=RecordingDocumentExtraction(),
+  )
+
+  with pytest.raises(PermanentJobError, match="invalid document extraction command"):
+    handlers.extract_document(payload)
+
+
+def test_extract_document_keeps_projection_pending_observable_for_worker_retry():
+  handlers = RagJobHandlers(
+    RecordingIngestion(),
+    None,
+    chunking_version="char-v1",
+    extract_document=RecordingDocumentExtraction(
+      {"accepted": 1, "projected": 0, "pending": 1}
+    ),
+  )
+
+  with pytest.raises(ProjectionUnavailable, match="pending"):
+    handlers.extract_document({
+      "event_id": "event-extract-pending",
+      "tenant_id": "tenant-a",
+      "source": "corpus/approved-documents/extraction-golden-en.html",
+      "scope": {"tenant_id": "tenant-a", "user_id": "owner-a"},
+      "source_sequence": 9,
+      "ocr": None,
+    })
 
 
 def checksum(value) -> str:

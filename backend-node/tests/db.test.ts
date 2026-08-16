@@ -61,8 +61,37 @@ describe('database helpers', () => {
     await connectToDatabase(differentUri);
 
     expect(disconnectSpy).toHaveBeenCalledTimes(1);
-    expect(connectSpy).toHaveBeenCalledWith(differentUri);
+    expect(connectSpy).toHaveBeenCalledWith(differentUri, expect.any(Object));
 
     await connectToDatabase(mongoUri);
+  });
+
+  it('uses bounded MongoDB timeouts and a bounded pool by default', async () => {
+    await disconnectFromDatabase();
+    const connectSpy = jest.spyOn(mongoose, 'connect');
+
+    await connectToDatabase(mongoUri);
+
+    expect(connectSpy).toHaveBeenCalledWith(mongoUri, {
+      connectTimeoutMS: 5_000,
+      serverSelectionTimeoutMS: 5_000,
+      socketTimeoutMS: 10_000,
+      maxPoolSize: 20,
+      minPoolSize: 0,
+      maxIdleTimeMS: 30_000,
+    });
+  });
+
+  it('allows composition code to override MongoDB driver limits', async () => {
+    await disconnectFromDatabase();
+    const connectSpy = jest.spyOn(mongoose, 'connect');
+
+    await connectToDatabase(mongoUri, { maxPoolSize: 7, socketTimeoutMS: 15_000 });
+
+    expect(connectSpy).toHaveBeenCalledWith(mongoUri, expect.objectContaining({
+      maxPoolSize: 7,
+      socketTimeoutMS: 15_000,
+      serverSelectionTimeoutMS: 5_000,
+    }));
   });
 });
