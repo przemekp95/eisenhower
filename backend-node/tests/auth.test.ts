@@ -1,4 +1,3 @@
-import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
 import request from 'supertest';
 import express from 'express';
 import {
@@ -10,6 +9,7 @@ import {
 
 describe('OIDC bearer verification', () => {
   it('verifies signature, issuer, audience and derives tenant scope from claims', async () => {
+    const { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } = await import('jose');
     const { privateKey, publicKey } = await generateKeyPair('RS256');
     const jwk = await exportJWK(publicKey);
     const verify = createOidcTokenVerifier(
@@ -42,6 +42,7 @@ describe('OIDC bearer verification', () => {
   });
 
   it('rejects a correctly signed token without a tenant claim', async () => {
+    const { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } = await import('jose');
     const { privateKey, publicKey } = await generateKeyPair('RS256');
     const jwk = await exportJWK(publicKey);
     const verify = createOidcTokenVerifier(
@@ -81,6 +82,7 @@ describe('OIDC bearer verification', () => {
   });
 
   it('maps missing optional array claims to empty scopes', async () => {
+    const { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } = await import('jose');
     const { privateKey, publicKey } = await generateKeyPair('RS256');
     const jwk = await exportJWK(publicKey);
     const verify = createOidcTokenVerifier(
@@ -106,6 +108,7 @@ describe('OIDC bearer verification', () => {
     { claims: { scope: 'tasks:read  calendar:write' }, scopes: ['tasks:read', 'calendar:write'] },
     { claims: { scp: ['tasks:read'] }, scopes: ['tasks:read'] },
   ])('maps supported OIDC scope claim shape %#', async ({ claims, scopes }) => {
+    const { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } = await import('jose');
     const { privateKey, publicKey } = await generateKeyPair('RS256');
     const jwk = await exportJWK(publicKey);
     const verify = createOidcTokenVerifier(

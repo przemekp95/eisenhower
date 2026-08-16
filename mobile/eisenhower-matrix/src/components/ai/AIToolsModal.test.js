@@ -44,15 +44,15 @@ function createProps(overrides = {}) {
 }
 
 describe('AIToolsModal', () => {
-  it('renders advanced analysis and both close buttons', () => {
+  it('renders advanced analysis and both close buttons', async () => {
     const props = createProps();
-    const { getByTestId, getByText } = render(<AIToolsModal {...props} />);
+    const { getByTestId, getByText } = await render(<AIToolsModal {...props} />);
 
-    fireEvent.changeText(getByTestId('ai-analysis-input'), 'Nowe zadanie');
-    fireEvent.press(getByTestId('ai-analysis-run-button'));
-    fireEvent.press(getByTestId('ai-analysis-add-button'));
-    fireEvent.press(getByTestId('ai-tools-close-top-button'));
-    fireEvent.press(getByTestId('ai-tools-close-button'));
+    await fireEvent.changeText(getByTestId('ai-analysis-input'), 'Nowe zadanie');
+    await fireEvent.press(getByTestId('ai-analysis-run-button'));
+    await fireEvent.press(getByTestId('ai-analysis-add-button'));
+    await fireEvent.press(getByTestId('ai-tools-close-top-button'));
+    await fireEvent.press(getByTestId('ai-tools-close-button'));
 
     expect(getByText('Pilne i ważne przez deadline.')).toBeTruthy();
     expect(getByTestId('ai-analysis-suggested').props.children).toContain('Zrób teraz');
@@ -62,7 +62,7 @@ describe('AIToolsModal', () => {
     expect(props.onClose).toHaveBeenCalledTimes(2);
   });
 
-  it('renders OCR and batch tabs with their results', () => {
+  it('renders OCR and batch tabs with their results', async () => {
     const ocrProps = createProps({
       activeTab: 'ocr',
       ocrLoading: false,
@@ -73,12 +73,12 @@ describe('AIToolsModal', () => {
         ],
       },
     });
-    const { getByTestId, getByText, rerender } = render(<AIToolsModal {...ocrProps} />);
+    const { getByTestId, getByText, rerender } = await render(<AIToolsModal {...ocrProps} />);
 
-    fireEvent.press(getByTestId('ai-ocr-run-button'));
-    fireEvent.changeText(getByTestId('ocr-title-1'), 'Reviewed task');
-    fireEvent.press(getByTestId('ocr-quadrant-1-2'));
-    fireEvent.press(getByTestId('ocr-import-button'));
+    await fireEvent.press(getByTestId('ai-ocr-run-button'));
+    await fireEvent.changeText(getByTestId('ocr-title-1'), 'Reviewed task');
+    await fireEvent.press(getByTestId('ocr-quadrant-1-2'));
+    await fireEvent.press(getByTestId('ocr-import-button'));
     expect(getByTestId('ocr-title-1').props.value).toBe('Task one');
     expect(getByText('Przejrzyj pozycje przed importem')).toBeTruthy();
     expect(ocrProps.onRunOcr).toHaveBeenCalled();
@@ -97,9 +97,9 @@ describe('AIToolsModal', () => {
       },
     });
 
-    rerender(<AIToolsModal {...batchProps} />);
-    fireEvent.changeText(getByTestId('ai-batch-input'), 'Task A\nTask B');
-    fireEvent.press(getByTestId('ai-batch-run-button'));
+    await rerender(<AIToolsModal {...batchProps} />);
+    await fireEvent.changeText(getByTestId('ai-batch-input'), 'Task A\nTask B');
+    await fireEvent.press(getByTestId('ai-batch-run-button'));
 
     expect(getByText('Task A')).toBeTruthy();
     expect(getByText('Zrób teraz')).toBeTruthy();
@@ -108,9 +108,9 @@ describe('AIToolsModal', () => {
     expect(batchProps.onRunBatchAnalyze).toHaveBeenCalled();
   });
 
-  it('does not render unavailable tools or technical administration', () => {
+  it('does not render unavailable tools or technical administration', async () => {
     const props = createProps({ availableTabs: [], activeTab: 'analysis' });
-    const { getByTestId, queryByTestId, queryByText } = render(<AIToolsModal {...props} />);
+    const { getByTestId, queryByTestId, queryByText } = await render(<AIToolsModal {...props} />);
 
     expect(getByTestId('ai-tools-unavailable')).toBeTruthy();
     expect(queryByTestId('ai-analysis-run-button')).toBeNull();
