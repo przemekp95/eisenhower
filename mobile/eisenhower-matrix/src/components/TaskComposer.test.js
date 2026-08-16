@@ -6,14 +6,14 @@ import { translations } from '../i18n/translations';
 describe('TaskComposer', () => {
   const t = translations.pl;
 
-  it('renders inputs and fires all task actions', () => {
+  it('renders inputs and fires all task actions', async () => {
     const onChangeTask = jest.fn();
     const onAddTask = jest.fn();
     const onSuggest = jest.fn();
     const onScan = jest.fn();
     const onOpenAITools = jest.fn();
 
-    const { getByPlaceholderText, getByTestId } = render(
+    const { getByPlaceholderText, getByTestId } = await render(
       <TaskComposer
         newTask={{ title: '', description: '', urgent: false, important: false }}
         onChangeTask={onChangeTask}
@@ -27,14 +27,14 @@ describe('TaskComposer', () => {
       />
     );
 
-    fireEvent.changeText(getByPlaceholderText('Tytuł zadania'), 'Projekt');
-    fireEvent.changeText(getByPlaceholderText('Opis'), 'Opis');
-    fireEvent(getByTestId('new-task-urgent-switch'), 'valueChange', true);
-    fireEvent(getByTestId('new-task-important-switch'), 'valueChange', true);
-    fireEvent.press(getByTestId('add-task-button'));
-    fireEvent.press(getByTestId('suggest-task-button'));
-    fireEvent.press(getByTestId('scan-task-button'));
-    fireEvent.press(getByTestId('open-ai-tools-button'));
+    await fireEvent.changeText(getByPlaceholderText('Tytuł zadania'), 'Projekt');
+    await fireEvent.changeText(getByPlaceholderText('Opis'), 'Opis');
+    await fireEvent(getByTestId('new-task-urgent-switch'), 'valueChange', true);
+    await fireEvent(getByTestId('new-task-important-switch'), 'valueChange', true);
+    await fireEvent.press(getByTestId('add-task-button'));
+    await fireEvent.press(getByTestId('suggest-task-button'));
+    await fireEvent.press(getByTestId('scan-task-button'));
+    await fireEvent.press(getByTestId('open-ai-tools-button'));
 
     expect(onChangeTask).toHaveBeenCalledWith('title', 'Projekt');
     expect(onChangeTask).toHaveBeenCalledWith('description', 'Opis');
@@ -46,10 +46,10 @@ describe('TaskComposer', () => {
     expect(onOpenAITools).toHaveBeenCalled();
   });
 
-  it('keeps disabled buttons inactive', () => {
+  it('keeps disabled buttons inactive', async () => {
     const onSuggest = jest.fn();
     const onScan = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <TaskComposer
         newTask={{ title: '', description: '', urgent: false, important: false }}
         onChangeTask={jest.fn()}
@@ -63,8 +63,8 @@ describe('TaskComposer', () => {
       />
     );
 
-    fireEvent.press(getByTestId('suggest-task-button'));
-    fireEvent.press(getByTestId('scan-task-button'));
+    await fireEvent.press(getByTestId('suggest-task-button'));
+    await fireEvent.press(getByTestId('scan-task-button'));
 
     expect(onSuggest).not.toHaveBeenCalled();
     expect(onScan).not.toHaveBeenCalled();

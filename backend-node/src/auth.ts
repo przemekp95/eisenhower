@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { createRemoteJWKSet, jwtVerify, JWTVerifyGetKey, JWTPayload } from 'jose';
+import type { JWTVerifyGetKey, JWTPayload } from 'jose' with { 'resolution-mode': 'import' };
 import { NextFunction, Request, Response } from 'express';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -111,12 +111,14 @@ export function createOidcTokenVerifier(
   if (issuer.origin !== jwks.origin) {
     throw new Error('OIDC_JWKS_URL must use the issuer origin');
   }
-  const resolveKey = keyResolver ?? createRemoteJWKSet(jwks, {
-    timeoutDuration: 3000,
-    cooldownDuration: 30_000,
-    cacheMaxAge: 600_000,
-  });
+  let resolveKey = keyResolver;
   return async (token: string) => {
+    const { createRemoteJWKSet, jwtVerify } = await import('jose');
+    resolveKey ??= createRemoteJWKSet(jwks, {
+      timeoutDuration: 3000,
+      cooldownDuration: 30_000,
+      cacheMaxAge: 600_000,
+    });
     const { payload } = await jwtVerify(token, resolveKey, {
       issuer: config.issuer,
       audience: config.audience,

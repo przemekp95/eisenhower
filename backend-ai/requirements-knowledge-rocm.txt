@@ -11,4 +11,4 @@ protobuf>=7.35.1,<8
 pymongo==4.17.0
 llama-index-core==0.14.23
 llama-index-vector-stores-qdrant==0.10.3
-numpy==2.4.4
+numpy==2.4.6

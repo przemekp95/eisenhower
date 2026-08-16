@@ -4,10 +4,10 @@ import TaskDelegationEditor from './TaskDelegationEditor';
 import { translations } from '../i18n/translations';
 
 describe('TaskDelegationEditor', () => {
-  it('lets an owner assign, reassign and cancel delegation accessibly', () => {
+  it('lets an owner assign, reassign and cancel delegation accessibly', async () => {
     const onAssign = jest.fn();
     const onCancel = jest.fn();
-    const view = render(<TaskDelegationEditor
+    const view = await render(<TaskDelegationEditor
       taskId="task-1"
       delegation={null}
       role="owner"
@@ -15,16 +15,16 @@ describe('TaskDelegationEditor', () => {
       onCancel={onCancel}
       t={translations.pl}
     />);
-    fireEvent.press(view.getByTestId('delegation-edit-task-1'));
-    fireEvent.changeText(view.getByTestId('delegation-user-task-1'), 'user-b');
-    fireEvent.changeText(view.getByTestId('delegation-label-task-1'), 'Pat');
-    fireEvent.changeText(view.getByTestId('delegation-note-task-1'), 'Użyj runbooka');
-    fireEvent.press(view.getByTestId('delegation-save-task-1'));
+    await fireEvent.press(view.getByTestId('delegation-edit-task-1'));
+    await fireEvent.changeText(view.getByTestId('delegation-user-task-1'), 'user-b');
+    await fireEvent.changeText(view.getByTestId('delegation-label-task-1'), 'Pat');
+    await fireEvent.changeText(view.getByTestId('delegation-note-task-1'), 'Użyj runbooka');
+    await fireEvent.press(view.getByTestId('delegation-save-task-1'));
     expect(onAssign).toHaveBeenCalledWith('task-1', {
       assigneeUserId: 'user-b', displayLabel: 'Pat', handoffNote: 'Użyj runbooka',
     });
 
-    view.rerender(<TaskDelegationEditor
+    await view.rerender(<TaskDelegationEditor
       taskId="task-1"
       delegation={{ assigneeUserId: 'user-b', displayLabel: 'Pat', handoffNote: '', status: 'offered' }}
       role="owner"
@@ -32,13 +32,13 @@ describe('TaskDelegationEditor', () => {
       onCancel={onCancel}
       t={translations.pl}
     />);
-    fireEvent.press(view.getByTestId('delegation-cancel-task-1'));
+    await fireEvent.press(view.getByTestId('delegation-cancel-task-1'));
     expect(onCancel).toHaveBeenCalledWith('task-1');
   });
 
-  it('shows delegated work and only valid assignee status actions', () => {
+  it('shows delegated work and only valid assignee status actions', async () => {
     const onStatus = jest.fn();
-    const view = render(<TaskDelegationEditor
+    const view = await render(<TaskDelegationEditor
       taskId="task-2"
       delegation={{ assigneeUserId: 'me', displayLabel: 'Ja', handoffNote: 'Sprawdź checklistę', status: 'offered' }}
       role="assignee"
@@ -46,31 +46,31 @@ describe('TaskDelegationEditor', () => {
       t={translations.en}
     />);
     expect(view.getByText('Sprawdź checklistę')).toBeTruthy();
-    fireEvent.press(view.getByTestId('delegation-status-accepted-task-2'));
+    await fireEvent.press(view.getByTestId('delegation-status-accepted-task-2'));
     expect(onStatus).toHaveBeenCalledWith('task-2', 'accepted');
     expect(view.queryByTestId('delegation-status-completed-task-2')).toBeNull();
   });
 
-  it('keeps invalid owner input open and supports cancelling the editor', () => {
+  it('keeps invalid owner input open and supports cancelling the editor', async () => {
     const onAssign = jest.fn();
-    const view = render(<TaskDelegationEditor taskId="task-3" delegation={null} role="owner"
+    const view = await render(<TaskDelegationEditor taskId="task-3" delegation={null} role="owner"
       onAssign={onAssign} onCancel={jest.fn()} t={translations.en} />);
-    fireEvent.press(view.getByTestId('delegation-edit-task-3'));
-    fireEvent.press(view.getByTestId('delegation-save-task-3'));
+    await fireEvent.press(view.getByTestId('delegation-edit-task-3'));
+    await fireEvent.press(view.getByTestId('delegation-save-task-3'));
     expect(view.getByRole('alert')).toBeTruthy();
     expect(onAssign).not.toHaveBeenCalled();
-    fireEvent.press(view.getByText('Cancel'));
+    await fireEvent.press(view.getByText('Cancel'));
     expect(view.queryByTestId('delegation-user-task-3')).toBeNull();
   });
 
-  it('renders safe assignee fallbacks when delegation metadata is incomplete', () => {
-    const view = render(<TaskDelegationEditor taskId="task-4" delegation={null} role="assignee"
+  it('renders safe assignee fallbacks when delegation metadata is incomplete', async () => {
+    const view = await render(<TaskDelegationEditor taskId="task-4" delegation={null} role="assignee"
       onStatus={jest.fn()} t={translations.en} />);
     expect(view.getByText('Assignee label: Unknown')).toBeTruthy();
   });
 
-  it('defaults a missing owner status label to offered', () => {
-    const view = render(<TaskDelegationEditor taskId="task-5"
+  it('defaults a missing owner status label to offered', async () => {
+    const view = await render(<TaskDelegationEditor taskId="task-5"
       delegation={{ assigneeUserId: 'user-b', displayLabel: 'Pat', handoffNote: '' }} role="owner"
       onAssign={jest.fn()} onCancel={jest.fn()} t={translations.en} />);
     expect(view.getByText('Assigned to: Pat · Offered')).toBeTruthy();
