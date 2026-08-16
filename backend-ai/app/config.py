@@ -20,6 +20,7 @@ def parse_csv_list(value: str | None, default: tuple[str, ...]) -> tuple[str, ..
 class Settings:
   training_data_path: Path
   model_cache_dir: Path
+  local_model_artifact_dir: Path | None = None
   audit_database_path: Path | None = None
   audit_hmac_key: str = "development-audit-key-change-me-now"
   release_sha: str = "0000000000000000000000000000000000000000"
@@ -39,6 +40,11 @@ class Settings:
   rag_allowed_tenants: tuple[str, ...] = ()
   rag_response_allowed_users: tuple[str, ...] = ()
   rag_retrieval_strategy: str = "hybrid-bge-v1"
+  llamaindex_candidate_collection: str = "eisenhower-knowledge-llama-v1-candidate"
+  llamaindex_pipeline_version: str = "llama-sentence-256-32-v1"
+  llamaindex_chunk_size: int = 256
+  llamaindex_chunk_overlap: int = 32
+  llamaindex_cache_path: Path | None = None
   reranker_base_url: str = "http://reranker:8000"
   reranker_api_key: str | None = None
   reranker_allowed_hosts: tuple[str, ...] = ()
@@ -49,7 +55,7 @@ class Settings:
   rag_embedding_model_name: str | None = None
   rag_embedding_model_revision: str | None = None
   rag_embedding_device: str | None = None
-  chunking_version: str = "chars-1200-overlap-160-v1"
+  chunking_version: str = "llama-sentence-256-32-v1"
   inference_base_url: str = "http://inference:8000/v1"
   inference_api_key: str | None = None
   inference_model: str | None = None
@@ -106,6 +112,7 @@ class Settings:
   local_model_require_evaluation: bool = False
   local_model_evaluation_profile: str = "development"
   local_model_approved_evaluation_sha256: str | None = None
+  local_model_approved_artifact_sha256: str | None = None
   local_model_owner_approval_bypass: bool = False
   local_model_owner_approval_valid_until: str | None = None
   local_model_semantic_leakage_threshold: float = 0.92
@@ -116,6 +123,7 @@ class Settings:
   local_model_minimum_worst_seed_macro_f1: float = 0.70
   local_model_maximum_seed_standard_deviation: float = 0.10
   ai_management_enabled: bool = True
+  jobs_max_queued: int = 1000
   tesseract_languages: str = "eng+pol"
   app_name: str = "AI Quadrant Classifier"
   cors_allow_origins: tuple[str, ...] = (
@@ -126,8 +134,16 @@ class Settings:
   )
 
   def __post_init__(self) -> None:
+    if self.local_model_artifact_dir is None:
+      object.__setattr__(self, "local_model_artifact_dir", self.model_cache_dir)
     if self.audit_database_path is None:
       object.__setattr__(self, "audit_database_path", self.model_cache_dir / "audit.sqlite3")
+    if self.llamaindex_cache_path is None:
+      object.__setattr__(
+        self,
+        "llamaindex_cache_path",
+        self.model_cache_dir / "llamaindex-ingestion-cache.json",
+      )
     retrieval_enabled = self.rag_enabled if self.rag_retrieval_enabled is None else self.rag_retrieval_enabled
     generation_enabled = self.rag_enabled if self.rag_generation_enabled is None else self.rag_generation_enabled
     object.__setattr__(self, "rag_retrieval_enabled", retrieval_enabled)
@@ -150,6 +166,17 @@ class Settings:
       raise ValueError("Production RAG responses require a promotion pointer and candidate ID.")
     if self.rag_retrieval_strategy not in {"dense-v1", "hybrid-bge-v1"}:
       raise ValueError("RAG_RETRIEVAL_STRATEGY must be 'dense-v1' or 'hybrid-bge-v1'.")
+    if (
+      self.llamaindex_candidate_collection == self.qdrant_collection_alias
+      or not self.llamaindex_candidate_collection.endswith("-candidate")
+    ):
+      raise ValueError("LlamaIndex backfill must use an isolated physical candidate collection.")
+    if not self.llamaindex_pipeline_version.strip():
+      raise ValueError("LLAMAINDEX_PIPELINE_VERSION is required.")
+    if self.llamaindex_chunk_size < 16:
+      raise ValueError("LLAMAINDEX_CHUNK_SIZE must be at least 16 tokens.")
+    if not 0 <= self.llamaindex_chunk_overlap < self.llamaindex_chunk_size:
+      raise ValueError("LLAMAINDEX_CHUNK_OVERLAP must be smaller than the chunk size.")
     timeout_values = (
       self.inference_connect_timeout_seconds,
       self.inference_read_timeout_seconds,
@@ -189,10 +216,16 @@ class Settings:
       raise ValueError("Evaluation profile must be 'development' or 'production'.")
     if self.local_model_maximum_semantic_leaks < 0:
       raise ValueError("Every quality threshold count must be non-negative.")
-    if self.local_model_approved_evaluation_sha256 is not None:
-      digest = self.local_model_approved_evaluation_sha256
+    for digest in (
+      self.local_model_approved_evaluation_sha256,
+      self.local_model_approved_artifact_sha256,
+    ):
+      if digest is None:
+        continue
       if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
-        raise ValueError("Approved evaluation SHA-256 must be a lowercase 64-character hexadecimal digest.")
+        raise ValueError("Approved SHA-256 values must be lowercase 64-character hexadecimal digests.")
+    if self.jobs_max_queued < 1:
+      raise ValueError("JOBS_MAX_QUEUED must be positive.")
     if self.local_model_owner_approval_bypass:
       if not self.local_model_owner_approval_valid_until:
         raise ValueError("Owner evaluation approval requires a validity deadline.")
@@ -210,8 +243,8 @@ class Settings:
       character not in "0123456789abcdef" for character in self.release_sha
     ):
       raise ValueError("RELEASE_SHA must be a lowercase 40-character hexadecimal commit.")
-    if self.chunking_version != "chars-1200-overlap-160-v1":
-      raise ValueError("Unsupported CHUNKING_VERSION for the configured 1200/160 chunker.")
+    if self.chunking_version != self.llamaindex_pipeline_version:
+      raise ValueError("CHUNKING_VERSION must match LLAMAINDEX_PIPELINE_VERSION.")
 
 
 def load_settings(env: dict[str, str] | None = None) -> Settings:
@@ -272,6 +305,11 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     model_cache_dir=Path(
       source.get("MODEL_CACHE_DIR", str(base_dir / "data" / "runtime"))
     ),
+    local_model_artifact_dir=(
+      Path(source["LOCAL_MODEL_ARTIFACT_DIR"])
+      if source.get("LOCAL_MODEL_ARTIFACT_DIR")
+      else None
+    ),
     audit_database_path=(
       Path(source["AUDIT_DATABASE_PATH"])
       if source.get("AUDIT_DATABASE_PATH")
@@ -307,6 +345,19 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     rag_allowed_tenants=parse_csv_list(source.get("RAG_ALLOWED_TENANTS"), ()),
     rag_response_allowed_users=parse_csv_list(source.get("RAG_RESPONSE_ALLOWED_USERS"), ()),
     rag_retrieval_strategy=source.get("RAG_RETRIEVAL_STRATEGY", "hybrid-bge-v1"),
+    llamaindex_candidate_collection=source.get(
+      "LLAMAINDEX_CANDIDATE_COLLECTION", "eisenhower-knowledge-llama-v1-candidate"
+    ),
+    llamaindex_pipeline_version=source.get(
+      "LLAMAINDEX_PIPELINE_VERSION", "llama-sentence-256-32-v1"
+    ),
+    llamaindex_chunk_size=int(source.get("LLAMAINDEX_CHUNK_SIZE", "256")),
+    llamaindex_chunk_overlap=int(source.get("LLAMAINDEX_CHUNK_OVERLAP", "32")),
+    llamaindex_cache_path=(
+      Path(source["LLAMAINDEX_CACHE_PATH"])
+      if source.get("LLAMAINDEX_CACHE_PATH")
+      else None
+    ),
     reranker_base_url=source.get("RERANKER_BASE_URL", "http://reranker:8000"),
     reranker_api_key=source.get("RERANKER_API_KEY") or None,
     reranker_allowed_hosts=parse_csv_list(source.get("RERANKER_ALLOWED_HOSTS"), ()),
@@ -319,7 +370,10 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     rag_embedding_model_name=source.get("RAG_EMBEDDING_MODEL_NAME") or None,
     rag_embedding_model_revision=source.get("RAG_EMBEDDING_MODEL_REVISION") or None,
     rag_embedding_device=source.get("RAG_EMBEDDING_DEVICE") or None,
-    chunking_version=source.get("CHUNKING_VERSION", "chars-1200-overlap-160-v1"),
+    chunking_version=source.get(
+      "CHUNKING_VERSION",
+      source.get("LLAMAINDEX_PIPELINE_VERSION", "llama-sentence-256-32-v1"),
+    ),
     inference_base_url=source.get(
       "INFERENCE_BASE_URL",
       source.get("VLLM_BASE_URL", "http://inference:8000/v1"),
@@ -385,6 +439,7 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     local_model_require_evaluation=source.get("LOCAL_MODEL_REQUIRE_EVALUATION", "true").lower() in ("true", "1", "yes"),
     local_model_evaluation_profile=evaluation_profile,
     local_model_approved_evaluation_sha256=source.get("LOCAL_MODEL_APPROVED_EVALUATION_SHA256") or None,
+    local_model_approved_artifact_sha256=source.get("LOCAL_MODEL_APPROVED_ARTIFACT_SHA256") or None,
     local_model_owner_approval_bypass=source.get(
       "LOCAL_MODEL_OWNER_APPROVAL_BYPASS", "false"
     ).lower() in ("true", "1", "yes"),
@@ -399,6 +454,7 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     local_model_minimum_worst_seed_macro_f1=float(source.get("LOCAL_MODEL_MINIMUM_WORST_SEED_MACRO_F1", "0.75" if production_profile else "0.70")),
     local_model_maximum_seed_standard_deviation=float(source.get("LOCAL_MODEL_MAXIMUM_SEED_STANDARD_DEVIATION", "0.05" if production_profile else "0.10")),
     ai_management_enabled=source.get("AI_MANAGEMENT_ENABLED", "true").lower() in ("true", "1", "yes"),
+    jobs_max_queued=int(source.get("JOBS_MAX_QUEUED", "1000")),
     tesseract_languages=source.get("TESSERACT_LANGUAGES", "eng+pol"),
     # MinIO Object Storage
     minio_endpoint=source.get("MINIO_ENDPOINT") or None,

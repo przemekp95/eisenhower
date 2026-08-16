@@ -1,10 +1,10 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import sqlite3
 
 import pytest
 
-from app.jobs import JobConflictError, SqliteJobQueue
+from app.jobs import JobConflictError, QueueCapacityExceeded, SqliteJobQueue
 from app.webhooks import (
   WEBHOOK_INGRESS_METHOD,
   WEBHOOK_INGRESS_PATH,
@@ -76,6 +76,36 @@ def test_sqlite_job_queue_treats_canonical_payload_as_the_idempotent_request(tmp
   )
 
   assert replay == created
+
+
+def test_sqlite_job_queue_is_bounded_without_breaking_idempotent_replay(tmp_path):
+  queue = SqliteJobQueue(tmp_path / "jobs.sqlite3", max_queued_jobs=1)
+  first = queue.enqueue("event-1", "rag.upsert", {"tenant_id": "tenant-a"})
+
+  assert queue.enqueue("event-1", "rag.upsert", {"tenant_id": "tenant-a"}) == first
+  with pytest.raises(QueueCapacityExceeded, match="capacity"):
+    queue.enqueue("event-2", "rag.upsert", {"tenant_id": "tenant-a"})
+
+  assert queue.get(first.job_id) == first
+
+
+def test_pruned_terminal_replay_bypasses_capacity_but_rejects_changed_payload(tmp_path):
+  queue = SqliteJobQueue(tmp_path / "jobs.sqlite3", max_queued_jobs=1)
+  completed_at = datetime.now(timezone.utc) + timedelta(seconds=1)
+  original_payload = {"tenant_id": "tenant-a"}
+  first = queue.enqueue("event-1", "rag.upsert", original_payload)
+  claimed = queue.claim_next("worker-a", now=completed_at)
+  assert claimed is not None
+  queue.complete(first.job_id, "worker-a", now=completed_at)
+  assert queue.prune_terminal_jobs(before=completed_at + timedelta(seconds=1), limit=1) == 1
+  queue.enqueue("event-2", "rag.upsert", {"tenant_id": "tenant-b"})
+
+  replay = queue.enqueue("event-1", "rag.upsert", original_payload)
+
+  assert replay.job_id == first.job_id
+  assert replay.status == "completed"
+  with pytest.raises(JobConflictError, match="already bound"):
+    queue.enqueue("event-1", "rag.upsert", {"tenant_id": "tenant-c"})
 
 
 @pytest.mark.parametrize(

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from fastapi import HTTPException
+
 from .config import Settings, load_settings
 from .main import create_app
 from .rag.bootstrap import build_rag_service
@@ -31,11 +33,28 @@ def create_knowledge_runtime(
     ai_service=classifier,
     rag_service=rag_service,
   )
-  allowed_paths = {"/health/live", "/metrics", "/v2/knowledge/answer"}
+  allowed_paths = {
+    "/health/live",
+    "/metrics",
+    "/v2/knowledge/search",
+    "/v2/knowledge/answer",
+  }
   application.router.routes = [
     route for route in application.router.routes
     if getattr(route, "path", None) in allowed_paths
   ]
+
+  @application.get("/health/ready", include_in_schema=False)
+  def knowledge_ready():
+    status = (
+      rag_service.generation_status()
+      if hasattr(rag_service, "generation_status")
+      else {"enabled": False, "state": "disabled", "failures": 0}
+    )
+    if status.get("enabled") and status.get("state") == "open":
+      raise HTTPException(status_code=503, detail="Generation circuit is open.")
+    return {"status": "ready", "optional_dependencies": {"generation": status}}
+
   application.title = "Eisenhower Knowledge Answer Runtime"
   return application
 

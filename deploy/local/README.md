@@ -1,94 +1,107 @@
 # Local production topology
 
-This topology runs the application on one local Linux host by default and keeps every location-sensitive
-connection configurable. The initial target is the AMD computer, but Node/Mongo, FastAPI, Qdrant, n8n
-the calendar/access gateways, identity service, Remote MCP and inference can be moved independently to hosts reachable over a private
-LAN/VPN address.
+This topology runs on one local Linux host by default and keeps every location-sensitive connection
+configurable. The default action is deliberately small: it does not start retrieval, generation,
+reranking, n8n or Keycloak.
 
 ## What is deployable now
 
-`compose.yaml` contains only real entrypoints: the web UI, Node API, a single-node MongoDB replica set required by
-the transactional outbox, FastAPI, the existing RAG worker,
-Qdrant, n8n, Keycloak with PostgreSQL, the OAuth-protected Remote MCP adapter and narrow nginx gateways. The Mongo outbox publisher is part of the Node API process; there is intentionally no
-invented `outbox-worker` container. A one-shot `audit-volume-init` applies the shared audit directory and
-preserves the distinct UID ownership required by the Node/MCP and AI audit files
-by the non-root Node container before it starts. Production is fixed to `AUTH_MODE=oidc`; neither Node,
-FastAPI nor Remote MCP receives a static user token as a fallback.
+The AI runtime is split by actual role without adding public entrypoints:
 
-`compose.amd.yaml` is an opt-in vLLM/ROCm overlay with independently movable BGE-M3 retrieval,
-Qwen generation and BGE reranking services. The exact local matrix and its readiness checks have physical
-qualification evidence under `backend-ai/evaluation/`; response exposure still remains independently
-fail-closed. FastAPI keeps its deterministic classifier fallback when private generation is unavailable.
+- `ai-service` is the dependency-light Bearer/OIDC, exact-Origin, CORS and audit boundary. It proxies only
+  to fixed private role URLs, bounds bodies, pools and timeouts, and refuses redirects with credentials.
+- `classifier-service` owns classification and requires a read-only, approved generation pointer whose
+  SHA-256 matches `LOCAL_MODEL_APPROVED_ARTIFACT_SHA256`. Production startup never trains a model.
+- `knowledge-service` owns online retrieval/answering. Mongo remains canonical and Qdrant remains a
+  rebuildable projection; the HTTP boundary and the RAG ports keep framework-specific types internal.
+- `rag-worker` is the single ingest/OCR/Docling worker. It shares one SQLite queue volume with the producer,
+  verifies webhook HMAC/idempotency and has a measured, mandatory queue bound.
+
+The default `core` graph contains only MongoDB, Node API, audit initialization, the AI boundary and the
+classifier. Qdrant/knowledge/worker are opt-in retrieval roles; vLLM generation and reranking are opt-in AMD
+roles; n8n/Calendar and Keycloak/access remain explicit profiles. The Mongo transactional outbox stays in
+the Node process; there is intentionally no invented outbox service.
+
+| Action | Starts | Explicitly excludes |
+| --- | --- | --- |
+| `deploy` / `deploy-core` | core | Qdrant, knowledge, worker, vLLM, reranker, n8n, Keycloak |
+| `deploy-retrieval` | core + Qdrant + knowledge + one worker + reranker | generation, n8n, Keycloak |
+| `deploy-response` | retrieval + private generation + identity/access/web/MCP | n8n and Calendar |
+| `deploy-full` | the former complete local topology | nothing |
+
+Each matching `render-*` action renders only its graph. All first-party images are tagged from exact clean
+`HEAD`, checked through the OCI revision label and recorded for rollback before mutation.
 
 ## First same-host deployment
 
-1. Build and tag the Node, CPU/ROCm AI, MCP and web images locally for one exact Git SHA (or publish them to the registry).
-   Set `API_IMAGE`, `AI_IMAGE`, `AI_ROCM_IMAGE`, `MCP_IMAGE` and `WEB_IMAGE` to those versioned tags or, preferably after publication, registry
-   digests. Do not use mutable `latest` tags.
+1. Build and tag each role for one exact Git SHA. Do not use mutable `latest` tags.
 
    ```bash
    release_sha="$(git rev-parse HEAD)"
    docker build --target production -f backend-node/Dockerfile \
      -t "local/eisenhower-api:${release_sha}" .
-   docker build --target production -f backend-ai/Dockerfile \
-     -t "local/eisenhower-ai:${release_sha}" backend-ai
+   for role in boundary classifier knowledge ingest; do
+     docker build --target "$role" --build-arg RELEASE_SHA="$release_sha" \
+       -f backend-ai/Dockerfile -t "local/eisenhower-ai-${role}:${release_sha}" backend-ai
+   done
    docker build -f mcp/eisenhower_adapter/Dockerfile \
      -t "local/eisenhower-mcp:${release_sha}" .
    docker build --target production -f web/Dockerfile \
      -t "local/eisenhower-web:${release_sha}" .
    ```
-2. Copy `.env.example` to `.env`, replace the placeholder image tags and populate secrets. Keep `.env`
-   outside version control and readable only by its owner. `AI_EVALUATION_FILE` must be the absolute host
-   path to an owner-approved production evaluation artifact; its approved digest is a separate required
-   input. A development benchmark is not a production substitute. A direct owner decision may temporarily
-   accept the missing independent-human artifact by setting `LOCAL_MODEL_OWNER_APPROVAL_VALID_UNTIL` to a
-   timezone-aware ISO-8601 deadline. This is recorded as an evidence bypass rather than fabricated evaluation
-   data, and classifier requests fail closed automatically after the deadline. If responses are enabled,
-   `AI_PROMOTION_ROOT` must contain the controller-written `current.json`, and
-   `RAG_RESPONSE_CANDIDATE_ID` must match its response candidate. The pointer is mounted read-only;
-   expiry or corruption automatically returns fallback without a container restart.
-3. Render without pulling or starting containers:
+2. Copy `.env.example` to an owner-only `.env` with mode `0600` and populate the role-specific image refs,
+   secrets and measured CPU/RAM/PID/thread/queue limits. Blank qualification values are intentional hard
+   failures; the previous monolith's peaks are evidence floors, not recommended role limits.
+
+   `AI_CLASSIFIER_ARTIFACT_ROOT` must contain the offline-trained atomic generation pointer and immutable
+   artifacts. The pointer digest is a separate required input. An owner-approved evaluation is still required;
+   a time-bounded owner bypass is recorded as a bypass and never as fabricated human evidence. If responses
+   are enabled, the promotion controller's `current.json`, candidate ID and tenant/user allowlists are also
+   mandatory.
+
+   Retrieval also requires an explicitly prepared Docling layout-model bundle. Preparing it is an offline
+   operator action, never a builder or production-startup download:
 
    ```bash
-   docker compose --env-file deploy/local/.env \
-     -f deploy/local/compose.yaml config --quiet
+   PYTHONPATH=backend-ai backend-ai/venv/bin/python \
+     backend-ai/scripts/prepare_docling_artifact.py --output /absolute/new/revision-directory
    ```
 
-4. Start the CPU-safe topology and verify each real endpoint from the host:
+   Set `AI_DOCLING_ARTIFACT_ROOT` to that directory and
+   `DOCLING_ARTIFACTS_MANIFEST_SHA256` to the digest printed by the command. Deployment verifies the manifest
+   before starting retrieval; the worker mounts the bundle read-only and verifies the pinned repository,
+   revision, complete file set, sizes and SHA-256 hashes before constructing Docling.
+
+3. Render without pulling or starting containers, then choose exactly one deployment action:
 
    ```bash
-   docker compose --env-file deploy/local/.env \
-     -f deploy/local/compose.yaml up -d
-   docker compose --env-file deploy/local/.env \
-     -f deploy/local/compose.yaml ps
+   deploy/local/deploy.sh render-core
+   deploy/local/deploy.sh render-retrieval
+   deploy/local/deploy.sh render-response
+   deploy/local/deploy.sh render-full
+   deploy/local/deploy.sh deploy-core
    ```
-
-For the independently governed AMD knowledge-answer canary, use `deploy.sh deploy-response`.
-It builds and starts only the knowledge runtime plus the private gateway and does not weaken or
-reuse the classifier's separate 240-case production-evaluation gate. The service exposes only the
-answer route, liveness and aggregate metrics; the atomic pointer, candidate ID, tenant/user
-allowlists and inference/reranker credentials are all mandatory.
 
 This binds host ports to `127.0.0.1` by default. Compose DNS names provide same-host service-to-service
 URLs. A reverse proxy or private client may reach only the endpoints explicitly selected by the owner.
 
-For a repeatable exact-SHA AMD preparation and rollout, keep `deploy/local/.env` mode `0600` and use:
+## Private vLLM lifecycle
+
+vLLM 0.20 development sleep endpoints are not enabled: its API key protects `/v1`, while development-mode
+sleep/control routes are outside that stable authenticated surface. The supported control is private
+orchestrator scale-to-zero:
 
 ```bash
-deploy/local/deploy.sh render
-deploy/local/deploy.sh build
-deploy/local/deploy.sh deploy
-deploy/local/deploy.sh smoke
+LIFECYCLE_OPERATOR_TOKEN='from-a-separate-secret-source' deploy/local/deploy.sh sleep-response
+LIFECYCLE_OPERATOR_TOKEN='from-a-separate-secret-source' deploy/local/deploy.sh wake-response
 ```
 
-The full `deploy` action starts infrastructure first, then the independently bounded GPU inference/reranker
-and knowledge runtime, the CPU classifier plus API/web/MCP, and finally both gateways. This prevents the web
-gateway from becoming healthy before its UI upstream exists and avoids loading a second BGE retrieval model
-into GPU memory for the ordinary classifier. The script refuses a dirty index/worktree, derives every first-party image tag from `HEAD`, verifies the
-OCI revision label and records the pre-deploy container image IDs in the owner-only
-`.runtime-cache/local-deploy/rollback.env`. It renders all three AMD profiles before mutation. A missing
-production evaluation artifact remains a hard preflight failure unless an unexpired owner deadline is present;
-a missing model revision or service key always fails preflight.
+The operator token is compared in constant time and is not an HTTP endpoint. Wake starts only inference and
+reranker, probes authenticated `/v1/models` until the mandatory timeout, and stops a partially started pair on
+failure. Normal request handling remains fail-closed behind readiness, application timeouts and the existing
+generation circuit breaker. The current ROCm knowledge image remains vLLM-derived until a clean physical
+gfx1151 benchmark qualifies a pinned dedicated PyTorch/ROCm image; no storage or RAM saving is claimed before
+that gate.
 
 ## Multi-user OIDC and Remote MCP
 
@@ -197,8 +210,11 @@ docker compose --env-file deploy/local/.env \
   --profile reranker-amd up reranker ai-service qdrant
 ```
 
-`RAG_RETRIEVAL_ENABLED=true` now requires this service unless the operator explicitly selects the
-`dense-v1` rollback. A missing, wrong or unavailable reranker never triggers a silent dense fallback.
+The deployed default remains `hybrid-bge-v1` and therefore requires this service. `hybrid-rrf-v1` is a
+separate no-reranker comparison candidate, not an automatic fallback or promoted default. It may be selected
+only after the frozen holdout and human review preserve the configured quality thresholds; rollback remains
+an explicit strategy/config revision. A missing, wrong or unavailable reranker never triggers a silent
+strategy change.
 The model cache defaults to `.runtime-cache/reranker-huggingface` on the workspace filesystem rather
 than a Docker-root volume; override `RERANKER_MODEL_CACHE` when moving the service to another host.
 

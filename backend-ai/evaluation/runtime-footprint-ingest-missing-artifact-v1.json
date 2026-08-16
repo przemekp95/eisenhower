@@ -1,0 +1,296 @@
+{
+  "container_id": "b5aabe95bb1b8a617a6b40707b801e28e0fe6ac543f25264e12118ca70714343",
+  "deployment_proven": false,
+  "evidence_level": "local-isolated-container",
+  "image": {
+    "id": "sha256:ae9644d8b04df1de0684562323692595fefc1356cb0b67d80f97fb74e35fafed",
+    "reference": "local/eisenhower-ai-ingest:ed193ea3b14b655f805dbe4f143c1a7d2f9c5fe4",
+    "runtime_role": "ingest",
+    "source_revision": "ed193ea3b14b655f805dbe4f143c1a7d2f9c5fe4"
+  },
+  "limits": {
+    "cpus": "2.0",
+    "memory": "2g",
+    "pids": "256"
+  },
+  "production_proven": false,
+  "recorded_at": "2026-08-15T16:58:45.705953+00:00",
+  "result": {
+    "cgroup": {
+      "average_cpu_cores": 0.975323,
+      "cgroup_memory_peak_bytes": 315797504,
+      "cpu_seconds": 3.703658,
+      "first_memory_current_bytes": 5140480,
+      "last_memory_current_bytes": 315351040,
+      "peak_memory_current_bytes": 315797504,
+      "peak_pids": 1,
+      "samples": 35,
+      "wall_seconds_sampled": 3.797366
+    },
+    "exit_code": 1,
+    "oom_killed": false,
+    "state_error": null,
+    "stderr_tail": "Traceback (most recent call last):\n  File \"/workspace/backend-ai/app/document_extraction/adapters.py\", line 66, in extract\n    result = converter.convert(\n             ^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/pydantic/_internal/_validate_call.py\", line 40, in wrapper_function\n    return wrapper(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/pydantic/_internal/_validate_call.py\", line 137, in __call__\n    res = self.__pydantic_validator__.validate_python(pydantic_core.ArgsKwargs(args, kwargs))\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/document_converter.py\", line 505, in convert\n    return next(all_res)\n           ^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/document_converter.py\", line 567, in convert_all\n    for conv_res in conv_res_iter:\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/document_converter.py\", line 696, in _convert\n    for item in map(\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/document_converter.py\", line 743, in _process_document\n    conv_res = self._execute_pipeline(in_doc, raises_on_error=raises_on_error)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/document_converter.py\", line 769, in _execute_pipeline\n    pipeline = self._get_pipeline(in_doc.format)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/document_converter.py\", line 726, in _get_pipeline\n    self.initialized_pipelines[cache_key] = pipeline_class(\n                                            ^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/pipeline/standard_pdf_pipeline.py\", line 588, in __init__\n    self._init_models()\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/pipeline/standard_pdf_pipeline.py\", line 610, in _init_models\n    self.layout_model = layout_factory.create_instance(\n                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/models/factories/base_factory.py\", line 57, in create_instance\n    return _cls(options=options, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/models/stages/layout/layout_object_detection_model.py\", line 49, in __init__\n    self.engine.initialize()\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/models/inference_engines/object_detection/onnxruntime_engine.py\", line 105, in initialize\n    model_folder, self._model_path = self._resolve_model_artifacts()\n                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/models/inference_engines/object_detection/onnxruntime_engine.py\", line 77, in _resolve_model_artifacts\n    model_folder = self._resolve_model_folder(\n                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/models/inference_engines/common/hf_vision_base.py\", line 68, in _resolve_model_folder\n    return resolve_model_artifacts_path(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/models/inference_engines/vlm/_utils.py\", line 122, in resolve_model_artifacts_path\n    return download_fn(repo_id, revision)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/models/inference_engines/common/hf_vision_base.py\", line 60, in download_wrapper\n    return self.download_models(\n           ^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/models/utils/hf_model_download.py\", line 39, in download_models\n    return download_hf_model(\n           ^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/models/utils/hf_model_download.py\", line 20, in download_hf_model\n    download_path = snapshot_download(\n                    ^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/huggingface_hub/utils/_validators.py\", line 88, in _inner_fn\n    return fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/huggingface_hub/_snapshot_download.py\", line 386, in snapshot_download\n    tree_entries = {\n                   ^\n  File \"/home/app/.local/lib/python3.11/site-packages/huggingface_hub/_snapshot_download.py\", line 386, in <dictcomp>\n    tree_entries = {\n                   ^\n  File \"/home/app/.local/lib/python3.11/site-packages/huggingface_hub/hf_api.py\", line 4093, in list_repo_tree\n    for path_info in paginate(path=tree_url, headers=headers, params={\"recursive\": recursive, \"expand\": expand}):\n  File \"/home/app/.local/lib/python3.11/site-packages/huggingface_hub/utils/_pagination.py\", line 36, in paginate\n    r = session.get(path, params=params, headers=headers, timeout=timeout)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/httpx/_client.py\", line 1053, in get\n    return self.request(\n           ^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/httpx/_client.py\", line 825, in request\n    return self.send(request, auth=auth, follow_redirects=follow_redirects)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/httpx/_client.py\", line 914, in send\n    response = self._send_handling_auth(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/httpx/_client.py\", line 942, in _send_handling_auth\n    response = self._send_handling_redirects(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/httpx/_client.py\", line 977, in _send_handling_redirects\n    hook(request)\n  File \"/home/app/.local/lib/python3.11/site-packages/huggingface_hub/utils/_http.py\", line 260, in hf_request_event_hook\n    raise OfflineModeIsEnabled(\nhuggingface_hub.errors.OfflineModeIsEnabled: Cannot reach https://huggingface.co/api/models/docling-project/docling-layout-heron-onnx/tree/40bde044036bb181c130ddf6c51792187268748f?recursive=true&expand=false: offline mode is enabled. To disable it, please unset the `HF_HUB_OFFLINE` environment variable.\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/workspace/backend-ai/scripts/benchmark_document_extraction.py\", line 138, in <module>\n    main()\n  File \"/workspace/backend-ai/scripts/benchmark_document_extraction.py\", line 53, in main\n    result = parser.extract(approved)\n             ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/backend-ai/app/document_extraction/adapters.py\", line 76, in extract\n    raise ExtractionRuntimeRejected(\"primary parser failed closed\") from error\napp.document_extraction.adapters.ExtractionRuntimeRejected: primary parser failed closed\n",
+    "timed_out": false,
+    "wall_seconds": 4.221823
+  },
+  "role": "ingest-document-extraction",
+  "samples": [
+    {
+      "cpu_usec": 42663,
+      "elapsed_seconds": 0.147742,
+      "memory_current": 5140480,
+      "memory_peak": 5980160,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 152645,
+      "elapsed_seconds": 0.257372,
+      "memory_current": 16494592,
+      "memory_peak": 16822272,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 252521,
+      "elapsed_seconds": 0.370469,
+      "memory_current": 24616960,
+      "memory_peak": 24616960,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 356829,
+      "elapsed_seconds": 0.483641,
+      "memory_current": 32387072,
+      "memory_peak": 32387072,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 464523,
+      "elapsed_seconds": 0.597659,
+      "memory_current": 42586112,
+      "memory_peak": 42586112,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 569955,
+      "elapsed_seconds": 0.708169,
+      "memory_current": 58675200,
+      "memory_peak": 58675200,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 678211,
+      "elapsed_seconds": 0.82241,
+      "memory_current": 87072768,
+      "memory_peak": 87072768,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 791776,
+      "elapsed_seconds": 0.936988,
+      "memory_current": 93343744,
+      "memory_peak": 93343744,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 901213,
+      "elapsed_seconds": 1.05123,
+      "memory_current": 107884544,
+      "memory_peak": 108208128,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1015987,
+      "elapsed_seconds": 1.165896,
+      "memory_current": 116731904,
+      "memory_peak": 116731904,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1129485,
+      "elapsed_seconds": 1.28078,
+      "memory_current": 119226368,
+      "memory_peak": 119353344,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1245479,
+      "elapsed_seconds": 1.396528,
+      "memory_current": 121745408,
+      "memory_peak": 121745408,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1358482,
+      "elapsed_seconds": 1.509884,
+      "memory_current": 159887360,
+      "memory_peak": 159887360,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1463234,
+      "elapsed_seconds": 1.623632,
+      "memory_current": 185843712,
+      "memory_peak": 185843712,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1568552,
+      "elapsed_seconds": 1.737858,
+      "memory_current": 195252224,
+      "memory_peak": 195252224,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1681332,
+      "elapsed_seconds": 1.85294,
+      "memory_current": 211079168,
+      "memory_peak": 211079168,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1790330,
+      "elapsed_seconds": 1.965107,
+      "memory_current": 224518144,
+      "memory_peak": 224600064,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1903303,
+      "elapsed_seconds": 2.078616,
+      "memory_current": 229638144,
+      "memory_peak": 229638144,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2013276,
+      "elapsed_seconds": 2.18887,
+      "memory_current": 239411200,
+      "memory_peak": 239411200,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2124252,
+      "elapsed_seconds": 2.299022,
+      "memory_current": 247959552,
+      "memory_peak": 247959552,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2235194,
+      "elapsed_seconds": 2.41037,
+      "memory_current": 249434112,
+      "memory_peak": 249434112,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2335156,
+      "elapsed_seconds": 2.519347,
+      "memory_current": 258269184,
+      "memory_peak": 258269184,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2439008,
+      "elapsed_seconds": 2.629267,
+      "memory_current": 275636224,
+      "memory_peak": 275636224,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2548011,
+      "elapsed_seconds": 2.738147,
+      "memory_current": 288886784,
+      "memory_peak": 288886784,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2656998,
+      "elapsed_seconds": 2.847034,
+      "memory_current": 288288768,
+      "memory_peak": 288886784,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2757877,
+      "elapsed_seconds": 2.956773,
+      "memory_current": 300785664,
+      "memory_peak": 301047808,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2869839,
+      "elapsed_seconds": 3.068197,
+      "memory_current": 306360320,
+      "memory_peak": 306397184,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2980314,
+      "elapsed_seconds": 3.179198,
+      "memory_current": 315535360,
+      "memory_peak": 315535360,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3089327,
+      "elapsed_seconds": 3.28888,
+      "memory_current": 315535360,
+      "memory_peak": 315535360,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3199321,
+      "elapsed_seconds": 3.398644,
+      "memory_current": 315797504,
+      "memory_peak": 315797504,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3308323,
+      "elapsed_seconds": 3.507187,
+      "memory_current": 315797504,
+      "memory_peak": 315797504,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3417318,
+      "elapsed_seconds": 3.616863,
+      "memory_current": 315797504,
+      "memory_peak": 315797504,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3526322,
+      "elapsed_seconds": 3.725672,
+      "memory_current": 315510784,
+      "memory_peak": 315797504,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3635318,
+      "elapsed_seconds": 3.834785,
+      "memory_current": 315510784,
+      "memory_peak": 315797504,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3746321,
+      "elapsed_seconds": 3.945108,
+      "memory_current": 315351040,
+      "memory_peak": 315797504,
+      "pids": 1
+    }
+  ],
+  "schema_version": "runtime-role-container-benchmark-v1",
+  "source_git_dirty": false,
+  "source_git_sha": "6417f605ef16499eef7a69fafbbc2d56a6c408aa",
+  "workload": {
+    "command": "scripts/benchmark_document_extraction.py",
+    "fixture_scope": "repository-approved synthetic extraction fixtures",
+    "model_cache_read_only": true,
+    "network_expected": false,
+    "workspace_read_only": true
+  },
+  "workload_report": null
+}

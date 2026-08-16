@@ -1,0 +1,6 @@
+# Local classifier and synchronous OCR API.
+-r requirements-ml.txt
+python-multipart==0.0.32
+pillow==12.3.0
+pytesseract==0.3.13
+torchvision==0.28.0+cpu

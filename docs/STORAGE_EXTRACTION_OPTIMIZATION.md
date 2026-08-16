@@ -2,7 +2,7 @@
 
 ## Evidence boundary
 
-This change is verified in source, automated tests, rendered Compose configuration and an isolated local runtime. It has not been deployed, merged, exercised with production traffic or accepted against representative private documents. The extraction benchmark uses only the frozen synthetic corpus fixtures.
+This change is verified in source, automated tests, rendered Compose configuration and an isolated local runtime. It has not been deployed, exercised with production traffic or accepted against representative private documents. The extraction benchmark uses only the frozen synthetic corpus fixtures.
 
 ## Runtime shape
 
@@ -14,13 +14,13 @@ This change is verified in source, automated tests, rendered Compose configurati
 - Terminal queue payloads older than seven days are compacted in bounded batches to content-free receipts, retaining idempotency and terminal outcome. Worker heartbeats older than one day are pruned in bounded batches. Webhook replay cleanup is also bounded and indexed.
 - `rag.extract_document` is a strict, signed, idempotent internal command. Its top-level tenant must equal its `AccessScope` tenant before it can enter the queue.
 - The worker composes manifest inspection and policy authorization before parsing. Docling is primary; Unstructured is used only for the approved empty-primary or unsupported-layout cases and must pass a minimum-text quality gate.
-- Parsing runs in a reusable spawned child. The parent enforces wall time and monitors Linux RSS every 50 ms, kills an over-budget child and checks child-reported peak RSS before accepting a result. The outer worker container provides the hard 5 GiB cgroup ceiling. `RLIMIT_AS` is intentionally not used because PyTorch reserves substantially more virtual address space than its resident set.
+- Parsing runs in a reusable spawned child. The parent enforces wall time and monitors Linux RSS every 50 ms, kills an over-budget child and checks child-reported peak RSS before accepting a result. The outer worker container requires the calibrated `AI_INGEST_MEMORY_LIMIT` cgroup bound. `RLIMIT_AS` is intentionally not used because PyTorch reserves substantially more virtual address space than its resident set.
 
 ## Local verification snapshot (2026-08-16)
 
-- Backend AI: 669 passed, 10 skipped, 88.48% coverage.
+- Backend AI after integration with current `dev`: 793 passed, 12 skipped, 87.92% coverage.
 - Backend Node: 245 passed; TypeScript typecheck passed.
-- Repository verification completed all gates: production dependency audits; API client 23/23; MCP 50/50; Node 245/245 at 100% coverage; BDD 21/21; web 187/187 plus 2 integrations at 100% coverage; backend AI 669 passed/10 skipped at 88.48%; mobile 192/192; builds and typechecks; Pylint 10.00/10. The long aggregate command received a harness SIGTERM only after Pylint printed 10.00/10, so the lint target was rerun separately and exited 0.
+- Repository verification completed all gates: production dependency audits; API client 23/23; MCP 50/50; Node 245/245 at 100% coverage; BDD 21/21; web 187/187 plus 2 integrations at 100% coverage; backend AI 793 passed/12 skipped at 87.92%; mobile 192/192; builds and typechecks; Pylint 10.00/10.
 - Local production-contract tests: 25 passed. Node deployment tests: 10 passed.
 - Producer-to-worker SQLite rehearsal: signed extraction command accepted, claimed from the same database and completed.
 - SQLite growth smoke: 50,000 queued rows; oldest eligible claim 8.026 ms; compacting 1,000 terminal rows 9.482 ms. This is a single local run, not a capacity guarantee.

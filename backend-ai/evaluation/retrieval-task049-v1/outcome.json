@@ -1,0 +1,51 @@
+{
+  "schema_version": "task049-outcome-v1",
+  "decision": "retain-hybrid-bge-v1-reranker",
+  "candidate_promotion": false,
+  "validation_seed_revealed": false,
+  "reason": "No no-reranker candidate passed the predeclared answerable, multilingual and no-answer gates together.",
+  "selected_runtime": {
+    "knowledge_image_id": "sha256:2e824d65029ad7fc307479e2066e689cef2bfb2d4d953a2ec2fe957ddfccfd60",
+    "knowledge_image_size_bytes": 10613987777,
+    "knowledge_image_layers": 13,
+    "model": "BAAI/bge-m3",
+    "model_revision": "5617a9f61b028005a4858fdac845db406aefb181",
+    "device": "AMD gfx1151 via PyTorch ROCm 7.2"
+  },
+  "selected_image_calibration": {
+    "source_git_sha": "1e485370e29058e10582ec081581da5f0c675181",
+    "raw_report_sha256": "dea35f9ea9eed7fae8a510a8c30780123c138164664e8a66a58cb7f9eb93b3b8",
+    "dataset_cases_sha256": "02e2c581f293e2d6a7363072deeb68195acc0b2a39e92b7175f6de2c3600b96b",
+    "dataset_documents_sha256": "da2e6a69c91b9475d99c3b5076b1fd0311f5c9f0ce50a93d6e618a35ac53df3d",
+    "model_load_seconds": 157.032574,
+    "process_peak_rss_mib": 3068.258,
+    "cleanup": {"mongo_database_dropped": true, "qdrant_collection_deleted": true},
+    "dense_t55": {"recall_at_5": 0.8281, "mrr_at_5": 0.8047, "no_answer_accuracy": 0.7604, "p95_ms": 115.633858},
+    "rrf_t55": {"recall_at_5": 0.8438, "mrr_at_5": 0.8438, "no_answer_accuracy": 0.6042, "p95_ms": 135.318929},
+    "score_fusion_d2_l1_t55": {"recall_at_5": 0.8594, "mrr_at_5": 0.8516, "no_answer_accuracy": 0.6042, "p95_ms": 109.671792},
+    "zero_tolerance": {"forbidden_hit_rate": 0.0, "stale_hit_rate": 0.0, "isolation_violation_rate": 0.0, "document_duplicate_rate": 0.0}
+  },
+  "sparse_diagnostics": {
+    "source_git_sha": "1e485370e29058e10582ec081581da5f0c675181",
+    "raw_report_sha256": "418a7e00a855ddcf518c44dc7731d77bea423f61dba56aa555b7fbd8b24a9bd2",
+    "sparse_artifact_sha256": "45c93804d2142b8f6d7ec6914ae23a1eee9c6a1d27d83d908a20d2afb3595ad9",
+    "dense_answerable": {"recall_at_5": 0.9844, "mrr_at_5": 0.9089},
+    "sparse_answerable": {"recall_at_5": 0.9062, "mrr_at_5": 0.8646},
+    "dense_sparse_rrf_answerable": {"recall_at_5": 0.9531, "mrr_at_5": 0.8885},
+    "best_zero_false_positive_confidence_recall": 0.875,
+    "cleanup": {"mongo_database_dropped": true, "dense_collection_deleted": true, "sparse_collection_deleted": true}
+  },
+  "security_scan": {
+    "sbom_components": 772,
+    "sbom_sha256": "ff4f8ba07b826473967363afd84b9fd3fe46a9a6f9965f3428112e4dd1c965cd",
+    "fixed_low_medium_high_critical_findings": 0,
+    "scan_sha256": "bec265aa39ae61a90def09b3e278222fd56f0100a072f94dede2d45209bc4097"
+  },
+  "verification": {
+    "backend_ai": "730 passed, 11 skipped, 87.96% coverage",
+    "compose_contracts": "24 passed",
+    "pylint": "10.00/10",
+    "deployment_changed": false,
+    "production_changed": false
+  }
+}

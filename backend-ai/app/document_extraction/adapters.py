@@ -7,11 +7,14 @@ from importlib.metadata import version
 import json
 from multiprocessing import get_context
 from multiprocessing.connection import Connection
+import os
 from os import sysconf
 from pathlib import Path
 from resource import RUSAGE_SELF, getrusage
 from time import monotonic
-from typing import Callable
+from typing import Callable, Mapping
+
+from .artifacts import ArtifactBundleRejected, verify_artifact_bundle
 
 from .models import (
   ApprovedExtractionRequest,
@@ -30,7 +33,31 @@ from .models import (
 CONTRACT_VERSION = "document-extraction-v1"
 DOCLING_LAYOUT_MODEL_REPOSITORY = "docling-project/docling-layout-heron-onnx"
 DOCLING_LAYOUT_MODEL_REVISION = "40bde044036bb181c130ddf6c51792187268748f"
+DOCLING_TABLE_MODEL_REPOSITORY = "docling-project/docling-models"
+DOCLING_TABLE_MODEL_REVISION = "fc0f2d45e2218ea24bce5045f58a389aed16dc23"
 TESSERACT_CLI_VERSION = "5.3.4"
+
+
+def resolve_docling_artifacts(
+  environment: Mapping[str, str] | None = None,
+) -> Path | None:
+  source = environment if environment is not None else os.environ
+  raw_path = source.get("DOCLING_ARTIFACTS_PATH", "").strip()
+  digest = source.get("DOCLING_ARTIFACTS_MANIFEST_SHA256", "").strip()
+  if not raw_path and not digest:
+    if source.get("APP_ENV") == "production":
+      raise ArtifactBundleRejected("verified Docling artifacts are required in production")
+    return None
+  if not raw_path or not digest:
+    raise ArtifactBundleRejected("Docling artifact path and manifest digest are both required")
+  return verify_artifact_bundle(
+    Path(raw_path),
+    expected_manifest_sha256=digest,
+    expected_repositories={
+      DOCLING_LAYOUT_MODEL_REPOSITORY: DOCLING_LAYOUT_MODEL_REVISION,
+      DOCLING_TABLE_MODEL_REPOSITORY: DOCLING_TABLE_MODEL_REVISION,
+    },
+  )
 
 
 class FallbackReason(str, Enum):
@@ -349,6 +376,7 @@ def _docling_converter(request: ApprovedExtractionRequest):
   })
   layout_options = layout_options.model_copy(update={"model_spec": model_spec})
   pdf_options = PdfPipelineOptions(
+    artifacts_path=resolve_docling_artifacts(),
     document_timeout=request.limits.maximum_wall_seconds,
     enable_remote_services=False,
     allow_external_plugins=False,

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import dataclass
 from math import isfinite, log
+from statistics import fmean, stdev
 import re
 from typing import Protocol, Sequence
 
@@ -10,7 +12,7 @@ import httpx
 from .adapters import is_private_service_url
 from .canonical import CanonicalDocumentStore, canonical_document_is_visible
 from .errors import RerankerUnavailable
-from .ingestion import DeterministicChunker, build_chunk_records
+from .ports import ChunkingEngine
 from .models import RetrievalHit, RetrievalQuery
 from .ports import Retriever
 
@@ -106,7 +108,7 @@ class PrivateVllmReranker:
       raise RerankerUnavailable("reranker candidate bound exceeded")
     try:
       response = self.client.post(
-        f"{self.base_url}/score",
+        f"{self.base_url}/v1/score",
         headers=self._headers,
         json={
           "model": self.model_id,
@@ -144,6 +146,7 @@ class HybridRetrievalCore:
     rrf_k: int = 60,
     dense_rrf_weight: float = _DEFAULT_DENSE_RRF_WEIGHT,
     lexical_rrf_weight: float = _DEFAULT_LEXICAL_RRF_WEIGHT,
+    fusion_mode: str = "rrf",
     title_weight: float = _DEFAULT_TITLE_WEIGHT,
     text_weight: float = _DEFAULT_TEXT_WEIGHT,
     reranker: Reranker | None = None,
@@ -154,6 +157,8 @@ class HybridRetrievalCore:
       raise ValueError("rrf_k must be positive")
     self._validate_weight("dense_rrf_weight", dense_rrf_weight)
     self._validate_weight("lexical_rrf_weight", lexical_rrf_weight)
+    if fusion_mode not in {"rrf", "dbsf"}:
+      raise ValueError("fusion_mode must be 'rrf' or 'dbsf'")
     self._validate_weight("title_weight", title_weight)
     self._validate_weight("text_weight", text_weight)
     if not 1 <= reranker_candidate_limit <= _MAX_RERANKER_CANDIDATES:
@@ -163,6 +168,7 @@ class HybridRetrievalCore:
     self.rrf_k = rrf_k
     self.dense_rrf_weight = float(dense_rrf_weight)
     self.lexical_rrf_weight = float(lexical_rrf_weight)
+    self.fusion_mode = fusion_mode
     self.title_weight = float(title_weight)
     self.text_weight = float(text_weight)
     self.reranker = reranker
@@ -208,6 +214,8 @@ class HybridRetrievalCore:
     dense_order: Sequence[RetrievalHit],
     lexical_order: Sequence[RetrievalHit],
   ) -> list[RetrievalHit]:
+    if self.fusion_mode == "dbsf":
+      return self._fuse_dbsf(dense_order, lexical_order)
     candidates = {item.chunk_id: item for item in lexical_order}
     candidates.update({item.chunk_id: item for item in dense_order})
     scores = {chunk_id: 0.0 for chunk_id in candidates}
@@ -227,6 +235,39 @@ class HybridRetrievalCore:
       fused,
       key=lambda item: (-item.score, item.chunk_id, item.document_id),
     )
+
+  def _fuse_dbsf(
+    self,
+    dense_order: Sequence[RetrievalHit],
+    lexical_order: Sequence[RetrievalHit],
+  ) -> list[RetrievalHit]:
+    candidates = {item.chunk_id: item for item in lexical_order}
+    candidates.update({item.chunk_id: item for item in dense_order})
+    scores = {chunk_id: 0.0 for chunk_id in candidates}
+    for ranking, weight in (
+      (dense_order, self.dense_rrf_weight),
+      (lexical_order, self.lexical_rrf_weight),
+    ):
+      normalized = self._dbsf_scores([item.score for item in ranking])
+      for item, score in zip(ranking, normalized, strict=True):
+        scores[item.chunk_id] += weight * score
+    fused = [
+      item.model_copy(update={"score": scores[item.chunk_id]})
+      for item in candidates.values()
+    ]
+    return sorted(fused, key=lambda item: (-item.score, item.chunk_id, item.document_id))
+
+  @staticmethod
+  def _dbsf_scores(scores: Sequence[float]) -> list[float]:
+    if len(scores) < 2:
+      return [0.5 for _ in scores]
+    deviation = stdev(scores)
+    if deviation == 0:
+      return [0.5 for _ in scores]
+    center = fmean(scores)
+    lower = center - (3 * deviation)
+    span = 6 * deviation
+    return [(score - lower) / span for score in scores]
 
   def _rerank(self, query_text: str, fused: list[RetrievalHit]) -> list[RetrievalHit]:
     reranker = self.reranker
@@ -391,7 +432,7 @@ class CanonicalBm25Retriever:
     document_store: CanonicalDocumentStore,
     *,
     embedding_version: str,
-    chunker: DeterministicChunker | None = None,
+    chunking_engine: ChunkingEngine,
     title_weight: float = _DEFAULT_TITLE_WEIGHT,
     text_weight: float = _DEFAULT_TEXT_WEIGHT,
   ):
@@ -399,7 +440,7 @@ class CanonicalBm25Retriever:
     HybridRetrievalCore._validate_weight("text_weight", text_weight)
     self.document_store = document_store
     self.embedding_version = embedding_version
-    self.chunker = chunker or DeterministicChunker()
+    self.chunking_engine = chunking_engine
     self.title_weight = float(title_weight)
     self.text_weight = float(text_weight)
 
@@ -423,11 +464,7 @@ class CanonicalBm25Retriever:
       document = state.document
       if not canonical_document_is_visible(document, query):
         continue
-      for chunk in build_chunk_records(
-        document,
-        self.chunker,
-        embedding_version=self.embedding_version,
-      ):
+      for chunk in self.chunking_engine.build(document, embedding_version=self.embedding_version):
         candidates.append(RetrievalHit(
           chunk_id=chunk.chunk_id,
           document_id=chunk.document_id,
@@ -462,6 +499,45 @@ class CanonicalBm25Retriever:
     )[:query.limit]
 
 
+@dataclass(frozen=True)
+class RetrievalConfidencePolicy:
+  """Calibration-owned abstention policy over source-native retrieval scores."""
+
+  dense_top_min: float = 0.40
+  strong_dense_top_min: float = 0.61
+  dense_margin_min: float = 0.05
+  lexical_top_min: float = 2.0
+
+  def __post_init__(self) -> None:
+    dense_values = (self.dense_top_min, self.strong_dense_top_min, self.dense_margin_min)
+    if (
+      any(not isfinite(value) or not 0 <= value <= 1 for value in dense_values)
+      or self.strong_dense_top_min < self.dense_top_min
+      or not isfinite(self.lexical_top_min)
+      or self.lexical_top_min <= 0
+    ):
+      raise ValueError("invalid retrieval confidence thresholds")
+
+  def accepts(
+    self,
+    dense_candidates: Sequence[RetrievalHit],
+    lexical_candidates: Sequence[RetrievalHit],
+  ) -> bool:
+    dense_scores = sorted((item.score for item in dense_candidates), reverse=True)
+    if not dense_scores or dense_scores[0] < self.dense_top_min:
+      return False
+    if not lexical_candidates:
+      return False
+    dense_second = dense_scores[1] if len(dense_scores) > 1 else 0.0
+    dense_margin = dense_scores[0] - dense_second
+    lexical_top = max(item.score for item in lexical_candidates)
+    return (
+      dense_scores[0] >= self.strong_dense_top_min
+      or dense_margin >= self.dense_margin_min
+      or lexical_top >= self.lexical_top_min
+    )
+
+
 class HybridRetriever:
   """Composes canonical dense and lexical retrievers with weighted RRF."""
 
@@ -473,20 +549,24 @@ class HybridRetriever:
     rrf_k: int = 60,
     dense_rrf_weight: float = _DEFAULT_DENSE_RRF_WEIGHT,
     lexical_rrf_weight: float = _DEFAULT_LEXICAL_RRF_WEIGHT,
+    fusion_mode: str = "rrf",
     candidate_multiplier: int = 4,
     reranker: Reranker | None = None,
     reranker_candidate_limit: int = 20,
     reranker_weight: float = 1.0,
+    confidence_policy: RetrievalConfidencePolicy | None = None,
   ):
     if candidate_multiplier < 1:
       raise ValueError("candidate_multiplier must be positive")
     self.dense_retriever = dense_retriever
     self.lexical_retriever = lexical_retriever
     self.candidate_multiplier = candidate_multiplier
+    self.confidence_policy = confidence_policy
     self.core = HybridRetrievalCore(
       rrf_k=rrf_k,
       dense_rrf_weight=dense_rrf_weight,
       lexical_rrf_weight=lexical_rrf_weight,
+      fusion_mode=fusion_mode,
       reranker=reranker,
       reranker_candidate_limit=reranker_candidate_limit,
       reranker_weight=reranker_weight,
@@ -494,7 +574,16 @@ class HybridRetriever:
 
   def retrieve(self, query: RetrievalQuery) -> list[RetrievalHit]:
     candidate_limit = min(20, max(query.limit, query.limit * self.candidate_multiplier))
-    candidate_query = query.model_copy(update={"limit": candidate_limit})
+    candidate_update = {"limit": candidate_limit}
+    if self.confidence_policy is not None:
+      candidate_update["score_threshold"] = -1.0
+    candidate_query = query.model_copy(update=candidate_update)
     dense_candidates = self.dense_retriever.retrieve(candidate_query)
     lexical_candidates = self.lexical_retriever.retrieve(candidate_query)
-    return self.core.rank(query, dense_candidates, lexical_candidates)
+    ranked = self.core.rank(query, dense_candidates, lexical_candidates)
+    if (
+      self.confidence_policy is not None
+      and not self.confidence_policy.accepts(dense_candidates, lexical_candidates)
+    ):
+      return []
+    return ranked

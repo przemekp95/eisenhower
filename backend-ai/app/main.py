@@ -20,7 +20,7 @@ from .defaults import QUADRANT_NAMES
 from .document_extraction.models import OCRRequest
 from .local_model import ModelNotReadyError
 from .generation.models import KnownStatement
-from .jobs import JobConflictError, SqliteJobQueue
+from .jobs import JobConflictError, QueueCapacityExceeded, SqliteJobQueue
 from .metrics import MetricsRegistry
 from .ops.response_canary import ResponseCanaryRouter
 from .rag.errors import RerankerUnavailable
@@ -33,6 +33,7 @@ from .rag.models import (
 )
 from .service import ProviderDisabledError, QuadrantAIService
 from .security_controls import SlidingWindowRateLimiter
+from .runtime_limits import configure_torch_threads
 from .store import TrainingStore
 from .webhooks import WebhookReplayVerifier, parse_webhook_envelope
 
@@ -174,6 +175,7 @@ def create_app(
   audit_sink=None,
 ) -> FastAPI:
   resolved_settings = settings or load_settings()
+  configure_torch_threads()
   resolved_store = store or TrainingStore(resolved_settings.training_data_path)
 
   resolved_ai_service = ai_service or QuadrantAIService(
@@ -217,7 +219,10 @@ def create_app(
       service_id="n8n-ingestion",
       scopes=["rag:ingest"],
     )
-    job_queue = SqliteJobQueue(resolved_settings.jobs_database_path)
+    job_queue = SqliteJobQueue(
+      resolved_settings.jobs_database_path,
+      max_queued_jobs=resolved_settings.jobs_max_queued,
+    )
   if resolved_settings.webhook_secret:
     webhook_verifier = WebhookReplayVerifier(
       resolved_settings.model_cache_dir / "webhook-replay.sqlite3",
@@ -819,7 +824,14 @@ def create_app(
       if key not in {"operation", "schema_version"}
     }
     try:
-      job = job_queue.enqueue(event_id, WEBHOOK_JOB_TYPES[operation], payload)
+      try:
+        job = job_queue.enqueue(event_id, WEBHOOK_JOB_TYPES[operation], payload)
+      except QueueCapacityExceeded as issue:
+        raise HTTPException(
+          status_code=503,
+          detail="Ingestion queue is full; retry later.",
+          headers={"Retry-After": "30"},
+        ) from issue
     except JobConflictError as exception:
       raise HTTPException(status_code=409, detail=str(exception)) from exception
     if not webhook_verifier.reserve_event(event_id):

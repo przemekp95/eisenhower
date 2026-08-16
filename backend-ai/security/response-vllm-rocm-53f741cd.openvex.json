@@ -1,0 +1,49 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://eisenhower.local/security/openvex/response-vllm-rocm/53f741cd77fca49d1932ebea42b77af998e1f06b",
+  "author": "Eisenhower repository owner",
+  "timestamp": "2026-08-15T22:16:00+02:00",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {"name": "CVE-2026-23949"},
+      "products": [{
+        "@id": "pkg:oci/eisenhower-vllm-rocm@sha256:8abffc2366246cd1b8c4eddfa18e2248793d1d5a8731a9a6f9d57c2f4db1ca5e?arch=amd64&repository_url=index.docker.io%2Flocal%2Feisenhower-vllm-rocm",
+        "subcomponents": [{"@id": "pkg:pypi/jaraco.context@5.3.0"}]
+      }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The affected tar extraction helper is vendored in setuptools; the offline vllm serve runtime does not build or extract Python packages."
+    },
+    {
+      "vulnerability": {"name": "CVE-2026-59890"},
+      "products": [{
+        "@id": "pkg:oci/eisenhower-vllm-rocm@sha256:8abffc2366246cd1b8c4eddfa18e2248793d1d5a8731a9a6f9d57c2f4db1ca5e?arch=amd64&repository_url=index.docker.io%2Flocal%2Feisenhower-vllm-rocm",
+        "subcomponents": [{"@id": "pkg:pypi/setuptools@79.0.1"}]
+      }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The affected sdist MANIFEST.in build path is not invoked by the offline vllm serve runtime; setuptools remains only to satisfy the pinned vLLM package contract."
+    },
+    {
+      "vulnerability": {"name": "CVE-2026-24049"},
+      "products": [{
+        "@id": "pkg:oci/eisenhower-vllm-rocm@sha256:8abffc2366246cd1b8c4eddfa18e2248793d1d5a8731a9a6f9d57c2f4db1ca5e?arch=amd64&repository_url=index.docker.io%2Flocal%2Feisenhower-vllm-rocm",
+        "subcomponents": [{"@id": "pkg:pypi/wheel@0.45.1"}]
+      }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The affected malicious-wheel unpack path is a vendored setuptools build utility and is not invoked by the offline vllm serve runtime."
+    },
+    {
+      "vulnerability": {"name": "CVE-2025-3000"},
+      "products": [{
+        "@id": "pkg:oci/eisenhower-vllm-rocm@sha256:8abffc2366246cd1b8c4eddfa18e2248793d1d5a8731a9a6f9d57c2f4db1ca5e?arch=amd64&repository_url=index.docker.io%2Flocal%2Feisenhower-vllm-rocm",
+        "subcomponents": [{"@id": "pkg:pypi/torch@2.11.0%2Bgitd0c8b1f"}]
+      }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "NVD identifies the affected configuration as PyTorch 2.6.0; this exact image contains PyTorch 2.11.0+gitd0c8b1f."
+    }
+  ]
+}

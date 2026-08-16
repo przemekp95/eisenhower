@@ -1,6 +1,6 @@
 # Done
 
-## TASK-050: Optimize MongoDB, SQLite and governed document extraction
+## TASK-053: Optimize MongoDB, SQLite and governed document extraction
 **Priority:** P0 | **Tags:** mongodb, sqlite, docling, unstructured, performance, reliability
 
 Repair the local asynchronous ingestion path and make the MongoDB, SQLite and Docling/Unstructured runtime bounded, observable and benchmarked without weakening canonical data, audit, idempotency or fail-closed extraction contracts.
@@ -16,8 +16,123 @@ Repair the local asynchronous ingestion path and make the MongoDB, SQLite and Do
 
 ### Outcome
 
-Repaired the split SQLite queue by mounting one durable volume into producer and worker, added WAL/FULL durability, query-aligned claim/cleanup indexes, bounded retention with compact idempotency receipts, stale-heartbeat cleanup and bounded per-job-type metrics. Added strict signed `rag.extract_document` producer/worker contracts and composed manifest-governed Docling plus controlled Unstructured fallback into a reusable spawned child with enforced wall time, monitored RSS kill, a 5 GiB outer cgroup bound, converter reuse, quality gates and source spans. Bounded Mongo pools/timeouts, aligned task/calendar/RAG/memory indexes, stored memory expirations as BSON dates for TTL, and set explicit 0.25 GiB WiredTiger/1 GiB container defaults. Local evidence includes a shared-queue producer-to-worker run, Mongo `IXSCAN` without blocking sort, 50k-row SQLite smoke, 11-case cold/warm extraction smoke, real reused-child extraction and an over-cap kill. Full repository gates passed; no commit, merge, deployment, production traffic or representative private-document acceptance was performed.
+Repaired the split SQLite queue by mounting one durable volume into producer and worker, added WAL/FULL durability, query-aligned claim/cleanup indexes, bounded retention with compact idempotency receipts, stale-heartbeat cleanup and bounded per-job-type metrics. Added strict signed `rag.extract_document` producer/worker contracts and composed manifest-governed Docling plus controlled Unstructured fallback into a reusable spawned child with enforced wall time, monitored RSS kill, a calibrated outer ingest cgroup bound, converter reuse, quality gates and source spans. Bounded Mongo pools/timeouts, aligned task/calendar/RAG/memory indexes, stored memory expirations as BSON dates for TTL, and set explicit 0.25 GiB WiredTiger/1 GiB container defaults. Local evidence includes a shared-queue producer-to-worker run, Mongo `IXSCAN` without blocking sort, 50k-row SQLite smoke, 11-case cold/warm extraction smoke, real reused-child extraction and an over-cap kill. Full repository gates passed after integration with current `dev`; no deployment, production traffic or representative private-document acceptance was performed.
 
+---
+
+## TASK-052: Migrate RAG mechanics to LlamaIndex and isolate the heavy knowledge runtime
+**Priority:** P1 | **Tags:** rag, llamaindex, migration, knowledge-service, mikrus
+
+Replace the long-term custom RAG mechanics incrementally with a minimal pinned LlamaIndex engine behind Eisenhower-owned application ports, while preserving MongoDB truth, authorization, canonical revalidation, stable transport contracts and a reversible rollout. Keep the small Mikrus profile limited to the lightweight web/API boundary and place embeddings, retrieval/reranking, ingest/OCR and generation in a private knowledge service on a measured stronger host.
+
+### Plan
+
+- Make the LlamaIndex retrieval and ingestion composition independently startable without constructing the replaced legacy Qdrant/chunking path.
+- Route ordinary ingest, replay, tombstone, reconcile and reindex through the versioned LlamaIndex projection while preserving Mongo ordering, idempotency and canonical fail-closed revalidation.
+- Replace chunk-ID overlap telemetry with frozen-corpus relevance, citation/no-answer, isolation, stale/tombstone and latency evidence; keep aggregate-only shadow observations.
+- Implement a guarded local alias cutover and physical-collection rollback rehearsal, with the previous collection retained and exact-current checks.
+- Remove only the superseded legacy mechanics after candidate-only, parity and rollback gates pass; retain Eisenhower-owned domain policy, DTOs, ports, auth, audit and fallback.
+- Fix and verify the lightweight Mikrus boundary contract, then run focused red-green, broad tests/lint/audits, Docker/Compose and bounded local runtime evidence without claiming deployment or production.
+
+### Outcome
+
+Cut ordinary retrieval, ingest, replay, tombstone, reconcile and reindex over to exact-pinned LlamaIndex `IngestionPipeline`, cache and Qdrant projection behind Eisenhower ports, selected the shared `llama-sentence-256-32-v1` node identity, and removed the superseded retriever, ingestion adapter, deterministic chunker and shadow router. Mongo remains canonical; tenant/project/ACL revalidation, `source_sequence`, checksum/version, stale/conflict rejection, tombstones, citations, fallback, auth, audit and stable HTTP/MCP/job DTOs remain Eisenhower-owned. Added fail-closed alias preflight/apply/rollback tooling with mandatory durable attempt/result audit and compensation on result-audit failure, and blocked candidate backfill after activation; disposable Qdrant 1.18.2 served the candidate through the alias and served retained legacy data again after rollback.
+
+The selected 36-case unapproved local report recorded hybrid Recall@k 0.9107, MRR 0.6577, citation correctness/recall and no-answer accuracy 1.0, freshness 1.0, zero stale/forbidden/isolation hits and p95 54.00 ms. This improves the historical local incumbent but does not meet the proposed unapproved MRR 0.8 threshold and is not human/holdout acceptance. Fresh verification passed 657 backend tests with 12 opt-in skips, Pylint 10.00/10, 240 Node tests plus build, 50 MCP tests, 25 deployment-profile tests, actionlint, Compose rendering, Python/Node/web/mobile dependency audits, and two live Qdrant tests. Final Trivy scans found zero fixable HIGH/CRITICAL findings in both built images.
+
+The local boundary image is 51,145,114 bytes, reached liveness in 478 ms at 41.27 MiB observed RSS, failed readiness with HTTP 503 when its private upstream was absent, and contains none of torch, torchvision, Docling, Unstructured, ONNX, Tesseract or LlamaIndex. The final private knowledge image is 935,476,896 bytes; isolated LlamaIndex engine initialization took 1.07 s and 141.45 MiB peak RSS on this 109.7 GiB development host. These measurements do not size Mikrus or production. No push, PR, merge, persistent alias change, deployment, Mikrus modification or public production promotion was performed.
+
+---
+
+## TASK-050: Improve single-stage retrieval quality without consuming sealed validation
+**Priority:** P2 | **Tags:** ai, rag, retrieval, quality, evaluation
+
+Improve the no-reranker candidate on calibration/train-dev evidence without introducing another cross-encoder or
+ColBERT service, weakening zero-tolerance safety, tuning on consumed holdouts, or changing the selected runtime
+before every predeclared quality gate passes.
+
+### Plan
+
+- Characterize TASK-049 failures by language and category using only calibration evidence, keeping the validation
+  seed sealed and guarding all earlier holdouts against overlap.
+- Add the smallest project-owned confidence or fusion improvement behind the existing Retriever/evaluation
+  boundary, starting with a failing behavior test and preserving ACL, canonical Mongo and rebuildable Qdrant.
+- Run focused and relevant backend tests, Compose contracts and static checks; execute fresh physical calibration
+  only if the local candidate is eligible, then either retain the reranker or proceed through the sealed gate.
+- Record the measured quality/resource tradeoff and rollback decision without promotion, deployment or production
+  changes.
+
+### Outcome
+
+Added an unselected post-fusion confidence and structured-identifier evidence candidate after proving the old
+dense/BM25 threshold scales were incomparable. Development improved to Recall@5 0.9688, MRR 0.9297 and p95
+120.84 ms, but the independently seeded physical qualification failed at 0.8594/0.8594, no-answer 0.8942 and
+134.77 ms p95, with PL Recall@5 only 0.75. Security/isolation stayed green, the original validation remained
+sealed and `hybrid-bge-v1` plus its private reranker remains selected. Backend AI passed 745/11 skipped at
+88.03%, Compose contracts 24/24 and four renders passed, and the 772-component selected image had zero fixed
+LOW/MEDIUM/HIGH/CRITICAL findings. No push, merge, deployment or production change occurred. Full evidence is
+in `docs/ai-rebuild/retrieval-task050.md`.
+
+---
+
+## TASK-049: Qualify retrieval without a separate reranker
+**Priority:** P1 | **Tags:** ai, rag, retrieval, bge-m3, qdrant, performance
+
+Raise multilingual retrieval quality enough to remove the separately served cross-encoder from the selected
+response topology, while preserving ACL, canonical Mongo/Qdrant projection, sealed evaluation, rollback and
+all public contracts. Evaluate BGE-M3 dense retrieval first, add lightweight score-aware fusion when needed,
+and consider dense+sparse BGE-M3 only if the simpler candidates miss the predeclared quality gate.
+
+### Plan
+
+- Freeze a new PL/EN calibration/validation contract without tuning on consumed holdouts; predeclare quality,
+  isolation, latency and resource gates.
+- Characterize BGE-M3 dense and weighted-RRF, then add score-aware fusion behind the existing Retriever port.
+- Add a versioned native BGE-M3 sparse projection only if simpler candidates miss the calibration gate.
+- Select no-reranker only after sealed validation; otherwise retain the incumbent and verified rollback.
+
+### Outcome
+
+Added project-owned DBSF score fusion and a minimal hash-pinned native BGE-M3 sparse head with a separate named
+Qdrant projection, without adding FlagEmbedding's training stack or changing HTTP/MCP/jobs contracts. Fresh
+physical gfx1151 calibration on the selected dedicated PyTorch/ROCm image kept every ACL/stale/isolation safety
+metric green, but the best score-fusion candidate reached only Recall@5 0.8594, MRR 0.8516 and no-answer 0.6042;
+dense+sparse also regressed answerable ranking versus dense and no zero-false-positive gate reached 0.90 recall.
+The validation seed therefore remained sealed and `hybrid-bge-v1` plus its existing private reranker remains the
+selected strategy. Backend AI 730/11 skipped at 87.96%, 24 Compose contracts, Pylint 10.00/10 and a fresh
+772-component/zero-fixed-finding image scan passed. No push, merge, deployment, production or public endpoint
+change occurred. Full evidence is in `docs/ai-rebuild/retrieval-task049.md`.
+
+---
+
+## TASK-048: Split and bound the AI runtime by operational role
+**Priority:** P1 | **Tags:** ai, runtime, docker, rocm, retrieval, reliability
+
+Reduce the backend AI footprint without changing public contracts: separate lightweight online boundaries, classification, knowledge retrieval/response and offline ingest dependencies; require an approved classifier artifact; make heavy runtime profiles explicit; and add measured resource, queue and vLLM lifecycle controls with rollback.
+
+### Plan
+
+- Characterize current images, dependencies, startup training, Compose actions, private HTTP/auth, jobs and retrieval quality gates before changing behavior.
+- Split role-specific dependency sets and image targets while keeping framework types behind project-owned ports and keeping Mongo canonical with Qdrant rebuildable.
+- Require an approved hash-verified classifier artifact at production startup and move training to an explicit offline command.
+- Add explicit core, retrieval, response and full profiles plus private authorized vLLM sleep/wake orchestration with bounded timeouts, readiness, cold-wake and fallback.
+- Add measured CPU/RAM/PID/thread/worker/queue limits, deterministic model/cache handling and benchmark tooling for latency, resources, failures and frozen retrieval quality.
+- Run test-first focused and broad verification, Compose rendering, image/SBOM/security checks and available local measurements; report hardware/deployment/production gaps separately.
+
+### Outcome
+
+Split the AI runtime into a 248 MB HTTP/auth/audit boundary, fail-closed offline-artifact classifier,
+dedicated knowledge and hash-verified ingest roles; made core the default and retrieval/response/full explicit.
+Selected the dedicated pinned PyTorch/ROCm knowledge image and official vLLM 0.26 response image after physical
+gfx1151, exact-image SBOM, all-severity scan/VEX and bounded failure measurements. Added measured response
+CPU/RAM/PID/thread limits, capacity-128 jobs, private authorized mutex-protected stop/wake with bounded probes
+and partial cleanup. The one-shot frozen holdout rejected the no-reranker simplification under the declared
+quality policy without fabricating human decisions. A local response-only rollback switched exact v0.26 to
+retained v0.20 and back, preserving Bearer/readiness/limits with zero OOM/restarts. Backend AI 700/11 skipped,
+local contracts 24/24, four Compose renders, shell/diff checks and independent security review are green. The
+detailed before/after evidence and remaining production/cold-storage risks are in
+`docs/ai-rebuild/runtime-footprint-task048.md`. No push, merge, branch deployment, production change or public
+endpoint occurred.
 ---
 
 ## TASK-045: Resolve default-branch Dependabot alerts and promote green dev

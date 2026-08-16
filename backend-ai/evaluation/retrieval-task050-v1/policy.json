@@ -1,0 +1,48 @@
+{
+  "schema_version": "task050-policy-v1",
+  "evidence_split": "development_only",
+  "development_seed_sha256": "0b9147034cc85ae4722c508339e3ad34fc42fe8884fa805ba50999dce490f8dd",
+  "task049_validation_seed_sha256": "4ec4be9de8d2eb2e440e4f793791a62ef55ace8ee2e552d6ffd2405661c2deda",
+  "validation_seed_must_remain_sealed": true,
+  "k": 5,
+  "global": {
+    "recall_at_k_min": 0.9,
+    "mrr_at_k_min": 0.8,
+    "no_answer_accuracy_min": 1.0
+  },
+  "languages": {
+    "recall_at_k_min": 0.85,
+    "mrr_at_k_min": 0.75
+  },
+  "safety": {
+    "forbidden_hit_rate_max": 0.0,
+    "stale_hit_rate_max": 0.0,
+    "isolation_violation_rate_max": 0.0,
+    "document_duplicate_rate_max": 0.0
+  },
+  "latency": {
+    "warm_p95_ms_max": 125.0,
+    "incumbent_ratio_max": 0.6
+  },
+  "candidates": {
+    "bge-m3-dbsf-d2-l1-confidence-id-v1": {
+      "strategy": "hybrid-score-confidence-v1",
+      "score_threshold": 0.4,
+      "fusion_mode": "dbsf",
+      "dense_weight": 2.0,
+      "lexical_weight": 1.0,
+      "rrf_k": null,
+      "identifier_evidence_required": true,
+      "confidence": {
+        "dense_top_min": 0.4,
+        "strong_dense_top_min": 0.61,
+        "dense_margin_min": 0.05,
+        "lexical_top_min": 5.0
+      }
+    }
+  },
+  "promotion": {
+    "allowed_from_development_result": false,
+    "next_gate": "new_sealed_validation_only_after_every_development_quality_and_safety_check_passes"
+  }
+}

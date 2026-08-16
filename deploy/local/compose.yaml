@@ -8,6 +8,7 @@ x-common: &common
 services:
   web:
     <<: *common
+    profiles: [access, response, full]
     image: ${WEB_IMAGE:?WEB_IMAGE must be a versioned tag or digest}
     environment:
       - VITE_API_URL=/api
@@ -103,14 +104,42 @@ services:
 
   ai-service:
     <<: *common
-    image: ${AI_IMAGE:?AI_IMAGE must be a versioned tag or digest}
+    image: ${AI_BOUNDARY_IMAGE:?AI_BOUNDARY_IMAGE must be a versioned tag or digest}
     group_add: ["1001"]
     ports:
       - "${AI_BIND_ADDRESS:-127.0.0.1}:${AI_BIND_PORT:-8000}:8000"
     environment:
       - APP_ENV=production
       - AUTH_MODE=oidc
+      - EISENHOWER_API_TOKEN=${EISENHOWER_API_TOKEN:-unused-in-oidc-mode}
+      - EISENHOWER_ADMIN_TOKEN=${EISENHOWER_ADMIN_TOKEN:-unused-in-oidc-mode}
       - EISENHOWER_INTERNAL_API_TOKEN=${EISENHOWER_INTERNAL_API_TOKEN:?EISENHOWER_INTERNAL_API_TOKEN is required}
+      - INTERNAL_ALLOWED_TENANTS=${INTERNAL_ALLOWED_TENANTS:?INTERNAL_ALLOWED_TENANTS is required}
+      - OIDC_ISSUER=${OIDC_ISSUER:?OIDC_ISSUER is required}
+      - OIDC_AUDIENCE=${OIDC_AUDIENCE:?OIDC_AUDIENCE is required}
+      - OIDC_JWKS_URL=${OIDC_JWKS_URL:?OIDC_JWKS_URL is required}
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://127.0.0.1}
+      - AUDIT_HMAC_KEY=${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY is required}
+      - AUDIT_DATABASE_PATH=/app/audit/audit.sqlite3
+      - RELEASE_SHA=${RELEASE_SHA:?RELEASE_SHA is required}
+      - CLASSIFIER_SERVICE_URL=http://classifier-service:8000
+      - KNOWLEDGE_SERVICE_URL=${KNOWLEDGE_SERVICE_URL:-http://classifier-service:8000}
+      - AI_ROLE_ALLOWED_HOSTS=classifier-service,knowledge-service
+    volumes:
+      - audit_data:/app/audit
+    mem_limit: ${AI_BOUNDARY_MEMORY_LIMIT:?calibrated AI boundary memory limit is required}
+    cpus: ${AI_BOUNDARY_CPU_LIMIT:?calibrated AI boundary CPU limit is required}
+    pids_limit: ${AI_BOUNDARY_PID_LIMIT:?calibrated AI boundary PID limit is required}
+
+  classifier-service:
+    <<: *common
+    image: ${AI_CLASSIFIER_IMAGE:?AI_CLASSIFIER_IMAGE must be a versioned tag or digest}
+    group_add: ["1001"]
+    environment:
+      - APP_ENV=production
+      - AUTH_MODE=oidc
+      - EISENHOWER_INTERNAL_API_TOKEN=${EISENHOWER_INTERNAL_API_TOKEN:?EISENHOWER_INTERNAL_API_TOKEN is required}
+      - EISENHOWER_WEBHOOK_SECRET=${EISENHOWER_WEBHOOK_SECRET:?EISENHOWER_WEBHOOK_SECRET is required}
       - INTERNAL_ALLOWED_TENANTS=${INTERNAL_ALLOWED_TENANTS:?INTERNAL_ALLOWED_TENANTS is required}
       - OIDC_ISSUER=${OIDC_ISSUER:?OIDC_ISSUER is required}
       - OIDC_AUDIENCE=${OIDC_AUDIENCE:?OIDC_AUDIENCE is required}
@@ -124,13 +153,16 @@ services:
       - LOCAL_MODEL_REQUIRE_EVALUATION=true
       - LOCAL_MODEL_EVALUATION_PROFILE=production
       - LOCAL_MODEL_APPROVED_EVALUATION_SHA256=${LOCAL_MODEL_APPROVED_EVALUATION_SHA256:?approved evaluation digest is required}
+      - LOCAL_MODEL_APPROVED_ARTIFACT_SHA256=${LOCAL_MODEL_APPROVED_ARTIFACT_SHA256:?approved classifier pointer digest is required}
+      - LOCAL_MODEL_ARTIFACT_DIR=/app/model-artifacts
+      - MODEL_CACHE_DIR=/app/runtime
       - LOCAL_MODEL_OWNER_APPROVAL_BYPASS=${LOCAL_MODEL_OWNER_APPROVAL_BYPASS:-false}
       - LOCAL_MODEL_OWNER_APPROVAL_VALID_UNTIL=${LOCAL_MODEL_OWNER_APPROVAL_VALID_UNTIL:-}
       - EVALUATION_DATA_PATH=/app/evaluation/production.json
       - AI_MANAGEMENT_ENABLED=false
-      - RAG_ENABLED=${RAG_ENABLED:-false}
-      - RAG_RETRIEVAL_ENABLED=${RAG_RETRIEVAL_ENABLED:-false}
-      - RAG_RETRIEVAL_STRATEGY=${RAG_RETRIEVAL_STRATEGY:-hybrid-bge-v1}
+      - RAG_ENABLED=false
+      - RAG_RETRIEVAL_ENABLED=false
+      - RAG_RETRIEVAL_STRATEGY=dense-v1
       - RAG_GENERATION_ENABLED=false
       - RAG_RESPONSE_ENABLED=false
       - RAG_RESPONSE_PROMOTION_POINTER_PATH=/app/promotion/current.json
@@ -143,7 +175,6 @@ services:
       - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/eisenhower?replicaSet=rs0}
       - MONGODB_DATABASE=${MONGODB_DATABASE:-eisenhower}
       - CANONICAL_DOCUMENTS_COLLECTION=${CANONICAL_DOCUMENTS_COLLECTION:-rag_documents}
-      - JOBS_DATABASE_PATH=/app/data/jobs.sqlite3
       - RERANKER_BASE_URL=${RERANKER_BASE_URL:-http://reranker:8000}
       - RERANKER_API_KEY=${RERANKER_API_KEY:-}
       - RERANKER_ALLOWED_HOSTS=${RERANKER_ALLOWED_HOSTS:-reranker}
@@ -151,17 +182,33 @@ services:
       - INFERENCE_API_KEY=${INFERENCE_API_KEY:-}
       - INFERENCE_MODEL=${INFERENCE_MODEL:-}
       - INFERENCE_ALLOWED_HOSTS=${INFERENCE_ALLOWED_HOSTS:-inference}
+      - JOBS_DATABASE_PATH=/app/data/jobs.sqlite3
+      - JOBS_MAX_QUEUED=${JOBS_MAX_QUEUED:?measured bounded queue capacity is required}
+      - OMP_NUM_THREADS=${AI_CLASSIFIER_OMP_THREADS:?measured classifier OMP thread limit is required}
+      - MKL_NUM_THREADS=${AI_CLASSIFIER_OMP_THREADS:?measured classifier OMP thread limit is required}
+      - OPENBLAS_NUM_THREADS=${AI_CLASSIFIER_OMP_THREADS:?measured classifier OMP thread limit is required}
+      - NUMEXPR_NUM_THREADS=${AI_CLASSIFIER_OMP_THREADS:?measured classifier OMP thread limit is required}
+      - TORCH_NUM_THREADS=${AI_CLASSIFIER_TORCH_THREADS:?measured classifier Torch thread limit is required}
+      - TOKENIZERS_PARALLELISM=false
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
     volumes:
-      - rag_jobs:/app/data
       - model_cache:/home/app/.cache/huggingface
+      - classifier_runtime:/app/runtime
+      - rag_jobs:/app/data
       - audit_data:/app/audit
+      - ${AI_CLASSIFIER_ARTIFACT_ROOT:?approved classifier artifact directory is required}:/app/model-artifacts:ro
       - ${AI_EVALUATION_FILE:?approved evaluation file is required}:/app/evaluation/production.json:ro
       - ${AI_PROMOTION_ROOT:-./.runtime/promotion}:/app/promotion:ro
+    mem_limit: ${AI_CLASSIFIER_MEMORY_LIMIT:?calibrated classifier memory limit is required}
+    cpus: ${AI_CLASSIFIER_CPU_LIMIT:?calibrated classifier CPU limit is required}
+    pids_limit: ${AI_CLASSIFIER_PID_LIMIT:?calibrated classifier PID limit is required}
 
   knowledge-service:
     <<: *common
-    image: ${AI_IMAGE:?AI_IMAGE must be a versioned tag or digest}
-    command: ["uvicorn", "app.knowledge_runtime:from_environment", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+    image: ${AI_KNOWLEDGE_IMAGE:?AI_KNOWLEDGE_IMAGE must be a versioned tag or digest}
+    command: ["python", "-m", "uvicorn", "app.knowledge_runtime:from_environment", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+    profiles: [retrieval, response, full]
     group_add: ["1001"]
     depends_on:
       mongodb:
@@ -182,13 +229,23 @@ services:
       - RELEASE_SHA=${RELEASE_SHA:?RELEASE_SHA is required}
       - AI_MANAGEMENT_ENABLED=false
       - RAG_RETRIEVAL_ENABLED=true
-      - RAG_GENERATION_ENABLED=true
-      - RAG_RESPONSE_ENABLED=true
+      - RAG_GENERATION_ENABLED=${RAG_GENERATION_ENABLED:-false}
+      - RAG_RESPONSE_ENABLED=${RAG_RESPONSE_ENABLED:-false}
       - RAG_RESPONSE_PROMOTION_POINTER_PATH=/app/promotion/current.json
-      - RAG_RESPONSE_CANDIDATE_ID=${RAG_RESPONSE_CANDIDATE_ID:?RAG_RESPONSE_CANDIDATE_ID is required}
+      - RAG_RESPONSE_CANDIDATE_ID=${RAG_RESPONSE_CANDIDATE_ID:-}
       - RAG_ALLOWED_TENANTS=${RAG_ALLOWED_TENANTS:?RAG_ALLOWED_TENANTS is required}
-      - RAG_RESPONSE_ALLOWED_USERS=${RAG_RESPONSE_ALLOWED_USERS:?RAG_RESPONSE_ALLOWED_USERS is required}
+      - RAG_RESPONSE_ALLOWED_USERS=${RAG_RESPONSE_ALLOWED_USERS:-}
       - RAG_RETRIEVAL_STRATEGY=${RAG_RETRIEVAL_STRATEGY:-hybrid-bge-v1}
+      - LLAMAINDEX_CANDIDATE_COLLECTION=${LLAMAINDEX_CANDIDATE_COLLECTION:-eisenhower-knowledge-llama-v1-candidate}
+      - LLAMAINDEX_PIPELINE_VERSION=${LLAMAINDEX_PIPELINE_VERSION:-llama-sentence-256-32-v1}
+      - LLAMAINDEX_CHUNK_SIZE=${LLAMAINDEX_CHUNK_SIZE:-256}
+      - LLAMAINDEX_CHUNK_OVERLAP=${LLAMAINDEX_CHUNK_OVERLAP:-32}
+      - LLAMAINDEX_CACHE_PATH=/app/runtime/llamaindex-ingestion-cache.json
+      - CHUNKING_VERSION=${LLAMAINDEX_PIPELINE_VERSION:-llama-sentence-256-32-v1}
+      - RAG_EMBEDDING_MODEL_NAME=BAAI/bge-m3
+      - RAG_EMBEDDING_MODEL_REVISION=5617a9f61b028005a4858fdac845db406aefb181
+      - RAG_EMBEDDING_DEVICE=cpu
+      - EMBEDDING_VERSION=bge-m3-v1
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_API_KEY=${QDRANT_API_KEY:-}
       - QDRANT_COLLECTION_ALIAS=${QDRANT_COLLECTION_ALIAS:-eisenhower-knowledge-active}
@@ -199,17 +256,29 @@ services:
       - RERANKER_API_KEY=${RERANKER_API_KEY:?RERANKER_API_KEY is required}
       - RERANKER_ALLOWED_HOSTS=${RERANKER_ALLOWED_HOSTS:-reranker}
       - INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}
-      - INFERENCE_API_KEY=${INFERENCE_API_KEY:?INFERENCE_API_KEY is required}
-      - INFERENCE_MODEL=${INFERENCE_MODEL:?INFERENCE_MODEL is required}
+      - INFERENCE_API_KEY=${INFERENCE_API_KEY:-}
+      - INFERENCE_MODEL=${INFERENCE_MODEL:-}
       - INFERENCE_ALLOWED_HOSTS=${INFERENCE_ALLOWED_HOSTS:-inference}
       - PROMPT_VERSION=${PROMPT_VERSION:-1.2.0}
       - KNOWLEDGE_PROMPT_VERSION=${KNOWLEDGE_PROMPT_VERSION:-1.0.0}
+      - OMP_NUM_THREADS=${AI_KNOWLEDGE_OMP_THREADS:?measured knowledge OMP thread limit is required}
+      - MKL_NUM_THREADS=${AI_KNOWLEDGE_OMP_THREADS:?measured knowledge OMP thread limit is required}
+      - OPENBLAS_NUM_THREADS=${AI_KNOWLEDGE_OMP_THREADS:?measured knowledge OMP thread limit is required}
+      - NUMEXPR_NUM_THREADS=${AI_KNOWLEDGE_OMP_THREADS:?measured knowledge OMP thread limit is required}
+      - TORCH_NUM_THREADS=${AI_KNOWLEDGE_TORCH_THREADS:?measured knowledge Torch thread limit is required}
+      - TOKENIZERS_PARALLELISM=false
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
     volumes:
       - model_cache:/home/app/.cache/huggingface
+      - knowledge_runtime:/app/runtime
       - audit_data:/app/audit
       - ${AI_PROMOTION_ROOT:-./.runtime/promotion}:/app/promotion:ro
+    mem_limit: ${AI_KNOWLEDGE_MEMORY_LIMIT:?calibrated knowledge memory limit is required}
+    cpus: ${AI_KNOWLEDGE_CPU_LIMIT:?calibrated knowledge CPU limit is required}
+    pids_limit: ${AI_KNOWLEDGE_PID_LIMIT:?calibrated knowledge PID limit is required}
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health/live >/dev/null"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
       interval: 30s
       timeout: 5s
       start_period: 600s
@@ -217,12 +286,78 @@ services:
 
   rag-worker:
     <<: *common
-    image: ${AI_IMAGE:?AI_IMAGE must be a versioned tag or digest}
+    image: ${AI_INGEST_IMAGE:?AI_INGEST_IMAGE must be a versioned tag or digest}
     command: ["python", "-m", "app.worker_runtime"]
     init: true
-    mem_limit: ${RAG_WORKER_MEMORY_LIMIT:-5g}
-    cpus: ${RAG_WORKER_CPUS:-2.0}
-    pids_limit: 512
+    profiles: [retrieval, response, full]
+    environment:
+      - APP_ENV=production
+      - AUTH_MODE=oidc
+      - OIDC_ISSUER=${OIDC_ISSUER:?OIDC_ISSUER is required}
+      - OIDC_AUDIENCE=${OIDC_AUDIENCE:?OIDC_AUDIENCE is required}
+      - OIDC_JWKS_URL=${OIDC_JWKS_URL:?OIDC_JWKS_URL is required}
+      - AUDIT_HMAC_KEY=${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY is required}
+      - RELEASE_SHA=${RELEASE_SHA:?RELEASE_SHA is required}
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/eisenhower?replicaSet=rs0}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-eisenhower}
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+      - QDRANT_COLLECTION_ALIAS=${QDRANT_COLLECTION_ALIAS:-eisenhower-knowledge-active}
+      - RAG_RETRIEVAL_ENABLED=true
+      - RAG_GENERATION_ENABLED=false
+      - RAG_RESPONSE_ENABLED=false
+      - RAG_RETRIEVAL_STRATEGY=dense-v1
+      - LLAMAINDEX_CANDIDATE_COLLECTION=${LLAMAINDEX_CANDIDATE_COLLECTION:-eisenhower-knowledge-llama-v1-candidate}
+      - LLAMAINDEX_PIPELINE_VERSION=${LLAMAINDEX_PIPELINE_VERSION:-llama-sentence-256-32-v1}
+      - LLAMAINDEX_CHUNK_SIZE=${LLAMAINDEX_CHUNK_SIZE:-256}
+      - LLAMAINDEX_CHUNK_OVERLAP=${LLAMAINDEX_CHUNK_OVERLAP:-32}
+      - LLAMAINDEX_CACHE_PATH=/app/runtime/llamaindex-ingestion-cache.json
+      - CHUNKING_VERSION=${LLAMAINDEX_PIPELINE_VERSION:-llama-sentence-256-32-v1}
+      - RAG_EMBEDDING_MODEL_NAME=BAAI/bge-m3
+      - RAG_EMBEDDING_MODEL_REVISION=5617a9f61b028005a4858fdac845db406aefb181
+      - RAG_EMBEDDING_DEVICE=cpu
+      - EMBEDDING_VERSION=bge-m3-v1
+      - LOCAL_MODEL_ARTIFACT_DIR=/app/model-artifacts
+      - LOCAL_MODEL_APPROVED_ARTIFACT_SHA256=${LOCAL_MODEL_APPROVED_ARTIFACT_SHA256:?approved classifier pointer digest is required}
+      - LOCAL_MODEL_REQUIRE_EVALUATION=true
+      - LOCAL_MODEL_EVALUATION_PROFILE=production
+      - LOCAL_MODEL_APPROVED_EVALUATION_SHA256=${LOCAL_MODEL_APPROVED_EVALUATION_SHA256:?approved evaluation digest is required}
+      - EVALUATION_DATA_PATH=/app/evaluation/production.json
+      - MODEL_CACHE_DIR=/app/runtime
+      - NUMBA_CACHE_DIR=/app/runtime/numba
+      - MPLCONFIGDIR=/app/runtime/matplotlib
+      - XDG_CACHE_HOME=/app/runtime/cache
+      - DOCLING_ARTIFACTS_PATH=/app/docling-artifacts
+      - DOCLING_ARTIFACTS_MANIFEST_SHA256=${DOCLING_ARTIFACTS_MANIFEST_SHA256:?approved Docling artifact manifest digest is required}
+      - JOBS_DATABASE_PATH=/app/data/jobs.sqlite3
+      - JOBS_MAX_QUEUED=${JOBS_MAX_QUEUED:?measured bounded queue capacity is required}
+      - EISENHOWER_WEBHOOK_SECRET=${EISENHOWER_WEBHOOK_SECRET:?EISENHOWER_WEBHOOK_SECRET is required}
+      - CORPUS_REPOSITORY_ROOT=/corpus
+      - CORPUS_MANIFEST_PATH=/corpus/docs/ai-rebuild/corpus-manifest-v1.json
+      - CORPUS_OWNER_ID=${CORPUS_OWNER_ID:-eisenhower-owner}
+      - CORPUS_ALLOWED_PROJECTS=${CORPUS_ALLOWED_PROJECTS:-eisenhower}
+      - OMP_NUM_THREADS=${AI_INGEST_OMP_THREADS:?measured ingest OMP thread limit is required}
+      - MKL_NUM_THREADS=${AI_INGEST_OMP_THREADS:?measured ingest OMP thread limit is required}
+      - OPENBLAS_NUM_THREADS=${AI_INGEST_OMP_THREADS:?measured ingest OMP thread limit is required}
+      - NUMEXPR_NUM_THREADS=${AI_INGEST_OMP_THREADS:?measured ingest OMP thread limit is required}
+      - TORCH_NUM_THREADS=${AI_INGEST_TORCH_THREADS:?measured ingest Torch thread limit is required}
+      - TOKENIZERS_PARALLELISM=false
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
+    volumes:
+      - rag_jobs:/app/data
+      - model_cache:/home/app/.cache/huggingface
+      - ingest_runtime:/app/runtime
+      - ${AI_DOCLING_ARTIFACT_ROOT:?approved Docling artifact directory is required}:/app/docling-artifacts:ro
+      - ${AI_CLASSIFIER_ARTIFACT_ROOT:?approved classifier artifact directory is required}:/app/model-artifacts:ro
+      - ${AI_EVALUATION_FILE:?approved evaluation file is required}:/app/evaluation/production.json:ro
+      - ../../README.md:/corpus/README.md:ro
+      - ../../docs:/corpus/docs:ro
+      - ../../corpus:/corpus/corpus:ro
+      - ../../.tasks:/corpus/.tasks:ro
+    mem_limit: ${AI_INGEST_MEMORY_LIMIT:?calibrated ingest memory limit is required}
+    cpus: ${AI_INGEST_CPU_LIMIT:?calibrated ingest CPU limit is required}
+    pids_limit: ${AI_INGEST_PID_LIMIT:?calibrated ingest PID limit is required}
     healthcheck:
       test:
         - CMD
@@ -236,27 +371,10 @@ services:
       timeout: 5s
       start_period: 600s
       retries: 5
-    environment:
-      - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/eisenhower?replicaSet=rs0}
-      - MONGODB_DATABASE=${MONGODB_DATABASE:-eisenhower}
-      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
-      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
-      - QDRANT_COLLECTION_ALIAS=${QDRANT_COLLECTION_ALIAS:-eisenhower-knowledge-active}
-      - JOBS_DATABASE_PATH=/app/data/jobs.sqlite3
-      - CORPUS_REPOSITORY_ROOT=/corpus
-      - CORPUS_MANIFEST_PATH=/corpus/docs/ai-rebuild/corpus-manifest-v1.json
-      - CORPUS_OWNER_ID=${CORPUS_OWNER_ID:-eisenhower-owner}
-      - CORPUS_ALLOWED_PROJECTS=${CORPUS_ALLOWED_PROJECTS:-eisenhower}
-    volumes:
-      - rag_jobs:/app/data
-      - model_cache:/home/app/.cache/huggingface
-      - ../../README.md:/corpus/README.md:ro
-      - ../../docs:/corpus/docs:ro
-      - ../../corpus:/corpus/corpus:ro
-      - ../../.tasks:/corpus/.tasks:ro
 
   qdrant:
     <<: *common
+    profiles: [retrieval, response, full]
     image: ${QDRANT_IMAGE:-qdrant/qdrant:v1.12.0}
     ports:
       - "${QDRANT_BIND_ADDRESS:-127.0.0.1}:${QDRANT_BIND_PORT:-6333}:6333"
@@ -268,6 +386,7 @@ services:
 
   n8n:
     <<: *common
+    profiles: [automation, full]
     image: ${N8N_IMAGE:-n8nio/n8n:2.4.6}
     ports:
       - "${N8N_BIND_ADDRESS:-127.0.0.1}:${N8N_BIND_PORT:-5678}:5678"
@@ -292,6 +411,7 @@ services:
 
   identity-db:
     <<: *common
+    profiles: [identity, access, response, full]
     image: ${IDENTITY_DB_IMAGE:-postgres:17.6-alpine}
     environment:
       - POSTGRES_DB=keycloak
@@ -307,6 +427,7 @@ services:
 
   identity-service:
     <<: *common
+    profiles: [identity, access, response, full]
     image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.7.0}
     command: ["start", "--import-realm"]
     depends_on:
@@ -337,6 +458,7 @@ services:
 
   mcp-service:
     <<: *common
+    profiles: [access, response, full]
     image: ${MCP_IMAGE:?MCP_IMAGE must be a versioned tag or digest}
     depends_on:
       api-service:
@@ -373,6 +495,7 @@ services:
 
   access-gateway:
     <<: *common
+    profiles: [access, response, full]
     image: ${ACCESS_GATEWAY_IMAGE:-nginx:1.27.5-alpine}
     depends_on:
       web:
@@ -397,6 +520,7 @@ services:
 
   calendar-gateway:
     <<: *common
+    profiles: [automation, full]
     image: ${CALENDAR_GATEWAY_IMAGE:-nginx:1.27.5-alpine}
     depends_on:
       api-service:
@@ -417,6 +541,9 @@ volumes:
   n8n_data:
   rag_jobs:
   model_cache:
+  classifier_runtime:
+  knowledge_runtime:
+  ingest_runtime:
   audit_data:
   identity_db_data:
 

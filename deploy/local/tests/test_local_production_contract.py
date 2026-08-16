@@ -36,7 +36,7 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertEqual(
       set(self.services) | set(self.amd_services),
       {
-        "api-service", "mongodb", "ai-service", "rag-worker", "qdrant", "n8n",
+        "api-service", "mongodb", "ai-service", "classifier-service", "rag-worker", "qdrant", "n8n",
         "knowledge-service",
         "calendar-gateway", "audit-volume-init", "identity-db", "identity-service",
         "mcp-service", "access-gateway", "web", "inference", "reranker",
@@ -51,14 +51,14 @@ class LocalProductionContractTest(unittest.TestCase):
         "AI_SERVICE_URL=${AI_SERVICE_URL:-http://ai-service:8000}",
       ],
       "ai-service": [
-        "QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}",
-        "INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}",
-        "RAG_RETRIEVAL_STRATEGY=${RAG_RETRIEVAL_STRATEGY:-hybrid-bge-v1}",
-        "RERANKER_BASE_URL=${RERANKER_BASE_URL:-http://reranker:8000}",
+        "CLASSIFIER_SERVICE_URL=http://classifier-service:8000",
+        "KNOWLEDGE_SERVICE_URL=${KNOWLEDGE_SERVICE_URL:-http://classifier-service:8000}",
       ],
       "knowledge-service": [
         "QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}",
         "INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}",
+        "RAG_RETRIEVAL_STRATEGY=${RAG_RETRIEVAL_STRATEGY:-hybrid-bge-v1}",
+        "RERANKER_BASE_URL=${RERANKER_BASE_URL:-http://reranker:8000}",
         "RAG_RESPONSE_PROMOTION_POINTER_PATH=/app/promotion/current.json",
       ],
       "rag-worker": [
@@ -86,8 +86,10 @@ class LocalProductionContractTest(unittest.TestCase):
     expected_image_inputs = {
       "api-service": "API_IMAGE",
       "mongodb": "MONGODB_IMAGE",
-      "ai-service": "AI_IMAGE",
-      "rag-worker": "AI_IMAGE",
+      "ai-service": "AI_BOUNDARY_IMAGE",
+      "classifier-service": "AI_CLASSIFIER_IMAGE",
+      "knowledge-service": "AI_KNOWLEDGE_IMAGE",
+      "rag-worker": "AI_INGEST_IMAGE",
       "qdrant": "QDRANT_IMAGE",
       "n8n": "N8N_IMAGE",
       "calendar-gateway": "CALENDAR_GATEWAY_IMAGE",
@@ -149,8 +151,14 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn('git diff --cached --quiet', script)
     self.assertIn('release_sha="$(git rev-parse HEAD)"', script)
     self.assertIn('API_IMAGE="local/eisenhower-api:${release_sha}"', script)
-    self.assertIn('AI_IMAGE="local/eisenhower-ai:${release_sha}"', script)
+    self.assertIn('AI_BOUNDARY_IMAGE="local/eisenhower-ai-boundary:${release_sha}"', script)
+    self.assertIn('AI_CLASSIFIER_IMAGE="local/eisenhower-ai-classifier:${release_sha}"', script)
+    self.assertIn('AI_KNOWLEDGE_IMAGE="local/eisenhower-ai-knowledge:${release_sha}"', script)
+    self.assertIn('AI_INGEST_IMAGE="local/eisenhower-ai-ingest:${release_sha}"', script)
     self.assertIn('AI_ROCM_IMAGE="local/eisenhower-ai-rocm:${release_sha}"', script)
+    self.assertIn('VLLM_RESPONSE_IMAGE="local/eisenhower-vllm-rocm:${release_sha}"', script)
+    self.assertIn('export AMD_INFERENCE_IMAGE="$response_image_id"', script)
+    self.assertIn('export AMD_RERANKER_IMAGE="$response_image_id"', script)
     self.assertIn('MCP_IMAGE="local/eisenhower-mcp:${release_sha}"', script)
     self.assertIn('WEB_IMAGE="local/eisenhower-web:${release_sha}"', script)
     self.assertIn('docker image inspect', script)
@@ -160,17 +168,39 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn('compose_base up --no-deps audit-volume-init', script)
     self.assertNotIn('compose_base up -d --wait mongodb qdrant audit-volume-init', script)
     self.assertIn('compose_base up -d --wait mongodb qdrant identity-db identity-service n8n', script)
-    self.assertIn('compose_base up --no-deps -d --wait ai-service api-service web mcp-service', script)
-    self.assertIn('compose_base up --no-deps -d --wait access-gateway calendar-gateway', script)
+    self.assertIn('compose_full up --no-deps -d --wait ai-service classifier-service api-service web mcp-service', script)
+    self.assertIn('compose_full up --no-deps -d --wait access-gateway calendar-gateway', script)
     self.assertIn('validate_response_inputs', script)
     self.assertIn('validate_classifier_approval', script)
     self.assertIn('LOCAL_MODEL_OWNER_APPROVAL_BYPASS=true', script)
     self.assertIn('rollback.env', script)
     self.assertIn('docker compose', script)
     self.assertIn('config --quiet', script)
+    self.assertIn('inference reranker', script)
+    self.assertIn('ROLLBACK_INFERENCE_IMAGE_ID', script)
+    self.assertIn('ROLLBACK_RERANKER_IMAGE_ID', script)
+
+  def test_first_role_split_rollback_preserves_the_legacy_monolith_topology(self):
+    script = DEPLOY_SCRIPT_PATH.read_text()
+
+    self.assertIn('ROLLBACK_LAYOUT=legacy_monolith', script)
+    self.assertIn('rollback.legacy.compose.yaml', script)
+    self.assertIn('rollback.legacy.compose.amd.yaml', script)
+    self.assertIn('ROLLBACK_LEGACY_COMPOSE_SHA256', script)
+    self.assertIn('compose_legacy()', script)
+    self.assertIn('AI_IMAGE="${ROLLBACK_AI_SERVICE_IMAGE_ID:', script)
+    self.assertIn('Legacy rollback Compose digest mismatch', script)
+    self.assertLess(
+      script.index('case "${ROLLBACK_LAYOUT:-roles}" in'),
+      script.index('missing classifier rollback image'),
+    )
 
   def test_amd_inference_is_opt_in_and_uses_the_pinned_rocm_model_contract(self):
     inference = self.amd_services["inference"]
+    self.assertEqual(
+      inference["image"],
+      "${AMD_INFERENCE_IMAGE:?hardened immutable inference image is required}",
+    )
     self.assertEqual(inference["profiles"], ["inference-amd"])
     self.assertEqual(inference["devices"], ["/dev/kfd:/dev/kfd", "/dev/dri:/dev/dri"])
     self.assertIn("healthcheck", inference)
@@ -183,34 +213,44 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn("model_cache:/root/.cache/huggingface", inference["volumes"])
 
   def test_amd_retrieval_profile_runs_pinned_bge_m3_without_enabling_generation(self):
-    ai = self.amd_services["ai-service"]
-    classifier = self.services["ai-service"]
-    worker = self.amd_services["rag-worker"]
-    self.assertEqual(ai["profiles"], ["retrieval-amd"])
-    self.assertEqual(worker["profiles"], ["retrieval-amd"])
+    ai = self.amd_services["knowledge-service"]
+    classifier = self.services["classifier-service"]
+    worker = self.services["rag-worker"]
+    self.assertEqual(ai["profiles"], ["retrieval-amd", "response-amd"])
+    self.assertEqual(worker["profiles"], ["retrieval", "response", "full"])
+    self.assertIn("/dev/kfd:/dev/kfd", ai["devices"])
+    self.assertIn("/dev/dri:/dev/dri", ai["devices"])
+    self.assertNotIn("devices", worker)
     for service in (ai, worker):
-      self.assertIn("/dev/kfd:/dev/kfd", service["devices"])
-      self.assertIn("/dev/dri:/dev/dri", service["devices"])
       self.assertIn("RAG_EMBEDDING_MODEL_NAME=BAAI/bge-m3", service["environment"])
       self.assertIn(
         "RAG_EMBEDDING_MODEL_REVISION=5617a9f61b028005a4858fdac845db406aefb181",
         service["environment"],
       )
       self.assertIn("EMBEDDING_VERSION=bge-m3-v1", service["environment"])
-    self.assertIn("RAG_GENERATION_ENABLED=false", ai["environment"])
-    self.assertIn("RAG_RESPONSE_ENABLED=false", ai["environment"])
+    self.assertIn("RAG_GENERATION_ENABLED=${RAG_GENERATION_ENABLED:-false}", self.services["knowledge-service"]["environment"])
+    self.assertIn("RAG_RESPONSE_ENABLED=${RAG_RESPONSE_ENABLED:-false}", self.services["knowledge-service"]["environment"])
     self.assertIn("RAG_GENERATION_ENABLED=false", classifier["environment"])
     self.assertIn("RAG_RESPONSE_ENABLED=false", classifier["environment"])
-    self.assertIn("RAG_RESPONSE_PROMOTION_POINTER_PATH=/app/promotion/current.json", ai["environment"])
-    self.assertIn("RAG_RESPONSE_CANDIDATE_ID=${RAG_RESPONSE_CANDIDATE_ID:-}", ai["environment"])
-    self.assertIn("${AI_PROMOTION_ROOT:-./.runtime/promotion}:/app/promotion:ro", ai["volumes"])
+    self.assertIn("RAG_RESPONSE_PROMOTION_POINTER_PATH=/app/promotion/current.json", self.services["knowledge-service"]["environment"])
+    self.assertIn("${AI_PROMOTION_ROOT:-./.runtime/promotion}:/app/promotion:ro", self.services["knowledge-service"]["volumes"])
     rocm_dockerfile = (ROOT / "backend-ai" / "Dockerfile.rocm").read_text(encoding="utf-8")
+    rocm_requirements = (ROOT / "backend-ai" / "requirements-knowledge-rocm.txt").read_text(encoding="utf-8")
     self.assertIn("ENTRYPOINT []", rocm_dockerfile)
-    self.assertIn("grpcio==1.78.0", rocm_dockerfile)
-    self.assertIn("'protobuf>=6.31.1,<7'", rocm_dockerfile)
+    self.assertIn("grpcio==1.78.0", rocm_requirements)
+    self.assertIn("protobuf>=6.31.1,<7", rocm_requirements)
+    self.assertIn(
+      "rocm/pytorch@sha256:4449f856653602317e4101a76fce599c7fcd58ccec2e539951fce5f73083179e",
+      rocm_dockerfile,
+    )
+    self.assertNotIn("vllm/vllm-openai-rocm", rocm_dockerfile)
 
   def test_amd_reranker_is_a_separate_pinned_bounded_private_service(self):
     reranker = self.amd_services["reranker"]
+    self.assertEqual(
+      reranker["image"],
+      "${AMD_RERANKER_IMAGE:?hardened immutable reranker image is required}",
+    )
     self.assertEqual(reranker["profiles"], ["reranker-amd"])
     self.assertEqual(reranker["devices"], ["/dev/kfd:/dev/kfd", "/dev/dri:/dev/dri"])
     self.assertIn("healthcheck", reranker)
@@ -238,7 +278,7 @@ class LocalProductionContractTest(unittest.TestCase):
       self.assertIn("RELEASE_SHA=${RELEASE_SHA:?RELEASE_SHA is required}", environment)
       self.assertIn("AUDIT_HMAC_KEY=${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY is required}", environment)
 
-    ai_environment = self.services["ai-service"]["environment"]
+    ai_environment = self.services["classifier-service"]["environment"]
     self.assertEqual(self.services["ai-service"]["group_add"], ["1001"])
     self.assertEqual(
       self.services["audit-volume-init"]["command"],
@@ -267,7 +307,7 @@ class LocalProductionContractTest(unittest.TestCase):
       "LOCAL_MODEL_APPROVED_EVALUATION_SHA256=${LOCAL_MODEL_APPROVED_EVALUATION_SHA256:?approved evaluation digest is required}",
       ai_environment,
     )
-    self.assertTrue(any(volume.endswith(":/app/evaluation/production.json:ro") for volume in self.services["ai-service"]["volumes"]))
+    self.assertTrue(any(volume.endswith(":/app/evaluation/production.json:ro") for volume in self.services["classifier-service"]["volumes"]))
     self.assertIn(
       "CALENDAR_INTERNAL_HMAC_KEY=${CALENDAR_INTERNAL_HMAC_KEY:?CALENDAR_INTERNAL_HMAC_KEY is required}",
       self.services["api-service"]["environment"],
@@ -338,7 +378,10 @@ class LocalProductionContractTest(unittest.TestCase):
   def test_example_environment_has_no_operational_secrets(self):
     env_text = ENV_PATH.read_text()
     self.assertIn("API_IMAGE=", env_text)
-    self.assertIn("AI_IMAGE=", env_text)
+    self.assertIn("AI_BOUNDARY_IMAGE=", env_text)
+    self.assertIn("AI_CLASSIFIER_IMAGE=", env_text)
+    self.assertIn("AI_KNOWLEDGE_IMAGE=", env_text)
+    self.assertIn("AI_INGEST_IMAGE=", env_text)
     self.assertIn("EISENHOWER_API_TOKEN=", env_text)
     self.assertIn("AUTH_MODE=oidc", env_text)
     self.assertIn("OIDC_ISSUER=https://identity.example.invalid/realms/eisenhower", env_text)
@@ -527,6 +570,17 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn("access_log off;", config)
     self.assertNotIn("$http_authorization", config)
 
+  def test_response_profile_includes_every_access_gateway_dependency(self):
+    gateway = self.services["access-gateway"]
+
+    self.assertIn("response", gateway["profiles"])
+    for dependency in gateway["depends_on"]:
+      profiles = self.services[dependency].get("profiles", [])
+      self.assertTrue(
+        not profiles or "response" in profiles,
+        f"{dependency} must join the response profile required by access-gateway",
+      )
+
   def test_identity_profile_declares_non_user_editable_tenant_boundaries(self):
     profile = json.loads(KEYCLOAK_USER_PROFILE_PATH.read_text())
     attributes = {item["name"]: item for item in profile["attributes"]}
@@ -555,7 +609,7 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertEqual(healthcheck["start_period"], "600s")
 
   def test_async_ingestion_producer_and_worker_share_one_bounded_durable_queue(self):
-    producer = self.services["ai-service"]
+    producer = self.services["classifier-service"]
     worker = self.services["rag-worker"]
 
     for service in (producer, worker):
@@ -563,9 +617,18 @@ class LocalProductionContractTest(unittest.TestCase):
       self.assertIn("rag_jobs:/app/data", service["volumes"])
 
     self.assertTrue(worker["init"])
-    self.assertEqual(worker["mem_limit"], "${RAG_WORKER_MEMORY_LIMIT:-5g}")
-    self.assertEqual(worker["cpus"], "${RAG_WORKER_CPUS:-2.0}")
-    self.assertEqual(worker["pids_limit"], 512)
+    self.assertEqual(
+      worker["mem_limit"],
+      "${AI_INGEST_MEMORY_LIMIT:?calibrated ingest memory limit is required}",
+    )
+    self.assertEqual(
+      worker["cpus"],
+      "${AI_INGEST_CPU_LIMIT:?calibrated ingest CPU limit is required}",
+    )
+    self.assertEqual(
+      worker["pids_limit"],
+      "${AI_INGEST_PID_LIMIT:?calibrated ingest PID limit is required}",
+    )
 
   def test_mongodb_has_explicit_small_host_resource_and_cache_bounds(self):
     mongodb = self.services["mongodb"]

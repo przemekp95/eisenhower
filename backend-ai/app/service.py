@@ -7,9 +7,6 @@ import mimetypes
 import re
 import shutil
 
-from PIL import Image
-import pytesseract
-
 from .config import Settings
 from .defaults import QUADRANT_NAMES, get_quadrant_name, normalize_language
 from .local_model import (
@@ -69,7 +66,11 @@ class QuadrantAIService:
     self.settings = settings
     self.store = store
     self.local_model = local_model or LocalMiniLMClassifier(settings=settings)
-    self.ocr_runner = ocr_runner or pytesseract.image_to_string
+    if ocr_runner is None:
+      import pytesseract
+
+      ocr_runner = pytesseract.image_to_string
+    self.ocr_runner = ocr_runner
     self.provider_store = provider_store or ProviderStateStore(
       self.settings.model_cache_dir / "provider_settings.json"
     )
@@ -404,6 +405,8 @@ class QuadrantAIService:
     }
 
   def _extract_tasks_with_tesseract(self, payload: bytes) -> tuple[list[str], str]:
+    from PIL import Image
+
     image = Image.open(BytesIO(payload))
     extracted_text = self.ocr_runner(image, lang=self.settings.tesseract_languages)
     return normalize_extracted_tasks(extracted_text.splitlines()), extracted_text

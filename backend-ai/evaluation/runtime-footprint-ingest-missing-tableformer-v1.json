@@ -1,0 +1,424 @@
+{
+  "container_id": "6748aa6462c52f762306fb3736e90ad3bf1fd4372b3ae130668db1cbf3a059a8",
+  "deployment_proven": false,
+  "evidence_level": "local-isolated-container",
+  "image": {
+    "id": "sha256:9599ced1738a6e9cda5f1db0bd72b3164352bdbdee1394e3aafe908edd2e2bb3",
+    "reference": "local/eisenhower-ai-ingest:d760f551bb915f420c74ced2403c5e3d4b689104",
+    "runtime_role": "ingest",
+    "source_revision": "d760f551bb915f420c74ced2403c5e3d4b689104"
+  },
+  "limits": {
+    "cpus": "2.0",
+    "memory": "2g",
+    "pids": "256"
+  },
+  "production_proven": false,
+  "recorded_at": "2026-08-15T17:08:10.252722+00:00",
+  "result": {
+    "cgroup": {
+      "average_cpu_cores": 1.078665,
+      "cgroup_memory_peak_bytes": 826617856,
+      "cpu_seconds": 6.388058,
+      "first_memory_current_bytes": 6328320,
+      "last_memory_current_bytes": 600907776,
+      "peak_memory_current_bytes": 826597376,
+      "peak_pids": 3,
+      "samples": 53,
+      "wall_seconds_sampled": 5.922188
+    },
+    "exit_code": 1,
+    "oom_killed": false,
+    "state_error": null,
+    "stderr_tail": "Traceback (most recent call last):\n  File \"/workspace/backend-ai/app/document_extraction/adapters.py\", line 91, in extract\n    result = converter.convert(\n             ^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/pydantic/_internal/_validate_call.py\", line 40, in wrapper_function\n    return wrapper(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/pydantic/_internal/_validate_call.py\", line 137, in __call__\n    res = self.__pydantic_validator__.validate_python(pydantic_core.ArgsKwargs(args, kwargs))\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/document_converter.py\", line 505, in convert\n    return next(all_res)\n           ^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/document_converter.py\", line 567, in convert_all\n    for conv_res in conv_res_iter:\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/document_converter.py\", line 696, in _convert\n    for item in map(\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/document_converter.py\", line 743, in _process_document\n    conv_res = self._execute_pipeline(in_doc, raises_on_error=raises_on_error)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/document_converter.py\", line 769, in _execute_pipeline\n    pipeline = self._get_pipeline(in_doc.format)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/document_converter.py\", line 726, in _get_pipeline\n    self.initialized_pipelines[cache_key] = pipeline_class(\n                                            ^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/pipeline/standard_pdf_pipeline.py\", line 588, in __init__\n    self._init_models()\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/pipeline/standard_pdf_pipeline.py\", line 631, in _init_models\n    self.table_model = table_factory.create_instance(\n                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/models/factories/base_factory.py\", line 57, in create_instance\n    return _cls(options=options, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling/models/stages/table_structure/table_structure_model.py\", line 86, in __init__\n    self.tm_config = c.read_config(f\"{artifacts_path}/tm_config.json\")\n                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/app/.local/lib/python3.11/site-packages/docling_ibm_models/tableformer/common.py\", line 48, in read_config\n    with open(config_filename, \"r\") as fd:\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^\nFileNotFoundError: [Errno 2] No such file or directory: '/app/docling-artifacts/accurate/tm_config.json'\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/workspace/backend-ai/scripts/benchmark_document_extraction.py\", line 138, in <module>\n    main()\n  File \"/workspace/backend-ai/scripts/benchmark_document_extraction.py\", line 53, in main\n    result = parser.extract(approved)\n             ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/backend-ai/app/document_extraction/adapters.py\", line 101, in extract\n    raise ExtractionRuntimeRejected(\"primary parser failed closed\") from error\napp.document_extraction.adapters.ExtractionRuntimeRejected: primary parser failed closed\n",
+    "timed_out": false,
+    "wall_seconds": 6.34768
+  },
+  "role": "ingest-document-extraction",
+  "samples": [
+    {
+      "cpu_usec": 36396,
+      "elapsed_seconds": 0.124407,
+      "memory_current": 6328320,
+      "memory_peak": 6328320,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 149391,
+      "elapsed_seconds": 0.237966,
+      "memory_current": 15904768,
+      "memory_peak": 16306176,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 262394,
+      "elapsed_seconds": 0.351518,
+      "memory_current": 24809472,
+      "memory_peak": 24809472,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 377392,
+      "elapsed_seconds": 0.466531,
+      "memory_current": 31993856,
+      "memory_peak": 34480128,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 490519,
+      "elapsed_seconds": 0.579147,
+      "memory_current": 44183552,
+      "memory_peak": 44183552,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 602479,
+      "elapsed_seconds": 0.691626,
+      "memory_current": 65196032,
+      "memory_peak": 65196032,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 708417,
+      "elapsed_seconds": 0.805894,
+      "memory_current": 89088000,
+      "memory_peak": 89088000,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 824420,
+      "elapsed_seconds": 0.921595,
+      "memory_current": 101515264,
+      "memory_peak": 101777408,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 939344,
+      "elapsed_seconds": 1.037456,
+      "memory_current": 112627712,
+      "memory_peak": 112627712,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1053347,
+      "elapsed_seconds": 1.151013,
+      "memory_current": 117952512,
+      "memory_peak": 121049088,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1167350,
+      "elapsed_seconds": 1.265444,
+      "memory_current": 120602624,
+      "memory_peak": 121049088,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1279364,
+      "elapsed_seconds": 1.37743,
+      "memory_current": 123224064,
+      "memory_peak": 123224064,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1394352,
+      "elapsed_seconds": 1.492146,
+      "memory_current": 170934272,
+      "memory_peak": 170934272,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1502580,
+      "elapsed_seconds": 1.605874,
+      "memory_current": 188715008,
+      "memory_peak": 188760064,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1616577,
+      "elapsed_seconds": 1.719782,
+      "memory_current": 211234816,
+      "memory_peak": 211320832,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1729547,
+      "elapsed_seconds": 1.833544,
+      "memory_current": 225140736,
+      "memory_peak": 225226752,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1842528,
+      "elapsed_seconds": 1.94571,
+      "memory_current": 231231488,
+      "memory_peak": 231231488,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 1954523,
+      "elapsed_seconds": 2.058521,
+      "memory_current": 240533504,
+      "memory_peak": 240652288,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2066458,
+      "elapsed_seconds": 2.169641,
+      "memory_current": 247799808,
+      "memory_peak": 247975936,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2180455,
+      "elapsed_seconds": 2.284372,
+      "memory_current": 252780544,
+      "memory_peak": 252780544,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2293517,
+      "elapsed_seconds": 2.396839,
+      "memory_current": 264531968,
+      "memory_peak": 264577024,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2407346,
+      "elapsed_seconds": 2.510879,
+      "memory_current": 282370048,
+      "memory_peak": 282370048,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2520349,
+      "elapsed_seconds": 2.624502,
+      "memory_current": 286826496,
+      "memory_peak": 286826496,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2633336,
+      "elapsed_seconds": 2.737205,
+      "memory_current": 292069376,
+      "memory_peak": 292069376,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2748301,
+      "elapsed_seconds": 2.852029,
+      "memory_current": 306028544,
+      "memory_peak": 306028544,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2860276,
+      "elapsed_seconds": 2.96654,
+      "memory_current": 307376128,
+      "memory_peak": 307376128,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 2974270,
+      "elapsed_seconds": 3.080396,
+      "memory_current": 317599744,
+      "memory_peak": 317599744,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3087250,
+      "elapsed_seconds": 3.193367,
+      "memory_current": 320483328,
+      "memory_peak": 320483328,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3202148,
+      "elapsed_seconds": 3.307814,
+      "memory_current": 346005504,
+      "memory_peak": 346021888,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3316142,
+      "elapsed_seconds": 3.421874,
+      "memory_current": 363810816,
+      "memory_peak": 363810816,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3430098,
+      "elapsed_seconds": 3.536006,
+      "memory_current": 363663360,
+      "memory_peak": 363810816,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3544076,
+      "elapsed_seconds": 3.649654,
+      "memory_current": 369692672,
+      "memory_peak": 369692672,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3659067,
+      "elapsed_seconds": 3.765216,
+      "memory_current": 382091264,
+      "memory_peak": 382246912,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3772447,
+      "elapsed_seconds": 3.87881,
+      "memory_current": 397795328,
+      "memory_peak": 397795328,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3885450,
+      "elapsed_seconds": 3.992593,
+      "memory_current": 417394688,
+      "memory_peak": 417398784,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 3998337,
+      "elapsed_seconds": 4.105403,
+      "memory_current": 427245568,
+      "memory_peak": 427245568,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4112340,
+      "elapsed_seconds": 4.219018,
+      "memory_current": 427245568,
+      "memory_peak": 427245568,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4227345,
+      "elapsed_seconds": 4.33412,
+      "memory_current": 427245568,
+      "memory_peak": 427245568,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4341343,
+      "elapsed_seconds": 4.448256,
+      "memory_current": 443473920,
+      "memory_peak": 443473920,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4453346,
+      "elapsed_seconds": 4.559634,
+      "memory_current": 453201920,
+      "memory_peak": 453263360,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4564339,
+      "elapsed_seconds": 4.671317,
+      "memory_current": 747978752,
+      "memory_peak": 748503040,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4678333,
+      "elapsed_seconds": 4.785153,
+      "memory_current": 826093568,
+      "memory_peak": 826093568,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4791336,
+      "elapsed_seconds": 4.898592,
+      "memory_current": 826597376,
+      "memory_peak": 826617856,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 4908339,
+      "elapsed_seconds": 5.014533,
+      "memory_current": 826593280,
+      "memory_peak": 826617856,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 5023343,
+      "elapsed_seconds": 5.130092,
+      "memory_current": 601636864,
+      "memory_peak": 826617856,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 5238171,
+      "elapsed_seconds": 5.244328,
+      "memory_current": 615202816,
+      "memory_peak": 826617856,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 5470155,
+      "elapsed_seconds": 5.360501,
+      "memory_current": 621703168,
+      "memory_peak": 826617856,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 5700044,
+      "elapsed_seconds": 5.475474,
+      "memory_current": 628523008,
+      "memory_peak": 826617856,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 5930003,
+      "elapsed_seconds": 5.590285,
+      "memory_current": 635568128,
+      "memory_peak": 826617856,
+      "pids": 3
+    },
+    {
+      "cpu_usec": 6082457,
+      "elapsed_seconds": 5.704531,
+      "memory_current": 602021888,
+      "memory_peak": 826617856,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 6196461,
+      "elapsed_seconds": 5.818477,
+      "memory_current": 601976832,
+      "memory_peak": 826617856,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 6311452,
+      "elapsed_seconds": 5.932782,
+      "memory_current": 601161728,
+      "memory_peak": 826617856,
+      "pids": 1
+    },
+    {
+      "cpu_usec": 6424454,
+      "elapsed_seconds": 6.046595,
+      "memory_current": 600907776,
+      "memory_peak": 826617856,
+      "pids": 1
+    }
+  ],
+  "schema_version": "runtime-role-container-benchmark-v1",
+  "source_git_dirty": false,
+  "source_git_sha": "d760f551bb915f420c74ced2403c5e3d4b689104",
+  "workload": {
+    "command": "scripts/benchmark_document_extraction.py",
+    "docling_artifacts_read_only": true,
+    "docling_manifest_sha256": "4106269199f9a2f8d21c0a383009c223af54cb7281c13b339601729db10c36a2",
+    "fixture_scope": "repository-approved synthetic extraction fixtures",
+    "model_cache_read_only": true,
+    "network_expected": false,
+    "workspace_read_only": true
+  },
+  "workload_report": null
+}

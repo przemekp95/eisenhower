@@ -14,10 +14,21 @@ from urllib.parse import unquote, urlsplit
 PYPI_INDEX = "https://pypi.org/simple"
 PYTORCH_CPU_INDEX = "https://download.pytorch.org/whl/cpu"
 PYTORCH_WHEEL_HOSTS = frozenset({"download.pytorch.org", "download-r2.pytorch.org"})
+PATCHED_BUILD_TOOLCHAIN = (
+  "RUN pip install --no-cache-dir --upgrade setuptools==84.0.0 wheel==0.46.3"
+)
 ALLOWED_UNAUDITED = {
   "torch": "2.13.0+cpu",
   "torchvision": "0.28.0+cpu",
 }
+ALLOWED_HASHED_WHEEL_REQUIREMENTS = {
+  (
+    "https://github.com/explosion/spacy-models/releases/download/"
+    "en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
+    "#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85"
+  ): ("en_core_web_sm", "3.8.0"),
+}
+ALLOWED_HASHED_WHEEL_UNAUDITED = {"en-core-web-sm": "3.8.0"}
 REQUIREMENT_PATTERN = re.compile(
   r"^(?P<name>[A-Za-z0-9_.-]+)(?:\[[A-Za-z0-9_,.-]+\])?==(?P<version>[^\s;]+)$"
 )
@@ -42,6 +53,13 @@ def validate_requirements_policy(requirements_text: str) -> dict[str, tuple[str,
       continue
     if line.startswith("--index-url") or line.startswith("--extra-index-url"):
       indexes.append(line)
+      continue
+    if line in ALLOWED_HASHED_WHEEL_REQUIREMENTS:
+      display_name, wheel_version = ALLOWED_HASHED_WHEEL_REQUIREMENTS[line]
+      name = canonical_name(display_name)
+      if name in requirements:
+        raise AuditPolicyError(f"Duplicate production dependency pin: {display_name}")
+      requirements[name] = (display_name, wheel_version)
       continue
     if line.startswith("-"):
       raise AuditPolicyError(f"Unsupported production requirement directive: {line}")
@@ -92,8 +110,13 @@ def validate_dockerfile_policy(dockerfile_text: str) -> None:
       "Dockerfile must not duplicate or override the checked PyTorch source declaration."
     )
   production_dependency_stage, production_marker, following_stages = dockerfile_text.partition(
-    "FROM base AS production"
+    "FROM classifier AS production"
   )
+  role_build = bool(production_marker)
+  if not production_marker:
+    production_dependency_stage, production_marker, following_stages = dockerfile_text.partition(
+      "FROM base AS production"
+    )
   if not production_marker:
     raise AuditPolicyError("Dockerfile must retain the checked production target.")
   pip_install_lines = [
@@ -101,15 +124,52 @@ def validate_dockerfile_policy(dockerfile_text: str) -> None:
     for line in production_dependency_stage.splitlines()
     if re.search(r"\b(?:python\s+-m\s+)?pip\s+install\b", line)
   ]
-  if pip_install_lines != ["RUN pip install --user -r requirements.txt"]:
+  if PATCHED_BUILD_TOOLCHAIN not in pip_install_lines:
+    raise AuditPolicyError("Dockerfile must install the pinned patched build toolchain.")
+  expected_lines = (
+    [
+      PATCHED_BUILD_TOOLCHAIN,
+      "RUN pip install --user -r requirements-boundary.txt",
+      "RUN pip install --user -r requirements-ml.txt",
+      "RUN pip install --user -r requirements-classifier.txt",
+      "RUN pip install --user -r requirements-knowledge.txt",
+      "RUN pip install --user -r requirements-ingest.txt",
+    ]
+    if role_build
+    else [PATCHED_BUILD_TOOLCHAIN, "RUN pip install --user -r requirements.txt"]
+  )
+  if pip_install_lines != expected_lines:
     raise AuditPolicyError(
-      "Dockerfile production dependencies must use exactly the checked requirements install."
+      "Dockerfile production dependencies must use exactly the checked role requirements installs."
     )
   production_stage = re.split(r"(?m)^FROM\s+", following_stages, maxsplit=1)[0]
   if re.search(r"\b(?:python\s+-m\s+)?pip\s+install\b", production_stage):
     raise AuditPolicyError(
       "Dockerfile production target must not install dependencies outside requirements.txt."
     )
+
+
+def read_requirements_tree(path: Path, *, _seen: set[Path] | None = None) -> str:
+  """Flatten local -r includes for policy validation without permitting remote sources."""
+
+  resolved = path.resolve()
+  seen = _seen or set()
+  if resolved in seen:
+    raise AuditPolicyError(f"Cyclic production requirement include: {path.name}")
+  seen.add(resolved)
+  flattened: list[str] = []
+  for raw_line in resolved.read_text(encoding="utf-8").splitlines():
+    line = raw_line.strip()
+    if line.startswith("-r ") or line.startswith("--requirement "):
+      include_name = line.split(maxsplit=1)[1]
+      include_path = (resolved.parent / include_name).resolve()
+      if include_path.parent != resolved.parent or not include_path.is_file():
+        raise AuditPolicyError(f"Production requirement include is not a local peer: {include_name}")
+      flattened.append(read_requirements_tree(include_path, _seen=seen))
+      continue
+    flattened.append(raw_line)
+  seen.remove(resolved)
+  return "\n".join(flattened)
 
 
 def validate_audit_report(
@@ -137,7 +197,7 @@ def validate_audit_report(
         raise AuditPolicyError(
           f"pip-audit returned a malformed unaudited record for {display_name}."
         )
-      expected_version = ALLOWED_UNAUDITED.get(name)
+      expected_version = ALLOWED_UNAUDITED.get(name) or ALLOWED_HASHED_WHEEL_UNAUDITED.get(name)
       expected_reason = (
         "Dependency not found on PyPI and could not be audited: "
         f"{name} ({expected_version})"
@@ -280,7 +340,7 @@ def _run_json(command: list[str]) -> tuple[dict, int]:
 
 def run_audit(requirements_path: Path, dockerfile_path: Path) -> tuple[int, dict[str, str]]:
   direct_requirements = validate_requirements_policy(
-    requirements_path.read_text(encoding="utf-8")
+    read_requirements_tree(requirements_path)
   )
   validate_dockerfile_policy(dockerfile_path.read_text(encoding="utf-8"))
 
@@ -339,8 +399,8 @@ def main() -> int:
     blind_spots = ", ".join(f"{name}=={version}" for name, version in sorted(skipped.items()))
     print(
       f"pip-audit checked {dependency_count - len(skipped)} dependencies; known audit "
-      f"blind spots remain for {blind_spots}. Official PyTorch CPU wheel source and "
-      "SHA-256 resolution were verified. This is not vulnerability evidence for the "
+      f"blind spots remain for {blind_spots}. Every allowlisted direct wheel source and "
+      "SHA-256 resolution was verified. This is not vulnerability evidence for the "
       "skipped wheels; the repository Trivy source scan remains a separate gate."
     )
   else:
