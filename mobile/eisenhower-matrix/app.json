@@ -28,7 +28,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Eisenhower Matrix to import task photos for OCR.",
+          "photosPermission": "Allow Eisenhower Matrix to read tasks from selected images.",
           "cameraPermission": false,
           "microphonePermission": false
         }

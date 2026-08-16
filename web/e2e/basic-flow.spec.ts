@@ -28,6 +28,13 @@ test.beforeEach(async ({ page }) => {
     localStorage.clear();
     localStorage.setItem('eisenhower-language', 'pl');
   });
+  await page.route('**/calendar/status', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'disconnected', canConnect: false, connection: null }),
+    })
+  );
   await page.goto('/');
 });
 
@@ -47,8 +54,8 @@ test('shows a task-first, honest and accessible board at the current viewport', 
   await enter(page);
   await expect(page.getByRole('heading', { level: 1, name: 'Eisenhower Matrix' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Dodaj zadanie' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Administracja' })).toBeVisible();
-  await expect(page.getByRole('status')).toContainText('Dane są aktualne');
+  await expect(page.getByRole('button', { name: 'Administracja' })).toHaveCount(0);
+  await expect(page.getByText('Dane są aktualne', { exact: false })).toBeVisible();
   await expect(quadrant(page, 'Zrób teraz')).toBeVisible();
   await expect(quadrant(page, 'Zaplanuj')).toBeVisible();
   await expect(quadrant(page, 'Deleguj')).toBeVisible();
@@ -65,7 +72,7 @@ test('shows a task-first, honest and accessible board at the current viewport', 
 
 test('shows offline state, never claims current data, and recovers locally', async ({ page }) => {
   await enter(page);
-  await expect(page.getByRole('status')).toContainText('Dane są aktualne');
+  await expect(page.getByText('Dane są aktualne', { exact: false })).toBeVisible();
 
   let failTaskLoad = true;
   await page.route('**/tasks', async (route) => {
@@ -81,22 +88,38 @@ test('shows offline state, never claims current data, and recovers locally', asy
 
   failTaskLoad = false;
   await page.getByRole('button', { name: 'Spróbuj ponownie' }).click();
-  await expect(page.getByRole('status')).toContainText('Dane są aktualne');
+  await expect(page.getByText('Dane są aktualne', { exact: false })).toBeVisible();
 });
 
-test('opens administration independently and explains the separate credential', async ({
+test('keeps technical administration out and starts the business calendar connection', async ({
   page,
 }) => {
+  let returnPath = '';
+  await page.route('**/calendar/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'disconnected', canConnect: true, connection: null }),
+    });
+  });
+  await page.route('https://accounts.google.com/**', (route) => route.abort());
+  await page.route('**/calendar/oauth/start', async (route) => {
+    returnPath = (route.request().postDataJSON() as { returnPath: string }).returnPath;
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        authorizationUrl: 'https://accounts.google.com/o/oauth2/auth?state=e2e-safe',
+      }),
+    });
+  });
   await enter(page);
   await expect(page.getByLabel('Tytuł zadania')).toHaveValue('');
-  await page.getByRole('button', { name: 'Administracja' }).click();
-
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await expect(page.getByLabel('Kod administratora')).toBeVisible();
-  await expect(page.getByLabel('Kod administratora')).toBeFocused();
-  await expect(page.getByText(/osobny kod administratora/i)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Otwórz administrację' })).toBeDisabled();
-  await expectAccessible(page);
+  await expect(page.getByRole('button', { name: 'Administracja' })).toHaveCount(0);
+  await expect(page.getByText(/provider|model|retrain|training data|n8n|outbox/i)).toHaveCount(0);
+  await page.getByRole('button', { name: 'Połącz Google Calendar' }).click();
+  await expect.poll(() => returnPath).toBe('/');
+  expect(returnPath).toBe('/');
 });
 
 test('creates, edits, classifies and permanently deletes a task with keyboard controls', async ({
@@ -106,6 +129,7 @@ test('creates, edits, classifies and permanently deletes a task with keyboard co
   // Narrow mobile CI runners need enough time for Axe without skipping checks.
   test.setTimeout(75_000);
   await enter(page);
+  await expect(page.getByText('Dane są aktualne', { exact: false })).toBeVisible();
 
   const title = `E2E smoke ${Date.now()}`;
   const editedTitle = `${title} edited`;

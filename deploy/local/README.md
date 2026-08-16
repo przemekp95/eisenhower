@@ -121,6 +121,16 @@ generation circuit breaker. The current ROCm knowledge image remains vLLM-derive
 gfx1151 benchmark qualifies a pinned dedicated PyTorch/ROCm image; no storage or RAM saving is claimed before
 that gate.
 
+Before either gateway and the final smoke check, deployment stops n8n, reconciles the five allowlisted
+repository workflows by stable ID, removes exact-name stale duplicates, verifies the installed definitions,
+and restarts n8n. If reconciliation fails, it restores the pre-reconcile SQLite snapshot and restarts the
+last known runtime before the deployment fails closed. Calendar workflows are published by default. RAG workflows require both
+`N8N_RAG_WORKFLOWS_ENABLED=true`, a live `knowledge-service`, and an existing `httpHeaderAuth` credential
+selected by `N8N_RAG_HEADER_AUTH_CREDENTIAL_ID`; otherwise they remain unpublished. Use
+`deploy/local/deploy.sh reconcile-n8n` to repeat only this step. Use
+`n8n/scripts/rehearse-runtime.sh` for a disposable n8n 2.4.6 import/publish/start rehearsal; it does not mount
+the deployment volume and does not contact Google.
+
 ## Multi-user OIDC and Remote MCP
 
 `identity-service` imports the production-shaped `eisenhower` realm from

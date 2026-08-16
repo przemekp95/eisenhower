@@ -9,30 +9,12 @@ import MatrixBoard from './src/components/MatrixBoard';
 import TaskComposer from './src/components/TaskComposer';
 import AIToolsModal from './src/components/ai/AIToolsModal';
 import useTaskSyncController from './src/hooks/useTaskSyncController';
-import {
-  addTrainingExample,
-  analyzeTaskAdvanced,
-  batchAnalyzeTasks,
-  clearTrainingData,
-  fetchTrainingStats,
-  getExamplesByQuadrant,
-  learnFromFeedback,
-  retrainModel,
-  setAIProviderEnabled,
-} from './src/services/ai';
+import { analyzeTaskAdvanced, batchAnalyzeTasks } from './src/services/ai';
 import { scanTasksFromImage } from './src/services/media';
 import { getSuggestedQuadrant, resolveAIActionNotice, resolveOCRNotice } from './src/utils/aiUi';
 import { flagsToQuadrant, quadrantToFlags } from './src/utils/taskUtils';
 import styles from './src/styles/appStyles';
-import {
-  clearAdminToken,
-  clearApiToken,
-  getAdminToken,
-  getApiToken,
-  setAdminToken,
-  setApiToken,
-  subscribeToApiToken,
-} from './src/authSession';
+import { clearApiToken, getApiToken, setApiToken, subscribeToApiToken } from './src/authSession';
 
 function AuthenticatedApp() {
   const {
@@ -58,7 +40,6 @@ function AuthenticatedApp() {
     loading,
     newTask,
     notice,
-    providerControls,
     quadrantOptions,
     refreshCapabilities,
     retrySync,
@@ -69,11 +50,6 @@ function AuthenticatedApp() {
     t,
     updateNewTaskField: updateTaskDraftField,
   } = useTaskSyncController();
-  const [trainingStats, setTrainingStats] = useState(null);
-  const [providerBusy, setProviderBusy] = useState({
-    local_model: false,
-    tesseract: false,
-  });
   const [aiToolsOpen, setAiToolsOpen] = useState(false);
   const [activeAITab, setActiveAITab] = useState('analysis');
   const [aiToolsError, setAiToolsError] = useState('');
@@ -87,38 +63,23 @@ function AuthenticatedApp() {
   const [batchInput, setBatchInput] = useState('');
   const [batchLoading, setBatchLoading] = useState(false);
   const [batchResult, setBatchResult] = useState(null);
-  const [manageLoading, setManageLoading] = useState(false);
-  const [manageAction, setManageAction] = useState('');
-  const [exampleText, setExampleText] = useState('');
-  const [exampleQuadrant, setExampleQuadrant] = useState(2);
-  const [feedbackTask, setFeedbackTask] = useState('');
-  const [predictedQuadrant, setPredictedQuadrant] = useState(1);
-  const [correctQuadrant, setCorrectQuadrant] = useState(0);
-  const [examplesQuadrant, setExamplesQuadrant] = useState(0);
-  const [examples, setExamples] = useState([]);
-  const [preserveExperience, setPreserveExperience] = useState(true);
-  const [keepDefaults, setKeepDefaults] = useState(true);
-  const [adminAuthenticated, setAdminAuthenticated] = useState(Boolean(getAdminToken()));
-  const [adminTokenInput, setAdminTokenInput] = useState('');
-  const [ocrLearningConsent, setOcrLearningConsent] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [clearConfirmationOpen, setClearConfirmationOpen] = useState(false);
   const retrySyncRef = useRef(retrySync);
   const refreshCapabilitiesRef = useRef(refreshCapabilities);
   const networkReachableRef = useRef(null);
   const analysisRequestRef = useRef(null);
   const batchRequestRef = useRef(null);
   const ocrRequestRef = useRef(null);
+  const availableAITabs = [
+    ...(aiCapabilities?.reasoned_local_analysis ? ['analysis'] : []),
+    ...(aiCapabilities?.ocr ? ['ocr'] : []),
+    ...(aiCapabilities?.batch_analysis ? ['batch'] : []),
+  ];
 
   useEffect(() => {
     retrySyncRef.current = retrySync;
     refreshCapabilitiesRef.current = refreshCapabilities;
   }, [refreshCapabilities, retrySync]);
-
-  useEffect(
-    () => subscribeToApiToken(() => setAdminAuthenticated(Boolean(getAdminToken()))),
-    []
-  );
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
@@ -158,25 +119,6 @@ function AuthenticatedApp() {
     setAnalysisTask((current) => current || newTask.title);
   }, [aiToolsOpen, newTask.title]);
 
-  useEffect(() => {
-    if (aiToolsOpen && activeAITab === 'manage' && adminAuthenticated) {
-      void refreshAIManagement();
-    }
-  }, [aiToolsOpen, activeAITab, adminAuthenticated]);
-
-  const refreshAIManagement = async () => {
-    setManageLoading(true);
-
-    try {
-      const [stats] = await Promise.all([fetchTrainingStats(), refreshCapabilities()]);
-      setTrainingStats(stats);
-    } catch {
-      setAiToolsError(t.aiManageLoadFailed);
-    } finally {
-      setManageLoading(false);
-    }
-  };
-
   const resetAIToolFeedback = () => {
     setAiToolsError('');
     setAiToolsMessage('');
@@ -202,8 +144,10 @@ function AuthenticatedApp() {
 
   const openAITools = (tab = 'analysis') => {
     resetAIToolFeedback();
+    const nextTab = availableAITabs.includes(tab) ? tab : availableAITabs[0];
+    if (!nextTab) return;
     setAiToolsOpen(true);
-    setActiveAITab(tab);
+    setActiveAITab(nextTab);
     setAnalysisTask(newTask.title);
   };
 
@@ -296,7 +240,6 @@ function AuthenticatedApp() {
           quadrant: flagsToQuadrant(item),
         })),
       });
-      setOcrLearningConsent(false);
       setAiToolsMessage(t.aiOcrReviewReady.replace('{count}', String(scanned.length)));
     } catch (error) {
       if (ocrRequestRef.current === controller) {
@@ -327,16 +270,14 @@ function AuthenticatedApp() {
     setOcrLoading(true);
     resetAIToolFeedback();
     try {
-      const result = await importScannedTasks(selected, { learn: ocrLearningConsent });
+      const result = await importScannedTasks(selected);
       setAiToolsMessage(
         t.aiOcrImportResult
           .replace('{imported}', String(result.imported))
           .replace('{saved}', String(result.savedRemotely))
           .replace('{pending}', String(result.pending))
-          .replace('{feedback}', ocrLearningConsent ? (result.feedbackSaved ? t.yes : t.no) : t.notRequested)
       );
       setOcrResult(null);
-      setOcrLearningConsent(false);
     } catch (error) {
       setAiToolsError(t.ocrFailed);
     } finally {
@@ -390,92 +331,11 @@ function AuthenticatedApp() {
     }
   };
 
-  const runManageAction = async (actionKey, action, successMessage, afterSuccess = null) => {
-    setManageAction(actionKey);
-    resetAIToolFeedback();
-
-    try {
-      const result = await action();
-      await refreshAIManagement();
-      if (afterSuccess) {
-        afterSuccess(result);
-      }
-      setAiToolsMessage(typeof successMessage === 'function' ? successMessage(result) : successMessage);
-    } catch (error) {
-      setAiToolsError(t.aiManageActionFailed);
-    } finally {
-      setManageAction('');
-    }
-  };
-
-  const handleManageProviderToggle = async (providerName) => {
-    const currentState = aiCapabilities?.provider_controls?.[providerName];
-    if (!currentState) {
-      return;
-    }
-
-    setProviderBusy((current) => ({ ...current, [providerName]: true }));
-
-    try {
-      await setAIProviderEnabled(providerName, !currentState.enabled);
-      await refreshAIManagement();
-      setAiToolsMessage(t.aiProviderToggleSaved);
-    } catch (error) {
-      setAiToolsError(t.aiProviderToggleFailed);
-    } finally {
-      setProviderBusy((current) => ({ ...current, [providerName]: false }));
-    }
-  };
-
   const handleTabChange = (tab) => {
+    if (!availableAITabs.includes(tab)) return;
     resetAIToolFeedback();
     setActiveAITab(tab);
   };
-
-  const handleAddExample = () =>
-    runManageAction(
-      'add-example',
-      () => addTrainingExample(exampleText.trim(), exampleQuadrant),
-      t.aiManageExampleAdded,
-      () => setExampleText('')
-    );
-
-  const handleLearnFeedback = () =>
-    runManageAction(
-      'feedback',
-      () => learnFromFeedback(feedbackTask.trim(), predictedQuadrant, correctQuadrant),
-      t.aiManageFeedbackSaved,
-      () => setFeedbackTask('')
-    );
-
-  const handleRetrain = () =>
-    runManageAction(
-      'retrain',
-      () => retrainModel(preserveExperience),
-      t.aiManageRetrained
-    );
-
-  const handleClear = () =>
-    runManageAction(
-      'clear',
-      () => clearTrainingData(keepDefaults),
-      t.aiManageCleared,
-      () => {
-        setExamples([]);
-        setClearConfirmationOpen(false);
-      }
-    );
-
-  const handleLoadExamples = () =>
-    runManageAction(
-      'examples',
-      async () => {
-        const response = await getExamplesByQuadrant(examplesQuadrant, 5);
-        setExamples(response.examples || []);
-        return response;
-      },
-      (response) => t.aiManageExamplesLoaded.replace('{count}', String(response?.examples?.length ?? 0))
-    );
 
   if (loading) {
     return (
@@ -547,13 +407,13 @@ function AuthenticatedApp() {
           onOpenAITools={() => openAITools('analysis')}
           suggestDisabled={suggestDisabled}
           scanDisabled={scanDisabled}
+          toolsDisabled={availableAITabs.length === 0}
           t={t}
         /> : null}
 
         {taskView === 'owned' ? <AIStatusPanel
           aiLoading={aiLoading}
           aiConnected={aiConnected}
-          providerControls={providerControls}
           t={t}
         /> : null}
 
@@ -576,6 +436,7 @@ function AuthenticatedApp() {
       <AIToolsModal
         visible={aiToolsOpen}
         t={t}
+        availableTabs={availableAITabs}
         activeTab={activeAITab}
         onTabChange={handleTabChange}
         onClose={closeAITools}
@@ -597,8 +458,6 @@ function AuthenticatedApp() {
         ocrResult={ocrResult}
         onChangeOcrItem={handleChangeOcrItem}
         onImportOcr={handleImportReviewedOcr}
-        ocrLearningConsent={ocrLearningConsent}
-        onChangeOcrLearningConsent={setOcrLearningConsent}
         batchInput={batchInput}
         onChangeBatchInput={(value) => {
           cancelBatchRequest();
@@ -608,51 +467,8 @@ function AuthenticatedApp() {
         onRunBatchAnalyze={handleBatchAnalyze}
         batchLoading={batchLoading}
         batchResult={batchResult}
-        manageLoading={manageLoading}
-        trainingStats={trainingStats}
-        providerControls={providerControls}
-        providerBusy={providerBusy}
-        onToggleProvider={handleManageProviderToggle}
-        exampleText={exampleText}
-        onChangeExampleText={setExampleText}
-        exampleQuadrant={exampleQuadrant}
-        onSelectExampleQuadrant={setExampleQuadrant}
-        onAddExample={handleAddExample}
-        feedbackTask={feedbackTask}
-        onChangeFeedbackTask={setFeedbackTask}
-        predictedQuadrant={predictedQuadrant}
-        onSelectPredictedQuadrant={setPredictedQuadrant}
-        correctQuadrant={correctQuadrant}
-        onSelectCorrectQuadrant={setCorrectQuadrant}
-        onLearnFeedback={handleLearnFeedback}
-        preserveExperience={preserveExperience}
-        onChangePreserveExperience={setPreserveExperience}
-        keepDefaults={keepDefaults}
-        onChangeKeepDefaults={setKeepDefaults}
-        onRetrain={handleRetrain}
-        onClear={handleClear}
-        examplesQuadrant={examplesQuadrant}
-        onSelectExamplesQuadrant={setExamplesQuadrant}
-        onLoadExamples={handleLoadExamples}
-        examples={examples}
         aiToolsError={aiToolsError}
         aiToolsMessage={aiToolsMessage}
-        manageAction={manageAction}
-        adminAuthenticated={adminAuthenticated}
-        adminTokenInput={adminTokenInput}
-        onChangeAdminTokenInput={setAdminTokenInput}
-        onSubmitAdminToken={() => {
-          setAdminToken(adminTokenInput);
-          setAdminTokenInput('');
-          setAdminAuthenticated(true);
-        }}
-        onClearAdminToken={() => {
-          clearAdminToken();
-          setAdminAuthenticated(false);
-        }}
-        clearConfirmationOpen={clearConfirmationOpen}
-        onRequestClear={() => setClearConfirmationOpen(true)}
-        onCancelClear={() => setClearConfirmationOpen(false)}
       />
     </SafeAreaView>
   );
@@ -666,11 +482,11 @@ function CredentialGate() {
       <View style={{ padding: 24, borderRadius: 24, backgroundColor: '#0f172a' }}>
         <Text style={{ color: '#fff', fontSize: 24, fontWeight: '700' }}>Eisenhower Matrix</Text>
         <Text style={{ color: '#cbd5e1', marginTop: 12, lineHeight: 20 }}>
-          Wpisz token dostępu. Token administratora podasz osobno tylko przy wejściu do panelu zarządzania AI.
+          Wpisz kod dostępu otrzymany od osoby zarządzającej systemem.
         </Text>
         <TextInput
           testID="auth-token-input"
-          accessibilityLabel="Token dostępu"
+          accessibilityLabel="Kod dostępu"
           secureTextEntry
           autoCapitalize="none"
           autoCorrect={false}

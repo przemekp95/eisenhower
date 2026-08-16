@@ -1,4 +1,4 @@
-# Web guide for users and administrators
+# Web guide for business users
 
 ## Start using the board
 
@@ -23,14 +23,12 @@ The access code stays only in the current browser tab. It is removed when you si
 - **No connection** means the visible board may be out of date. Use **Try again** after restoring the connection.
 - A failed create or edit keeps the draft in place and shows the next safe step beside that task or form.
 
-## Administration
+## Business administration
 
-Open **Administration** from the board header. You do not need to create or name a task first.
+Business administrators use the same business language and workflows as other users. The product does not expose providers, models, training data, queues, workflows, indexes, credentials, n8n or infrastructure controls. Calendar connection, synchronization progress and conflict resolution remain business actions and are available only when the server reports the corresponding capability.
 
-The administrator code is separate from the ordinary access code and is also kept only in the current tab. Each control has a permanent label and describes its effect. Turning off a feature, refreshing suggestions, and clearing learned examples require an explicit confirmation. While an action is running, its controls are disabled to prevent duplicate changes.
-
-If administration changes are disabled in the current environment, the panel is read-only. This is intentional: the browser does not bypass server roles, permissions, or production safety gates.
+Technical maintenance is an operator responsibility performed through private deployment and service interfaces outside the web and mobile products. Hiding a control in the browser is not an authorization boundary; operator endpoints remain protected server-side and are not called by product clients.
 
 ## Current sign-in limitation
 
-The supported deployment still uses the existing static Bearer access model. The clearer screens do not create personal accounts, password recovery, or a new identity provider. Moving to individual accounts requires a separate product and infrastructure decision. Until then, the system owner must distribute and rotate the two access codes through an approved secure channel.
+The supported deployment still uses the existing static Bearer access model. The clearer screens do not create personal accounts, password recovery, business roles or a new identity provider. Moving to individual accounts and a distinct business-administrator role requires a separate product and infrastructure decision. Until then, the system owner must distribute and rotate the product access code through an approved secure channel; the separate operator credential must never be entered into a product client.

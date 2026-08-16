@@ -275,11 +275,26 @@ export class MongooseTaskRepository implements TaskRepository {
     }
   }
 
-  async listDelegated(scope: TaskPrincipalScope, limit: number) {
+  async listDelegated(
+    scope: TaskPrincipalScope,
+    limit: number,
+    lifecycle: TaskLifecycleFilter
+  ) {
+    const lifecycleScope: QueryFilter<Task> =
+      lifecycle === 'all'
+        ? {}
+        : lifecycle === 'active'
+          ? { $or: [{ lifecycleState: 'active' as const }, { lifecycleState: { $exists: false } }] }
+          : { lifecycleState: lifecycle };
     const tasks = await TaskModel.find({
-      tenantId: scope.tenantId,
-      'delegation.assigneeUserId': scope.userId,
-      deletedAt: { $exists: false },
+      $and: [
+        {
+          tenantId: scope.tenantId,
+          'delegation.assigneeUserId': scope.userId,
+          deletedAt: { $exists: false },
+        },
+        lifecycleScope,
+      ],
     })
       .sort({ 'delegation.statusUpdatedAt': -1, _id: -1 })
       .limit(limit)

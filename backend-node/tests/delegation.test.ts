@@ -306,6 +306,37 @@ describe('task delegation workflow', () => {
     expect(accepted.body.delegation.status).toBe('accepted');
   });
 
+  it('filters delegated work by business lifecycle and rejects invalid filters', async () => {
+    const app = principalApp();
+    const delegation = {
+      assigneeUserId: 'user-b', displayLabel: 'Pat', handoffNote: '', status: 'accepted' as const,
+      offeredAt: new Date(), statusUpdatedAt: new Date(),
+    };
+    await TaskModel.create({
+      tenantId: 'tenant-a', ownerId: 'owner-a', title: 'Active handoff',
+      lifecycleState: 'active', delegation,
+    });
+    await TaskModel.collection.insertOne({
+      tenantId: 'tenant-a', ownerId: 'owner-a', title: 'Archived handoff',
+      urgent: false, important: false, revision: 0,
+      lifecycleState: 'archived', archivedAt: new Date(), delegation,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    const assignee = asPrincipal(app, 'tenant-a', 'user-b');
+
+    const active = await assignee.get('/tasks/delegated?lifecycle=active');
+    const archived = await assignee.get('/tasks/delegated?lifecycle=archived');
+    const all = await assignee.get('/tasks/delegated?lifecycle=all');
+    const invalid = await assignee.get('/tasks/delegated?lifecycle=technical');
+
+    expect(active.status).toBe(200);
+    expect(active.body.map((task: { title: string }) => task.title)).toEqual(['Active handoff']);
+    expect(archived.body.map((task: { title: string }) => task.title)).toEqual(['Archived handoff']);
+    expect(all.body).toHaveLength(2);
+    expect(invalid.status).toBe(400);
+    expect(invalid.body.error).toBe('Invalid lifecycle filter');
+  });
+
   it('applies optional delegation and schedule fields without weakening revision preconditions', async () => {
     const app = principalApp();
     const owner = asPrincipal(app, 'tenant-a', 'owner-a');

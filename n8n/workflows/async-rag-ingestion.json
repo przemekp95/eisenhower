@@ -27,7 +27,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.EISENHOWER_INTERNAL_API_URL + '/internal/webhooks/n8n/verify' }}",
+        "url": "={{ $env.EISENHOWER_KNOWLEDGE_INTERNAL_API_URL + '/internal/webhooks/n8n/verify' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -181,7 +181,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.EISENHOWER_INTERNAL_API_URL + '/internal/rag/ingestion/upsert' }}",
+        "url": "={{ $env.EISENHOWER_KNOWLEDGE_INTERNAL_API_URL + '/internal/rag/ingestion/upsert' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -208,7 +208,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.EISENHOWER_INTERNAL_API_URL + '/internal/rag/ingestion/tombstone' }}",
+        "url": "={{ $env.EISENHOWER_KNOWLEDGE_INTERNAL_API_URL + '/internal/rag/ingestion/tombstone' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -235,7 +235,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.EISENHOWER_INTERNAL_API_URL + '/internal/rag/reindex' }}",
+        "url": "={{ $env.EISENHOWER_KNOWLEDGE_INTERNAL_API_URL + '/internal/rag/reindex' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -262,7 +262,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.EISENHOWER_INTERNAL_API_URL + '/internal/rag/evaluations' }}",
+        "url": "={{ $env.EISENHOWER_KNOWLEDGE_INTERNAL_API_URL + '/internal/rag/evaluations' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [

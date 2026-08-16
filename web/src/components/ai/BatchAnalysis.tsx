@@ -98,7 +98,7 @@ export default function BatchAnalysis({ onBatchComplete }: Props) {
             <li key={entry.task} className="rounded-2xl border border-white/10 bg-black/20 p-3">
               {entry.task}:{' '}
               {resolveQuadrantLabel(entry.analyses.rag.quadrant, quadrantLabels, (quadrant) =>
-                t('ai.manage.quadrantUnknown').replace('{quadrant}', String(quadrant))
+                t('ai.quadrantUnknown').replace('{quadrant}', String(quadrant))
               )}
             </li>
           ))}

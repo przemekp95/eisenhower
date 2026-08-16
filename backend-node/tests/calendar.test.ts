@@ -1,6 +1,10 @@
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import request from 'supertest';
+import mongoose from 'mongoose';
 import { createApp } from '../src/app';
+import { CalendarApplicationService } from '../src/application/calendar';
+import { createCalendarRouter } from '../src/routes/calendar';
+import { isCalendarInboundCommand } from '../src/routes/calendarInternal';
 import {
   CalendarBindingModel,
   CalendarConflictModel,
@@ -46,6 +50,7 @@ describe('calendar integration boundary', () => {
     aiHealthChecker: async () => 'healthy',
     databaseStatusResolver: () => 'connected',
     calendarInternalHmacKey: internalKey,
+    rateLimitLimit: 1_000,
   });
   const api = (path: string) => request(app).get(path).set('Authorization', 'Bearer test-api-token');
 
@@ -57,6 +62,8 @@ describe('calendar integration boundary', () => {
   afterAll(stopMongo);
 
   it('gets one owner-scoped task with its strong revision ETag', async () => {
+    expect(createCalendarRouter()).toBeDefined();
+    expect(isCalendarInboundCommand('not-an-object')).toBe(false);
     const task = await TaskModel.create({ title: 'Calendar seed' });
     const response = await api(`/tasks/${task.id}`);
 
@@ -79,7 +86,7 @@ describe('calendar integration boundary', () => {
     await CalendarSyncStateModel.create({
       tenantId: 'local', ownerId: 'local-user', connectionId: connection.id,
       syncToken: 'sync-1', pageToken: 'page-2', fullResyncRequired: false,
-      watch: { channelId: 'channel-1', resourceId: 'resource-1', expiresAt: new Date(Date.now() + 60_000) },
+      watch: { channelId: 'channel-1', resourceId: 'resource-1', verificationHash: createHash('sha256').update('secret-1').digest('hex'), expiresAt: new Date(Date.now() + 60_000) },
     });
 
     const stored = await CalendarConnectionModel.findById(connection.id).lean();
@@ -200,18 +207,35 @@ describe('calendar integration boundary', () => {
       tenantId: 'local', ownerId: 'local-user', provider: 'google', calendarId: 'primary',
       credentialRef: 'n8n:secret-reference-only', status: 'active',
     });
+    await CalendarOutboxModel.create({
+      eventId: 'failed-business-sync', tenantId: 'local', ownerId: 'local-user',
+      aggregateId: connection.id, aggregateRevision: 0, type: 'calendar.sync.requested',
+      payload: { connectionId: connection.id }, status: 'dead_letter', attempts: 5,
+      lastError: 'private_runtime_detail',
+    });
     const connected = await api('/calendar/status');
     const first = await request(app).post('/calendar/sync-requests')
       .set('Authorization', 'Bearer test-api-token').set('Idempotency-Key', 'ui-sync-1').send({});
     const replay = await request(app).post('/calendar/sync-requests')
       .set('Authorization', 'Bearer test-api-token').set('Idempotency-Key', 'ui-sync-1').send({});
 
-    expect(disconnected.body).toEqual({ status: 'disconnected', connection: null });
+    expect(disconnected.body).toEqual({ status: 'disconnected', connection: null, canConnect: false });
     expect(connected.body.status).toBe('connected');
     expect(connected.body.connection).toEqual({ id: connection.id, provider: 'google', calendarId: 'primary' });
+    expect(connected.body.canConnect).toBe(false);
+    expect(connected.body).toMatchObject({ syncProblem: true, failedSyncCount: 1 });
     expect(JSON.stringify(connected.body)).not.toContain('credentialRef');
+    expect(JSON.stringify(connected.body)).not.toContain('private_runtime_detail');
     expect(first.status).toBe(202);
     expect(replay.body.eventId).toBe(first.body.eventId);
+    expect(await CalendarOutboxModel.findOne({ eventId: first.body.eventId })).toMatchObject({
+      type: 'calendar.sync.requested',
+      payload: { connectionId: connection.id },
+    });
+    expect((await CalendarSyncStateModel.findOne({ connectionId: connection.id }))?.lastRequestedAt).toBeDefined();
+    expect(await CalendarOutboxModel.findOne({ eventId: 'failed-business-sync' }).lean()).toMatchObject({
+      status: 'pending', attempts: 0,
+    });
   });
 
   it('claims an executable provider dispatch enriched with connection and binding data', async () => {
@@ -277,10 +301,10 @@ describe('calendar integration boundary', () => {
     await CalendarSyncStateModel.create({
       tenantId: 'local', ownerId: 'local-user', connectionId: connection.id,
       syncToken: 'sync-current', fullResyncRequired: false,
-      watch: { channelId: 'channel-1', resourceId: 'resource-1', expiresAt: new Date(Date.now() + 60_000) },
+      watch: { channelId: 'channel-1', resourceId: 'resource-1', verificationHash: createHash('sha256').update('channel-secret').digest('hex'), expiresAt: new Date(Date.now() + 60_000) },
     });
     const path = '/internal/calendar/notifications/validate';
-    const body = { channelId: 'channel-1', resourceId: 'resource-1', messageNumber: '42' };
+    const body = { channelId: 'channel-1', resourceId: 'resource-1', channelToken: 'channel-secret', messageNumber: '42' };
     const auth = signed(path, body);
     const response = await request(app).post(path)
       .set('X-Eisenhower-Timestamp', auth.timestamp)
@@ -291,6 +315,77 @@ describe('calendar integration boundary', () => {
       valid: true, tenantId: 'local', ownerId: 'local-user', connectionId: connection.id,
       calendarId: 'primary', syncToken: 'sync-current', signalId: 'channel-1:42',
     });
+  });
+
+  it('reclaims expired leases and dead-letters a failed final attempt', async () => {
+    const connection = await CalendarConnectionModel.create({
+      tenantId: 'local', ownerId: 'local-user', provider: 'google', calendarId: 'primary',
+      credentialRef: 'reference', status: 'active',
+    });
+    await CalendarOutboxModel.create({
+      eventId: 'expired-lease', tenantId: 'local', ownerId: 'local-user',
+      aggregateId: connection.id, aggregateRevision: 0, type: 'calendar.sync.requested',
+      payload: { connectionId: connection.id }, status: 'leased', attempts: 4,
+      leaseId: 'expired-worker',
+      leaseUntil: new Date(Date.now() - 1_000),
+    });
+
+    const reclaimed = await internalPost('/internal/calendar/outbox/claim', {});
+    const activeLease = await CalendarOutboxModel.findOne({ eventId: 'expired-lease' }).lean();
+    const stale = await internalPost('/internal/calendar/outbox/acknowledge', {
+      eventId: 'expired-lease', leaseId: 'expired-worker', delivered: true,
+    });
+    const failed = await internalPost('/internal/calendar/outbox/acknowledge', {
+      eventId: 'expired-lease', leaseId: reclaimed.body.leaseId,
+      delivered: false, error: 'provider_dispatch_failed',
+    });
+
+    expect(reclaimed.body).toMatchObject({
+      eventId: 'expired-lease', type: 'calendar.sync.requested', checkpoint: 'full-resync',
+    });
+    expect(reclaimed.body.leaseId).not.toBe('expired-worker');
+    expect(activeLease?.leaseUntil?.getTime()).toBeGreaterThan(Date.now() + 34 * 60_000);
+    expect(stale.status).toBe(409);
+    expect(failed.body).toMatchObject({
+      status: 'dead_letter', attempts: 5, lastError: 'provider_dispatch_failed',
+    });
+  });
+
+  it('rejects a wrong watch token and non-monotonic Google message numbers', async () => {
+    const connection = await CalendarConnectionModel.create({
+      tenantId: 'local', ownerId: 'local-user', provider: 'google', calendarId: 'primary',
+      credentialRef: 'reference', status: 'active',
+    });
+    await CalendarSyncStateModel.create({
+      tenantId: 'local', ownerId: 'local-user', connectionId: connection.id,
+      syncToken: 'sync-current', fullResyncRequired: false,
+      watch: {
+        channelId: 'channel-secure', resourceId: 'resource-secure',
+        verificationHash: 'placeholder', lastMessageNumber: 41,
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+    await CalendarSyncStateModel.updateOne(
+      { connectionId: connection.id },
+      { $set: { 'watch.verificationHash': createHash('sha256').update('expected-token').digest('hex') } },
+    );
+
+    const wrongToken = await internalPost('/internal/calendar/notifications/validate', {
+      channelId: 'channel-secure', resourceId: 'resource-secure',
+      channelToken: 'wrong-token', messageNumber: '42',
+    });
+    const accepted = await internalPost('/internal/calendar/notifications/validate', {
+      channelId: 'channel-secure', resourceId: 'resource-secure',
+      channelToken: 'expected-token', messageNumber: '42',
+    });
+    const replay = await internalPost('/internal/calendar/notifications/validate', {
+      channelId: 'channel-secure', resourceId: 'resource-secure',
+      channelToken: 'expected-token', messageNumber: '42',
+    });
+
+    expect(wrongToken).toMatchObject({ status: 403, body: { valid: false } });
+    expect(accepted).toMatchObject({ status: 200, body: { valid: true, signalId: 'channel-secure:42' } });
+    expect(replay).toMatchObject({ status: 409, body: { valid: false, reason: 'message_replayed' } });
   });
 
   async function internalPost(path: string, body?: object) {
@@ -395,7 +490,7 @@ describe('calendar integration boundary', () => {
       timeZone: 'Europe/Warsaw',
     });
 
-    expect(missingCheckpoint.body).toMatchObject({ outcome: 'rejected', reason: 'checkpoint_token_missing' });
+    expect(missingCheckpoint).toMatchObject({ status: 400, body: { error: 'Invalid calendar inbound command' } });
     expect(missingBinding.body).toMatchObject({ outcome: 'ignored', reason: 'binding_not_found' });
     expect(deleted.body.outcome).toBe('provider_deleted_task_preserved');
     expect((await CalendarBindingModel.findById(binding.id))?.providerDeletedAt).toBeDefined();
@@ -403,6 +498,9 @@ describe('calendar integration boundary', () => {
     expect(missingTaskBinding).toBeDefined();
     expect(applied.body).toMatchObject({ outcome: 'applied', revision: 1 });
     expect(await TaskModel.findById(task.id)).toMatchObject({ title: 'Provider wins', revision: 1 });
+    await expect(new CalendarApplicationService().applyInbound({
+      ...base, operationId: 'direct-checkpoint-missing', kind: 'sync_checkpoint',
+    })).resolves.toMatchObject({ outcome: 'rejected', reason: 'checkpoint_token_missing' });
   });
 
   it('validates public sync preconditions and reports pending calendar status', async () => {
@@ -455,23 +553,30 @@ describe('calendar integration boundary', () => {
     const listed = await api('/calendar/conflicts');
     const path = `/calendar/conflicts/${conflict.id}/resolve`;
     const noRevision = await request(app).post(path)
-      .set('Authorization', 'Bearer test-api-token').send({ strategy: 'google' });
+      .set('Authorization', 'Bearer test-api-token').set('Idempotency-Key', 'no-revision').send({ strategy: 'google' });
+    const noOperation = await request(app).post(path)
+      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"').send({ strategy: 'google' });
     const badStrategy = await request(app).post(path)
-      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"').send({ strategy: 'other' });
+      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"').set('Idempotency-Key', 'bad-strategy').send({ strategy: 'other' });
     const stale = await request(app).post(path)
-      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"9"').send({ strategy: 'google' });
+      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"9"').set('Idempotency-Key', 'stale-revision').send({ strategy: 'google' });
     const missing = await request(app).post(`/calendar/conflicts/${new CalendarConflictModel().id}/resolve`)
-      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"').send({ strategy: 'google' });
+      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"').set('Idempotency-Key', 'missing-conflict').send({ strategy: 'google' });
     const resolved = await request(app).post(path)
-      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"').send({ strategy: 'google' });
+      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"').set('Idempotency-Key', 'resolve-google').send({ strategy: 'google' });
 
     expect(listed.body).toHaveLength(1);
     expect(noRevision.status).toBe(428);
+    expect(noOperation.status).toBe(428);
     expect(badStrategy.status).toBe(400);
     expect(stale.status).toBe(412);
     expect(missing.status).toBe(404);
     expect(resolved.status).toBe(200);
-    expect(await TaskModel.findById(task.id)).toMatchObject({ title: 'Google' });
+    expect(await TaskModel.findById(task.id).lean()).toMatchObject({ title: 'Google', revision: 1 });
+    expect(await CalendarBindingModel.findById(binding.id).lean()).toMatchObject({
+      lastTaskRevision: 1,
+      lastProviderRevision: 'new',
+    });
   });
 
   it('resolves a local conflict by enqueueing an outbound event and rejects unavailable targets', async () => {
@@ -490,7 +595,7 @@ describe('calendar integration boundary', () => {
       providerSnapshot: { title: 'Local snapshot' }, status: 'open', revision: 0,
     });
     const resolved = await request(app).post(`/calendar/conflicts/${conflict.id}/resolve`)
-      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"')
+      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"').set('Idempotency-Key', 'resolve-local')
       .send({ strategy: 'eisenhower' });
     const unavailable = await CalendarConflictModel.create({
       tenantId: 'local', ownerId: 'local-user', connectionId: connection.id,
@@ -499,12 +604,64 @@ describe('calendar integration boundary', () => {
       status: 'open', revision: 0,
     });
     const rejected = await request(app).post(`/calendar/conflicts/${unavailable.id}/resolve`)
-      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"')
+      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"').set('Idempotency-Key', 'resolve-unavailable')
       .send({ strategy: 'eisenhower' });
 
     expect(resolved.status).toBe(200);
-    expect(await CalendarOutboxModel.findOne({ eventId: `conflict:${conflict.id}:0` })).not.toBeNull();
+    expect(await CalendarOutboxModel.findOne({ eventId: `conflict:${conflict.id}:0` })).toMatchObject({
+      type: 'event_update', payload: { bindingId: binding.id },
+    });
     expect(rejected.status).toBe(409);
+  });
+
+  it('replays conflict resolution by Idempotency-Key without repeating side effects', async () => {
+    const task = await TaskModel.create({ title: 'Local', revision: 2 });
+    const connection = await CalendarConnectionModel.create({
+      tenantId: 'local', ownerId: 'local-user', provider: 'google', calendarId: 'primary',
+      credentialRef: 'reference', status: 'active',
+    });
+    const binding = await CalendarBindingModel.create({
+      tenantId: 'local', ownerId: 'local-user', connectionId: connection.id, taskId: task.id,
+      providerEventId: 'replay-event', providerEtag: 'old', lastTaskRevision: 1,
+      lastProviderRevision: 'old',
+    });
+    const conflict = await CalendarConflictModel.create({
+      tenantId: 'local', ownerId: 'local-user', connectionId: connection.id,
+      bindingId: binding.id, taskId: task.id, taskRevision: 2, providerRevision: 'new',
+      providerSnapshot: { title: 'Provider' }, status: 'open', revision: 0,
+    });
+    const invoke = (strategy: 'eisenhower' | 'google') => request(app)
+      .post(`/calendar/conflicts/${conflict.id}/resolve`)
+      .set('Authorization', 'Bearer test-api-token')
+      .set('If-Match', '"0"')
+      .set('Idempotency-Key', 'resolve-conflict-replay')
+      .send({ strategy });
+
+    const first = await invoke('eisenhower');
+    const replay = await invoke('eisenhower');
+    const reused = await invoke('google');
+
+    expect(first.status).toBe(200);
+    expect(replay.status).toBe(200);
+    expect(replay.body).toEqual(first.body);
+    expect(reused).toMatchObject({ status: 409, body: { error: 'calendar_operation_reused' } });
+    expect(await CalendarOutboxModel.countDocuments({ eventId: `conflict:${conflict.id}:0` })).toBe(1);
+    expect(await CalendarMutationReceiptModel.countDocuments({ operationId: 'resolve-conflict-replay' })).toBe(1);
+  });
+
+  it('fails closed when a conflict transaction produces no resolution result', async () => {
+    const session = {
+      withTransaction: jest.fn(async () => undefined),
+      endSession: jest.fn(async () => undefined),
+    };
+    jest.spyOn(mongoose, 'startSession').mockResolvedValueOnce(session as never);
+
+    await expect(new CalendarApplicationService().resolveConflict({
+      tenantId: 'local', ownerId: 'local-user', actorId: 'local-user',
+      operationId: 'incomplete-resolution', conflictId: new CalendarConflictModel().id,
+      expectedRevision: 0, strategy: 'google',
+    })).rejects.toThrow('calendar_conflict_resolution_incomplete');
+    expect(session.endSession).toHaveBeenCalled();
   });
 
   it('rejects conflicts when exactly one resolution target is unavailable', async () => {
@@ -527,7 +684,7 @@ describe('calendar integration boundary', () => {
 
     for (const item of [missingBinding, missingTask]) {
       const response = await request(app).post(`/calendar/conflicts/${item.id}/resolve`)
-        .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"')
+        .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"').set('Idempotency-Key', `resolve-unavailable-${item.id}`)
         .send({ strategy: 'eisenhower' });
       expect(response.status).toBe(409);
     }
@@ -553,7 +710,7 @@ describe('calendar integration boundary', () => {
     await TaskModel.collection.updateOne({ _id: task._id }, { $unset: { revision: '' } });
 
     const response = await request(app).post(`/calendar/conflicts/${conflict.id}/resolve`)
-      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"')
+      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"').set('Idempotency-Key', 'resolve-legacy-local')
       .send({ strategy: 'eisenhower' });
 
     expect(response.status).toBe(200);
@@ -562,7 +719,7 @@ describe('calendar integration boundary', () => {
     });
   });
 
-  it('uses zero as the task revision fallback for a legacy Google resolution', async () => {
+  it('increments from the zero fallback for a legacy Google resolution', async () => {
     const task = await TaskModel.create({ title: 'Legacy local' });
     const connection = await CalendarConnectionModel.create({
       tenantId: 'local', ownerId: 'local-user', provider: 'google', calendarId: 'primary',
@@ -584,11 +741,11 @@ describe('calendar integration boundary', () => {
     await TaskModel.collection.updateOne({ _id: task._id }, { $unset: { revision: '' } });
 
     const response = await request(app).post(`/calendar/conflicts/${conflict.id}/resolve`)
-      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"')
+      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"').set('Idempotency-Key', 'resolve-legacy-google')
       .send({ strategy: 'google' });
 
     expect(response.status).toBe(200);
-    expect(await CalendarBindingModel.findById(binding.id)).toMatchObject({ lastTaskRevision: 0 });
+    expect(await CalendarBindingModel.findById(binding.id).lean()).toMatchObject({ lastTaskRevision: 1 });
   });
 
   it('applies and conflicts provider changes for legacy tasks without revisions', async () => {
@@ -652,6 +809,67 @@ describe('calendar integration boundary', () => {
     expect(invalidRequest.status).toBe(400);
     expect(syncRequest.status).toBe(202);
     expect(reused.status).toBe(409);
+  });
+
+  it('applies a bounded manual-sync command batch through the signed internal boundary', async () => {
+    const connection = await CalendarConnectionModel.create({
+      tenantId: 'local', ownerId: 'local-user', provider: 'google', calendarId: 'primary',
+      credentialRef: 'reference', status: 'active',
+    });
+    const base = { tenantId: 'local', ownerId: 'local-user', connectionId: connection.id };
+    const invalid = await internalPost('/internal/calendar/sync/apply-batch', { commands: [] });
+    const invalidMember = await internalPost('/internal/calendar/sync/apply-batch', {
+      commands: [{ ...base, operationId: 'invalid-member', kind: 'execute_any' }],
+    });
+    const unknownKind = { ...base, operationId: 'unknown-command', kind: 'execute_any' };
+    const malformedChange = {
+      ...base, operationId: 'malformed-change', kind: 'event_changed',
+      providerEventId: 'event', providerEtag: 'etag', title: 'Bad date',
+      dueAt: 'not-a-date', timeZone: 'UTC',
+    };
+    const applied = await internalPost('/internal/calendar/sync/apply-batch', {
+      commands: [{
+        ...base, operationId: 'manual-sync-checkpoint', kind: 'sync_checkpoint',
+        nextSyncToken: 'manual-sync-token',
+      }],
+    });
+
+    expect(invalid.status).toBe(400);
+    expect(invalidMember.status).toBe(400);
+    expect(isCalendarInboundCommand(unknownKind)).toBe(false);
+    expect(isCalendarInboundCommand(malformedChange)).toBe(false);
+    expect(applied).toMatchObject({
+      status: 202, body: { results: [{ outcome: 'sync_completed' }] },
+    });
+    expect(await CalendarSyncStateModel.findOne({ connectionId: connection.id })).toMatchObject({
+      syncToken: 'manual-sync-token', fullResyncRequired: false,
+    });
+  });
+
+  it('maps batch reuse, unexpected batch failures and non-Error conflict failures', async () => {
+    const base = {
+      tenantId: 'local', ownerId: 'local-user', connectionId: new CalendarConnectionModel().id,
+    };
+    const reused = await internalPost('/internal/calendar/sync/apply-batch', {
+      commands: [
+        { ...base, operationId: 'batch-reuse', kind: 'sync_token_gone' },
+        { ...base, operationId: 'batch-reuse', kind: 'sync_checkpoint', nextSyncToken: 'next' },
+      ],
+    });
+    jest.spyOn(CalendarMutationReceiptModel, 'findOne').mockImplementationOnce(() => {
+      throw new Error('batch failure');
+    });
+    const failed = await internalPost('/internal/calendar/sync/apply-batch', {
+      commands: [{ ...base, operationId: 'batch-failure', kind: 'sync_token_gone' }],
+    });
+    jest.spyOn(CalendarApplicationService.prototype, 'resolveConflict').mockRejectedValueOnce('non-error');
+    const nonError = await request(app).post(`/calendar/conflicts/${new CalendarConflictModel().id}/resolve`)
+      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"')
+      .set('Idempotency-Key', 'non-error').send({ strategy: 'google' });
+
+    expect(reused).toMatchObject({ status: 409, body: { error: 'calendar_operation_reused' } });
+    expect(failed).toMatchObject({ status: 500, body: { error: 'batch failure' } });
+    expect(nonError.status).toBe(500);
   });
 
   it('claims no work and dead-letters dispatches without a connection or required binding', async () => {
@@ -727,6 +945,57 @@ describe('calendar integration boundary', () => {
     expect(sync.body.status).toBe('delivered');
   });
 
+  it('rolls back a delivered acknowledgement when binding persistence fails', async () => {
+    const connection = await CalendarConnectionModel.create({
+      tenantId: 'local', ownerId: 'local-user', provider: 'google', calendarId: 'primary',
+      credentialRef: 'reference', status: 'active',
+    });
+    const task = await TaskModel.create({ title: 'Atomic acknowledgement' });
+    await CalendarOutboxModel.create({
+      eventId: 'atomic-ack', tenantId: 'local', ownerId: 'local-user', aggregateId: task.id,
+      aggregateRevision: 1, type: 'event_create', payload: {}, status: 'leased',
+      leaseId: 'atomic-lease', leaseUntil: new Date(Date.now() + 60_000),
+    });
+    jest.spyOn(CalendarBindingModel, 'findOneAndUpdate').mockRejectedValueOnce(new Error('binding write failed'));
+
+    const response = await internalPost('/internal/calendar/outbox/acknowledge', {
+      eventId: 'atomic-ack', leaseId: 'atomic-lease', delivered: true,
+      connectionId: connection.id, providerEventId: 'provider-atomic', providerEtag: 'etag-atomic',
+    });
+
+    expect(response.status).toBe(500);
+    expect(await CalendarOutboxModel.findOne({ eventId: 'atomic-ack' }).lean()).toMatchObject({
+      status: 'leased', leaseId: 'atomic-lease',
+    });
+    expect(await CalendarBindingModel.countDocuments({ taskId: task.id })).toBe(0);
+  });
+
+  it('dead-letters an exhausted acknowledgement and rejects a lease race', async () => {
+    const task = await TaskModel.create({ title: 'Lease race' });
+    await CalendarOutboxModel.create({
+      eventId: 'exhausted-no-error', tenantId: 'local', ownerId: 'local-user',
+      aggregateId: task.id, aggregateRevision: 1, type: 'event_create', payload: {},
+      status: 'leased', attempts: 5, leaseUntil: new Date(Date.now() + 30_000),
+    });
+    const exhausted = await internalPost('/internal/calendar/outbox/acknowledge', {
+      eventId: 'exhausted-no-error', delivered: false,
+    });
+    await CalendarOutboxModel.create({
+      eventId: 'lease-race', tenantId: 'local', ownerId: 'local-user',
+      aggregateId: task.id, aggregateRevision: 1, type: 'event_create', payload: {},
+      status: 'leased', attempts: 1, leaseUntil: new Date(Date.now() + 30_000),
+    });
+    jest.spyOn(CalendarOutboxModel, 'findOneAndUpdate').mockReturnValueOnce({
+      lean: async () => null,
+    } as never);
+    const raced = await internalPost('/internal/calendar/outbox/acknowledge', {
+      eventId: 'lease-race', delivered: true,
+    });
+
+    expect(exhausted.body).toMatchObject({ status: 'dead_letter', lastError: 'provider_error' });
+    expect(raced).toMatchObject({ status: 409, body: { error: 'Outbox event lease changed' } });
+  });
+
   it('rejects unknown notifications and covers page checkpoints with unknown message numbers', async () => {
     const invalid = await internalPost('/internal/calendar/notifications/validate', {
       channelId: 'missing', resourceId: 'missing',
@@ -738,19 +1007,32 @@ describe('calendar integration boundary', () => {
     await CalendarSyncStateModel.create({
       tenantId: 'local', ownerId: 'local-user', connectionId: connection.id,
       pageToken: 'page-current', fullResyncRequired: false,
-      watch: { channelId: 'channel-page', resourceId: 'resource-page', expiresAt: new Date(Date.now() + 60_000) },
+      watch: { channelId: 'channel-page', resourceId: 'resource-page', verificationHash: createHash('sha256').update('page-secret').digest('hex'), expiresAt: new Date(Date.now() + 60_000) },
     });
     const revoked = await internalPost('/internal/calendar/notifications/validate', {
-      channelId: 'channel-page', resourceId: 'resource-page',
+      channelId: 'channel-page', resourceId: 'resource-page', channelToken: 'page-secret', messageNumber: '1',
     });
     await CalendarConnectionModel.updateOne({ _id: connection.id }, { $set: { status: 'active' } });
     const valid = await internalPost('/internal/calendar/notifications/validate', {
-      channelId: 'channel-page', resourceId: 'resource-page',
+      channelId: 'channel-page', resourceId: 'resource-page', channelToken: 'page-secret', messageNumber: '1',
     });
 
     expect(invalid).toMatchObject({ status: 403, body: { valid: false } });
     expect(revoked).toMatchObject({ status: 403, body: { valid: false } });
-    expect(valid.body).toMatchObject({ pageToken: 'page-current', signalId: 'channel-page:unknown' });
+    expect(valid.body).toMatchObject({ pageToken: 'page-current', signalId: 'channel-page:1' });
+  });
+
+  it.each([
+    [{ channelId: 'channel' }],
+    [{ channelId: 'channel', resourceId: 'resource' }],
+    [{ channelId: 'channel', resourceId: 'resource', channelToken: 'token' }],
+    [{ channelId: 'channel', resourceId: 'resource', channelToken: 'token', messageNumber: 'nope' }],
+    [{ channelId: 'channel', resourceId: 'resource', channelToken: 'token', messageNumber: '9007199254740992' }],
+    [{ channelId: 'channel', resourceId: 'resource', channelToken: 'token', messageNumber: '0' }],
+  ])('rejects malformed notification field combinations %#', async (body) => {
+    expect(await internalPost('/internal/calendar/notifications/validate', body)).toMatchObject({
+      status: 403, body: { valid: false },
+    });
   });
 
   it('validates and persists watch renewal and internal status responses', async () => {
@@ -761,7 +1043,8 @@ describe('calendar integration boundary', () => {
     });
     const watch = await internalPost('/internal/calendar/watch/renew', {
       tenantId: 'local', ownerId: 'local-user', connectionId: connection.id,
-      channelId: 'renewed', resourceId: 'resource', expiresAt: '2026-08-30T12:00:00.000Z',
+      channelId: 'renewed', resourceId: 'resource', verificationHash: 'a'.repeat(64),
+      expiresAt: '2026-08-30T12:00:00.000Z',
     });
     const missing = await internalPost('/internal/calendar/status', {
       tenantId: 'local', ownerId: 'local-user', connectionId: new CalendarConnectionModel().id,
@@ -795,7 +1078,7 @@ describe('calendar integration boundary', () => {
       throw new Error('resolve failure');
     });
     const resolved = await request(app).post(`/calendar/conflicts/${new CalendarConflictModel().id}/resolve`)
-      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"')
+      .set('Authorization', 'Bearer test-api-token').set('If-Match', '"0"').set('Idempotency-Key', 'resolve-error')
       .send({ strategy: 'google' });
 
     expect(status).toMatchObject({ status: 500, body: { error: 'status failure' } });
@@ -824,7 +1107,8 @@ describe('calendar integration boundary', () => {
     }
     const watch = {
       tenantId: 'local', ownerId: 'local-user', connectionId: new CalendarConnectionModel().id,
-      channelId: 'channel', resourceId: 'resource', expiresAt: '2026-09-01T00:00:00.000Z',
+      channelId: 'channel', resourceId: 'resource', verificationHash: 'a'.repeat(64),
+      expiresAt: '2026-09-01T00:00:00.000Z',
     };
     for (const field of Object.keys(watch)) {
       const body = { ...watch, [field]: '' };
@@ -854,20 +1138,25 @@ describe('calendar integration boundary', () => {
       throw new Error('claim failure');
     });
     const claimFailure = await internalPost('/internal/calendar/outbound/claim', {});
-    jest.spyOn(CalendarOutboxModel, 'findOneAndUpdate').mockImplementationOnce(() => {
+    jest.spyOn(CalendarOutboxModel, 'findOne').mockImplementationOnce(() => {
       throw new Error('ack failure');
     });
-    const ackFailure = await internalPost('/internal/calendar/outbound/result', {});
+    const ackFailure = await internalPost('/internal/calendar/outbound/result', {
+      eventId: 'ack-failure', delivered: true,
+    });
     jest.spyOn(CalendarSyncStateModel, 'findOne').mockImplementationOnce(() => {
       throw new Error('notification failure');
     });
-    const notificationFailure = await internalPost('/internal/calendar/notifications/validate', {});
+    const notificationFailure = await internalPost('/internal/calendar/notifications/validate', {
+      channelId: 'channel', resourceId: 'resource', channelToken: 'secret', messageNumber: '1',
+    });
     jest.spyOn(CalendarSyncStateModel, 'findOneAndUpdate').mockImplementationOnce(() => {
       throw new Error('watch failure');
     });
     const watchFailure = await internalPost('/internal/calendar/watch/renew', {
       tenantId: 'local', ownerId: 'local-user', connectionId: new CalendarConnectionModel().id,
-      channelId: 'channel', resourceId: 'resource', expiresAt: '2026-09-01T00:00:00.000Z',
+      channelId: 'channel', resourceId: 'resource', verificationHash: 'a'.repeat(64),
+      expiresAt: '2026-09-01T00:00:00.000Z',
     });
     jest.spyOn(CalendarConnectionModel, 'find').mockImplementationOnce(() => {
       throw new Error('reconciliation failure');
@@ -923,7 +1212,7 @@ describe('calendar integration boundary', () => {
     expect(unboundClaim.body.provider).toEqual({
       connectionId: connection.id, calendarId: 'primary',
     });
-    expect((await internalPost('/internal/calendar/outbound/result', undefined)).status).toBe(404);
+    expect((await internalPost('/internal/calendar/outbound/result', undefined)).status).toBe(400);
 
     await CalendarOutboxModel.create({
       eventId: 'delete-no-etag', tenantId: 'local', ownerId: 'local-user', aggregateId: task.id,
