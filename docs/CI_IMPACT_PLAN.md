@@ -14,6 +14,8 @@ The dependency graph preserves the repository's real boundaries:
 - the whole mobile application tree and the directly imported shared API client select the Android release build because Metro bundles both into the APK;
 - manifest changes retain the `dependency-audit` impact label, while npm, backend Python, MCP lockfile and mobile policy audits execute continuously on every run; Trivy enforcement is also unconditional, with fork PR SARIF retained as a normal artifact when code-scanning upload is not write-capable.
 
+The continuous Trivy job scans repository and filesystem content. It does not substitute for the release gate, which scans every complete locally loaded first-party production image, blocks publication on LOW, MEDIUM, HIGH or CRITICAL findings, retains the vulnerability report and CycloneDX SBOM, and permits `docker push` only after the exact image passes.
+
 This is dependency-aware layered/ports-and-adapters impact selection, not a claim that the monorepo implements CQRS or a fully hexagonal architecture.
 
 ## Measured baseline and savings boundary

@@ -25,6 +25,7 @@ jobs:
     env:
       DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
       DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
+      TRIVY_IMAGE: aquasec/trivy:0.71.1@sha256:53570e6911c2361ebe7995228088cf83a6b9b73e7f3cdca44bd8f8f425e80fa7
     strategy:
       fail-fast: false
       matrix:
@@ -34,31 +35,43 @@ jobs:
             dockerfile: ./backend-ai/Dockerfile
             tag: eisenhower-ai-boundary
             target: boundary
+            require_torch: false
+            require_torchvision: false
           - name: backend-ai-classifier
             context: ./backend-ai
             dockerfile: ./backend-ai/Dockerfile
             tag: eisenhower-ai-classifier
             target: classifier
+            require_torch: true
+            require_torchvision: true
           - name: backend-ai-knowledge
             context: ./backend-ai
             dockerfile: ./backend-ai/Dockerfile
             tag: eisenhower-ai-knowledge
             target: knowledge
+            require_torch: true
+            require_torchvision: false
           - name: backend-ai-ingest
             context: ./backend-ai
             dockerfile: ./backend-ai/Dockerfile
             tag: eisenhower-ai-ingest
             target: ingest
+            require_torch: true
+            require_torchvision: true
           - name: backend-node
             context: .
             dockerfile: ./backend-node/Dockerfile
             tag: eisenhower-api
             target: production
+            require_torch: false
+            require_torchvision: false
           - name: web
             context: .
             dockerfile: ./web/Dockerfile
             tag: eisenhower-web
             target: production
+            require_torch: false
+            require_torchvision: false
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -87,15 +100,98 @@ jobs:
           password: ${{ env.DOCKER_HUB_TOKEN }}
 
       - name: Build image
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           target: ${{ matrix.target }}
-          push: ${{ steps.docker-hub.outputs.enabled == 'true' }}
-          tags: ${{ steps.docker-hub.outputs.enabled == 'true' && format('{0}/{1}:{2}', env.DOCKER_HUB_USERNAME, matrix.tag, env.RELEASE_SHA) || format('local/{0}:{1}', matrix.tag, env.RELEASE_SHA) }}
+          load: true
+          push: false
+          tags: ${{ format('{0}/{1}:{2}', env.DOCKER_HUB_USERNAME, matrix.tag, env.RELEASE_SHA) }}
+          build-args: |
+            RELEASE_SHA=${{ env.RELEASE_SHA }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Scan complete image for vulnerabilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_ref="${DOCKER_HUB_USERNAME}/${{ matrix.tag }}:${RELEASE_SHA}"
+          mkdir -p release-security "$RUNNER_TEMP/trivy-cache"
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock:ro \
+            -v "$RUNNER_TEMP/trivy-cache:/root/.cache/" \
+            -v "$PWD/release-security:/evidence" \
+            "$TRIVY_IMAGE" image \
+            --scanners vuln \
+            --severity LOW,MEDIUM,HIGH,CRITICAL \
+            --exit-code 1 \
+            --format json \
+            --output "/evidence/${{ matrix.name }}-${RELEASE_SHA}.trivy.json" \
+            "$image_ref"
+
+      - name: Generate image SBOM
+        if: ${{ always() && steps.build.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_ref="${DOCKER_HUB_USERNAME}/${{ matrix.tag }}:${RELEASE_SHA}"
+          mkdir -p release-security "$RUNNER_TEMP/trivy-cache"
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock:ro \
+            -v "$RUNNER_TEMP/trivy-cache:/root/.cache/" \
+            -v "$PWD/release-security:/evidence" \
+            "$TRIVY_IMAGE" image \
+            --format cyclonedx \
+            --output "/evidence/${{ matrix.name }}-${RELEASE_SHA}.cdx.json" \
+            "$image_ref"
+
+      - name: Verify role-specific SBOM coverage
+        if: ${{ always() && steps.build.outcome == 'success' }}
+        shell: bash
+        env:
+          REQUIRE_TORCH: ${{ matrix.require_torch }}
+          REQUIRE_TORCHVISION: ${{ matrix.require_torchvision }}
+        run: |
+          set -euo pipefail
+          sbom_path="release-security/${{ matrix.name }}-${RELEASE_SHA}.cdx.json"
+          if [ "$REQUIRE_TORCH" = "true" ]; then
+            jq -e \
+              --arg version "2.13.0+cpu" \
+              '([.components[]? | select(.name == "torch" and .version == $version)] | length) == 1' \
+              "$sbom_path"
+          fi
+          if [ "$REQUIRE_TORCHVISION" = "true" ]; then
+            jq -e \
+              --arg version "0.28.0+cpu" \
+              '([.components[]? | select(.name == "torchvision" and .version == $version)] | length) == 1' \
+              "$sbom_path"
+          fi
+
+      - name: Verify image security evidence
+        if: ${{ always() && steps.build.outcome == 'success' }}
+        shell: bash
+        run: |
+          test -s "release-security/${{ matrix.name }}-${RELEASE_SHA}.trivy.json"
+          test -s "release-security/${{ matrix.name }}-${RELEASE_SHA}.cdx.json"
+
+      - name: Preserve image security evidence
+        if: ${{ always() && steps.build.outcome == 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-image-security-${{ matrix.name }}-${{ env.RELEASE_SHA }}
+          path: |
+            release-security/${{ matrix.name }}-${{ env.RELEASE_SHA }}.trivy.json
+            release-security/${{ matrix.name }}-${{ env.RELEASE_SHA }}.cdx.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish verified image
+        if: ${{ success() }}
+        shell: bash
+        run: docker push "${DOCKER_HUB_USERNAME}/${{ matrix.tag }}:${RELEASE_SHA}"
 
   android-release:
     name: android-release

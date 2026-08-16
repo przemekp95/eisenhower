@@ -145,7 +145,7 @@ The repository uses three workflows:
 - `ci.yml`
   Runs security, production dependency, unit/coverage, integration, isolated browser E2E, AI, mobile, and native Android release checks on `dev` and `master`. The Android job uploads a downloadable release APK, validates the embedded public backend URLs, and the workflow can also be started manually with `workflow_dispatch`.
 - `release.yml`
-  Runs only after a successful CI push run on `master`, builds immutable commit-SHA Docker images, and performs optional deployments when required secrets are present (`deploy-mikrus` and ECS).
+  Runs only for an explicitly selected green `master` SHA, builds each split first-party production image locally, blocks publication on any LOW, MEDIUM, HIGH or CRITICAL image finding, retains its vulnerability report and CycloneDX SBOM, and performs optional deployments only after verified publication.
 
 Protected branches:
 
@@ -171,6 +171,11 @@ Current repository-level controls include:
 - fail-closed Python dependency auditing: `pip-audit` may leave only the exact
   `torch==2.13.0+cpu` and `torchvision==0.28.0+cpu` blind spots, whose public
   PyTorch CPU wheel source and SHA-256 resolution are checked separately
+- fail-closed post-`master` image publication: every complete boundary,
+  classifier, knowledge, ingest, Node and web production image is loaded
+  locally, scanned with digest-pinned Trivy, and rejected on any LOW, MEDIUM,
+  HIGH or CRITICAL finding before `docker push`; a CycloneDX SBOM and the
+  vulnerability report are retained for 90 days
 - server-side Bearer authentication on all non-health Node and AI routes, with a separate administrator credential for AI management
 - exact Origin validation on browser state changes in addition to least-privilege CORS; header-based auth uses no cookies, so classical CSRF is not applicable
 - runtime-only user and administrator token entry in web/mobile clients; neither token is bundled or persisted
@@ -179,9 +184,8 @@ Current repository-level controls include:
 
 Recommended production additions that are not fully implemented in this repository:
 
-- built-image vulnerability scanning and an image SBOM; the current Trivy gate
-  scans repository manifests and does not prove that the two PyTorch wheels are
-  free of vulnerabilities
+- independently archived or registry-attached release SBOM and vulnerability
+  attestations beyond the 90-day GitHub artifact retention window
 - centralized secret storage
 - managed TLS termination
 - external log aggregation
