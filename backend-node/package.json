@@ -23,15 +23,15 @@
     "express-validator": "^7.3.2",
     "helmet": "^8.3.0",
     "jose": "5.10.0",
-    "mongoose": "^9.9.1"
+    "mongoose": "^9.9.2"
   },
   "devDependencies": {
-    "@cucumber/cucumber": "^12.9.0",
+    "@cucumber/cucumber": "^13.2.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.2.0",
-    "@types/supertest": "^7.2.0",
+    "@types/supertest": "^7.2.1",
     "jest": "^30.4.2",
     "mongodb-memory-server": "^11.2.0",
     "supertest": "^7.0.0",
