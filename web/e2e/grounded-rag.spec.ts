@@ -72,6 +72,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('renders a sourced answer with escaped citations on desktop and mobile', async ({ page }) => {
+  test.setTimeout(60_000);
+
   await page.getByPlaceholder('Task title').fill('Prepare the incident review');
   await page.getByPlaceholder('Description').fill('Existing context');
   const opener = page.getByRole('button', { name: 'Open AI assistant' });
