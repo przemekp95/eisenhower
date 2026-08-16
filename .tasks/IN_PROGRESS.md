@@ -1,26 +1,5 @@
 # In Progress
 
-## TASK-051: Promote the runtime-footprint work through green dev and master
-**Priority:** P0 | **Tags:** release, ci, runtime, rag, promotion
-
-Integrate every unpublished commit from `codex/runtime-footprint-20260815` with the current remote development
-line, extend the owner's active conditional checkpoints consistently through 2026-08-23 23:59:59
-Europe/Warsaw, and promote the exact verified source through the required PR-to-dev and dev-to-master workflow
-without deploying or changing production runtime state.
-
-### Plan
-
-- Reconcile the current `origin/dev`/`origin/master` ancestry and independently merged LlamaIndex work without
-  stash, history rewriting, contract regression or loss of either line's evidence.
-- Extend only active conditional checkpoints; preserve historical timestamps, consumed approvals and immutable
-  benchmark evidence.
-- Run the full local release gate and inspect the final security, HTTP/browser, async jobs/outbox, CQRS,
-  ports-and-adapters and TDD/DDD/BDD boundaries.
-- Push the feature branch, merge a green exact-head PR to `dev`, then merge a green dev-only PR to `master` and
-  verify post-merge CI for the exact remote SHA; do not deploy or modify production.
-
----
-
 ## TASK-047: Deploy the portable local AMD platform with Calendar and Remote MCP
 **Priority:** P0 | **Tags:** calendar, mcp, oauth, n8n, amd, rocm, deployment
 
