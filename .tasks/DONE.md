@@ -1,5 +1,28 @@
 # Done
 
+## TASK-057: Gate release publication on complete all-severity image scans
+**Priority:** P0 | **Tags:** security, dependencies, docker, release-gate
+
+Prevent publication of any first-party production image until its complete installed contents pass a fail-closed LOW, MEDIUM, HIGH and CRITICAL vulnerability scan and produce retained SBOM evidence.
+
+### Plan
+
+- Add a failing release contract that preserves the current six-role image matrix and requires local builds, all-severity image scans, CycloneDX SBOMs and publication only after every gate passes.
+- Adapt the earlier unpromoted gate to the current split runtime without reverting role targets, exact-SHA labels, deployment ordering or existing CI controls.
+- Update operational and acceptance documentation to distinguish repository scanning, built-image release evidence, publication and deployment.
+- Run focused red-green checks, full repository verification and fresh scans of the current images; preserve red findings rather than weakening the policy.
+- Promote the exact green source through reviewed PRs to `dev` and `master`, then verify branch equality and post-merge CI without claiming a release or deployment.
+
+### Outcome
+
+Preserved all six current first-party production targets (`boundary`, `classifier`, `knowledge`, `ingest`, Node API and web) and made release publication depend on local exact-SHA builds, complete installed-image Trivy scans for LOW, MEDIUM, HIGH and CRITICAL findings, per-image CycloneDX evidence and role-aware Torch/Torchvision checks. Image pushes now run only after every build, scan, evidence and SBOM assertion succeeds; unfixed findings are not ignored.
+
+Recorded a real red-green release contract, passed the focused 12-test deployment contract, actionlint and the complete repository verification. Fresh exact-tree image evidence produced all 12 reports: web passed with zero findings, while boundary, classifier, knowledge, ingest and Node were correctly blocked. The red reports were preserved rather than weakening the policy or accepting risk.
+
+Promoted reviewed PRs #233 and #234 through `dev` to exact master `6f39d89fa89041e1998bbaffb9e90a075f114439`; feature, post-merge dev, master-PR and final master CI passed, and the governed fast-forward sync restored exact `dev`/`master` equality. No release workflow, image publication, deployment, running stack change or public-production validation was performed.
+
+---
+
 ## TASK-056: Make Calendar and automation a coherent business-only product flow
 **Priority:** P0 | **Tags:** product, calendar, n8n, web, reliability, accessibility
 
