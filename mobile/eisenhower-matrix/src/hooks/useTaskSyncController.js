@@ -76,10 +76,12 @@ export default function useTaskSyncController() {
   const [aiLoading, setAiLoading] = useState(true);
   const [notice, setNotice] = useState('');
   const [aiCapabilities, setAiCapabilities] = useState(null);
+  const [suggestLoading, setSuggestLoading] = useState(false);
   const [newTask, setNewTask] = useState(EMPTY_TASK);
   const tasksRef = useRef([]);
   const delegatedTasksRef = useRef([]);
   const syncInFlightRef = useRef(null);
+  const suggestionInFlightRef = useRef(false);
 
   const t = translations[language];
   const quadrantOptions = useMemo(() => getQuadrantOptions(t), [t]);
@@ -89,7 +91,7 @@ export default function useTaskSyncController() {
   );
   const providerControls = aiCapabilities?.provider_controls || {};
   const aiConnected = Boolean(aiCapabilities);
-  const suggestDisabled = !providerControls.local_model?.active;
+  const suggestDisabled = aiLoading || suggestLoading || !providerControls.local_model?.active;
   const scanDisabled = !providerControls.tesseract?.active;
 
   useEffect(() => {
@@ -475,19 +477,30 @@ export default function useTaskSyncController() {
   };
 
   const handleSuggest = async () => {
-    if (!newTask.title.trim()) {
+    const requestedTitle = newTask.title.trim();
+    if (!requestedTitle || suggestionInFlightRef.current) {
       return;
     }
 
+    suggestionInFlightRef.current = true;
+    setSuggestLoading(true);
     try {
-      const suggestion = await suggestTaskQuadrant(newTask.title);
-      setNewTask((current) => ({
-        ...current,
-        urgent: suggestion.urgent,
-        important: suggestion.important,
-      }));
+      const suggestion = await suggestTaskQuadrant(requestedTitle);
+      setNewTask((current) => {
+        if (current.title.trim() !== requestedTitle) {
+          return current;
+        }
+        return {
+          ...current,
+          urgent: suggestion.urgent,
+          important: suggestion.important,
+        };
+      });
     } catch (error) {
       setNotice(resolveSuggestionNotice(error, t));
+    } finally {
+      suggestionInFlightRef.current = false;
+      setSuggestLoading(false);
     }
   };
 

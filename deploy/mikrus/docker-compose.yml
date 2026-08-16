@@ -27,13 +27,23 @@ services:
     restart: unless-stopped
     command: ["python", "-m", "uvicorn", "app.api_boundary:from_environment", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
     environment:
-      KNOWLEDGE_SERVICE_BASE_URL: ${KNOWLEDGE_SERVICE_BASE_URL:?private knowledge service URL is required}
-      KNOWLEDGE_SERVICE_ALLOWED_HOSTS: ${KNOWLEDGE_SERVICE_ALLOWED_HOSTS:?private knowledge service host is required}
+      APP_ENV: production
+      AUTH_MODE: static
+      EISENHOWER_API_TOKEN: ${EISENHOWER_API_TOKEN:?EISENHOWER_API_TOKEN is required}
+      EISENHOWER_ADMIN_TOKEN: ${EISENHOWER_ADMIN_TOKEN:?EISENHOWER_ADMIN_TOKEN is required}
+      AUDIT_HMAC_KEY: ${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY is required}
+      AUDIT_DATABASE_PATH: /app/audit/ai-boundary.sqlite3
+      CLASSIFIER_SERVICE_URL: ${CLASSIFIER_SERVICE_URL:-${KNOWLEDGE_SERVICE_BASE_URL:?private classifier service URL is required}}
+      KNOWLEDGE_SERVICE_URL: ${KNOWLEDGE_SERVICE_URL:-${KNOWLEDGE_SERVICE_BASE_URL:?private knowledge service URL is required}}
+      AI_ROLE_ALLOWED_HOSTS: ${AI_ROLE_ALLOWED_HOSTS:-${KNOWLEDGE_SERVICE_ALLOWED_HOSTS:?private AI role hosts are required}}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:?CORS_ALLOW_ORIGINS is required}
+      RELEASE_SHA: ${IMAGE_TAG:?IMAGE_TAG is required}
+    volumes:
+      - audit_data:/app/audit
     expose:
       - "8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5).read()"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=5).read()"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -59,8 +69,6 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
-      ai-service:
-        condition: service_healthy
     expose:
       - "3001"
     healthcheck:
@@ -78,8 +86,6 @@ services:
     depends_on:
       api-service:
         condition: service_started
-      ai-service:
-        condition: service_healthy
     ports:
       - "${WEB_PORT:-8080}:3000"
     healthcheck:
@@ -99,9 +105,6 @@ services:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
       - prometheus_data:/prometheus
-    depends_on:
-      ai-service:
-        condition: service_healthy
     expose:
       - "9090"
     healthcheck:

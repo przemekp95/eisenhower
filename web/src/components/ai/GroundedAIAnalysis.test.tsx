@@ -53,7 +53,11 @@ describe('GroundedAIAnalysis', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Check sources' }));
 
     await waitFor(() => expect(screen.getByText('Answer with sources')).toBeInTheDocument());
-    expect(mockedApi.answerKnowledge).toHaveBeenCalledWith('prepare incident review', 'en');
+    expect(mockedApi.answerKnowledge).toHaveBeenCalledWith(
+      'prepare incident review',
+      'en',
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
     expect(screen.queryByText('1 retrieved chunks')).not.toBeInTheDocument();
     expect(screen.queryByText('Index minilm-v1')).not.toBeInTheDocument();
     expect(
@@ -79,7 +83,8 @@ describe('GroundedAIAnalysis', () => {
     await waitFor(() =>
       expect(mockedApi.answerKnowledge).toHaveBeenCalledWith(
         'Which approved procedure applies?',
-        'en'
+        'en',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
       )
     );
   });
@@ -234,6 +239,29 @@ describe('GroundedAIAnalysis', () => {
       </LanguageProvider>
     );
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  });
+
+  it('silently ignores a cancelled source check after the task changes', async () => {
+    let rejectRequest!: (reason: unknown) => void;
+    mockedApi.answerKnowledge.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectRequest = reject;
+        })
+    );
+    const view = renderAnalysis('old task');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Check sources' }));
+    view.rerender(
+      <LanguageProvider>
+        <GroundedAIAnalysis taskTitle="new task" />
+      </LanguageProvider>
+    );
+    await act(async () => {
+      rejectRequest(Object.assign(new Error('Request cancelled'), { code: 'request_cancelled' }));
+    });
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('does not submit an empty task and clears results after a language change', async () => {

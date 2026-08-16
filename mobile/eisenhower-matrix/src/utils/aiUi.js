@@ -47,7 +47,26 @@ export function getProviderTone(control) {
 }
 
 export function resolveSuggestionNotice(error, t) {
-  return error?.code === 'provider_disabled' ? t.aiSuggestDisabled : t.aiSuggestUnavailable;
+  if (error?.code === 'provider_disabled') {
+    return `${t.aiSuggestDisabled}. ${t.aiManualFallback}`;
+  }
+  if (error?.code === 'request_timeout') {
+    return t.aiRequestTimedOut;
+  }
+  return t.aiManualFallback;
+}
+
+export function resolveAIActionNotice(error, t, fallback) {
+  if (error?.code === 'request_cancelled') {
+    return '';
+  }
+  if (error?.code === 'request_timeout') {
+    return t.aiRequestTimedOut;
+  }
+  if (['provider_disabled', 'provider_unavailable', 'ai_unavailable'].includes(error?.code)) {
+    return t.aiManualFallback;
+  }
+  return fallback || t.aiManualFallback;
 }
 
 export function resolveOCRNotice(error, t) {
@@ -61,6 +80,14 @@ export function resolveOCRNotice(error, t) {
 
   if (error?.code === 'ocr_request_failed') {
     return t.ocrFailed;
+  }
+
+  if (error?.code === 'request_cancelled') {
+    return '';
+  }
+
+  if (error?.code === 'request_timeout') {
+    return t.aiRequestTimedOut;
   }
 
   return t.ocrUnavailable;

@@ -47,7 +47,77 @@ describe('AI component error paths', () => {
     renderWithLanguage(<AdvancedAIAnalysis taskTitle="task" onAnalysisComplete={jest.fn()} />);
     fireEvent.click(screen.getByText(/Run advanced analysis/i));
 
-    await waitFor(() => expect(screen.getByText('Analysis failed')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText('AI analysis is currently unavailable.')).toBeInTheDocument()
+    );
+  });
+
+  it('clears a stale advanced result before retry and keeps it cleared after failure', async () => {
+    mockedApi.analyzeTask
+      .mockResolvedValueOnce({
+        task: 'task',
+        langchain_analysis: {
+          quadrant: 0,
+          reasoning: 'Stale recommendation',
+          confidence: 0.9,
+          method: 'local-analysis',
+        },
+        rag_classification: { quadrant: 0, quadrant_name: 'Do Now', confidence: 0.9 },
+        comparison: { methods_agree: true, confidence_difference: 0 },
+      })
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Request timed out'), { code: 'request_timeout' })
+      );
+    renderWithLanguage(<AdvancedAIAnalysis taskTitle="task" onAnalysisComplete={jest.fn()} />);
+
+    fireEvent.click(screen.getByText(/Run advanced analysis/i));
+    await screen.findByText('Stale recommendation');
+    fireEvent.click(screen.getByText(/Run advanced analysis/i));
+
+    await screen.findByText(/took too long/i);
+    expect(screen.queryByText('Stale recommendation')).not.toBeInTheDocument();
+    expect(screen.getByText(/choose a quadrant manually/i)).toBeInTheDocument();
+  });
+
+  it('cancels an in-flight advanced request when the component unmounts', () => {
+    let signal: AbortSignal | undefined;
+    mockedApi.analyzeTask.mockImplementationOnce((_task, _language, options) => {
+      signal = options?.signal;
+      return new Promise(() => undefined);
+    });
+    const view = renderWithLanguage(
+      <AdvancedAIAnalysis taskTitle="task" onAnalysisComplete={jest.fn()} />
+    );
+
+    fireEvent.click(screen.getByText(/Run advanced analysis/i));
+    expect(signal?.aborted).toBe(false);
+    view.unmount();
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it('treats an explicit advanced-request cancellation as silent and ignores its cleanup after the task changes', async () => {
+    let rejectAnalysis!: (reason: unknown) => void;
+    mockedApi.analyzeTask.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectAnalysis = reject;
+        })
+    );
+    const view = renderWithLanguage(
+      <AdvancedAIAnalysis taskTitle="old task" onAnalysisComplete={jest.fn()} />
+    );
+
+    fireEvent.click(screen.getByText(/Run advanced analysis/i));
+    view.rerender(
+      <LanguageProvider>
+        <AdvancedAIAnalysis taskTitle="new task" onAnalysisComplete={jest.fn()} />
+      </LanguageProvider>
+    );
+    await act(async () => {
+      rejectAnalysis(Object.assign(new Error('Request cancelled'), { code: 'request_cancelled' }));
+    });
+
+    expect(screen.queryByText(/currently unavailable|took too long/i)).not.toBeInTheDocument();
   });
 
   it('ignores empty advanced-analysis titles and falls back on unknown failures', async () => {
@@ -65,7 +135,9 @@ describe('AI component error paths', () => {
     renderWithLanguage(<AdvancedAIAnalysis taskTitle="task" onAnalysisComplete={jest.fn()} />);
     fireEvent.click(screen.getAllByText(/Run advanced analysis/i)[1]);
 
-    await waitFor(() => expect(screen.getByText('Analysis failed')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText('AI analysis is currently unavailable.')).toBeInTheDocument()
+    );
   });
 
   it('renders the fallback suggested quadrant when langchain does not return one', async () => {
@@ -96,7 +168,11 @@ describe('AI component error paths', () => {
     await waitFor(() =>
       expect(screen.getByText(/Sugerowany kwadrant: Deleguj/i)).toBeInTheDocument()
     );
-    expect(mockedApi.analyzeTask).toHaveBeenCalledWith('task', 'pl');
+    expect(mockedApi.analyzeTask).toHaveBeenCalledWith(
+      'task',
+      'pl',
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
   });
 
   it('falls back to an unknown quadrant label in advanced analysis', async () => {
@@ -320,6 +396,86 @@ describe('AI component error paths', () => {
     await waitFor(() => expect(screen.getByText('Bulk review failed')).toBeInTheDocument());
   });
 
+  it('treats an explicit batch cancellation as silent', async () => {
+    mockedApi.batchAnalyzeTasks.mockRejectedValueOnce(
+      Object.assign(new Error('Request cancelled'), { code: 'request_cancelled' })
+    );
+
+    renderWithLanguage(<BatchAnalysis onBatchComplete={jest.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText(/One task per line/i), {
+      target: { value: 'task one' },
+    });
+    fireEvent.click(screen.getByText(/Review task list/i));
+
+    await waitFor(() => expect(screen.getByText(/Review task list/i)).toBeInTheDocument());
+    expect(screen.queryByText('Bulk review failed')).not.toBeInTheDocument();
+  });
+
+  it('cancels an in-flight batch review and ignores its late result when the list changes', async () => {
+    let resolveBatch!: (result: api.BatchAnalysisResult) => void;
+    let signal: AbortSignal | undefined;
+    mockedApi.batchAnalyzeTasks.mockImplementationOnce((_tasks, options) => {
+      signal = options?.signal;
+      return new Promise((resolve) => {
+        resolveBatch = resolve;
+      });
+    });
+    const onBatchComplete = jest.fn();
+    renderWithLanguage(<BatchAnalysis onBatchComplete={onBatchComplete} />);
+    const textarea = screen.getByPlaceholderText(/One task per line/i);
+
+    fireEvent.change(textarea, { target: { value: 'old task' } });
+    fireEvent.click(screen.getByText(/Review task list/i));
+    expect(signal?.aborted).toBe(false);
+    expect(screen.getByText(/Reviewing task list/i)).toBeInTheDocument();
+
+    fireEvent.change(textarea, { target: { value: 'new task' } });
+    expect(signal?.aborted).toBe(true);
+    expect(screen.getByText(/Review task list/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Bulk review failed/i)).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveBatch({
+        batch_results: [
+          {
+            task: 'old task',
+            analyses: {
+              rag: { quadrant: 0, confidence: 0.9, quadrant_name: 'Do Now' },
+              langchain: { quadrant: 0, confidence: 0.9, reasoning: 'Old response' },
+            },
+          },
+        ],
+        summary: { methods: { rag: { quadrant_distribution: { '0': 1 } } }, total_tasks: 1 },
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    expect(screen.queryByText(/old task: Do Now/i)).not.toBeInTheDocument();
+    expect(onBatchComplete).not.toHaveBeenCalled();
+  });
+
+  it('silently ignores an aborted batch rejection after the task list changes', async () => {
+    let rejectBatch!: (reason: unknown) => void;
+    mockedApi.batchAnalyzeTasks.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectBatch = reject;
+        })
+    );
+    renderWithLanguage(<BatchAnalysis onBatchComplete={jest.fn()} />);
+    const textarea = screen.getByPlaceholderText(/One task per line/i);
+
+    fireEvent.change(textarea, { target: { value: 'old task' } });
+    fireEvent.click(screen.getByText(/Review task list/i));
+    fireEvent.change(textarea, { target: { value: 'new task' } });
+    await act(async () => {
+      rejectBatch(Object.assign(new Error('Request cancelled'), { code: 'request_cancelled' }));
+    });
+
+    expect(screen.queryByText(/Bulk review failed/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Review task list/i)).toBeInTheDocument();
+  });
+
   it('falls back to an unknown quadrant label in batch review', async () => {
     mockedApi.batchAnalyzeTasks.mockResolvedValueOnce({
       batch_results: [
@@ -354,6 +510,26 @@ describe('AI component error paths', () => {
     });
 
     await waitFor(() => expect(screen.getByText('OCR failed')).toBeInTheDocument());
+  });
+
+  it('silently ignores an OCR cancellation that settles after unmount', async () => {
+    let rejectOcr!: (reason: unknown) => void;
+    mockedApi.extractTasksFromImage.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectOcr = reject;
+        })
+    );
+    const view = renderWithLanguage(<ImageUpload onTasksExtracted={jest.fn()} />);
+    const file = new File(['task'], 'tasks.txt', { type: 'text/plain' });
+    fireEvent.change(screen.getByTestId('image-upload-input'), {
+      target: { files: [file] },
+    });
+
+    view.unmount();
+    await act(async () => {
+      rejectOcr(Object.assign(new Error('Request cancelled'), { code: 'request_cancelled' }));
+    });
   });
 
   it('requires OCR review and explicit import before persisting selected edited tasks', async () => {

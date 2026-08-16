@@ -12,6 +12,7 @@ ENV_PATH = ROOT / "deploy" / "local" / ".env.example"
 GATEWAY_CONFIG_PATH = ROOT / "deploy" / "local" / "calendar-gateway.conf.template"
 ACCESS_GATEWAY_CONFIG_PATH = ROOT / "deploy" / "local" / "access-gateway.conf.template"
 DEPLOY_SCRIPT_PATH = ROOT / "deploy" / "local" / "deploy.sh"
+LOCAL_README_PATH = ROOT / "deploy" / "local" / "README.md"
 KEYCLOAK_REALM_PATH = ROOT / "deploy" / "local" / "identity" / "eisenhower-realm.json"
 KEYCLOAK_USER_PROFILE_PATH = (
   ROOT / "deploy" / "local" / "identity" / "eisenhower-user-profile.json"
@@ -195,6 +196,30 @@ class LocalProductionContractTest(unittest.TestCase):
       script.index('missing classifier rollback image'),
     )
 
+  def test_user_facing_core_rollout_does_not_require_knowledge_or_gpu_services(self):
+    boundary = self.services["ai-service"]
+    self.assertNotIn("depends_on", boundary)
+
+    script = DEPLOY_SCRIPT_PATH.read_text()
+    self.assertIn("deploy-access-core)", script)
+    core_rollout = script[script.index("deploy_access_core() {"):script.index("deploy_retrieval() {")]
+    self.assertIn("build_access_core_images", core_rollout)
+    self.assertIn("prepare_access_core_render_inputs", core_rollout)
+    self.assertIn("compose_access_core", core_rollout)
+    self.assertIn("smoke_access_core", core_rollout)
+    for required_service in ("identity-db", "identity-service", "api-service", "web", "mcp-service", "access-gateway"):
+      self.assertIn(required_service, core_rollout)
+    for optional_service in ("knowledge-service", "rag-worker", "qdrant", "inference", "reranker"):
+      self.assertNotIn(optional_service, core_rollout)
+
+    documentation = LOCAL_README_PATH.read_text()
+    self.assertIn("deploy/local/deploy.sh deploy-access-core", documentation)
+    self.assertIn("cannot produce an ungrounded answer", documentation)
+
+    render_case = script[script.index("  render-access-core)"):script.index("  render-retrieval)")]
+    self.assertIn("prepare_access_core_render_inputs", render_case)
+    self.assertNotIn("prepare_access_core_render_inputs", script[script.index("render() {"):script.index("validate_lifecycle_auth() {")])
+
   def test_amd_inference_is_opt_in_and_uses_the_pinned_rocm_model_contract(self):
     inference = self.amd_services["inference"]
     self.assertEqual(
@@ -273,10 +298,11 @@ class LocalProductionContractTest(unittest.TestCase):
     self.assertIn("RERANKER_API_KEY is required", self.amd_compose_text)
 
   def test_application_images_receive_required_production_identity_and_audit_config(self):
-    for name in ("api-service", "ai-service"):
+    for name in ("api-service", "ai-service", "knowledge-service"):
       environment = self.services[name]["environment"]
       self.assertIn("RELEASE_SHA=${RELEASE_SHA:?RELEASE_SHA is required}", environment)
-      self.assertIn("AUDIT_HMAC_KEY=${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY is required}", environment)
+      if name != "ai-service":
+        self.assertIn("AUDIT_HMAC_KEY=${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY is required}", environment)
 
     ai_environment = self.services["classifier-service"]["environment"]
     self.assertEqual(self.services["ai-service"]["group_add"], ["1001"])

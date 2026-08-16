@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { OCRResult, extractTasksFromImage } from '../../services/api';
 import { useLanguage } from '../../i18n/LanguageContext';
 
@@ -27,6 +27,7 @@ export default function ImageUpload({ onTasksExtracted }: Props) {
   const [importing, setImporting] = useState(false);
   const [learnFromAccepted, setLearnFromAccepted] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const requestRef = useRef<AbortController | null>(null);
   const { language, t } = useLanguage();
 
   const copy =
@@ -54,22 +55,40 @@ export default function ImageUpload({ onTasksExtracted }: Props) {
             `Added: ${imported}. Not added: ${failed}. Improve suggestions: ${learned ? 'yes' : 'no'}.`,
         };
 
+  useEffect(
+    () => () => {
+      const request = requestRef.current;
+      requestRef.current = null;
+      request?.abort();
+    },
+    []
+  );
+
   const handleSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
     setError(null);
     setStatus(null);
+    setResult(null);
+    setReviewTasks([]);
     try {
-      const payload = await extractTasksFromImage(file);
+      const payload = await extractTasksFromImage(file, { signal: controller.signal });
       setResult(payload);
       setReviewTasks(payload.classified_tasks.map((task) => ({ ...task, selected: true })));
       setLearnFromAccepted(false);
-    } catch {
-      setError(t('ai.ocr.failed'));
+    } catch (issue) {
+      const code = issue && typeof issue === 'object' && 'code' in issue ? issue.code : undefined;
+      if (code !== 'request_cancelled') setError(t('ai.ocr.failed'));
     } finally {
-      setLoading(false);
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        setLoading(false);
+      }
       event.target.value = '';
     }
   };
