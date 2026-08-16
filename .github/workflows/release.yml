@@ -1,21 +1,26 @@
 name: Release
 
 on:
-  workflow_run:
-    workflows:
-      - CI
-    types:
-      - completed
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Exact green master commit to release
+        required: true
+        type: string
+      deploy:
+        description: Deploy the released images after publishing them
+        required: true
+        default: false
+        type: boolean
 
 env:
   NODE_VERSION: "20"
   PYTHON_VERSION: "3.11"
-  RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+  RELEASE_SHA: ${{ inputs.release_sha }}
 
 jobs:
   docker-release:
     name: docker-release
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'master' }}
     runs-on: ubuntu-latest
     env:
       DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
@@ -24,16 +29,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: backend-ai
-            context: ./backend-ai
-            dockerfile: ./backend-ai/Dockerfile
-            tag: eisenhower-ai
-            target: knowledge-production
           - name: backend-ai-boundary
             context: ./backend-ai
             dockerfile: ./backend-ai/Dockerfile
             tag: eisenhower-ai-boundary
-            target: api-boundary
+            target: boundary
+          - name: backend-ai-classifier
+            context: ./backend-ai
+            dockerfile: ./backend-ai/Dockerfile
+            tag: eisenhower-ai-classifier
+            target: classifier
+          - name: backend-ai-knowledge
+            context: ./backend-ai
+            dockerfile: ./backend-ai/Dockerfile
+            tag: eisenhower-ai-knowledge
+            target: knowledge
+          - name: backend-ai-ingest
+            context: ./backend-ai
+            dockerfile: ./backend-ai/Dockerfile
+            tag: eisenhower-ai-ingest
+            target: ingest
           - name: backend-node
             context: .
             dockerfile: ./backend-node/Dockerfile
@@ -84,7 +99,6 @@ jobs:
 
   android-release:
     name: android-release
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'master' }}
     runs-on: ubuntu-latest
     env:
       EXPO_PUBLIC_APP_ORIGIN_URL: ${{ vars.EXPO_PUBLIC_APP_ORIGIN_URL }}
@@ -253,6 +267,7 @@ jobs:
 
   deploy-mikrus:
     name: deploy-mikrus
+    if: ${{ github.event.inputs.deploy == 'true' }}
     runs-on:
       - self-hosted
       - mikrus
@@ -267,7 +282,7 @@ jobs:
       MIKRUS_ENV_FILE: ${{ secrets.MIKRUS_ENV_FILE }}
       MIKRUS_APP_DIR: ${{ secrets.MIKRUS_APP_DIR }}
       MIKRUS_PUBLIC_URL: ${{ vars.MIKRUS_PUBLIC_URL }}
-      IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
+      IMAGE_TAG: ${{ inputs.release_sha }}
       DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
       DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
     steps:
@@ -299,6 +314,7 @@ jobs:
 
   deploy:
     name: deploy
+    if: ${{ github.event.inputs.deploy == 'true' }}
     runs-on: ubuntu-latest
     needs: docker-release
     env:

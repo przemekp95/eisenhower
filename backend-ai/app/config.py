@@ -20,6 +20,7 @@ def parse_csv_list(value: str | None, default: tuple[str, ...]) -> tuple[str, ..
 class Settings:
   training_data_path: Path
   model_cache_dir: Path
+  local_model_artifact_dir: Path | None = None
   audit_database_path: Path | None = None
   audit_hmac_key: str = "development-audit-key-change-me-now"
   release_sha: str = "0000000000000000000000000000000000000000"
@@ -111,6 +112,7 @@ class Settings:
   local_model_require_evaluation: bool = False
   local_model_evaluation_profile: str = "development"
   local_model_approved_evaluation_sha256: str | None = None
+  local_model_approved_artifact_sha256: str | None = None
   local_model_owner_approval_bypass: bool = False
   local_model_owner_approval_valid_until: str | None = None
   local_model_semantic_leakage_threshold: float = 0.92
@@ -121,6 +123,7 @@ class Settings:
   local_model_minimum_worst_seed_macro_f1: float = 0.70
   local_model_maximum_seed_standard_deviation: float = 0.10
   ai_management_enabled: bool = True
+  jobs_max_queued: int = 1000
   tesseract_languages: str = "eng+pol"
   app_name: str = "AI Quadrant Classifier"
   cors_allow_origins: tuple[str, ...] = (
@@ -131,6 +134,8 @@ class Settings:
   )
 
   def __post_init__(self) -> None:
+    if self.local_model_artifact_dir is None:
+      object.__setattr__(self, "local_model_artifact_dir", self.model_cache_dir)
     if self.audit_database_path is None:
       object.__setattr__(self, "audit_database_path", self.model_cache_dir / "audit.sqlite3")
     if self.llamaindex_cache_path is None:
@@ -211,10 +216,16 @@ class Settings:
       raise ValueError("Evaluation profile must be 'development' or 'production'.")
     if self.local_model_maximum_semantic_leaks < 0:
       raise ValueError("Every quality threshold count must be non-negative.")
-    if self.local_model_approved_evaluation_sha256 is not None:
-      digest = self.local_model_approved_evaluation_sha256
+    for digest in (
+      self.local_model_approved_evaluation_sha256,
+      self.local_model_approved_artifact_sha256,
+    ):
+      if digest is None:
+        continue
       if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
-        raise ValueError("Approved evaluation SHA-256 must be a lowercase 64-character hexadecimal digest.")
+        raise ValueError("Approved SHA-256 values must be lowercase 64-character hexadecimal digests.")
+    if self.jobs_max_queued < 1:
+      raise ValueError("JOBS_MAX_QUEUED must be positive.")
     if self.local_model_owner_approval_bypass:
       if not self.local_model_owner_approval_valid_until:
         raise ValueError("Owner evaluation approval requires a validity deadline.")
@@ -293,6 +304,11 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     ),
     model_cache_dir=Path(
       source.get("MODEL_CACHE_DIR", str(base_dir / "data" / "runtime"))
+    ),
+    local_model_artifact_dir=(
+      Path(source["LOCAL_MODEL_ARTIFACT_DIR"])
+      if source.get("LOCAL_MODEL_ARTIFACT_DIR")
+      else None
     ),
     audit_database_path=(
       Path(source["AUDIT_DATABASE_PATH"])
@@ -423,6 +439,7 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     local_model_require_evaluation=source.get("LOCAL_MODEL_REQUIRE_EVALUATION", "true").lower() in ("true", "1", "yes"),
     local_model_evaluation_profile=evaluation_profile,
     local_model_approved_evaluation_sha256=source.get("LOCAL_MODEL_APPROVED_EVALUATION_SHA256") or None,
+    local_model_approved_artifact_sha256=source.get("LOCAL_MODEL_APPROVED_ARTIFACT_SHA256") or None,
     local_model_owner_approval_bypass=source.get(
       "LOCAL_MODEL_OWNER_APPROVAL_BYPASS", "false"
     ).lower() in ("true", "1", "yes"),
@@ -437,6 +454,7 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     local_model_minimum_worst_seed_macro_f1=float(source.get("LOCAL_MODEL_MINIMUM_WORST_SEED_MACRO_F1", "0.75" if production_profile else "0.70")),
     local_model_maximum_seed_standard_deviation=float(source.get("LOCAL_MODEL_MAXIMUM_SEED_STANDARD_DEVIATION", "0.05" if production_profile else "0.10")),
     ai_management_enabled=source.get("AI_MANAGEMENT_ENABLED", "true").lower() in ("true", "1", "yes"),
+    jobs_max_queued=int(source.get("JOBS_MAX_QUEUED", "1000")),
     tesseract_languages=source.get("TESSERACT_LANGUAGES", "eng+pol"),
     # MinIO Object Storage
     minio_endpoint=source.get("MINIO_ENDPOINT") or None,

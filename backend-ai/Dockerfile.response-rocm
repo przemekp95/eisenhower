@@ -1,0 +1,20 @@
+FROM vllm/vllm-openai-rocm@sha256:5709fafe47123becb2f5e61c32d0b97beff1a629bb40bb753c15464f69a97a18
+
+ARG RELEASE_SHA
+LABEL org.opencontainers.image.revision=$RELEASE_SHA \
+      eisenhower.runtime.role=response-vllm-rocm \
+      org.opencontainers.image.base.digest=sha256:5709fafe47123becb2f5e61c32d0b97beff1a629bb40bb753c15464f69a97a18
+
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip uninstall -y PyGObject \
+    && python -m pip install --no-cache-dir --upgrade \
+      cryptography==50.0.0 \
+      h2==4.4.1 \
+      jaraco.context==6.1.0 \
+      setuptools==79.0.1 \
+      wheel==0.46.3 \
+    && python -m pip check
+
+ENTRYPOINT ["vllm", "serve"]

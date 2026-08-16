@@ -1,0 +1,93 @@
+{
+  "all_required_cases_passed": true,
+  "deployment_proven": false,
+  "evidence_level": "local-isolated-container-repetitions",
+  "image": {
+    "id": "sha256:6c4445198e7ab412bc71107f575f4e47e16ae507838c51afb4101af1e1146095",
+    "reference": "local/eisenhower-ai-ingest:090c1d5c9ac2017bbdcc55317ea68f2a44eb5d3f",
+    "runtime_role": "ingest",
+    "source_revision": "090c1d5c9ac2017bbdcc55317ea68f2a44eb5d3f"
+  },
+  "limits": {
+    "cpus": "2.0",
+    "memory": "2560m",
+    "pids": "256"
+  },
+  "metrics": {
+    "cgroup_memory_peak_bytes": {
+      "maximum": 1837862912,
+      "median": 1837789184,
+      "minimum": 1836695552,
+      "p95": 1837855539.2
+    },
+    "cpu_seconds": {
+      "maximum": 14.925359,
+      "median": 14.895835,
+      "minimum": 14.848695,
+      "p95": 14.922407
+    },
+    "peak_pids": {
+      "maximum": 9,
+      "median": 8,
+      "minimum": 8,
+      "p95": 8.9
+    },
+    "wall_seconds": {
+      "maximum": 14.270565,
+      "median": 14.219672,
+      "minimum": 14.189964,
+      "p95": 14.265476
+    }
+  },
+  "pressure_events": {
+    "max": 0,
+    "oom": 0,
+    "oom_kill": 0
+  },
+  "production_proven": false,
+  "repetitions": 3,
+  "runs": [
+    {
+      "cgroup_memory_peak_bytes": 1837789184,
+      "cpu_seconds": 14.848695,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "peak_pids": 9,
+      "recorded_at": "2026-08-15T17:47:46.004361+00:00",
+      "report": "2560m-run-1.json",
+      "report_sha256": "18826961eae694af4129355c1fda5f9f08dd64b96bf8f1c2d2588102d1daf415",
+      "wall_seconds": 14.189964
+    },
+    {
+      "cgroup_memory_peak_bytes": 1836695552,
+      "cpu_seconds": 14.925359,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "peak_pids": 8,
+      "recorded_at": "2026-08-15T17:48:00.431148+00:00",
+      "report": "2560m-run-2.json",
+      "report_sha256": "75b29923f9fd67329b78aaa4dd2d0d00c125bff5de29662eca89b0cc0ae4963d",
+      "wall_seconds": 14.270565
+    },
+    {
+      "cgroup_memory_peak_bytes": 1837862912,
+      "cpu_seconds": 14.895835,
+      "memory_max_events": 0,
+      "memory_oom_events": 0,
+      "memory_oom_kill_events": 0,
+      "peak_pids": 8,
+      "recorded_at": "2026-08-15T17:48:14.879944+00:00",
+      "report": "2560m-run-3.json",
+      "report_sha256": "ea8e7988fc9af133bde4cece008d34a629cbb03294fb07215ceaec68610d5e07",
+      "wall_seconds": 14.219672
+    }
+  ],
+  "schema_version": "runtime-role-repetition-summary-v1",
+  "source_git_sha": "090c1d5c9ac2017bbdcc55317ea68f2a44eb5d3f",
+  "workload": {
+    "command": "scripts/benchmark_document_extraction.py",
+    "docling_manifest_sha256": "5cf47966d872e55c9c2c43a73a1369361e7f2c6a358c2c2fbc3dd16350b56300"
+  }
+}

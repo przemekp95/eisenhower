@@ -1,0 +1,29 @@
+{
+  "approval_source": "owner_out_of_band",
+  "approved_at": "2026-08-15T22:03:25+02:00",
+  "approved_by": "eisenhower-repository-owner",
+  "authentication_level": "repository_record_only",
+  "candidate_sha256": "3d15da58a87ce5653f6c67a696532cbeec4d14de0c88851e0bec45a4d8097100",
+  "case_decisions_created": false,
+  "corpus_manifest_sha256": "a5fa40a4a6ffadb784533eb4b5bff63035b51672c83bb86757d9c098535d1111",
+  "corpus_snapshot_sha256": "2994f809649d3dd155faf09419557de7af70c7a77dae9aa4d3cf67f717ac70a8",
+  "decision": "accept_missing_independent_review_for_one_holdout_run",
+  "deployment_authorized": false,
+  "independent_human_review": false,
+  "promotion_authorized": false,
+  "schema_version": "retrieval-holdout-owner-acceptance-v1",
+  "scope": "task-048-exact-strategy-holdout-comparison-only",
+  "single_use": true,
+  "source_baseline_git_sha": "e4e824fac269da328186b5611603a4a532cebf64",
+  "strategy_ids": {
+    "hybrid_no_reranker": "hybrid-rrf-v1",
+    "hybrid_reranker": "hybrid-bge-v1"
+  },
+  "strategy_report_sha256": {
+    "hybrid_no_reranker": "9e2af89e03699d7b357f002185ae59caf4de3a3a08edd2c51d3f9647b2a64af3",
+    "hybrid_reranker": "bab0027fbb6dc05eec7e5750de392fa1be996ca8318b1d5e649e29544997bf66"
+  },
+  "thresholds_sha256": "e37602d4cbd9a304675382b7d32d999a977631405fc8527bfb29388779e521bb",
+  "tuning_authorized": false,
+  "valid_until": "2026-08-15T23:59:59+02:00"
+}
