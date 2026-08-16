@@ -1,19 +1,5 @@
 # In Progress
 
-## TASK-059: Resolve new experimental LangChain Dependabot alerts
-**Priority:** P0 | **Tags:** security, dependencies, dependabot, langchain
-
-Upgrade the isolated experimental LangChain dependency set to close GHSA-pjwx-r37v-7724 and GHSA-926x-3r5x-gfhw without weakening dependency resolution, production image gates or application security boundaries.
-
-### Plan
-
-- Reproduce both default-branch alerts and add or update the smallest fail-closed check that requires a non-vulnerable resolved `langchain-core` version.
-- Resolve the complete experimental LangChain/Qdrant set to the smallest mutually compatible pinned versions, preserving the experiment-only boundary and current Qdrant client contract.
-- Run focused resolver and LangChain integration tests, continuous production dependency audits and complete repository verification.
-- Promote the exact green source through reviewed PRs to `dev` and `master`, verify the default-branch alert state, post-merge CI and final branch equality without deployment.
-
----
-
 ## TASK-047: Deploy the portable local AMD platform with Calendar and Remote MCP
 **Priority:** P0 | **Tags:** calendar, mcp, oauth, n8n, amd, rocm, deployment
 

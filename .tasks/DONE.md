@@ -1,5 +1,25 @@
 # Done
 
+## TASK-059: Resolve new experimental LangChain Dependabot alerts
+**Priority:** P0 | **Tags:** security, dependencies, dependabot, langchain
+
+Upgrade the isolated experimental LangChain dependency set to close GHSA-pjwx-r37v-7724 and GHSA-926x-3r5x-gfhw without weakening dependency resolution, production image gates or application security boundaries.
+
+### Plan
+
+- Reproduce both default-branch alerts and add or update the smallest fail-closed check that requires a non-vulnerable resolved `langchain-core` version.
+- Resolve the complete experimental LangChain/Qdrant set to the smallest mutually compatible pinned versions, preserving the experiment-only boundary and current Qdrant client contract.
+- Run focused resolver and LangChain integration tests, continuous production dependency audits and complete repository verification.
+- Promote the exact green source through reviewed PRs to `dev` and `master`, verify the default-branch alert state, post-merge CI and final branch equality without deployment.
+
+### Outcome
+
+Raised only the research-only `langchain-core` pin from 1.2.22 to the jointly patched 1.3.3 while retaining `langchain-qdrant==1.0.0`, `langchain-community==0.3.31` and production `qdrant-client==1.19.0`. Added a fail-closed boundary regression covering both advisory floors. The test first failed on 1.2.22, then 10 focused boundary and adapter integration tests passed against the installed 1.3.3 set, `pip check` reported no broken requirements, and the complete `make verify` gate passed.
+
+Promoted reviewed PRs #241 and #243 through exact-head CI, green post-merge `dev` CI and green master push CI to `7918ebb97cd1721447a960875c6dd31280b1a9a8`. GitHub Dependency Graph then marked Dependabot alerts #167 (`GHSA-926x-3r5x-gfhw`) and #168 (`GHSA-pjwx-r37v-7724`) fixed without dismissal, and the governed sync restored exact `dev`/`master` equality. The experimental dependency remains outside production images; no image was published and no deployment or running environment was changed.
+
+---
+
 ## TASK-058: Eliminate all release-image vulnerability findings
 **Priority:** P0 | **Tags:** security, dependencies, docker, release-gate
 
