@@ -1,5 +1,22 @@
 # Done
 
+## TASK-015: Qualify the selected live GPU, runtime, model and quantization
+**Priority:** P2 | **Tags:** rag, vllm, gpu, citations
+
+After retrieval proves useful, qualify a licensed model on the exact physical NVIDIA/CUDA or AMD/ROCm host and prove that its pinned runtime satisfies the private generation contract, capacity and failure gates.
+
+### Plan
+
+- Preserve the revision-pinned Qwen3-4B-Instruct-2507 BF16 runtime and immutable PL/EN PromptSpecs.
+- Complete adversarial no-answer/injection, bounded concurrency/capacity and disconnect/fallback checks on physical `gfx1151`.
+- Record exact runtime, memory, restart and rollback evidence without inferring untested OOM behavior.
+
+### Outcome
+
+Qualified the pinned Qwen3-4B-Instruct-2507 BF16 and BGE reranker matrix on physical AMD `gfx1151` for bounded single-user local capacity. Live PL/EN structured output, authentication, exact identities, grounded citations, no-answer/injection, serialized concurrency at `max-num-seqs=1`, oversize rejection without OOM/restart, disconnect fallback, private stop/wake and exact v0.26 → v0.20 → v0.26 rollback all passed. Fresh 2026-08-16 verification found both services healthy, Qwen and pinned BGE model identities live, inference limited to 16 GiB/3 CPU/320 PID, 53 focused classifier/evaluation tests and all 29 local production-contract tests green; the complete `make verify` gate also passed with 797 backend-AI tests/12 runtime skips, 265 Node tests, 21 BDD scenarios/107 steps, 204 web tests plus 2 integrations, 183 mobile tests, 50 MCP tests, audits, builds, typechecks and Pylint 10.00/10. This closes machine/model qualification only; current-release deployment, real response traffic and human quality remain TASK-047/TASK-023 gates.
+
+---
+
 ## TASK-060: Consolidate and qualify outstanding dependency updates
 **Priority:** P1 | **Tags:** dependencies, security, maintenance, ci
 
