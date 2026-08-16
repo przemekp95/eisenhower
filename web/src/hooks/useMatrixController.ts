@@ -1,14 +1,9 @@
-import { FormEvent, useCallback, useMemo, useRef, useState } from 'react';
+import { FormEvent, useMemo, useRef, useState } from 'react';
 import { DropResult } from '@hello-pangea/dnd';
-import {
-  classifyTask,
-  LangChainAnalysis,
-  learnFromAcceptedOCRTasks,
-  OCRResult,
-} from '../services/api';
+import { classifyTask, learnFromAcceptedOCRTasks, OCRResult } from '../services/api';
 import { TranslationKey } from '../i18n/translations';
 import { Task, TaskInput } from '../types';
-import { quadrantToTaskState, resolveSuggestedQuadrant } from '../components/matrixUtils';
+import { quadrantToTaskState } from '../components/matrixUtils';
 
 interface UseMatrixControllerOptions {
   tasks: Task[];
@@ -31,7 +26,6 @@ export function useMatrixController({
   translate,
 }: UseMatrixControllerOptions) {
   const [newTask, setNewTask] = useState<TaskInput>(EMPTY_TASK);
-  const [showAiTools, setShowAiTools] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [createPending, setCreatePending] = useState(false);
@@ -73,14 +67,6 @@ export function useMatrixController({
     createOperationKeyRef.current = null;
     setNewTask((current) => ({ ...current, [key]: value }));
   };
-
-  const openAiTools = useCallback(() => {
-    setShowAiTools(true);
-  }, []);
-
-  const closeAiTools = useCallback(() => {
-    setShowAiTools(false);
-  }, []);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -133,27 +119,6 @@ export function useMatrixController({
     } finally {
       setAiLoading(false);
     }
-  };
-
-  const handleAnalysisComplete = (analysis: LangChainAnalysis) => {
-    const suggestedQuadrant = resolveSuggestedQuadrant(analysis);
-    setNewTask((current) => ({
-      ...current,
-      ...quadrantToTaskState(suggestedQuadrant),
-    }));
-  };
-
-  const handleAnalysisImport = async (analysis: LangChainAnalysis) => {
-    const title = newTask.title.trim() || analysis.task.trim();
-
-    await onAddTask({
-      title,
-      description: newTask.description.trim(),
-      ...quadrantToTaskState(resolveSuggestedQuadrant(analysis)),
-    });
-
-    resetNewTask();
-    closeAiTools();
   };
 
   const handleOCRImport = async (result: OCRResult, learnFromAccepted: boolean) => {
@@ -226,19 +191,14 @@ export function useMatrixController({
   return {
     aiError,
     aiLoading,
-    closeAiTools,
     createError,
     createPending,
-    handleAnalysisComplete,
-    handleAnalysisImport,
     handleDragEnd,
     handleOCRImport,
     handleSubmit,
     handleSuggest,
     newTask,
-    openAiTools,
     quadrants,
-    showAiTools,
     updateNewTaskField,
   };
 }
