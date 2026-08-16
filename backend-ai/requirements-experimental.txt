@@ -1,7 +1,7 @@
 -r requirements.txt
 
 # Research-only modules; never imported by the production application factory.
-minio==7.2.11
-langchain-core==1.3.3
-langchain-qdrant==1.0.0
-langchain-community==0.3.31
+minio==7.2.20
+langchain-core==1.5.4
+langchain-qdrant==1.1.0
+langchain-community==0.4.2

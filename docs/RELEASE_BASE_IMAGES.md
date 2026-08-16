@@ -1,6 +1,6 @@
 # Release base image policy
 
-Last reviewed: 2026-08-11
+Last reviewed: 2026-08-16
 
 Readable version tags stay beside OCI index digests so maintainers can see the intended release line while Docker pulls immutable content. The digest is the release control; the tag is update context.
 
@@ -8,13 +8,13 @@ Readable version tags stay beside OCI index digests so maintainers can see the i
 
 | Input | Current policy | Evidence limit |
 | --- | --- | --- |
-| Web build/development Node | `node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293` | The OCI index contains at least `linux/amd64` and `linux/arm64/v8`; both stages intentionally share it. |
+| Web build/development Node | `node:24-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43` | The OCI index contains at least `linux/amd64` and `linux/arm64/v8`; both stages intentionally share it. |
 | Web production Nginx | `nginx:alpine@sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752` | The OCI index contains at least `linux/amd64` and `linux/arm64/v8`. |
 | Mikrus MongoDB | `mongo:7-jammy@sha256:04582c3a144d088f841c446abfc19f79adcefa8bd00ad4a7fb18e27b9585c5d6` | The OCI index contains `linux/amd64` and `linux/arm64/v8`. |
 
 These registry resolutions were checked on the review date. A digest fixes content; it does not prove vulnerability status, runtime compatibility, data migration safety or a successful target deployment.
 
-The backend Node and AI Dockerfiles are also release build inputs, but they are owned outside this frontend/documentation slice and still use mutable `node:20-alpine` and `python:3.11-slim` base references. Until their owning slice pins and verifies them, the complete release build is not fully digest-pinned.
+The backend Node and AI Dockerfiles are also release build inputs. They use the same digest-pinned Wolfi base and install explicitly pinned Node 24 and Python 3.11 packages; their package-version and image-security checks remain separate release gates.
 
 ## Controlled update procedure
 

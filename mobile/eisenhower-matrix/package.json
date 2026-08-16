@@ -23,16 +23,16 @@
     "expo-status-bar": "^55.0.6",
     "image-size": "file:./vendor/metro-image-size",
     "probe-image-size": "7.3.0",
-    "react": "19.2.0",
+    "react": "19.2.8",
     "react-native": "0.83.10",
-    "react-native-safe-area-context": "~5.6.2"
+    "react-native-safe-area-context": "~5.9.0"
   },
   "devDependencies": {
     "@testing-library/react-native": "^13.3.3",
     "babel-preset-expo": "^55.0.24",
     "jest": "^29.7.0",
     "jest-expo": "^55.0.20",
-    "react-test-renderer": "19.2.0"
+    "react-test-renderer": "19.2.8"
   },
   "overrides": {
     "@tootallnate/once": "3.0.1",
