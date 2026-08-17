@@ -59,14 +59,17 @@ def test_rocm_response_image_is_hardened_pinned_and_built_for_both_response_role
   assert "ports:" not in provider
 
 
-def test_canonical_compose_keeps_roles_private_and_n8n_explicit():
+def test_canonical_compose_keeps_roles_private_and_admin_stack_mandatory():
   compose = yaml.safe_load((ROOT / "compose.yaml").read_text())
   services = compose["services"]
 
   assert services["ai-service"]["image"].startswith("${AI_BOUNDARY_IMAGE")
   assert "profiles" not in services["ai-service"]
   assert "profiles" not in services["classifier-service"]
-  assert services["n8n"]["profiles"] == ["n8n"]
+  for service in ("n8n", "prometheus", "grafana", "oauth2-proxy"):
+    assert "profiles" not in services[service]
+    assert "ports" not in services[service]
+    assert services[service]["healthcheck"]
   assert {name for name, service in services.items() if service.get("ports")} == {"gateway"}
   assert services["ai-service"]["mem_limit"]
   assert services["ai-service"]["cpus"]
