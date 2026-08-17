@@ -8,6 +8,9 @@ import type {
   TaskDto,
   TaskLifecycleState,
   TrainingExampleAddedDto,
+  MemoryConfirmResponseDto,
+  MemoryExportResponseDto,
+  MemoryPrepareResponseDto,
 } from './index';
 
 type Equal<Left, Right> =
@@ -43,6 +46,15 @@ type RetrainContract = Expect<Equal<Resolved<AiApiClient['retrainModel']>, Retra
 type ExamplesContract = Expect<
   Equal<Resolved<AiApiClient['getExamplesByQuadrant']>, ExamplesByQuadrantDto>
 >;
+type MemoryPrepareContract = Expect<
+  Equal<Resolved<AiApiClient['prepareMemory']>, MemoryPrepareResponseDto>
+>;
+type MemoryConfirmContract = Expect<
+  Equal<Resolved<AiApiClient['confirmMemory']>, MemoryConfirmResponseDto>
+>;
+type MemoryExportContract = Expect<
+  Equal<Resolved<AiApiClient['exportMemory']>, MemoryExportResponseDto>
+>;
 
 export type ApiClientTypeContracts =
   | ListTasksContract
@@ -54,4 +66,7 @@ export type ApiClientTypeContracts =
   | FeedbackContract
   | OcrFeedbackContract
   | RetrainContract
-  | ExamplesContract;
+  | ExamplesContract
+  | MemoryPrepareContract
+  | MemoryConfirmContract
+  | MemoryExportContract;

@@ -1,5 +1,5 @@
 export const QUADRANT_ACCENTS = ['#fb7185', '#38bdf8', '#f59e0b', '#94a3b8'];
-export const AI_TABS = ['analysis', 'ocr', 'batch'];
+export const AI_TABS = ['analysis', 'grounded', 'ocr', 'batch'];
 
 export function getQuadrantOptions(t) {
   return [
@@ -34,6 +34,17 @@ export function resolveAIActionNotice(error, t, fallback) {
 }
 
 export function resolveOCRNotice(error, t) {
+  if (error?.code === 'camera_permission_denied') {
+    return t.aiOcrCameraPermissionDenied;
+  }
+
+  if (error?.code === 'library_permission_denied') {
+    return t.aiOcrLibraryPermissionDenied;
+  }
+
+  if (error?.code === 'media_offline') {
+    return t.aiOcrOffline;
+  }
   if (error?.code === 'provider_disabled') {
     return t.ocrDisabled;
   }

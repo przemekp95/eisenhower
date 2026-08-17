@@ -46,10 +46,21 @@ class StaticTokenVerifier:
         "local",
         "local-operator",
         roles=["operator", "admin"],
-        scopes=["ai:operate", "ai:analyze", "knowledge:read"],
+        scopes=[
+          "ai:operate",
+          "ai:analyze",
+          "knowledge:read",
+          "memory:read",
+          "memory:write",
+        ],
       )
     if _constant_time_token_match(token, self.user_token):
-      return AuthPrincipal("local", "local-user", roles=["user"], scopes=["ai:analyze"])
+      return AuthPrincipal(
+        "local",
+        "local-user",
+        roles=["user"],
+        scopes=["ai:analyze", "memory:read", "memory:write"],
+      )
     raise AuthError("Access denied")
 
 

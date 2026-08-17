@@ -18,12 +18,15 @@ jest.mock('expo-network', () => ({
 jest.mock('./src/services/ai', () => ({
   suggestTaskQuadrant: jest.fn(),
   analyzeTaskAdvanced: jest.fn(),
+  answerKnowledge: jest.fn(),
   batchAnalyzeTasks: jest.fn(),
   fetchAICapabilities: jest.fn(),
 }));
 
 jest.mock('./src/services/media', () => ({
   scanTasksFromImage: jest.fn(),
+  selectImageForOcr: jest.fn(),
+  extractTasksFromSelectedImage: jest.fn(),
 }));
 
 jest.mock('./src/services/reminders', () => ({
@@ -180,7 +183,21 @@ afterEach(async () => {
       summary: { total_tasks: 2 },
     });
     ai.fetchAICapabilities.mockResolvedValue(capabilities());
-    media.scanTasksFromImage.mockResolvedValue([]);
+    ai.answerKnowledge.mockResolvedValue({
+      status: 'insufficient_evidence',
+      answer: null,
+      claims: [],
+      citations: [],
+      retrieval: { hit_count: 0, top_score: null, embedding_version: 'bge-m3-v1' },
+      no_answer_reason: 'insufficient_context',
+    });
+    media.selectImageForOcr.mockResolvedValue({
+      uri: 'file:///tmp/selected.jpg',
+      name: 'selected.jpg',
+      type: 'image/jpeg',
+      source: 'library',
+    });
+    media.extractTasksFromSelectedImage.mockResolvedValue([]);
     setApiToken('runtime-only-test-token');
   });
 
@@ -864,7 +881,7 @@ afterEach(async () => {
 
     expect(getByTestId('suggest-task-button').props.accessibilityState.disabled).toBe(true);
     await fireEvent.press(getByTestId('open-ai-tools-button'));
-    expect(getByTestId('ai-ocr-run-button')).toBeTruthy();
+    expect(getByTestId('ai-ocr-camera-button')).toBeTruthy();
     expect(queryByTestId('ai-analysis-run-button')).toBeNull();
     expect(queryByTestId('ai-batch-run-button')).toBeNull();
   });
@@ -941,6 +958,100 @@ afterEach(async () => {
     ), {
       timeout: ASYNC_TIMEOUT,
     });
+  });
+
+  it('checks grounded sources and applies the reviewed answer to the task draft', async () => {
+    ai.answerKnowledge.mockResolvedValueOnce({
+      status: 'answered',
+      answer: 'MongoDB jest źródłem prawdy.',
+      claims: [{ statement: 'MongoDB jest źródłem prawdy.', citation_ids: ['chunk-1'] }],
+      citations: [{ chunk_id: 'chunk-1', title: 'Architektura', excerpt: 'MongoDB jest kanoniczne.' }],
+      retrieval: { hit_count: 1, top_score: 0.9, embedding_version: 'bge-m3-v1' },
+    });
+    const view = await render(<App />);
+    await waitFor(() => expect(view.getByTestId('open-ai-tools-button')).toBeTruthy(), {
+      timeout: ASYNC_TIMEOUT,
+    });
+
+    await fireEvent.press(view.getByTestId('open-ai-tools-button'));
+    await fireEvent.press(view.getByTestId('ai-tab-grounded'));
+    await fireEvent.changeText(view.getByTestId('grounded-question-input'), 'Co jest kanoniczne?');
+    await act(async () => {
+      fireEvent.press(view.getByTestId('grounded-run-button'));
+    });
+    await waitFor(() => expect(view.getByText('Architektura')).toBeTruthy(), {
+      timeout: ASYNC_TIMEOUT,
+    });
+    await fireEvent.press(view.getByTestId('grounded-prepare-description'));
+    await fireEvent.changeText(view.getByTestId('grounded-description-preview'), 'Sprawdzony opis');
+    await fireEvent.press(view.getByTestId('grounded-apply-description'));
+    await fireEvent.press(view.getByTestId('ai-tools-close-button'));
+
+    expect(ai.answerKnowledge).toHaveBeenCalledWith(
+      'Co jest kanoniczne?',
+      'pl',
+      expect.objectContaining({ signal: expect.any(Object) })
+    );
+    expect(view.getByPlaceholderText('Opis').props.value).toBe('Sprawdzony opis');
+  });
+
+  it('shows the grounded fallback when approved sources cannot be checked', async () => {
+    ai.answerKnowledge.mockRejectedValueOnce({ code: 'grounded_request_failed' });
+    const view = await render(<App />);
+    await waitFor(() => expect(view.getByTestId('open-ai-tools-button')).toBeTruthy(), {
+      timeout: ASYNC_TIMEOUT,
+    });
+
+    await fireEvent.press(view.getByTestId('open-ai-tools-button'));
+    await fireEvent.press(view.getByTestId('ai-tab-grounded'));
+    await fireEvent.changeText(view.getByTestId('grounded-question-input'), 'Nieznane źródło');
+    await act(async () => {
+      fireEvent.press(view.getByTestId('grounded-run-button'));
+    });
+
+    await waitFor(() => expect(view.getByTestId('ai-tools-error').props.children).toBe(
+      'Nie udało się sprawdzić zatwierdzonych źródeł. Spróbuj ponownie.'
+    ));
+  });
+
+  it('keeps a camera image local until review and supports permission retry', async () => {
+    media.selectImageForOcr
+      .mockRejectedValueOnce({ code: 'camera_permission_denied' })
+      .mockResolvedValueOnce({
+        uri: 'file:///tmp/camera.jpg',
+        name: 'camera.jpg',
+        type: 'image/jpeg',
+        source: 'camera',
+      });
+    const view = await render(<App />);
+    await waitFor(() => expect(view.getByTestId('scan-task-button')).toBeTruthy(), {
+      timeout: ASYNC_TIMEOUT,
+    });
+
+    await fireEvent.press(view.getByTestId('scan-task-button'));
+    await act(async () => {
+      fireEvent.press(view.getByTestId('ai-ocr-camera-button'));
+    });
+    await waitFor(() => expect(view.getByTestId('ai-tools-error').props.children).toContain(
+      'Odmówiono dostępu do aparatu'
+    ));
+    await act(async () => {
+      fireEvent.press(view.getByTestId('ai-ocr-camera-button'));
+    });
+    await waitFor(() => expect(view.getByTestId('ocr-image-preview')).toBeTruthy());
+
+    expect(media.extractTasksFromSelectedImage).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.press(view.getByTestId('ai-ocr-submit-button'));
+    });
+    await waitFor(() => expect(media.extractTasksFromSelectedImage).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'camera.jpg', source: 'camera' }),
+      'pl',
+      expect.objectContaining({ signal: expect.any(Object) })
+    ));
+    await waitFor(() => expect(view.getByTestId('ai-tools-message').props.children).toBe(
+      'Na obrazie nie znaleziono żadnych zadań'
+    ));
   });
 
   it('surfaces add-to-matrix errors when the local persistence fallback also fails', async () => {
@@ -1082,7 +1193,7 @@ afterEach(async () => {
   it('scans tasks through OCR and creates them remotely', async () => {
     storage.loadTasks.mockResolvedValue([]);
     tasksApi.fetchRemoteTasks.mockResolvedValue([]);
-    media.scanTasksFromImage.mockResolvedValue([
+    media.extractTasksFromSelectedImage.mockResolvedValue([
       {
         title: 'Scanned task',
         description: '',
@@ -1101,6 +1212,9 @@ afterEach(async () => {
       timeout: ASYNC_TIMEOUT,
     });
     await fireEvent.press(getByTestId('scan-task-button'));
+    await fireEvent.press(getByTestId('ai-ocr-library-button'));
+    await waitFor(() => expect(getByTestId('ocr-image-preview')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    await fireEvent.press(getByTestId('ai-ocr-submit-button'));
     await waitFor(() => expect(getByTestId('ocr-title-ocr-review-0')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
     await fireEvent.press(getByTestId('ocr-import-button'));
 
@@ -1117,9 +1231,9 @@ afterEach(async () => {
     await waitFor(() => expect(getByTestId('notice-banner').props.children).toBe('Zsynchronizowano z API'), {
       timeout: ASYNC_TIMEOUT,
     });
-    expect(media.scanTasksFromImage).toHaveBeenCalledWith(
+    expect(media.extractTasksFromSelectedImage).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'selected.jpg' }),
       'pl',
-      null,
       expect.objectContaining({ signal: expect.any(Object) })
     );
   });
@@ -1171,7 +1285,7 @@ afterEach(async () => {
   });
 
   it('shows OCR notices for empty and failed scans', async () => {
-    media.scanTasksFromImage.mockResolvedValueOnce([]);
+    media.extractTasksFromSelectedImage.mockResolvedValueOnce([]);
     storage.loadTasks.mockResolvedValue([]);
     tasksApi.fetchRemoteTasks.mockResolvedValue([]);
 
@@ -1182,12 +1296,17 @@ afterEach(async () => {
     });
 
     await fireEvent.press(getByTestId('scan-task-button'));
+    await fireEvent.press(getByTestId('ai-ocr-library-button'));
+    await waitFor(() => expect(getByTestId('ocr-image-preview')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    await fireEvent.press(getByTestId('ai-ocr-submit-button'));
     await waitFor(() => expect(getByTestId('ai-tools-message').props.children).toBe('Na obrazie nie znaleziono żadnych zadań'), {
       timeout: ASYNC_TIMEOUT,
     });
 
-    media.scanTasksFromImage.mockRejectedValueOnce({ code: 'ocr_request_failed' });
-    await fireEvent.press(getByTestId('scan-task-button'));
+    media.extractTasksFromSelectedImage.mockRejectedValueOnce({ code: 'ocr_request_failed' });
+    await fireEvent.press(getByTestId('ai-ocr-library-button'));
+    await waitFor(() => expect(getByTestId('ocr-image-preview')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    await fireEvent.press(getByTestId('ai-ocr-submit-button'));
     await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe('Nie udało się odczytać obrazu, więc nic nie dodano'), {
       timeout: ASYNC_TIMEOUT,
     });
@@ -1299,16 +1418,26 @@ afterEach(async () => {
     });
 
     await fireEvent.press(getByTestId('ai-tab-ocr'));
-    media.scanTasksFromImage.mockResolvedValueOnce([]);
-    await fireEvent.press(getByTestId('ai-ocr-run-button'));
+    media.extractTasksFromSelectedImage.mockResolvedValueOnce([]);
+    await fireEvent.press(getByTestId('ai-ocr-library-button'));
+    await waitFor(() => expect(getByTestId('ocr-image-preview')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    await fireEvent.press(getByTestId('ai-ocr-submit-button'));
     await waitFor(() => expect(getByTestId('ai-tools-message').props.children).toBe(
       'Na obrazie nie znaleziono żadnych zadań'
     ), {
       timeout: ASYNC_TIMEOUT,
     });
 
-    media.scanTasksFromImage.mockRejectedValueOnce({ code: 'provider_disabled' });
-    await fireEvent.press(getByTestId('ai-ocr-run-button'));
+    media.selectImageForOcr.mockResolvedValueOnce({
+      uri: 'file:///tmp/selected-2.jpg',
+      name: 'selected-2.jpg',
+      type: 'image/jpeg',
+      source: 'library',
+    });
+    media.extractTasksFromSelectedImage.mockRejectedValueOnce({ code: 'provider_disabled' });
+    await fireEvent.press(getByTestId('ai-ocr-library-button'));
+    await waitFor(() => expect(getByTestId('ocr-image-preview')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    await fireEvent.press(getByTestId('ai-ocr-submit-button'));
     await waitFor(() => expect(getByTestId('ai-tools-error').props.children).toBe(
       'Skanowanie notatek jest chwilowo niedostępne'
     ), {
@@ -1337,7 +1466,7 @@ afterEach(async () => {
   it('keeps OCR tasks locally when remote creation fails', async () => {
     storage.loadTasks.mockResolvedValue([]);
     tasksApi.fetchRemoteTasks.mockResolvedValue([]);
-    media.scanTasksFromImage.mockResolvedValue([
+    media.extractTasksFromSelectedImage.mockResolvedValue([
       {
         id: 'ocr-1',
         title: 'Offline scan',
@@ -1355,6 +1484,9 @@ afterEach(async () => {
       timeout: ASYNC_TIMEOUT,
     });
     await fireEvent.press(getByTestId('scan-task-button'));
+    await fireEvent.press(getByTestId('ai-ocr-library-button'));
+    await waitFor(() => expect(getByTestId('ocr-image-preview')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
+    await fireEvent.press(getByTestId('ai-ocr-submit-button'));
     await waitFor(() => expect(getByTestId('ocr-title-ocr-1')).toBeTruthy(), { timeout: ASYNC_TIMEOUT });
     await fireEvent.press(getByTestId('ocr-import-button'));
 

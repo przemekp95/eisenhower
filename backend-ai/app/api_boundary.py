@@ -23,6 +23,7 @@ FORWARDED_REQUEST_HEADERS = {
   "accept",
   "authorization",
   "content-type",
+  "idempotency-key",
   "origin",
   "x-request-id",
 }
@@ -104,7 +105,7 @@ def create_boundary_app(
     allow_origins=list(resolved.cors_allow_origins),
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Request-ID"],
   )
 
   def record(request: Request, action: AuditAction, outcome: AuditOutcome) -> None:

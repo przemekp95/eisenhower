@@ -13,7 +13,14 @@ def test_static_token_verifier_uses_constant_server_side_identity_mapping():
   assert user.user_id == "local-user"
   assert user.roles == ["user"]
   assert admin.roles == ["operator", "admin"]
-  assert admin.scopes == ["ai:operate", "ai:analyze", "knowledge:read"]
+  assert admin.scopes == [
+    "ai:operate",
+    "ai:analyze",
+    "knowledge:read",
+    "memory:read",
+    "memory:write",
+  ]
+  assert user.scopes == ["ai:analyze", "memory:read", "memory:write"]
 
 
 def test_static_token_verifier_rejects_unknown_tokens():

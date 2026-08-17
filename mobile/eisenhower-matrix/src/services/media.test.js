@@ -1,11 +1,23 @@
 import * as ImagePicker from 'expo-image-picker';
+import * as Network from 'expo-network';
 import { mobileConfig } from '../config';
-import { mapOcrResponseToTasks, scanTasksFromImage } from './media';
+import {
+  extractTasksFromSelectedImage,
+  mapOcrResponseToTasks,
+  scanTasksFromImage,
+  selectImageForOcr,
+} from './media';
 
 jest.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: jest.fn(),
+  requestCameraPermissionsAsync: jest.fn(),
   launchImageLibraryAsync: jest.fn(),
+  launchCameraAsync: jest.fn(),
 }));
+
+jest.mock('expo-network', () => ({
+  getNetworkStateAsync: jest.fn(),
+}), { virtual: true });
 
 const quadrantNames = { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' };
 
@@ -50,6 +62,10 @@ describe('media service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     global.fetch = jest.fn();
+    Network.getNetworkStateAsync.mockResolvedValue({
+      isConnected: true,
+      isInternetReachable: true,
+    });
   });
 
   it('maps OCR responses to local task records', () => {
@@ -119,13 +135,31 @@ describe('media service', () => {
     ]);
   });
 
-  it('returns empty list when permission is denied or picker is cancelled', async () => {
+  it('reports library permission denial and returns empty list when picker is cancelled', async () => {
     ImagePicker.requestMediaLibraryPermissionsAsync.mockResolvedValue({ granted: false });
-    await expect(scanTasksFromImage()).resolves.toEqual([]);
+    await expect(scanTasksFromImage()).rejects.toMatchObject({
+      code: 'library_permission_denied',
+    });
 
     ImagePicker.requestMediaLibraryPermissionsAsync.mockResolvedValue({ granted: true });
     ImagePicker.launchImageLibraryAsync.mockResolvedValue({ canceled: true, assets: [] });
     await expect(scanTasksFromImage('pl')).resolves.toEqual([]);
+  });
+
+  it('treats a picker result without assets as a cancelled selection', async () => {
+    ImagePicker.requestMediaLibraryPermissionsAsync.mockResolvedValue({ granted: true });
+    ImagePicker.launchImageLibraryAsync.mockResolvedValue({ canceled: false });
+
+    await expect(selectImageForOcr('library')).resolves.toBeNull();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unsupported image source before requesting permissions', async () => {
+    await expect(selectImageForOcr('clipboard')).rejects.toMatchObject({
+      code: 'invalid_media_source',
+    });
+    expect(ImagePicker.requestCameraPermissionsAsync).not.toHaveBeenCalled();
+    expect(ImagePicker.requestMediaLibraryPermissionsAsync).not.toHaveBeenCalled();
   });
 
   it('uses the default Expo picker when no adapter is provided', async () => {
@@ -161,6 +195,57 @@ describe('media service', () => {
         lifecycleState: 'active',
       },
     ]);
+  });
+
+  it('captures a camera image only after explicit permission without requesting EXIF metadata', async () => {
+    ImagePicker.requestCameraPermissionsAsync.mockResolvedValue({ granted: true });
+    ImagePicker.launchCameraAsync.mockResolvedValue({
+      canceled: false,
+      assets: [{
+        uri: 'file:///tmp/camera.jpg',
+        fileName: 'camera.jpg',
+        mimeType: 'image/jpeg',
+        exif: { GPSLatitude: 52.1 },
+      }],
+    });
+
+    await expect(selectImageForOcr('camera')).resolves.toEqual({
+      uri: 'file:///tmp/camera.jpg',
+      name: 'camera.jpg',
+      type: 'image/jpeg',
+      source: 'camera',
+    });
+    expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({
+      exif: false,
+      mediaTypes: ['images'],
+    }));
+  });
+
+  it('returns a typed camera permission error so the user can retry', async () => {
+    ImagePicker.requestCameraPermissionsAsync.mockResolvedValue({ granted: false });
+
+    await expect(selectImageForOcr('camera')).rejects.toMatchObject({
+      code: 'camera_permission_denied',
+    });
+    expect(ImagePicker.launchCameraAsync).not.toHaveBeenCalled();
+  });
+
+  it('keeps the selected image local while offline instead of uploading it', async () => {
+    Network.getNetworkStateAsync.mockResolvedValue({
+      isConnected: false,
+      isInternetReachable: false,
+    });
+    const image = {
+      uri: 'file:///tmp/offline.jpg',
+      name: 'offline.jpg',
+      type: 'image/jpeg',
+      source: 'camera',
+    };
+
+    await expect(extractTasksFromSelectedImage(image, 'pl')).rejects.toMatchObject({
+      code: 'media_offline',
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('uses default asset name and mime type when the picker omits them', async () => {

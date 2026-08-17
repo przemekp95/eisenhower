@@ -10,7 +10,7 @@ function createProps(overrides = {}) {
   return {
     visible: true,
     t,
-    availableTabs: ['analysis', 'ocr', 'batch'],
+    availableTabs: ['analysis', 'grounded', 'ocr', 'batch'],
     activeTab: 'analysis',
     onTabChange: jest.fn(),
     onClose: jest.fn(),
@@ -27,7 +27,21 @@ function createProps(overrides = {}) {
     suggestedQuadrant: 0,
     onAddAdvancedAnalysisToMatrix: jest.fn(),
     analysisAdding: false,
-    onRunOcr: jest.fn(),
+    groundedQuestion: 'Co jest kanoniczne?',
+    onChangeGroundedQuestion: jest.fn(),
+    onRunGrounded: jest.fn(),
+    onCancelGrounded: jest.fn(),
+    groundedLoading: false,
+    groundedResult: null,
+    groundedDescriptionPreview: null,
+    onPrepareGroundedDescription: jest.fn(),
+    onChangeGroundedDescriptionPreview: jest.fn(),
+    onApplyGroundedDescription: jest.fn(),
+    onDiscardGroundedDescription: jest.fn(),
+    onSelectOcrImage: jest.fn(),
+    onSubmitOcrImage: jest.fn(),
+    onDiscardOcrImage: jest.fn(),
+    ocrSelectedImage: null,
     ocrLoading: false,
     ocrResult: null,
     onChangeOcrItem: jest.fn(),
@@ -75,13 +89,15 @@ describe('AIToolsModal', () => {
     });
     const { getByTestId, getByText, rerender } = await render(<AIToolsModal {...ocrProps} />);
 
-    await fireEvent.press(getByTestId('ai-ocr-run-button'));
+    await fireEvent.press(getByTestId('ai-ocr-camera-button'));
+    await fireEvent.press(getByTestId('ai-ocr-library-button'));
     await fireEvent.changeText(getByTestId('ocr-title-1'), 'Reviewed task');
     await fireEvent.press(getByTestId('ocr-quadrant-1-2'));
     await fireEvent.press(getByTestId('ocr-import-button'));
     expect(getByTestId('ocr-title-1').props.value).toBe('Task one');
     expect(getByText('Przejrzyj pozycje przed importem')).toBeTruthy();
-    expect(ocrProps.onRunOcr).toHaveBeenCalled();
+    expect(ocrProps.onSelectOcrImage).toHaveBeenCalledWith('camera');
+    expect(ocrProps.onSelectOcrImage).toHaveBeenCalledWith('library');
     expect(ocrProps.onChangeOcrItem).toHaveBeenCalledWith('1', { title: 'Reviewed task' });
     expect(ocrProps.onChangeOcrItem).toHaveBeenCalledWith('1', { quadrant: 2 });
     expect(ocrProps.onImportOcr).toHaveBeenCalled();
@@ -108,6 +124,28 @@ describe('AIToolsModal', () => {
     expect(batchProps.onRunBatchAnalyze).toHaveBeenCalled();
   });
 
+  it('requires an explicit privacy review before uploading a selected camera image', async () => {
+    const props = createProps({
+      activeTab: 'ocr',
+      ocrSelectedImage: {
+        uri: 'file:///tmp/camera.jpg',
+        name: 'camera.jpg',
+        type: 'image/jpeg',
+        source: 'camera',
+      },
+    });
+    const view = await render(<AIToolsModal {...props} />);
+
+    expect(view.getByTestId('ocr-image-preview')).toBeTruthy();
+    expect(view.getByText('camera.jpg')).toBeTruthy();
+    expect(view.getByText(translations.pl.aiOcrPrivacyNotice)).toBeTruthy();
+    await fireEvent.press(view.getByTestId('ai-ocr-submit-button'));
+    await fireEvent.press(view.getByTestId('ai-ocr-discard-button'));
+
+    expect(props.onSubmitOcrImage).toHaveBeenCalled();
+    expect(props.onDiscardOcrImage).toHaveBeenCalled();
+  });
+
   it('does not render unavailable tools or technical administration', async () => {
     const props = createProps({ availableTabs: [], activeTab: 'analysis' });
     const { getByTestId, queryByTestId, queryByText } = await render(<AIToolsModal {...props} />);
@@ -115,6 +153,45 @@ describe('AIToolsModal', () => {
     expect(getByTestId('ai-tools-unavailable')).toBeTruthy();
     expect(queryByTestId('ai-analysis-run-button')).toBeNull();
     expect(queryByText(/provider|model|trening|administrator/i)).toBeNull();
+  });
+
+  it('renders disabled loading states for analysis, OCR review and batch processing', async () => {
+    const view = await render(
+      <AIToolsModal {...createProps({ analysisLoading: true, advancedAnalysis: null })} />
+    );
+
+    expect(view.getByTestId('ai-analysis-run-button').props.accessibilityState).toEqual({
+      disabled: true,
+    });
+    expect(view.getByText(translations.pl.aiAnalysisRunning)).toBeTruthy();
+
+    await view.rerender(
+      <AIToolsModal
+        {...createProps({
+          activeTab: 'ocr',
+          ocrLoading: true,
+          ocrSelectedImage: {
+            uri: 'file:///tmp/loading.jpg',
+            name: 'loading.jpg',
+            type: 'image/jpeg',
+            source: 'camera',
+          },
+        })}
+      />
+    );
+    expect(view.getByTestId('ai-ocr-submit-button').props.accessibilityState).toEqual({
+      disabled: true,
+    });
+    expect(view.getByText(translations.pl.aiOcrRunning)).toBeTruthy();
+    expect(view.getByTestId('ai-ocr-discard-button')).toBeTruthy();
+
+    await view.rerender(
+      <AIToolsModal {...createProps({ activeTab: 'batch', batchLoading: true })} />
+    );
+    expect(view.getByTestId('ai-batch-run-button').props.accessibilityState).toEqual({
+      disabled: true,
+    });
+    expect(view.getByText(translations.pl.aiBatchRunning)).toBeTruthy();
   });
 
 });

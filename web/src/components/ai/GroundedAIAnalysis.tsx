@@ -59,7 +59,12 @@ export default function GroundedAIAnalysis({
     setApplyStatus(null);
 
     try {
-      setResult(await answerKnowledge(question.trim(), language, { signal: controller.signal }));
+      const nextResult = await answerKnowledge(question.trim(), language, {
+        signal: controller.signal,
+      });
+      if (!controller.signal.aborted) {
+        setResult(nextResult);
+      }
     } catch (issue) {
       const code = issue && typeof issue === 'object' && 'code' in issue ? issue.code : undefined;
       if (code !== 'request_cancelled') {
@@ -72,6 +77,12 @@ export default function GroundedAIAnalysis({
         setLoading(false);
       }
     }
+  };
+
+  const cancelAnalysis = () => {
+    requestRef.current?.abort();
+    requestRef.current = null;
+    setLoading(false);
   };
 
   const prepareDescription = (answer: string) => {
@@ -116,14 +127,25 @@ export default function GroundedAIAnalysis({
         />
       </label>
 
-      <button
-        type="button"
-        onClick={() => void runAnalysis()}
-        disabled={loading || !question.trim()}
-        className="rounded-full bg-emerald-300 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {loading ? t('ai.grounded.running') : t('ai.grounded.run')}
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => void runAnalysis()}
+          disabled={loading || !question.trim()}
+          className="rounded-full bg-emerald-300 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {loading ? t('ai.grounded.running') : t('ai.grounded.run')}
+        </button>
+        {loading ? (
+          <button
+            type="button"
+            onClick={cancelAnalysis}
+            className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white/80 transition hover:bg-white/8 hover:text-white"
+          >
+            {t('ai.grounded.cancel')}
+          </button>
+        ) : null}
+      </div>
 
       {error ? (
         <p role="alert" className="text-sm text-red-200">

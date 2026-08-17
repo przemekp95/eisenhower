@@ -89,6 +89,10 @@ class Settings:
   memory_retrieval_enabled: bool = False
   memory_response_enabled: bool = False
   memory_policy_path: Path | None = None
+  memory_consent_hmac_key: str | None = None
+  memory_consent_hmac_key_id: str = "runtime"
+  memory_projection_collection: str = "eisenhower-memory-v1"
+  memory_projection_version: str = "memory-projection-v1"
   # MinIO Object Storage
   minio_endpoint: str | None = None
   minio_access_key: str | None = None
@@ -194,6 +198,24 @@ class Settings:
       raise ValueError("Memory retrieval requires governed memory writes.")
     if self.memory_response_enabled and not self.memory_retrieval_enabled:
       raise ValueError("Memory response augmentation requires memory retrieval.")
+    if self.memory_write_enabled:
+      if self.memory_policy_path is None:
+        raise ValueError("MEMORY_POLICY_PATH is required when memory writes are enabled.")
+      if self.memory_consent_hmac_key is None or len(self.memory_consent_hmac_key.encode("utf-8")) < 32:
+        raise ValueError("MEMORY_CONSENT_HMAC_KEY must contain at least 32 bytes.")
+      if self.memory_consent_hmac_key in {
+        self.audit_hmac_key,
+        self.api_token,
+        self.admin_token,
+        self.internal_api_token,
+      }:
+        raise ValueError("MEMORY_CONSENT_HMAC_KEY must be a separate secret.")
+    if (
+      not self.memory_consent_hmac_key_id
+      or len(self.memory_consent_hmac_key_id) > 32
+      or any(not (character.isalnum() or character in "_-") for character in self.memory_consent_hmac_key_id)
+    ):
+      raise ValueError("MEMORY_CONSENT_HMAC_KEY_ID must use 1..32 safe characters.")
     bounded_thresholds = (
       self.local_model_confidence_threshold,
       self.local_model_minimum_macro_f1,
@@ -415,6 +437,14 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     memory_retrieval_enabled=source.get("MEMORY_RETRIEVAL_ENABLED", "false").lower() in ("true", "1", "yes"),
     memory_response_enabled=source.get("MEMORY_RESPONSE_ENABLED", "false").lower() in ("true", "1", "yes"),
     memory_policy_path=(Path(source["MEMORY_POLICY_PATH"]) if source.get("MEMORY_POLICY_PATH") else None),
+    memory_consent_hmac_key=source.get("MEMORY_CONSENT_HMAC_KEY") or None,
+    memory_consent_hmac_key_id=source.get("MEMORY_CONSENT_HMAC_KEY_ID", "runtime"),
+    memory_projection_collection=source.get(
+      "MEMORY_PROJECTION_COLLECTION", "eisenhower-memory-v1"
+    ),
+    memory_projection_version=source.get(
+      "MEMORY_PROJECTION_VERSION", "memory-projection-v1"
+    ),
     corpus_allowed_projects=parse_csv_list(source.get("CORPUS_ALLOWED_PROJECTS"), ("eisenhower",)),
     local_model_name=source.get(
       "LOCAL_MODEL_NAME",
