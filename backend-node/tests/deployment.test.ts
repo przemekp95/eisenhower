@@ -18,13 +18,20 @@ describe('host-neutral deployment and release boundaries', () => {
     expect(compose.match(/^\s+ports:/gm)).toHaveLength(1);
     expect(compose).toContain('APP_ENV=${APP_ENV:?APP_ENV is required}');
     expect(compose).toContain('AUTH_MODE=${AUTH_MODE:?AUTH_MODE is required}');
-    expect(compose).toContain('profiles: [n8n]');
+    expect(compose).not.toMatch(/^\s+profiles: \[n8n\]$/m);
+    for (const service of ['n8n', 'prometheus', 'grafana', 'oauth2-proxy']) {
+      expect(compose).toContain(`  ${service}:`);
+    }
     expect(compose).toContain('INFERENCE_BASE_URL=');
     expect(compose).toContain('INFERENCE_API_KEY=');
     expect(compose).toContain('INFERENCE_ALLOWED_HOSTS=');
     expect(compose).not.toContain('INFERENCE_MODEL=');
     expect(gateway).toContain('location = /eisenhower/google-calendar/webhook');
     expect(gateway).toContain('location = /eisenhower/google-calendar/oauth/callback');
+    for (const route of ['/admin/n8n/', '/admin/prometheus/', '/admin/grafana/']) {
+      expect(gateway).toContain(`location ${route}`);
+    }
+    expect(gateway.match(/auth_request \/oauth2\/auth;/g)).toHaveLength(3);
   });
 
   it('publishes only after all image scans and emits one digest manifest', () => {
@@ -95,6 +102,7 @@ describe('host-neutral deployment and release boundaries', () => {
     const deploy = fs.readFileSync(path.join(repositoryRoot, 'deploy/generic/deploy.sh'), 'utf8');
 
     expect(backup).toContain('mongodump --archive --gzip');
+    expect(backup).toContain('audit n8n grafana identity rag-jobs');
     expect(backup).toContain('sha256sum');
     expect(restore).toContain('RESTORE_CONFIRM');
     expect(restore).toContain('sha256sum -c SHA256SUMS');
