@@ -37,6 +37,11 @@ accepted by a person.
 The manually dispatched release retains the existing full-green-master-SHA preflight. It
 must validate the full SHA, prove ancestry from `origin/master`, find the exact successful
 master push run, and recheck all stable CI contexts before any secret-bearing job runs.
+Those stable contexts are `resolve-run-mode`, `security-lint`, `test-backend-node`,
+`test-api-client`, `test-mcp-adapter`, `test-n8n-workflows`, `test-frontend`,
+`test-frontend-integration`, `test-frontend-e2e`, `test-backend-ai`, `test-mobile`, and
+`test-mobile-native-android`. The separate `branch-policy` context continues to enforce the
+allowed branch flow.
 
 The release workflow builds every first-party image, scans it, creates an SBOM, publishes
 immutable registry digests, and emits a checksum-protected release manifest. The final gate
