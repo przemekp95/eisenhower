@@ -23,6 +23,10 @@ export async function analyzeTaskAdvanced(task, language = 'pl', options = {}) {
   return getAiApi().analyzeTask(task, language, options);
 }
 
+export async function answerKnowledge(query, language = 'pl', options = {}) {
+  return getAiApi().answerKnowledge(query, language, null, 5, options);
+}
+
 export async function batchAnalyzeTasks(tasks, options = {}) {
   return getAiApi().batchAnalyzeTasks(tasks, options);
 }

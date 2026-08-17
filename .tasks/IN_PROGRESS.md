@@ -1,5 +1,22 @@
 # In Progress
 
+## TASK-028: Add Grounded RAG and camera parity across web and mobile
+**Priority:** P2 | **Tags:** product, rag, mobile, web, parity
+
+Define the supported Grounded RAG and camera workflows on both clients, including platform capabilities, privacy, permissions, offline behavior, and acceptance evidence.
+
+### Plan
+
+- Define a shared user-visible Grounded RAG contract with citations, abstention, cancellation and apply-preview behavior while preserving platform-specific accessibility.
+- Add explicit camera capture with permission-denied, retry, offline, privacy and review-before-submit behavior; keep gallery upload independently available.
+- Verify web/mobile contract and accessibility tests, and leave physical camera acceptance explicitly open until real-device evidence exists.
+
+### Progress
+
+Web and mobile now share the user-visible Grounded RAG outcome: `/v2/knowledge/answer`, inert citations, explicit no-answer, cancellation and editable apply preview. Both expose separate camera and gallery paths; mobile adds on-demand permission, denial/retry, local preview before upload and offline no-upload behavior, while both retain OCR review before task mutation. Web unit/build and mobile unit/security/native Android release checks are green. Physical Android/iOS/mobile-browser capture, byte-level EXIF handling, screen-reader/large-text acceptance and real-backend citation traffic remain deliberately open.
+
+---
+
 ## TASK-002: Benchmark and approve the frozen production evaluation
 **Priority:** P0 | **Tags:** ai, evaluation, production-gate
 
@@ -36,9 +53,15 @@ Deliver the approved platform end to end on the local AMD computer while keeping
 - Package application, automation, storage and inference as independently addressable services; qualify the exact local `gfx1151` ROCm/vLLM/model matrix and preserve classifier fallback when inference is unavailable.
 - Run focused red-green loops, executable BDD, full repository verification and local end-to-end runtime checks, then promote only the exact green SHA through reviewed PRs to `dev` and `master`.
 
+### Activation decision gate
+
+Before changing any deployed classifier, retrieval, response or MAG flag, record one explicit owner decision for each independently controlled capability: `enable`, `hold` or `reject`. Every decision record must bind the approver and decision time, exact source/deployment SHA, checksum-bound evidence, target environment and cohort, exact before/after flag values, approval expiry when applicable, monitoring window, stop thresholds and the tested rollback action. Retrieval, generated responses, MAG writes, MAG retrieval and MAG response augmentation require separate decisions; approval of one never implies approval of another. Green source tests, builds, local rehearsals, model qualification or an expired historical approval cannot activate a capability automatically. TASK-047 cannot close until the applicable TASK-014, TASK-023 and TASK-019 decisions and their observed outcomes are recorded, while public publication remains a separate TASK-020 decision.
+
 ### Progress
 
 The portable local topology, transactional Calendar domain/outbox, HMAC-bound n8n workflows, bounded MCP write tools, API client and accessible Calendar status/conflict UI are implemented on the feature branch. Point 1 is live on the local AMD host with per-user encrypted Google OAuth and an active Watch channel. Point 2 has a fail-closed multi-user Keycloak boundary, pre-registered PKCE clients, exact resource audiences, scoped Node task authorization, a private Host/Origin/rate-limited gateway and Remote MCP token exchange that never passes the MCP bearer upstream. The local Compose now includes the web UI behind that gateway with state-bound Authorization Code + S256 PKCE and memory-only access tokens. Point 4 has AMD ROCm BGE-M3 retrieval and Qwen generation-shadow evidence on `gfx1151`, including strict PL/EN schema, safe injection abstention, serialized capacity-two traffic at configured capacity one, oversize rejection without OOM, application-level disconnect fallback and physical recovery. An exact-SHA build/render/deploy/smoke/rollback script now covers all first-party images and verifies OCI source revisions. Final deployment remains fail-closed because a genuine production classifier evaluation file does not exist; the script refuses `/dev/null`, a mismatched digest or missing model/service keys instead of weakening readiness. On 2026-08-16 the expired runtime correctly returned classifier readiness 503, both 240-item annotation files remained entirely null, and the production benchmark was hardened so every shared quality-gate failure now blocks `production_readiness`.
+
+The cross-capability activation decision gate is now explicit and still pending. No existing automated evidence or prior time-bounded approval satisfies it by itself.
 
 ---
 
@@ -52,10 +75,13 @@ Deploy retrieval-only to an allowlisted internal cohort with `RAG_GENERATION_ENA
 - Deploy the selected owner-authorized hybrid BGE strategy with its private pinned reranker on the local AMD cohort.
 - Preserve aggregate-only telemetry, canonical authorization and independent retrieval/generation/response switches.
 - Rehearse disable and restore paths before recording the final bounded decision.
+- Record the retrieval-specific `enable`, `hold` or `reject` decision under the TASK-047 activation gate, including exact flags, cohort, evidence checksums, observation window, stop thresholds and rollback action.
 
 ### Progress
 
 The earlier exact-source ROCm image loaded 25 canonical documents into a green 235-point local Qdrant projection and completed a real authorized BGE-M3-to-Qwen shadow request without exposing generated content. The newer `dev` strategy adds owner-authorized fielded BM25/RRF and a separate fail-closed pinned reranker; its local deployment must be rehearsed together with the qualified generator before this pilot can close.
+
+The remaining no-traffic preflight now resolves the current Compose contract to retrieval-only `hybrid-bge-v1`, binds the pinned BGE reranker revision, proves an exact disable/restore cycle and records a checksum-bound local artifact. It made no runtime mutation and explicitly records the missing classifier evaluation, expired approval, older running SHA and absence of cohort/traffic evidence. Current-SHA deployment, real internal traffic, persistent telemetry, reviewed sampling and signed go/no-go remain external gates.
 
 ---
 
@@ -75,12 +101,15 @@ Deploy the qualified private inference matrix behind FastAPI, discard validated 
 - Bind the response endpoint to the atomic promotion pointer, stable per-user percentage assignment and an expiring owner approval receipt; fail closed on stale, malformed or mismatched state.
 - Apply the independently granted owner approval only through 2026-08-23 23:59:59 Europe/Warsaw, keep the existing tenant/user allowlists and rehearse automatic expiry plus rollback before local enablement.
 - Keep user-visible responses disabled unless every zero-tolerance gate and explicit tenant/user allowlist is satisfied.
+- Record generation-shadow and user-visible response decisions separately under the TASK-047 activation gate; neither decision may imply classifier, retrieval or MAG activation.
 
 ### Progress
 
 Private Qwen generation shadow is real and generated content is discarded after strict validation. A separate `POST /v2/knowledge/answer` query contract now preserves search semantics and returns either one atomic claim with one authorized citation or a content-free `insufficient_evidence`; it never reuses classifier explanations as answers. Two-phase guided generation first decides answerability and only then produces the required cited claim, avoiding nullable/conditional-schema gaps observed on the physical vLLM decoder. OIDC scope, tenant/project ACL, browser rate limiting, tenant/user canary allowlists, provider failures and foreign citations all remain fail-closed. The web UI calls this Q&A contract and renders no quadrant or invented source for abstentions. Physical Qwen on AMD `gfx1151` passed PL answer, EN answer, unsupported private-data question and injected-context abstention 4/4; full `make verify` passed with 627 backend-AI tests/10 skips at 88.57% coverage, 240 Node tests, 21 BDD scenarios/107 steps, 186 web tests plus 2 integrations, 192 mobile tests, 50 MCP tests, audits, builds, typechecks and Pylint 10.00/10. User-visible responses remain disabled by default because this bounded smoke is not an independently human-reviewed answer-quality holdout; the 42 retrieval decisions and 240 classifier labels remain pending.
 
 The separate technical response holdout is frozen at 24 fixed-context cases and its first physical AMD/Qwen run passed the predeclared automated policy: answerable recall 1.0, no-answer precision/recall 1.0/1.0, citation/schema/context binding 1.0, injection success 0.0, supported-answer rate 0.9167 and p95 2851.23 ms. Runtime now reloads the atomic response pointer per request, applies stable pseudonymous percentage routing only after tenant/user allowlists, records aggregate decisions and automatically fails closed when the owner approval expires. PRs #179/#180 promoted this source through green `dev` to master `c8072ad7`. A private knowledge-only AMD service isolates the governed answer route; the full local deployment now also carries the owner's explicitly time-bounded classifier evidence bypass without fabricating the still-empty dual-human labels, and fails classifier requests closed after that approval expires. Real canary traffic and post-expiry evidence remain open.
+
+A deterministic current-source rehearsal now drives an expired decision through the real response router and metrics registry: it returns `response_approval_expired`, exposes no generated response and emits the bounded `approval_expired=1` counter. This is synthetic local contract evidence only. An observed request against a deployed current SHA after real approval expiry, plus real canary traffic and durable telemetry, remains open.
 
 ---
 
@@ -97,14 +126,19 @@ Implement MAG as a separate user-memory domain with MongoDB as source of truth a
 - Build a separate Qdrant memory projection and revalidate every retrieved hit against MongoDB before using the bounded memory prompt budget.
 - Add PL/EN evaluation for benefit, false memory, stale/conflict behavior, poisoning, isolation, deletion/export completeness, latency and token impact.
 - Roll out behind independent write, retrieval and response flags with shadow/canary evidence and a rehearsed disable/rebuild path.
+- Record separate `enable`, `hold` or `reject` decisions for MAG writes, retrieval and response augmentation under the TASK-047 activation gate; each requires its own cohort, expiry, monitoring and rollback evidence.
 
 ### Resume gate
 
 Design and synthetic tests may proceed before production RAG, but real memory writes and response augmentation require approved consent/retention ownership plus stable TASK-010 through TASK-015 and TASK-023 retrieval/generation rollout evidence.
 
+Meeting these prerequisites permits a decision; it does not switch any MAG flag automatically. The corresponding TASK-047 activation decision must still be recorded before runtime mutation.
+
 ### Progress
 
 The owner policy, fully intent-bound HMAC confirmations, typed fail-closed policy validation, transactional Mongo repository, replay-safe lifecycle, explicit active-conflict keys, atomically idempotent supersession, separate content-free Qdrant projection, pre-ranking status/expiry filters, canonical overfetch/revalidation/risk-aware ranking, bounded untrusted prompt projection and PL/EN evaluation framework are implemented locally. A refreshed isolated Mongo replica-set + real Qdrant test proved cross-tenant/user isolation, tampered-projection rejection, duplicate-conflict transaction rollback, orphan cleanup, physical deletion and replay after clock movement, then removed its database, collection and container. All memory rollout flags remain false; no user-facing write, retrieval or response augmentation is enabled, and real-user shadow/canary remains gated by TASK-013 through TASK-015 and TASK-023.
+
+The previously missing online slice is now implemented but disabled: FastAPI conditionally composes the canonical Mongo repository and separate Qdrant projection, exposes Bearer-scoped prepare/confirm/export/revoke/delete plus aggregate-only retrieval shadow, forwards `Idempotency-Key` through the browser boundary and audits export without content. The web UI is capability-gated and requires server receipt preview plus a separate confirmation for every write, revocation or deletion. Compose declares all flags false and the policy still refuses deployment; no MAG route is exposed in the default runtime and no real user has written or retrieved memory.
 
 ---
 
@@ -124,9 +158,13 @@ Package the verified RAG, document extraction, MAG, MCP, n8n, security, evaluati
 
 Build the case-study structure during implementation, but publish capability claims only after the corresponding TASK-010 through TASK-019 and TASK-023 evidence exists. Any public deployment still requires explicit authorization.
 
+Publication requires its own recorded `publish`, `hold` or `reject` decision with approved claims, redactions, destination and approver. Runtime activation decisions under TASK-047 do not authorize publication.
+
 ### Progress
 
 Created a private evidence-led case-study draft with current artifact hashes, the failed retrieval baseline, ADRs/non-goals and explicit separation of source, tests, local runtime, deployment and public proof. The refreshed MCP rehearsal proves all six tools through a real stdio subprocess/SDK handshake against current Node/FastAPI, isolated MongoDB/Qdrant, five citations and zero wrong-project hits. The web now has an accessible PL/EN RAG/fallback/no-answer surface; a separate unmocked Chromium desktop/Pixel 7 rehearsal proves current Vite → FastAPI → MiniLM → isolated Mongo/Qdrant citation flow with wrong-user ACL denial and complete cleanup. n8n raw-body signing is hardened in source, but the workflow is not imported or active. Fresh broad regression evidence is backend AI 365 passed/7 skipped at 89.86% coverage, Node 66 plus build, web 134 at 100% plus build/format and 6 Playwright checks, MCP 21 with warnings as errors, and n8n 5/5. The earlier Prometheus/Grafana rehearsal remains historical source-bound evidence, not current same-release telemetry. No immutable release image, live vLLM, deployed telemetry, public HTTPS, publication or deployment is claimed.
+
+The 2026-08-17 evidence delta is recorded separately because this draft is itself part of the frozen RAG corpus and cannot be silently rewritten without changing holdout document IDs. The private delta records the new shadow/canary preflight, disabled MAG API/UI and automated client parity while preserving explicit no-deployment/no-traffic/no-publication boundaries. Folding it into the canonical draft requires corpus refreeze and human review; publication still requires separate authorization.
 
 ---
 

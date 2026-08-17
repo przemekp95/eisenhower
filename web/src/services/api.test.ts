@@ -14,6 +14,9 @@ import {
   getCalendarStatus,
   getDelegatedTasks,
   getTasks,
+  prepareMemory,
+  confirmMemory,
+  exportMemory,
   requestCalendarSync,
   disconnectCalendar,
   resolveCalendarConflict,
@@ -645,6 +648,78 @@ describe('api service', () => {
     await expect(getCapabilities()).resolves.toEqual(capabilities);
     expect(global.fetch).toHaveBeenCalledWith(
       `${runtimeConfig.aiApiUrl}/capabilities`,
+      expect.objectContaining({ credentials: 'omit' })
+    );
+  });
+
+  it('uses the governed prepare, confirm and export memory endpoints', async () => {
+    const intent = {
+      action: 'create' as const,
+      memory_id: 'preference-1',
+      memory_type: 'communication_preference',
+      conflict_key: 'response-style',
+      content: 'Prefer concise Polish responses',
+      source_event_id: 'web-memory-1',
+      provenance: 'explicit web memory control',
+      confidence: 1,
+      salience: 0.8,
+      retention_class: 'user_controlled',
+      expires_at: '2026-09-17T00:00:00Z',
+    };
+    const receipt = {
+      confirmation_id: `h1:runtime:${'a'.repeat(64)}`,
+      actor_user_id: 'owner-user',
+      action: 'create' as const,
+      intent_checksum: 'b'.repeat(64),
+      policy_version: 'eisenhower-memory-consent-v1',
+      confirmed_at: '2026-08-17T00:00:00Z',
+      expires_at: '2026-08-17T00:05:00Z',
+    };
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ action: 'create', memory_id: 'preference-1', receipt }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({
+          memory_id: 'preference-1',
+          status: 'active',
+          projection_state: 'synchronized',
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ items: [] }),
+      });
+
+    const prepared = await prepareMemory(intent);
+    await confirmMemory(intent, prepared.receipt, 'memory-create-1');
+    await exportMemory();
+
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      `${runtimeConfig.aiApiUrl}/v2/memory/prepare`,
+      expect.objectContaining({ method: 'POST', body: JSON.stringify(intent) })
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      `${runtimeConfig.aiApiUrl}/v2/memory/confirm`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'Idempotency-Key': 'memory-create-1' }),
+        body: JSON.stringify({ intent, receipt }),
+      })
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      3,
+      `${runtimeConfig.aiApiUrl}/v2/memory/export`,
       expect.objectContaining({ credentials: 'omit' })
     );
   });

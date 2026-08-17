@@ -9,8 +9,8 @@ import MatrixBoard from './src/components/MatrixBoard';
 import TaskComposer from './src/components/TaskComposer';
 import AIToolsModal from './src/components/ai/AIToolsModal';
 import useTaskSyncController from './src/hooks/useTaskSyncController';
-import { analyzeTaskAdvanced, batchAnalyzeTasks } from './src/services/ai';
-import { scanTasksFromImage } from './src/services/media';
+import { analyzeTaskAdvanced, answerKnowledge, batchAnalyzeTasks } from './src/services/ai';
+import { extractTasksFromSelectedImage, selectImageForOcr } from './src/services/media';
 import { getSuggestedQuadrant, resolveAIActionNotice, resolveOCRNotice } from './src/utils/aiUi';
 import { flagsToQuadrant, quadrantToFlags } from './src/utils/taskUtils';
 import styles from './src/styles/appStyles';
@@ -32,7 +32,6 @@ function AuthenticatedApp() {
     handleLifecycle,
     handleResolveConflict,
     handleSchedule,
-    handleScan,
     handleSuggest,
     handleToggle,
     importScannedTasks,
@@ -58,7 +57,12 @@ function AuthenticatedApp() {
   const [advancedAnalysis, setAdvancedAnalysis] = useState(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisAdding, setAnalysisAdding] = useState(false);
+  const [groundedQuestion, setGroundedQuestion] = useState('');
+  const [groundedLoading, setGroundedLoading] = useState(false);
+  const [groundedResult, setGroundedResult] = useState(null);
+  const [groundedDescriptionPreview, setGroundedDescriptionPreview] = useState(null);
   const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrSelectedImage, setOcrSelectedImage] = useState(null);
   const [ocrResult, setOcrResult] = useState(null);
   const [batchInput, setBatchInput] = useState('');
   const [batchLoading, setBatchLoading] = useState(false);
@@ -68,10 +72,12 @@ function AuthenticatedApp() {
   const refreshCapabilitiesRef = useRef(refreshCapabilities);
   const networkReachableRef = useRef(null);
   const analysisRequestRef = useRef(null);
+  const groundedRequestRef = useRef(null);
   const batchRequestRef = useRef(null);
   const ocrRequestRef = useRef(null);
   const availableAITabs = [
     ...(aiCapabilities?.reasoned_local_analysis ? ['analysis'] : []),
+    ...(aiCapabilities?.knowledge_retrieval ? ['grounded'] : []),
     ...(aiCapabilities?.ocr ? ['ocr'] : []),
     ...(aiCapabilities?.batch_analysis ? ['batch'] : []),
   ];
@@ -107,6 +113,7 @@ function AuthenticatedApp() {
 
   useEffect(() => () => {
     analysisRequestRef.current?.abort();
+    groundedRequestRef.current?.abort();
     batchRequestRef.current?.abort();
     ocrRequestRef.current?.abort();
   }, []);
@@ -117,6 +124,7 @@ function AuthenticatedApp() {
     }
 
     setAnalysisTask((current) => current || newTask.title);
+    setGroundedQuestion((current) => current || newTask.title);
   }, [aiToolsOpen, newTask.title]);
 
   const resetAIToolFeedback = () => {
@@ -136,6 +144,12 @@ function AuthenticatedApp() {
     setBatchLoading(false);
   };
 
+  const cancelGroundedRequest = () => {
+    groundedRequestRef.current?.abort();
+    groundedRequestRef.current = null;
+    setGroundedLoading(false);
+  };
+
   const cancelOcrRequest = () => {
     ocrRequestRef.current?.abort();
     ocrRequestRef.current = null;
@@ -149,15 +163,20 @@ function AuthenticatedApp() {
     setAiToolsOpen(true);
     setActiveAITab(nextTab);
     setAnalysisTask(newTask.title);
+    setGroundedQuestion(newTask.title);
   };
 
   const closeAITools = () => {
     cancelAnalysisRequest();
+    cancelGroundedRequest();
     cancelBatchRequest();
     cancelOcrRequest();
     setAdvancedAnalysis(null);
+    setGroundedResult(null);
+    setGroundedDescriptionPreview(null);
     setBatchResult(null);
     setOcrResult(null);
+    setOcrSelectedImage(null);
     setAiToolsOpen(false);
     resetAIToolFeedback();
   };
@@ -213,21 +232,78 @@ function AuthenticatedApp() {
     }
   };
 
-  const handleOcrFromTools = async () => {
+  const handleRunGrounded = async () => {
+    if (!groundedQuestion.trim()) return;
+    cancelGroundedRequest();
+    setGroundedResult(null);
+    setGroundedDescriptionPreview(null);
+    resetAIToolFeedback();
+    const controller = new AbortController();
+    groundedRequestRef.current = controller;
+    setGroundedLoading(true);
+    try {
+      const result = await answerKnowledge(groundedQuestion.trim(), language, {
+        signal: controller.signal,
+      });
+      if (groundedRequestRef.current === controller && !controller.signal.aborted) {
+        setGroundedResult(result);
+      }
+    } catch (error) {
+      if (groundedRequestRef.current === controller) {
+        const message = resolveAIActionNotice(error, t, t.aiGroundedFailed);
+        if (message) setAiToolsError(message);
+      }
+    } finally {
+      if (groundedRequestRef.current === controller) {
+        groundedRequestRef.current = null;
+        setGroundedLoading(false);
+      }
+    }
+  };
+
+  const handlePrepareGroundedDescription = (answer) => {
+    const existing = newTask.description.trim();
+    setGroundedDescriptionPreview(existing ? `${existing}\n\n${answer}` : answer);
+  };
+
+  const handleApplyGroundedDescription = () => {
+    if (!groundedDescriptionPreview?.trim()) return;
+    updateTaskDraftField('description', groundedDescriptionPreview.trim());
+    setGroundedDescriptionPreview(null);
+    setAiToolsMessage(t.aiGroundedApplied);
+  };
+
+  const handleSelectOcrImage = async (source) => {
+    setOcrResult(null);
+    resetAIToolFeedback();
+    try {
+      setOcrSelectedImage(await selectImageForOcr(source));
+    } catch (error) {
+      const message = resolveOCRNotice(error, t);
+      if (message) setAiToolsError(message);
+    }
+  };
+
+  const handleSubmitOcrImage = async () => {
+    if (!ocrSelectedImage) return;
     cancelOcrRequest();
     setOcrResult(null);
     resetAIToolFeedback();
     const controller = new AbortController();
     ocrRequestRef.current = controller;
     setOcrLoading(true);
-
     try {
-      const scanned = await scanTasksFromImage(language, null, { signal: controller.signal });
+      const scanned = await extractTasksFromSelectedImage(
+        ocrSelectedImage,
+        language,
+        { signal: controller.signal }
+      );
       if (ocrRequestRef.current !== controller || controller.signal.aborted) {
         return;
       }
       if (scanned.length === 0) {
         setOcrResult({ count: 0, items: [] });
+        setOcrSelectedImage(null);
         setAiToolsMessage(t.ocrEmpty);
         return;
       }
@@ -240,6 +316,7 @@ function AuthenticatedApp() {
           quadrant: flagsToQuadrant(item),
         })),
       });
+      setOcrSelectedImage(null);
       setAiToolsMessage(t.aiOcrReviewReady.replace('{count}', String(scanned.length)));
     } catch (error) {
       if (ocrRequestRef.current === controller) {
@@ -333,6 +410,7 @@ function AuthenticatedApp() {
 
   const handleTabChange = (tab) => {
     if (!availableAITabs.includes(tab)) return;
+    if (tab !== 'grounded') cancelGroundedRequest();
     resetAIToolFeedback();
     setActiveAITab(tab);
   };
@@ -402,7 +480,6 @@ function AuthenticatedApp() {
           onSuggest={handleSuggest}
           onScan={() => {
             openAITools('ocr');
-            void handleOcrFromTools();
           }}
           onOpenAITools={() => openAITools('analysis')}
           suggestDisabled={suggestDisabled}
@@ -453,7 +530,26 @@ function AuthenticatedApp() {
         suggestedQuadrant={advancedAnalysis ? getSuggestedQuadrant(advancedAnalysis) : 3}
         onAddAdvancedAnalysisToMatrix={handleAddAdvancedAnalysisToMatrix}
         analysisAdding={analysisAdding}
-        onRunOcr={handleOcrFromTools}
+        groundedQuestion={groundedQuestion}
+        onChangeGroundedQuestion={(value) => {
+          cancelGroundedRequest();
+          setGroundedQuestion(value);
+          setGroundedResult(null);
+          setGroundedDescriptionPreview(null);
+        }}
+        onRunGrounded={handleRunGrounded}
+        onCancelGrounded={cancelGroundedRequest}
+        groundedLoading={groundedLoading}
+        groundedResult={groundedResult}
+        groundedDescriptionPreview={groundedDescriptionPreview}
+        onPrepareGroundedDescription={handlePrepareGroundedDescription}
+        onChangeGroundedDescriptionPreview={setGroundedDescriptionPreview}
+        onApplyGroundedDescription={handleApplyGroundedDescription}
+        onDiscardGroundedDescription={() => setGroundedDescriptionPreview(null)}
+        onSelectOcrImage={handleSelectOcrImage}
+        onSubmitOcrImage={handleSubmitOcrImage}
+        onDiscardOcrImage={() => setOcrSelectedImage(null)}
+        ocrSelectedImage={ocrSelectedImage}
         ocrLoading={ocrLoading}
         ocrResult={ocrResult}
         onChangeOcrItem={handleChangeOcrItem}

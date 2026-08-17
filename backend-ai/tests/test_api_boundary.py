@@ -47,6 +47,48 @@ def test_boundary_preserves_bearer_origin_and_routes_only_to_private_role_upstre
   assert all(request.headers["origin"] == "https://app.example" for request in observed)
 
 
+def test_boundary_routes_memory_to_classifier_and_forwards_idempotency_key(tmp_path):
+  observed = []
+
+  def handler(request: httpx.Request):
+    observed.append(request)
+    return httpx.Response(200, json={"status": "active"})
+
+  app = create_boundary_app(
+    settings=settings(tmp_path),
+    classifier_url="http://classifier-service:8000",
+    knowledge_url="http://knowledge-service:8000",
+    allowed_upstream_hosts=("classifier-service", "knowledge-service"),
+    client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+  )
+  client = TestClient(app)
+  headers = {
+    "Authorization": "Bearer user-token",
+    "Origin": "https://app.example",
+    "Idempotency-Key": "memory-confirm-1",
+  }
+
+  response = client.post(
+    "/v2/memory/confirm",
+    json={"intent": {"action": "delete"}, "receipt": {}},
+    headers=headers,
+  )
+  preflight = client.options(
+    "/v2/memory/confirm",
+    headers={
+      "Origin": "https://app.example",
+      "Access-Control-Request-Method": "POST",
+      "Access-Control-Request-Headers": "authorization,content-type,idempotency-key",
+    },
+  )
+
+  assert response.status_code == 200
+  assert observed[0].url.host == "classifier-service"
+  assert observed[0].headers["idempotency-key"] == "memory-confirm-1"
+  assert preflight.status_code == 200
+  assert "idempotency-key" in preflight.headers["access-control-allow-headers"].lower()
+
+
 def test_boundary_metrics_expose_the_exact_release_sha_without_probing_optional_ai(tmp_path):
   release_sha = "a" * 40
   calls = []

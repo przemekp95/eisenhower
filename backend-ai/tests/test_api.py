@@ -1271,10 +1271,16 @@ def test_root_and_capabilities(real_model_bundle):
     "local_similar_examples",
     "ocr",
     "batch_analysis",
+    "memory_write",
+    "memory_retrieval",
+    "memory_response",
   }
   assert capabilities.json()["classification"] is True
   assert capabilities.json()["retrieval_augmented_generation"] is False
   assert capabilities.json()["local_similar_examples"] is True
+  assert capabilities.json()["memory_write"] is False
+  assert capabilities.json()["memory_retrieval"] is False
+  assert capabilities.json()["memory_response"] is False
 
   operator_capabilities = client.get("/operator/capabilities")
   assert operator_capabilities.status_code == 200

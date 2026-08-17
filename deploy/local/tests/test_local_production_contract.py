@@ -284,6 +284,22 @@ class LocalProductionContractTest(unittest.TestCase):
     )
     self.assertNotIn("vllm/vllm-openai-rocm", rocm_dockerfile)
 
+  def test_classifier_keeps_memory_runtime_disabled_but_fully_declared(self):
+    classifier = self.services["classifier-service"]
+    environment = classifier["environment"]
+    for flag in (
+      "MEMORY_WRITE_ENABLED=${MEMORY_WRITE_ENABLED:-false}",
+      "MEMORY_RETRIEVAL_ENABLED=${MEMORY_RETRIEVAL_ENABLED:-false}",
+      "MEMORY_RESPONSE_ENABLED=${MEMORY_RESPONSE_ENABLED:-false}",
+    ):
+      self.assertIn(flag, environment)
+    self.assertIn("MEMORY_POLICY_PATH=/app/policies/memory-policy-v1.json", environment)
+    self.assertIn("MEMORY_CONSENT_HMAC_KEY=${MEMORY_CONSENT_HMAC_KEY:-}", environment)
+    self.assertIn(
+      "${MEMORY_POLICY_FILE:-../../docs/ai-rebuild/memory-policy-v1.json}:/app/policies/memory-policy-v1.json:ro",
+      classifier["volumes"],
+    )
+
   def test_amd_reranker_is_a_separate_pinned_bounded_private_service(self):
     reranker = self.amd_services["reranker"]
     self.assertEqual(

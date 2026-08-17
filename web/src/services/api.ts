@@ -16,6 +16,11 @@ import apiClient, {
   type TaskScheduleDto,
   type CalendarStatusDto,
   type CalendarConflictDto,
+  type MemoryConfirmResponseDto,
+  type MemoryConsentReceipt,
+  type MemoryExportResponseDto,
+  type MemoryIntentDto,
+  type MemoryPrepareResponseDto,
 } from '@eisenhower/api-client';
 import { runtimeConfig } from '../config';
 import type { Language } from '../i18n/translations';
@@ -55,6 +60,13 @@ export type LangChainAnalysis = TaskAnalysis;
 export type OCRResult = OcrResultDto;
 export type BatchAnalysisResult = BatchAnalysisResultDto;
 export type AICapabilities = AICapabilitiesDto;
+export type {
+  MemoryConfirmResponseDto,
+  MemoryConsentReceipt,
+  MemoryExportResponseDto,
+  MemoryIntentDto,
+  MemoryPrepareResponseDto,
+};
 export type {
   TaskDto,
   TaskDelegationAssignmentDto,
@@ -201,4 +213,26 @@ export async function getCapabilities(
   options: { signal?: AbortSignal } = {}
 ): Promise<AICapabilities> {
   return getAiApi().fetchCapabilities(options);
+}
+
+export async function prepareMemory(
+  intent: MemoryIntentDto,
+  options: { signal?: AbortSignal } = {}
+): Promise<MemoryPrepareResponseDto> {
+  return getAiApi().prepareMemory(intent, options);
+}
+
+export async function confirmMemory(
+  intent: MemoryIntentDto,
+  receipt: MemoryConsentReceipt,
+  idempotencyKey: string,
+  options: { signal?: AbortSignal } = {}
+): Promise<MemoryConfirmResponseDto> {
+  return getAiApi().confirmMemory(intent, receipt, idempotencyKey, options);
+}
+
+export async function exportMemory(
+  options: { signal?: AbortSignal } = {}
+): Promise<MemoryExportResponseDto> {
+  return getAiApi().exportMemory(options);
 }

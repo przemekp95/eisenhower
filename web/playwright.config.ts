@@ -5,6 +5,7 @@ const webDir = __dirname;
 const backendDir = path.resolve(webDir, '../backend-node');
 const frontendUrl = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:4173';
 const apiUrl = process.env.PLAYWRIGHT_API_URL ?? 'http://127.0.0.1:3101';
+const frontendPort = new URL(frontendUrl).port || '80';
 const apiPort = new URL(apiUrl).port || '80';
 const { NO_COLOR: _ignoredNoColor, ...childEnv } = process.env;
 
@@ -74,7 +75,7 @@ export default defineConfig({
       url: `${apiUrl}/health`,
     },
     {
-      command: 'npm run dev -- --host 127.0.0.1 --port 4173 --strictPort --force',
+      command: `npm run dev -- --host 127.0.0.1 --port ${frontendPort} --strictPort --force`,
       cwd: webDir,
       env: {
         ...childEnv,

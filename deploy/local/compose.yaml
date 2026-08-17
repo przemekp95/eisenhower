@@ -169,6 +169,14 @@ services:
       - RAG_RESPONSE_CANDIDATE_ID=${RAG_RESPONSE_CANDIDATE_ID:-}
       - RAG_ALLOWED_TENANTS=${RAG_ALLOWED_TENANTS:-}
       - RAG_RESPONSE_ALLOWED_USERS=${RAG_RESPONSE_ALLOWED_USERS:-}
+      - MEMORY_WRITE_ENABLED=${MEMORY_WRITE_ENABLED:-false}
+      - MEMORY_RETRIEVAL_ENABLED=${MEMORY_RETRIEVAL_ENABLED:-false}
+      - MEMORY_RESPONSE_ENABLED=${MEMORY_RESPONSE_ENABLED:-false}
+      - MEMORY_POLICY_PATH=/app/policies/memory-policy-v1.json
+      - MEMORY_CONSENT_HMAC_KEY=${MEMORY_CONSENT_HMAC_KEY:-}
+      - MEMORY_CONSENT_HMAC_KEY_ID=${MEMORY_CONSENT_HMAC_KEY_ID:-runtime}
+      - MEMORY_PROJECTION_COLLECTION=${MEMORY_PROJECTION_COLLECTION:-eisenhower-memory-v1}
+      - MEMORY_PROJECTION_VERSION=${MEMORY_PROJECTION_VERSION:-memory-projection-v1}
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_API_KEY=${QDRANT_API_KEY:-}
       - QDRANT_COLLECTION_ALIAS=${QDRANT_COLLECTION_ALIAS:-eisenhower-knowledge-active}
@@ -200,6 +208,7 @@ services:
       - ${AI_CLASSIFIER_ARTIFACT_ROOT:?approved classifier artifact directory is required}:/app/model-artifacts:ro
       - ${AI_EVALUATION_FILE:?approved evaluation file is required}:/app/evaluation/production.json:ro
       - ${AI_PROMOTION_ROOT:-./.runtime/promotion}:/app/promotion:ro
+      - ${MEMORY_POLICY_FILE:-../../docs/ai-rebuild/memory-policy-v1.json}:/app/policies/memory-policy-v1.json:ro
     mem_limit: ${AI_CLASSIFIER_MEMORY_LIMIT:?calibrated classifier memory limit is required}
     cpus: ${AI_CLASSIFIER_CPU_LIMIT:?calibrated classifier CPU limit is required}
     pids_limit: ${AI_CLASSIFIER_PID_LIMIT:?calibrated classifier PID limit is required}

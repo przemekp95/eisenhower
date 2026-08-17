@@ -515,6 +515,27 @@ describe('AI component error paths', () => {
     );
   });
 
+  it('offers separate gallery and rear-camera inputs with review-first privacy guidance', () => {
+    const inputClickSpy = jest
+      .spyOn(HTMLInputElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+    renderWithLanguage(<ImageUpload onTasksExtracted={jest.fn()} />);
+
+    expect(screen.getByTestId('image-upload-input')).not.toHaveAttribute('capture');
+    expect(screen.getByTestId('image-camera-input')).toHaveAttribute('accept', 'image/*');
+    expect(screen.getByTestId('image-camera-input')).toHaveAttribute('capture', 'environment');
+    expect(screen.getByRole('button', { name: 'Choose from gallery' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Take photo' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Review extracted tasks before import. The selected image is used only for this scan.'
+      )
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Take photo' }));
+    expect(inputClickSpy).toHaveBeenCalledTimes(1);
+    inputClickSpy.mockRestore();
+  });
+
   it('silently ignores an OCR cancellation that settles after unmount', async () => {
     let rejectOcr!: (reason: unknown) => void;
     mockedApi.extractTasksFromImage.mockImplementationOnce(
@@ -631,6 +652,21 @@ describe('AI component error paths', () => {
     }
   );
 
+  it('renders the reviewed import summary in Polish', async () => {
+    localStorage.setItem('eisenhower-language', 'pl');
+    mockedApi.extractTasksFromImage.mockResolvedValueOnce(reviewedOcrPayload());
+    const onTasksExtracted = jest.fn().mockResolvedValue({ imported: 2, failed: 0 });
+    renderWithLanguage(<ImageUpload onTasksExtracted={onTasksExtracted} />);
+    fireEvent.change(screen.getByTestId('image-upload-input'), {
+      target: { files: [new File(['tasks'], 'tasks.txt', { type: 'text/plain' })] },
+    });
+
+    await screen.findByDisplayValue('first');
+    fireEvent.click(screen.getByRole('button', { name: 'Importuj wybrane' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Dodano: 2. Nie dodano: 0.');
+  });
+
   it('ignores empty OCR selections, opens the file picker, and falls back on unknown OCR failures', async () => {
     const inputClickSpy = jest
       .spyOn(HTMLInputElement.prototype, 'click')
@@ -639,7 +675,7 @@ describe('AI component error paths', () => {
 
     renderWithLanguage(<ImageUpload onTasksExtracted={jest.fn()} />);
 
-    fireEvent.click(screen.getByText(/Upload image/i));
+    fireEvent.click(screen.getByText(/Choose from gallery/i));
     expect(inputClickSpy).toHaveBeenCalledTimes(1);
 
     fireEvent.change(screen.getByTestId('image-upload-input'), {

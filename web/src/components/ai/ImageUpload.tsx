@@ -23,6 +23,7 @@ export default function ImageUpload({ onTasksExtracted }: Props) {
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const { language, t } = useLanguage();
 
   const copy =
@@ -116,14 +117,35 @@ export default function ImageUpload({ onTasksExtracted }: Props) {
         aria-label={t('ai.ocr.upload')}
         onChange={handleSelect}
       />
-      <button
-        type="button"
-        disabled={loading || importing}
-        onClick={() => inputRef.current?.click()}
-        className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-white/15 disabled:opacity-50"
-      >
-        {loading ? t('ai.ocr.extracting') : t('ai.ocr.upload')}
-      </button>
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        data-testid="image-camera-input"
+        aria-label={t('ai.ocr.camera')}
+        onChange={handleSelect}
+      />
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={loading || importing}
+          onClick={() => inputRef.current?.click()}
+          className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-white/15 disabled:opacity-50"
+        >
+          {loading ? t('ai.ocr.extracting') : t('ai.ocr.gallery')}
+        </button>
+        <button
+          type="button"
+          disabled={loading || importing}
+          onClick={() => cameraInputRef.current?.click()}
+          className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-white/10 disabled:opacity-50"
+        >
+          {loading ? t('ai.ocr.extracting') : t('ai.ocr.camera')}
+        </button>
+      </div>
+      <p className="max-w-2xl text-xs leading-5 text-white/55">{t('ai.ocr.privacy')}</p>
 
       {result ? (
         <fieldset className="space-y-3" disabled={importing}>

@@ -4,6 +4,7 @@ import GroundedAIAnalysis from './ai/GroundedAIAnalysis';
 import TaskPrioritySuggestion from './ai/TaskPrioritySuggestion';
 import BatchAnalysis from './ai/BatchAnalysis';
 import ImageUpload from './ai/ImageUpload';
+import MemoryControls from './ai/MemoryControls';
 import type { OCRImportSummary } from './ai/ImageUpload';
 import { AICapabilities, BatchAnalysisResult, getCapabilities, OCRResult } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -23,7 +24,7 @@ interface Props {
   ) => Promise<OCRImportSummary | number | void> | OCRImportSummary | number | void;
 }
 
-type Tab = 'assistant' | 'ocr' | 'batch';
+type Tab = 'assistant' | 'ocr' | 'batch' | 'memory';
 type CapabilityState = 'checking' | 'ready' | 'error';
 
 function hasKnowledgeCapability(capabilities: AICapabilities) {
@@ -39,7 +40,8 @@ function isTabAvailable(tab: Tab, capabilities: AICapabilities | null, state: Ca
     return capabilities.classification || hasKnowledgeCapability(capabilities);
   }
   if (tab === 'ocr') return capabilities.ocr;
-  return capabilities.batch_analysis;
+  if (tab === 'batch') return capabilities.batch_analysis;
+  return capabilities.memory_write === true;
 }
 
 const FOCUSABLE_SELECTOR =
@@ -158,6 +160,9 @@ export default function AITools({
     { id: 'assistant', label: t('ai.tabs.assistant') },
     { id: 'ocr', label: t('ai.tabs.ocr') },
     { id: 'batch', label: t('ai.tabs.batch') },
+    ...(capabilities?.memory_write === true
+      ? [{ id: 'memory' as const, label: t('ai.tabs.memory') }]
+      : []),
   ];
 
   const formatOcrImportedSummary = (count: number) => {
@@ -194,8 +199,8 @@ export default function AITools({
   };
 
   const activeFeatureAvailable = isTabAvailable(activeTab, capabilities, capabilityState);
-  const anyUserFeatureAvailable = (['assistant', 'ocr', 'batch'] as Tab[]).some((tab) =>
-    isTabAvailable(tab, capabilities, capabilityState)
+  const anyUserFeatureAvailable = tabs.some((tab) =>
+    isTabAvailable(tab.id, capabilities, capabilityState)
   );
   const classificationAvailable = Boolean(capabilities?.classification);
   const knowledgeAvailable = Boolean(capabilities && hasKnowledgeCapability(capabilities));
@@ -385,6 +390,11 @@ export default function AITools({
                 ) : (
                   unavailablePanel
                 )}
+              </div>
+            ) : null}
+            {activeTab === 'memory' && capabilities?.memory_write === true ? (
+              <div role="tabpanel" id="ai-panel-memory" aria-labelledby="ai-tab-memory">
+                <MemoryControls />
               </div>
             ) : null}
             {lastSummary ? (

@@ -1,5 +1,9 @@
 # Completion log
 
+2026-08-17 — TASK-047/TASK-014/TASK-019/TASK-023/TASK-020 governance follow-up: Added one mandatory cross-capability activation decision gate with separate enable/hold/reject records for classifier, retrieval, responses and each MAG stage, exact-SHA evidence, cohort, expiry, monitoring, stop and rollback fields, plus an independent publication decision so green automation cannot silently activate or publish a capability.
+
+2026-08-17 — TASK-014/TASK-019/TASK-020/TASK-023/TASK-028 milestone: Completed the remaining no-human source slices with deterministic retrieval/expiry rehearsal, disabled consent-governed MAG API/UI, private noncanonical case-study evidence delta and automated web/mobile Grounded RAG plus camera contracts; full `make verify`, 24 browser E2E checks and 30 local deployment contracts passed while real traffic, physical acceptance, classifier labels and publication stayed open.
+
 2026-08-17 — TASK-002 evidence milestone: Added an immutable private pre-adjudication agreement report, rationale-bound adjudication, candidate evidence manifest and manifest-bound production freeze; 31 focused tests, full repository verification and a subsequent 804-test backend run passed, while the real benchmark remains correctly fail-closed on two still-empty human annotation passes.
 
 2026-08-16 — TASK-015: Formally closed the physical AMD `gfx1151` Qwen3-4B/BGE qualification with fresh healthy model-identity and 16 GiB/3 CPU/320 PID evidence, 53 focused evaluation tests and 29 local deployment-contract tests; exact-current deployment and real-user response quality remain separate open gates.

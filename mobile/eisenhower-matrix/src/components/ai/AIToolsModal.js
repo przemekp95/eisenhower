@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import styles from '../../styles/appStyles';
+import GroundedRagPanel from './GroundedRagPanel';
 import {
   AI_TABS,
   getQuadrantTitleByValue,
@@ -31,7 +32,21 @@ export default function AIToolsModal({
   suggestedQuadrant,
   onAddAdvancedAnalysisToMatrix,
   analysisAdding,
-  onRunOcr,
+  groundedQuestion,
+  onChangeGroundedQuestion,
+  onRunGrounded,
+  onCancelGrounded,
+  groundedLoading,
+  groundedResult,
+  groundedDescriptionPreview,
+  onPrepareGroundedDescription,
+  onChangeGroundedDescriptionPreview,
+  onApplyGroundedDescription,
+  onDiscardGroundedDescription,
+  onSelectOcrImage,
+  onSubmitOcrImage,
+  onDiscardOcrImage,
+  ocrSelectedImage,
   ocrLoading,
   ocrResult,
   onChangeOcrItem,
@@ -130,21 +145,77 @@ export default function AIToolsModal({
               </View>
             ) : null}
 
+            {availableTabs.includes('grounded') && activeTab === 'grounded' ? (
+              <GroundedRagPanel
+                t={t}
+                question={groundedQuestion}
+                onChangeQuestion={onChangeGroundedQuestion}
+                onRun={onRunGrounded}
+                onCancel={onCancelGrounded}
+                loading={groundedLoading}
+                result={groundedResult}
+                descriptionPreview={groundedDescriptionPreview}
+                onPrepareDescription={onPrepareGroundedDescription}
+                onChangeDescriptionPreview={onChangeGroundedDescriptionPreview}
+                onApplyDescription={onApplyGroundedDescription}
+                onDiscardDescription={onDiscardGroundedDescription}
+              />
+            ) : null}
+
             {availableTabs.includes('ocr') && activeTab === 'ocr' ? (
               <View style={styles.toolCard}>
                 <Text style={styles.toolTitle}>{t.aiOcrTitle}</Text>
-                <Pressable
-                  testID="ai-ocr-run-button"
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: ocrLoading }}
-                  onPress={onRunOcr}
-                  disabled={ocrLoading}
-                  style={[styles.primaryButton, ocrLoading && styles.disabledButton]}
-                >
-                  <Text style={styles.primaryButtonText}>
-                    {ocrLoading ? t.aiOcrRunning : t.aiOcrRun}
-                  </Text>
-                </Pressable>
+                <View style={styles.actions}>
+                  <Pressable
+                    testID="ai-ocr-camera-button"
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: ocrLoading }}
+                    onPress={() => onSelectOcrImage('camera')}
+                    disabled={ocrLoading}
+                    style={[styles.primaryButton, ocrLoading && styles.disabledButton]}
+                  >
+                    <Text style={styles.primaryButtonText}>{t.aiOcrCamera}</Text>
+                  </Pressable>
+                  <Pressable
+                    testID="ai-ocr-library-button"
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: ocrLoading }}
+                    onPress={() => onSelectOcrImage('library')}
+                    disabled={ocrLoading}
+                    style={[styles.secondaryButton, ocrLoading && styles.disabledButton]}
+                  >
+                    <Text style={styles.secondaryButtonText}>{t.aiOcrLibrary}</Text>
+                  </Pressable>
+                </View>
+                {ocrSelectedImage ? (
+                  <View testID="ocr-image-preview" style={styles.analysisResult}>
+                    <Text style={styles.cardTitle}>{ocrSelectedImage.name}</Text>
+                    <Text style={styles.aiSubtitle}>{t.aiOcrPrivacyNotice}</Text>
+                    <View style={styles.actions}>
+                      <Pressable
+                        testID="ai-ocr-submit-button"
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: ocrLoading }}
+                        onPress={onSubmitOcrImage}
+                        disabled={ocrLoading}
+                        style={[styles.primaryButton, ocrLoading && styles.disabledButton]}
+                      >
+                        <Text style={styles.primaryButtonText}>
+                          {ocrLoading ? t.aiOcrRunning : t.aiOcrSubmit}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        testID="ai-ocr-discard-button"
+                        accessibilityRole="button"
+                        onPress={onDiscardOcrImage}
+                        disabled={ocrLoading}
+                        style={[styles.secondaryButton, ocrLoading && styles.disabledButton]}
+                      >
+                        <Text style={styles.secondaryButtonText}>{t.aiOcrDiscard}</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : null}
                 {ocrResult ? (
                   <View style={styles.analysisResult}>
                     <Text accessibilityRole="header" style={styles.analysisMeta}>{t.aiOcrReviewTitle}</Text>

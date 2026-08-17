@@ -41,6 +41,9 @@ const AI_API_PATHS = Object.freeze({
   analyzeTaskWithRag: '/v2/ai/analyze',
   knowledgeSearch: '/v2/knowledge/search',
   knowledgeAnswer: '/v2/knowledge/answer',
+  memoryPrepare: '/v2/memory/prepare',
+  memoryConfirm: '/v2/memory/confirm',
+  memoryExport: '/v2/memory/export',
   extractTasksFromImage: '/extract-tasks-from-image',
   batchAnalyzeTasks: '/batch-analyze',
   addTrainingExample: '/add-example',
@@ -633,6 +636,53 @@ function createAiApi(baseUrl, optionsOrFetch) {
         errorCode: 'knowledge_answer_failed',
         validate: isKnowledgeAnswerDto,
         invalidResponse: 'AI API returned an invalid response',
+      });
+    },
+    async prepareMemory(intent, requestOptions = {}) {
+      const response = await request(buildUrl(baseUrl, AI_API_PATHS.memoryPrepare), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(intent),
+        signal: requestOptions.signal,
+      });
+      return readJson(response, {
+        defaultError: 'Memory preview could not be prepared',
+        errorCode: 'memory_prepare_failed',
+        validate: isMemoryPrepareResponseDto,
+        invalidResponse: 'AI API returned an invalid memory preview',
+      });
+    },
+    async confirmMemory(intent, receipt, idempotencyKey, requestOptions = {}) {
+      if (typeof idempotencyKey !== 'string' || idempotencyKey.length === 0) {
+        throw createRequestError('A memory confirmation key is required', {
+          code: 'memory_idempotency_key_required',
+        });
+      }
+      const response = await request(buildUrl(baseUrl, AI_API_PATHS.memoryConfirm), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey,
+        },
+        body: JSON.stringify({ intent, receipt }),
+        signal: requestOptions.signal,
+      });
+      return readJson(response, {
+        defaultError: 'Memory confirmation failed',
+        errorCode: 'memory_confirm_failed',
+        validate: isMemoryConfirmResponseDto,
+        invalidResponse: 'AI API returned an invalid memory confirmation',
+      });
+    },
+    async exportMemory(requestOptions = {}) {
+      const response = await request(buildUrl(baseUrl, AI_API_PATHS.memoryExport), {
+        signal: requestOptions.signal,
+      });
+      return readJson(response, {
+        defaultError: 'Memory export failed',
+        errorCode: 'memory_export_failed',
+        validate: isMemoryExportResponseDto,
+        invalidResponse: 'AI API returned an invalid memory export',
       });
     },
     async extractTasksFromImage(file, requestOptions = {}) {
@@ -1276,17 +1326,86 @@ function isCapabilitiesDto(value) {
     'ocr',
     'batch_analysis',
   ]);
+  const optionalFields = new Set(['memory_write', 'memory_retrieval', 'memory_response']);
   return Boolean(
     isRecord(value) &&
-    Object.keys(value).length === fields.size &&
-    Object.keys(value).every((field) => fields.has(field)) &&
+    Object.keys(value).every((field) => fields.has(field) || optionalFields.has(field)) &&
+    [...fields].every((field) => Object.hasOwn(value, field)) &&
     typeof value.classification === 'boolean' &&
     typeof value.reasoned_local_analysis === 'boolean' &&
     typeof value.retrieval_augmented_generation === 'boolean' &&
     typeof value.knowledge_retrieval === 'boolean' &&
     typeof value.local_similar_examples === 'boolean' &&
     typeof value.ocr === 'boolean' &&
-    typeof value.batch_analysis === 'boolean'
+    typeof value.batch_analysis === 'boolean' &&
+    isOptional(value.memory_write, (item) => typeof item === 'boolean') &&
+    isOptional(value.memory_retrieval, (item) => typeof item === 'boolean') &&
+    isOptional(value.memory_response, (item) => typeof item === 'boolean')
+  );
+}
+
+function isMemoryConsentReceipt(value) {
+  return Boolean(
+    isRecord(value) &&
+    typeof value.confirmation_id === 'string' &&
+    typeof value.actor_user_id === 'string' &&
+    ['create', 'supersede', 'revoke', 'delete'].includes(value.action) &&
+    typeof value.intent_checksum === 'string' &&
+    /^[a-f0-9]{64}$/.test(value.intent_checksum) &&
+    typeof value.policy_version === 'string' &&
+    isUtcIsoInstant(value.confirmed_at) &&
+    isUtcIsoInstant(value.expires_at) &&
+    Date.parse(value.expires_at) > Date.parse(value.confirmed_at)
+  );
+}
+
+function isMemoryPrepareResponseDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    ['create', 'supersede', 'revoke', 'delete'].includes(value.action) &&
+    typeof value.memory_id === 'string' &&
+    isMemoryConsentReceipt(value.receipt) &&
+    value.receipt.action === value.action
+  );
+}
+
+function isMemoryConfirmResponseDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    typeof value.memory_id === 'string' &&
+    ['active', 'superseded', 'consent_revoked', 'deleted'].includes(value.status) &&
+    ['synchronized', 'pending', 'not_configured'].includes(value.projection_state)
+  );
+}
+
+function isMemoryExportItemDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    typeof value.memory_id === 'string' &&
+    typeof value.memory_type === 'string' &&
+    typeof value.conflict_key === 'string' &&
+    typeof value.content === 'string' &&
+    typeof value.provenance === 'string' &&
+    isConfidence(value.confidence) &&
+    isConfidence(value.salience) &&
+    typeof value.retention_class === 'string' &&
+    isUtcIsoInstant(value.created_at) &&
+    isUtcIsoInstant(value.updated_at) &&
+    isUtcIsoInstant(value.expires_at) &&
+    ['active', 'superseded', 'consent_revoked', 'deleted'].includes(value.status) &&
+    isNullable(value.supersedes_id, (item) => typeof item === 'string') &&
+    isNullable(value.superseded_by_id, (item) => typeof item === 'string') &&
+    ['create', 'supersede', 'revoke', 'delete'].includes(value.consent_action) &&
+    typeof value.consent_policy_version === 'string' &&
+    isUtcIsoInstant(value.consented_at)
+  );
+}
+
+function isMemoryExportResponseDto(value) {
+  return Boolean(
+    isRecord(value) &&
+    Array.isArray(value.items) &&
+    value.items.every(isMemoryExportItemDto)
   );
 }
 

@@ -16,7 +16,7 @@ describe('aiUi helpers', () => {
   it('returns quadrant options with the expected order and accents', () => {
     const options = getQuadrantOptions(t);
 
-    expect(AI_TABS).toEqual(['analysis', 'ocr', 'batch']);
+    expect(AI_TABS).toEqual(['analysis', 'grounded', 'ocr', 'batch']);
     expect(options).toHaveLength(4);
     expect(options.map((entry) => entry.value)).toEqual([0, 1, 2, 3]);
     expect(options.map((entry) => entry.accent)).toEqual(QUADRANT_ACCENTS);
@@ -46,6 +46,13 @@ describe('aiUi helpers', () => {
     expect(resolveOCRNotice({ code: 'ocr_request_failed' }, t)).toBe(
       'Nie udało się odczytać obrazu, więc nic nie dodano'
     );
+    expect(resolveOCRNotice({ code: 'camera_permission_denied' }, t)).toBe(
+      t.aiOcrCameraPermissionDenied
+    );
+    expect(resolveOCRNotice({ code: 'library_permission_denied' }, t)).toBe(
+      t.aiOcrLibraryPermissionDenied
+    );
+    expect(resolveOCRNotice({ code: 'media_offline' }, t)).toBe(t.aiOcrOffline);
     expect(resolveOCRNotice({ code: 'request_timeout' }, t)).toBe(t.aiRequestTimedOut);
     expect(resolveOCRNotice({ code: 'request_cancelled' }, t)).toBe('');
     expect(resolveOCRNotice(new Error('x'), t)).toBe('Skanowanie notatek jest chwilowo niedostępne');

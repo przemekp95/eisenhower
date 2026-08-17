@@ -2,6 +2,7 @@ import { setAccessToken } from '../authSession';
 import { mobileConfig } from '../config';
 import {
   analyzeTaskAdvanced,
+  answerKnowledge,
   batchAnalyzeTasks,
   fetchAICapabilities,
   suggestTaskQuadrant,
@@ -90,6 +91,83 @@ describe('business task-assistance service', () => {
       JSON.stringify({ task: 'Plan roadmap', language: 'pl' })
     );
     expect(global.fetch.mock.calls[1][0]).toBe(`${mobileConfig.aiApiUrl}/batch-analyze`);
+  });
+
+  it('requests a grounded answer with the current language and supports cancellation', async () => {
+    const controller = new AbortController();
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({
+        status: 'answered',
+        answer: 'MongoDB is canonical.',
+        claims: [{ statement: 'MongoDB is canonical.', citation_ids: ['chunk-1'] }],
+        citations: [{
+          chunk_id: 'chunk-1',
+          document_id: 'doc-1',
+          source_uri: 'eisenhower://projects/p1/doc-1',
+          title: 'Architecture',
+          excerpt: 'MongoDB is canonical.',
+          score: 0.9,
+          content_version: 'v1',
+        }],
+        retrieval: { hit_count: 1, top_score: 0.9, embedding_version: 'bge-m3-v1' },
+        generation: null,
+        no_answer_reason: null,
+      }),
+    });
+
+    await expect(answerKnowledge('Co jest kanoniczne?', 'pl', {
+      signal: controller.signal,
+    })).resolves.toMatchObject({ status: 'answered', answer: 'MongoDB is canonical.' });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${mobileConfig.aiApiUrl}/v2/knowledge/answer`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'Co jest kanoniczne?',
+          language: 'pl',
+          project_id: null,
+          limit: 5,
+        }),
+        signal: controller.signal,
+      })
+    );
+  });
+
+  it('uses grounded-answer defaults when language and request options are omitted', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({
+        status: 'insufficient_evidence',
+        answer: null,
+        claims: [],
+        citations: [],
+        retrieval: { hit_count: 0, top_score: null, embedding_version: 'bge-m3-v1' },
+        generation: null,
+        no_answer_reason: 'insufficient_context',
+      }),
+    });
+
+    await expect(answerKnowledge('Brakujące źródło')).resolves.toMatchObject({
+      status: 'insufficient_evidence',
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${mobileConfig.aiApiUrl}/v2/knowledge/answer`,
+      expect.objectContaining({
+        body: JSON.stringify({
+          query: 'Brakujące źródło',
+          language: 'pl',
+          project_id: null,
+          limit: 5,
+        }),
+      })
+    );
   });
 
   it('uses Polish as the default language for a task review', async () => {

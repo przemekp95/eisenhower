@@ -175,6 +175,42 @@ describe('GroundedAIAnalysis', () => {
     expect(screen.queryByText(/Suggested quadrant:/)).not.toBeInTheDocument();
   });
 
+  it('lets the user cancel an in-flight source check without showing an error', () => {
+    let signal: AbortSignal | undefined;
+    mockedApi.answerKnowledge.mockImplementationOnce((_question, _language, options) => {
+      signal = options?.signal;
+      return new Promise(() => undefined);
+    });
+    renderAnalysis();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Check sources' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel source check' }));
+
+    expect(signal?.aborted).toBe(true);
+    expect(screen.getByRole('button', { name: 'Check sources' })).toBeEnabled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('ignores a late successful response after the user cancels the source check', async () => {
+    let resolveRequest!: (result: api.KnowledgeAnswer) => void;
+    mockedApi.answerKnowledge.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRequest = resolve;
+        })
+    );
+    renderAnalysis();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Check sources' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel source check' }));
+    await act(async () => {
+      resolveRequest(groundedResult());
+    });
+
+    expect(screen.queryByTestId('grounded-result')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Check sources' })).toBeEnabled();
+  });
+
   it('renders no-answer with and without a policy reason', async () => {
     mockedApi.answerKnowledge
       .mockResolvedValueOnce(
