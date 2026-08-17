@@ -19,10 +19,10 @@ fi
 compose=(docker compose --project-directory "$deploy_root" --env-file "$env_file" -f "$deploy_root/compose.yaml")
 restart() { "${compose[@]}" up -d >/dev/null || true; }
 trap restart EXIT
-"${compose[@]}" stop web gateway mcp-service api-service ai-service classifier-service knowledge-service rag-worker identity-service
+"${compose[@]}" stop web gateway oauth2-proxy n8n grafana prometheus mcp-service api-service ai-service classifier-service knowledge-service rag-worker identity-service
 "${compose[@]}" exec -T mongodb mongorestore --drop --archive --gzip < "$backup_set/mongodb.archive.gz"
 "${compose[@]}" --profile maintenance run --rm --no-deps -T backup-volume-helper \
-  sh -c 'find /volumes/audit /volumes/n8n /volumes/identity /volumes/rag-jobs -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; tar -C /volumes -xzf -' \
+  sh -c 'find /volumes/audit /volumes/n8n /volumes/grafana /volumes/identity /volumes/rag-jobs -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; tar -C /volumes -xzf -' \
   < "$backup_set/private-volumes.tar.gz"
 "${compose[@]}" up -d --wait
 trap - EXIT

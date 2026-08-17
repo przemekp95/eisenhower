@@ -11,11 +11,6 @@ on:
         description: Exact released master SHA
         required: true
         type: string
-      enable_n8n:
-        description: Enable the optional private n8n profile
-        required: true
-        default: false
-        type: boolean
 
 concurrency:
   group: production-deploy
@@ -60,10 +55,9 @@ jobs:
         shell: bash
         env:
           DEPLOY_ENV_FILE_CONTENT: ${{ secrets.DEPLOY_ENV_FILE }}
-          ENABLE_N8N: ${{ inputs.enable_n8n }}
         run: |
           umask 077
           env_file="$RUNNER_TEMP/eisenhower-deploy.env"
           printf '%s' "$DEPLOY_ENV_FILE_CONTENT" > "$env_file"
           test -s "$env_file"
-          deploy/generic/deploy.sh release/release-manifest.json "$env_file" "$ENABLE_N8N"
+          deploy/generic/deploy.sh release/release-manifest.json "$env_file"

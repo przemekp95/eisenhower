@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+test "$#" -eq 2 || { echo "Usage: deploy.sh RELEASE_MANIFEST ENV_FILE" >&2; exit 2; }
 manifest_path=${1:?release manifest path is required}
 source_env=${2:?deployment environment file is required}
-enable_n8n=${3:-false}
 deploy_root=${EISENHOWER_DEPLOY_ROOT:-$(pwd)}
 state_dir="$deploy_root/.deploy"
 marker="$deploy_root/.eisenhower-deployment"
@@ -11,7 +11,6 @@ marker="$deploy_root/.eisenhower-deployment"
 test -f "$marker" || { echo "Deployment ownership marker is missing." >&2; exit 1; }
 test -s "$manifest_path"
 test -s "$source_env"
-test "$enable_n8n" = false || test "$enable_n8n" = true
 mkdir -p "$state_dir"
 chmod 0700 "$state_dir"
 
@@ -43,21 +42,12 @@ release_sha=$(jq -er '.release_sha | select(test("^[0-9a-f]{40}$"))' "$manifest_
 build_release_env "$manifest_path" "$generated_env"
 
 compose=(docker compose --project-directory "$deploy_root" --env-file "$generated_env" -f "$deploy_root/compose.yaml")
-profiles=()
-if [ "$enable_n8n" = true ]; then profiles=(--profile n8n); fi
-"${compose[@]}" "${profiles[@]}" config --quiet
-"${compose[@]}" "${profiles[@]}" pull
+"${compose[@]}" config --quiet
+"${compose[@]}" pull
 
 previous_manifest="$state_dir/active-release-manifest.json"
 rollback_manifest="$state_dir/rollback-release-manifest.json"
-active_n8n_profile="$state_dir/active-n8n-profile"
-rollback_n8n_profile="$state_dir/rollback-n8n-profile"
 if [ -s "$previous_manifest" ]; then cp "$previous_manifest" "$rollback_manifest"; fi
-if [ -s "$active_n8n_profile" ]; then
-  previous_n8n=$(cat "$active_n8n_profile")
-  test "$previous_n8n" = false || test "$previous_n8n" = true
-  printf '%s\n' "$previous_n8n" > "$rollback_n8n_profile"
-fi
 
 rollback() {
   if [ -s "$rollback_manifest" ]; then
@@ -65,15 +55,11 @@ rollback() {
     rollback_env=$(mktemp "$state_dir/rollback-env.XXXXXX")
     chmod 0600 "$rollback_env"
     build_release_env "$rollback_manifest" "$rollback_env"
-    rollback_profiles=()
-    if [ -s "$rollback_n8n_profile" ] && [ "$(cat "$rollback_n8n_profile")" = true ]; then
-      rollback_profiles=(--profile n8n)
-    fi
     set +e
     docker compose --project-directory "$deploy_root" --env-file "$rollback_env" \
-      -f "$deploy_root/compose.yaml" "${rollback_profiles[@]}" pull
+      -f "$deploy_root/compose.yaml" pull
     docker compose --project-directory "$deploy_root" --env-file "$rollback_env" \
-      -f "$deploy_root/compose.yaml" "${rollback_profiles[@]}" up -d --remove-orphans --wait
+      -f "$deploy_root/compose.yaml" up -d --remove-orphans --wait
     rollback_status=$?
     rm -f "$rollback_env"
     set -e
@@ -82,7 +68,7 @@ rollback() {
 }
 trap rollback ERR
 trap 'rm -f "$generated_env"' EXIT
-"${compose[@]}" "${profiles[@]}" up -d --remove-orphans --wait
+"${compose[@]}" up -d --remove-orphans --wait
 
 for service in web api-service ai-service classifier-service knowledge-service rag-worker mcp-service; do
   container_id=$("${compose[@]}" ps -q "$service")
@@ -92,8 +78,6 @@ done
 
 cp "$manifest_path" "$state_dir/active-release-manifest.json"
 chmod 0600 "$state_dir/active-release-manifest.json"
-printf '%s\n' "$enable_n8n" > "$active_n8n_profile"
-chmod 0600 "$active_n8n_profile"
-rm -f "$rollback_manifest" "$rollback_n8n_profile"
+rm -f "$rollback_manifest"
 trap - ERR EXIT
 rm -f "$generated_env"

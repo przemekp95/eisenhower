@@ -19,7 +19,7 @@ compose=(docker compose --project-directory "$deploy_root" --env-file "$env_file
 trap 'rm -f "$backup_set"/*.tmp' EXIT
 "${compose[@]}" exec -T mongodb mongodump --archive --gzip > "$backup_set/mongodb.archive.gz.tmp"
 "${compose[@]}" --profile maintenance run --rm --no-deps -T backup-volume-helper \
-  sh -c 'tar -C /volumes -czf - audit n8n identity rag-jobs' > "$backup_set/private-volumes.tar.gz.tmp"
+  sh -c 'tar -C /volumes -czf - audit n8n grafana identity rag-jobs' > "$backup_set/private-volumes.tar.gz.tmp"
 cp "$active_manifest" "$backup_set/release-manifest.json.tmp"
 mv "$backup_set/mongodb.archive.gz.tmp" "$backup_set/mongodb.archive.gz"
 mv "$backup_set/private-volumes.tar.gz.tmp" "$backup_set/private-volumes.tar.gz"
