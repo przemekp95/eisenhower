@@ -32,8 +32,8 @@ Fresh candidate evidence:
 
 - API client: `33 passed` plus TypeScript declarations, including literal JPEG/PNG byte fixtures,
   progressive-scan metadata removal and malformed-input rejection;
-- web: `221 passed`, formatting and production build, including image sanitization when the browser
-  supplies no MIME type;
+- web: `222 passed`, formatting and production build, including image sanitization when the browser
+  supplies no MIME type and rejection of image bytes disguised as text;
 - mobile: `202 passed`, `5` security tests and production dependency audit with `0` vulnerabilities;
 - native Android: clean Expo prebuild followed by `352` Gradle release tasks, with `BUILD SUCCESSFUL`;
 - local CI-candidate APK: v2 signature verified, SHA-256

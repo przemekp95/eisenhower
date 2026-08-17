@@ -90,6 +90,22 @@ describe('OCR file privacy', () => {
     expect(sanitized.type).toBe('image/jpeg');
     await expect(readFileBytes(sanitized)).resolves.toEqual(Array.from(jpegWithoutPrivateMetadata));
   });
+
+  it('rejects malformed image bytes even when the file claims to be text', async () => {
+    const malformedJpeg = new File(
+      [Uint8Array.from([0xff, 0xd8, 0xff, 0xe1, 0x00, 0x10, 0x45])],
+      'scan.txt',
+      { type: 'text/plain' }
+    );
+    const disguisedWebp = new File(
+      [Uint8Array.from([0x52, 0x49, 0x46, 0x46, 0x04, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50])],
+      'tasks.txt',
+      { type: 'text/plain' }
+    );
+
+    await expect(sanitizeOcrFile(malformedJpeg)).rejects.toThrow('Malformed JPEG segment');
+    await expect(sanitizeOcrFile(disguisedWebp)).rejects.toThrow('Unsupported image format');
+  });
 });
 
 const taskResponse = {

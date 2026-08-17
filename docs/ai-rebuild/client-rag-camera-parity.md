@@ -28,7 +28,8 @@ and require an explicit preview before AI-derived text or OCR-derived tasks chan
   deletes it after success or failure. It does not create or upload the temporary file while offline.
 - The web removes EXIF/XMP, IPTC and comment segments from JPEG uploads and EXIF/text chunks from PNG
   uploads before the request. Unsupported image encodings fail closed instead of sending original
-  bytes; plain-text task imports remain unchanged. The service contract grants no durable-media
+  bytes, including image bytes mislabeled as text; validated plain-text task imports remain
+  unchanged. The service contract grants no durable-media
   retention.
 - Denied mobile permission is a typed, retryable state. Cancelling either picker is not an error and
   does not start OCR.

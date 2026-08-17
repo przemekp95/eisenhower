@@ -210,13 +210,55 @@ function readFileBytes(file: File): Promise<Uint8Array> {
   });
 }
 
+function hasKnownImageSignature(bytes: Uint8Array): boolean {
+  const asciiAt = (offset: number, value: string) =>
+    Array.from(value).every(
+      (character, index) => bytes[offset + index] === character.charCodeAt(0)
+    );
+
+  return (
+    (bytes[0] === 0xff && bytes[1] === 0xd8) ||
+    (bytes[0] === 0x89 && asciiAt(1, 'PNG')) ||
+    asciiAt(0, 'GIF87a') ||
+    asciiAt(0, 'GIF89a') ||
+    asciiAt(0, 'BM') ||
+    (asciiAt(0, 'RIFF') && asciiAt(8, 'WEBP')) ||
+    asciiAt(4, 'ftyp')
+  );
+}
+
+function readFileText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('Unable to read text bytes'));
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.readAsText(file, 'utf-8');
+  });
+}
+
+async function isSafeTextUpload(file: File, bytes: Uint8Array): Promise<boolean> {
+  if (
+    !(file.type.startsWith('text/') || /\.txt$/i.test(file.name)) ||
+    hasKnownImageSignature(bytes)
+  ) {
+    return false;
+  }
+
+  try {
+    const text = await readFileText(file);
+    return !/[\ufffd\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(text);
+  } catch {
+    return false;
+  }
+}
+
 export async function sanitizeOcrFile(file: File): Promise<File> {
   const bytes = await readFileBytes(file);
   let sanitized: Uint8Array;
   try {
     sanitized = stripImageMetadata(bytes);
   } catch (error) {
-    if (file.type.startsWith('text/') || /\.txt$/i.test(file.name)) {
+    if (await isSafeTextUpload(file, bytes)) {
       return file;
     }
     throw error;
