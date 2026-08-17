@@ -132,9 +132,10 @@ describe('business task-assistance service', () => {
           project_id: null,
           limit: 5,
         }),
-        signal: controller.signal,
+        signal: expect.anything(),
       })
     );
+    expect(global.fetch.mock.calls[0][1].signal.aborted).toBe(false);
   });
 
   it('uses grounded-answer defaults when language and request options are omitted', async () => {
