@@ -63,7 +63,7 @@ while true; do
   mapper_names=$(
     if [ -n "$scope_id" ]; then
       "${kcadm[@]}" get "client-scopes/$scope_id/protocol-mappers/models" \
-        -r eisenhower --fields name --format csv --noquotes 2>/dev/null | sort
+        -r eisenhower --fields name --format csv --noquotes 2>/dev/null | sort || true
     fi
   )
   if [ "$role_name" = eisenhower-admin ] \
