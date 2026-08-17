@@ -9,6 +9,7 @@ import {
   CalendarBindingModel,
   CalendarConflictModel,
   CalendarConnectionModel,
+  CalendarInternalRequestReceiptModel,
   CalendarMutationReceiptModel,
   CalendarOutboxModel,
   CalendarSyncStateModel,
@@ -508,9 +509,11 @@ describe('calendar integration boundary', () => {
       .set('X-Eisenhower-Signature', staleSignature).send(body);
     const malformedSignature = await request(app).post(path)
       .set('X-Eisenhower-Timestamp', stale.timestamp)
+      .set('X-Eisenhower-Request-Id', stale.requestId)
       .set('X-Eisenhower-Signature', 'nope').send(body);
     const wrongSignature = await request(app).post(path)
       .set('X-Eisenhower-Timestamp', stale.timestamp)
+      .set('X-Eisenhower-Request-Id', stale.requestId)
       .set('X-Eisenhower-Signature', '0'.repeat(64)).send(body);
     const invalidBody = await internalPost(path, body);
 
@@ -519,6 +522,73 @@ describe('calendar integration boundary', () => {
     expect(malformedSignature.status).toBe(401);
     expect(wrongSignature.status).toBe(401);
     expect(invalidBody.status).toBe(400);
+  });
+
+  it('fails closed for reused, pending, and unavailable internal request receipts', async () => {
+    const path = '/internal/calendar/status';
+    const firstBody = {};
+    const requestId = 'receipt-reuse-different-body';
+    const firstAuth = signedWithRequestId(path, firstBody, requestId);
+    const first = await request(app).post(path)
+      .set('X-Eisenhower-Timestamp', firstAuth.timestamp)
+      .set('X-Eisenhower-Request-Id', requestId)
+      .set('X-Eisenhower-Signature', firstAuth.signature).send(firstBody);
+    const secondBody = { changed: true };
+    const secondAuth = signedWithRequestId(path, secondBody, requestId);
+    const reused = await request(app).post(path)
+      .set('X-Eisenhower-Timestamp', secondAuth.timestamp)
+      .set('X-Eisenhower-Request-Id', requestId)
+      .set('X-Eisenhower-Signature', secondAuth.signature).send(secondBody);
+
+    const pendingBody = {};
+    const pendingId = 'receipt-still-processing';
+    const pendingFingerprint = createHash('sha256')
+      .update(`POST\n${path}\n${JSON.stringify(pendingBody)}`)
+      .digest('hex');
+    await CalendarInternalRequestReceiptModel.create({
+      requestId: pendingId,
+      fingerprint: pendingFingerprint,
+      status: 'pending',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    const pendingAuth = signedWithRequestId(path, pendingBody, pendingId);
+    const pending = await request(app).post(path)
+      .set('X-Eisenhower-Timestamp', pendingAuth.timestamp)
+      .set('X-Eisenhower-Request-Id', pendingId)
+      .set('X-Eisenhower-Signature', pendingAuth.signature).send(pendingBody);
+
+    jest.spyOn(CalendarInternalRequestReceiptModel, 'create').mockRejectedValueOnce(
+      new Error('receipt storage unavailable') as never,
+    );
+    const unavailable = await internalPost(path, {});
+
+    expect(first.status).toBe(404);
+    expect(reused).toMatchObject({ status: 409, body: { error: 'calendar_request_id_reused' } });
+    expect(pending).toMatchObject({ status: 409, body: { error: 'calendar_request_in_progress' } });
+    expect(unavailable).toMatchObject({ status: 500, body: { error: 'receipt storage unavailable' } });
+  });
+
+  it('replays an empty completed claim and tolerates receipt completion logging failure', async () => {
+    const path = '/internal/calendar/outbox/claim';
+    const body = {};
+    const requestId = 'empty-claim-completed-replay';
+    const auth = signedWithRequestId(path, body, requestId);
+    const send = () => request(app).post(path)
+      .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Request-Id', requestId)
+      .set('X-Eisenhower-Signature', auth.signature).send(body);
+
+    const first = await send();
+    const replay = await send();
+    jest.spyOn(CalendarInternalRequestReceiptModel, 'updateOne').mockRejectedValueOnce(
+      new Error('completion logging unavailable') as never,
+    );
+    const loggingFailureResponse = await internalPost('/internal/calendar/status', {});
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(first.status).toBe(204);
+    expect(replay.status).toBe(204);
+    expect(loggingFailureResponse.status).toBe(404);
   });
 
   it('rejects idempotency key reuse with a different inbound or sync request', async () => {

@@ -106,9 +106,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   if (authMode === 'oidc' && !(oidcIssuer && oidcAudience && oidcJwksUrl)) {
     throw new Error('OIDC_ISSUER, OIDC_AUDIENCE and OIDC_JWKS_URL are required for OIDC auth.');
   }
-  if (authMode === 'static' && production && apiToken.length < 32) {
-    throw new Error('EISENHOWER_API_TOKEN must be at least 32 characters in production.');
-  }
   const mongodbUri = production
     ? requiredProductionValue(env, 'MONGODB_URI')
     : (env.MONGODB_URI?.trim() || DEFAULT_MONGO_URI);

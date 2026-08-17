@@ -197,6 +197,7 @@ export function createCalendarInternalRouter(key: string, service = new Calendar
       let statusCode = 204;
       let responseBody: Record<string, unknown> | undefined;
       const context = internalRequestContext.get(req);
+      /* istanbul ignore next -- router middleware establishes this invariant before the handler */
       if (!context) throw new Error('calendar_request_receipt_missing');
       const session = await mongoose.startSession();
       try {
