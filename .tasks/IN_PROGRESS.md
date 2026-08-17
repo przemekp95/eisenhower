@@ -1,5 +1,19 @@
 # In Progress
 
+## TASK-063: Make automation and observability mandatory and admin-only
+**Priority:** P0 | **Tags:** deployment, n8n, prometheus, grafana, oidc, monitoring
+
+Make n8n, Prometheus and Grafana mandatory members of the canonical dev/prod topology and expose their administrative interfaces only through the single gateway to Keycloak users holding the `eisenhower-admin` role.
+
+### Plan
+
+- Freeze failing Compose, gateway, identity, deployment and backup contracts for mandatory n8n/Prometheus/Grafana and admin-only access.
+- Add a private OIDC authorization proxy, mandatory health-gated services, persistent provisioning and the explicit public Calendar webhook exception.
+- Remove the optional n8n input/profile and profile-aware rollback state while preserving one ingress, private service ports and identical dev/prod graphs.
+- Render both environments, exercise access decisions and service configuration, run proportional Node/FastAPI/n8n/monitoring/lifecycle/workflow regression, then document exact local and external gates.
+
+---
+
 ## TASK-028: Add Grounded RAG and camera parity across web and mobile
 **Priority:** P2 | **Tags:** product, rag, mobile, web, parity
 
