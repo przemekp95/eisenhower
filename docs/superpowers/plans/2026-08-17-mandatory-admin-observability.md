@@ -6,7 +6,7 @@
 
 **Architecture:** The canonical `compose.yaml` contains all three applications plus a private OAuth2 Proxy policy-enforcement service. Nginx remains the only host-published ingress, delegates `/admin/*` authorization to OAuth2 Proxy through `auth_request`, and keeps only the existing narrow Calendar/n8n webhook public. Keycloak remains the identity provider; Grafana and n8n retain their own application state, while Prometheus data is bounded and rebuildable.
 
-**Tech Stack:** Docker Compose, Nginx, Keycloak, OAuth2 Proxy 7.12, n8n 2.4.6, Prometheus 3.5, Grafana 12.1, Python `unittest`, shell lifecycle tests, GitHub Actions.
+**Tech Stack:** Docker Compose, Nginx, Keycloak, OAuth2 Proxy 7.12, n8n 2.4.6, Prometheus 3.5, Grafana 12.1, Python `pytest`, shell lifecycle tests, GitHub Actions.
 
 ## Global Constraints
 
@@ -14,7 +14,7 @@
 - Preserve one canonical `compose.yaml`, one host-published gateway port, and identical service graphs for dev and prod renders.
 - Keep Mongo, Qdrant, APIs, identity, n8n, Prometheus, Grafana, and OAuth2 Proxy private.
 - Treat `eisenhower-admin` as a new dedicated Keycloak realm role; do not reinterpret the existing application `admin` role.
-- Keep `/webhook/calendar/*` public and narrow. Do not expose general n8n webhook, editor, metrics, or admin paths without authorization.
+- Keep only `POST /eisenhower/google-calendar/webhook` public and narrow. Do not expose general n8n webhook, editor, metrics, or admin paths without authorization.
 - Apply strict TDD to behavioral changes: add a focused failing test, capture the failure, implement the smallest change, rerun green, then refactor.
 - Stop before merge, push, image publication, deployment, cutover, or production mutation.
 
@@ -38,10 +38,10 @@
 - [ ] Run the focused tests and record RED because the three mandatory services and admin policy do not yet exist:
 
 ```bash
-python3 -m unittest \
-  deploy.tests.test_compose_contract \
-  deploy.tests.test_admin_access_contract \
-  backend-ai.tests.test_monitoring_contract -v
+backend-ai/venv/bin/python -m pytest -o addopts='' \
+  deploy/tests/test_compose_contract.py \
+  deploy/tests/test_admin_access_contract.py \
+  backend-ai/tests/test_monitoring_contract.py -q
 ```
 
 - [ ] Commit only the red tests:
@@ -58,11 +58,11 @@ git commit -m "test: require mandatory admin observability"
 - Modify: `compose.yaml`
 - Modify: `deploy/local/access-gateway.conf.template`
 - Modify: `deploy/local/identity/eisenhower-realm.json`
+- Create: `deploy/local/identity/eisenhower-admin-claims.json`
+- Create: `deploy/local/identity/ensure-admin-access.sh`
 - Create: `monitoring/grafana/provisioning/datasources/prometheus.yml`
 - Create: `monitoring/grafana/provisioning/dashboards/default.yml`
 - Modify: `.env.example`
-- Modify: `deploy/env/dev.env.example`
-- Modify: `deploy/env/prod.env.example`
 
 - [ ] Remove the n8n profile and add a healthcheck. Configure its editor base path as `/admin/n8n/` while retaining the existing public Calendar webhook URL contract.
 - [ ] Add private mandatory `prometheus` using `prom/prometheus:v3.5.0`, the checked-in scrape/rule configuration, bounded retention, persistent storage, `--web.external-url=/admin/prometheus/`, and a readiness healthcheck.
@@ -70,7 +70,7 @@ git commit -m "test: require mandatory admin observability"
 - [ ] Add private mandatory `oauth2-proxy` using `quay.io/oauth2-proxy/oauth2-proxy:v7.12.0-alpine`, Keycloak OIDC, `--allowed-role=eisenhower-admin`, secure cookies, `--set-xauthrequest=true`, a static success upstream, and a ping healthcheck.
 - [ ] Pass `ADMIN_OIDC_CLIENT_SECRET` and `ADMIN_OIDC_REDIRECT_URI` into the Keycloak import environment. Add the `eisenhower-admin` realm role and confidential `eisenhower-admin-access` client without changing existing roles or clients.
 - [ ] Make gateway startup depend on healthy n8n, Prometheus, Grafana, and OAuth2 Proxy.
-- [ ] Add Nginx upstreams and routes. For each `/admin/*` route, require `auth_request /oauth2/auth`, redirect 401 responses to `/oauth2/start`, propagate the authenticated user header, and proxy to the matching private service. Keep only `/webhook/calendar/*` outside the admin gate.
+- [ ] Add Nginx upstreams and routes. For each `/admin/*` route, require `auth_request /oauth2/auth`, redirect 401 responses to `/oauth2/start`, propagate the authenticated user header, and proxy to the matching private service. Keep only `POST /eisenhower/google-calendar/webhook` outside the admin gate.
 - [ ] Add required safe-placeholder environment variables to all examples:
 
 ```dotenv
@@ -83,10 +83,8 @@ PROMETHEUS_RETENTION_TIME=15d
 - [ ] Render both environments with non-secret placeholders and validate Nginx and OAuth2 Proxy configuration inside their pinned images:
 
 ```bash
-python3 deploy/tests/render_compose.py --environment dev
-python3 deploy/tests/render_compose.py --environment prod
-docker compose --env-file deploy/env/dev.env.example config >/tmp/eisenhower-compose-dev.yaml
-docker compose --env-file deploy/env/prod.env.example config >/tmp/eisenhower-compose-prod.yaml
+backend-ai/venv/bin/python -m pytest -o addopts='' \
+  deploy/tests/test_compose_contract.py::test_dev_and_prod_render_the_identical_service_graph -vv
 docker run --rm quay.io/oauth2-proxy/oauth2-proxy:v7.12.0-alpine --version
 ```
 
@@ -94,7 +92,7 @@ docker run --rm quay.io/oauth2-proxy/oauth2-proxy:v7.12.0-alpine --version
 - [ ] Commit the green implementation:
 
 ```bash
-git add compose.yaml deploy/local/access-gateway.conf.template deploy/local/identity/eisenhower-realm.json monitoring/grafana .env.example deploy/env/dev.env.example deploy/env/prod.env.example
+git add compose.yaml deploy/local/access-gateway.conf.template deploy/local/identity monitoring/grafana .env.example
 git commit -m "feat: require role-gated admin services"
 ```
 
@@ -114,7 +112,7 @@ git commit -m "feat: require role-gated admin services"
 - [ ] Run the focused lifecycle suite and record RED against the current profile-aware scripts:
 
 ```bash
-python3 -m unittest deploy.tests.test_generic_lifecycle -v
+backend-ai/venv/bin/python -m pytest -o addopts='' deploy/tests/test_generic_lifecycle.py -q
 ```
 
 - [ ] Remove the `enable_n8n` workflow input and every `--profile n8n` branch or profile state file from deploy and rollback.
@@ -124,7 +122,7 @@ python3 -m unittest deploy.tests.test_generic_lifecycle -v
 
 ```bash
 bash -n deploy/generic/deploy.sh deploy/generic/rollback.sh deploy/generic/backup.sh deploy/generic/restore.sh
-python3 -m unittest deploy.tests.test_generic_lifecycle -v
+backend-ai/venv/bin/python -m pytest -o addopts='' deploy/tests/test_generic_lifecycle.py -q
 ```
 
 - [ ] Commit the lifecycle migration:
@@ -145,13 +143,14 @@ git commit -m "refactor: make admin stack unconditional"
 - Modify: `docs/OPERATIONS_RUNBOOK.md`
 - Modify: `docs/architecture/deployment-topology.md`
 - Modify: `deploy/tests/test_docs_contract.py`
-- Modify: `deploy/tests/test_workflow_contract.py`
+- Modify: `backend-ai/tests/test_release_workflow_contract.py`
 
 - [ ] Add failing documentation/workflow contracts that reject descriptions of n8n as optional, reject provider-specific deploy jobs, require the three admin paths and `eisenhower-admin`, and keep the final release gate separate from generic deployment.
 - [ ] Run those focused tests and record RED:
 
 ```bash
-python3 -m unittest deploy.tests.test_docs_contract deploy.tests.test_workflow_contract -v
+backend-ai/venv/bin/python -m pytest -o addopts='' \
+  deploy/tests/test_docs_contract.py backend-ai/tests/test_release_workflow_contract.py -q
 ```
 
 - [ ] Update the topology and operational docs to describe mandatory services, admin-only routes, public Calendar webhook exception, first-admin role assignment, secret rotation, backup/restore scope, Prometheus retention, and outage behavior.
@@ -161,7 +160,7 @@ python3 -m unittest deploy.tests.test_docs_contract deploy.tests.test_workflow_c
 - [ ] Commit documentation and audit alignment:
 
 ```bash
-git add README.md docs deploy/tests/test_docs_contract.py deploy/tests/test_workflow_contract.py
+git add README.md docs deploy/tests/test_docs_contract.py backend-ai/tests/test_release_workflow_contract.py
 git commit -m "docs: document mandatory admin operations"
 ```
 

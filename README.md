@@ -137,7 +137,9 @@ The OAuth2 Proxy callback is `/oauth2/callback`. The only unauthenticated n8n
 exception is `POST /eisenhower/google-calendar/webhook`; it does not expose the
 editor or arbitrary n8n webhook paths. Assign `eisenhower-admin` only to named
 operators and supply unique `ADMIN_OIDC_CLIENT_SECRET` and
-`ADMIN_OIDC_COOKIE_SECRET` values outside version control.
+`ADMIN_OIDC_COOKIE_SECRET` values outside version control. The admin session is
+refreshed every minute and expires after 15 minutes; the gateway forwards refreshed
+cookies so role revocation is re-evaluated within that bounded session window.
 
 AMD and NVIDIA are standalone provider projects, not overlays of the application topology:
 
@@ -277,7 +279,8 @@ The `test-mobile-native-android` job uploads a downloadable CI candidate APK fro
 
 ---
 
-## Optional profiles
+## Maintenance profile
 
-The canonical graph keeps n8n private and disabled unless the explicit `n8n` profile is selected.
+The canonical graph always starts n8n, Prometheus and Grafana. The only profile is
+`maintenance`, which exposes no host port and is used by backup/restore helpers.
 AMD/NVIDIA inference runs as a separate provider project and never changes the application graph.

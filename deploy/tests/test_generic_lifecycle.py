@@ -142,5 +142,7 @@ def test_backup_is_checksummed_and_restore_requires_explicit_confirmation(tmp_pa
   )
   assert accepted.returncode == 0, accepted.stderr
   log = (tmp_path / "docker.log").read_text()
+  assert "stop gateway oauth2-proxy n8n grafana mcp-service api-service ai-service classifier-service knowledge-service rag-worker identity-service identity-db" in log
   assert "tar -C /volumes -czf - audit n8n grafana identity rag-jobs" in log
   assert "/volumes/grafana" in log
+  assert "stop web gateway oauth2-proxy n8n grafana prometheus mcp-service api-service ai-service classifier-service knowledge-service rag-worker identity-service identity-db" in log

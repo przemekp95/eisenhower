@@ -56,7 +56,9 @@ Before target acceptance, operators must independently prove:
 - live backup and confirmation-gated restore on representative data;
 - rollback after a deliberately failed rollout;
 - live Keycloak login for a named user with `eisenhower-admin`, plus rejection of an
-  unauthenticated user and an authenticated user without that role;
+  unauthenticated user and an authenticated user without that role; verify that
+  role revocation is enforced after the one-minute refresh and no later than the
+  15-minute session expiry;
 - imported and active n8n workflows plus successful execution history;
 - healthy Prometheus targets/rules, populated Grafana dashboards and alert delivery;
 - provider-specific AMD or NVIDIA runtime health and model quality where inference is enabled.
@@ -73,7 +75,9 @@ use, plus any required human model evaluation, remain separate gates.
 
 `deploy/generic/backup.sh` archives MongoDB and the durable audit, identity, n8n, Grafana and
 RAG job volumes with checksums and the active release manifest. `restore.sh` requires an
-explicit confirmation. Prometheus retention data is operational and is rebuilt from live
+explicit confirmation. Backup quiesces stateful writers and identity storage before copying
+SQLite/PostgreSQL-backed volumes; restore keeps them stopped until replacement completes.
+Prometheus retention data is operational and is rebuilt from live
 scrape targets after restore. Qdrant is rebuildable from canonical MongoDB data and is
 intentionally not a canonical backup source.
 
@@ -83,6 +87,8 @@ intentionally not a canonical backup source.
   remain disabled, and unsafe untrusted origins are rejected. Admin console access adds a
   secure SameSite=Lax OAuth2 Proxy session cookie; the gateway's Origin allowlist rejects
   cross-site unsafe requests, while n8n and Grafana retain their own request protections.
+  OAuth2 Proxy refreshes the cookie every minute and expires it after 15 minutes, and Nginx
+  propagates refreshed split cookies from the authorization subrequest.
   CORS and Origin checks are defense in depth, not authentication.
 - HTTP/webhooks: the gateway is the only ingress. MongoDB, Qdrant, API/AI, MCP and n8n stay
   private, as do Prometheus, Grafana and OAuth2 Proxy. Only explicit Calendar OAuth and

@@ -465,8 +465,13 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=false
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Admin
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES=false
+      - GF_PLUGINS_PLUGIN_ADMIN_ENABLED=false
+      - GF_PLUGINS_PREINSTALL_DISABLED=true
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/grafana.ini:/etc/grafana/grafana.ini:ro
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     healthcheck:
@@ -523,6 +528,27 @@ services:
       - ./deploy/local/identity/eisenhower-realm.json:/opt/keycloak/data/import/eisenhower-realm.json:ro
       - ./deploy/local/identity/eisenhower-user-profile.json:/opt/keycloak/conf/eisenhower-user-profile.json:ro
 
+  identity-admin-bootstrap:
+    <<: *common
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.7.0}
+    restart: "no"
+    read_only: true
+    entrypoint: ["/bin/sh", "/opt/eisenhower/ensure-admin-access.sh"]
+    depends_on:
+      identity-service:
+        condition: service_started
+    environment:
+      - KC_BOOTSTRAP_ADMIN_USERNAME=${KC_BOOTSTRAP_ADMIN_USERNAME:?KC_BOOTSTRAP_ADMIN_USERNAME is required}
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=${KC_BOOTSTRAP_ADMIN_PASSWORD:?KC_BOOTSTRAP_ADMIN_PASSWORD is required}
+      - ADMIN_OIDC_CLIENT_SECRET=${ADMIN_OIDC_CLIENT_SECRET:?ADMIN_OIDC_CLIENT_SECRET is required}
+      - ADMIN_OIDC_REDIRECT_URI=${ADMIN_OIDC_REDIRECT_URI:?ADMIN_OIDC_REDIRECT_URI is required}
+      - IDENTITY_ADMIN_URL=http://identity-service:8080/identity
+    volumes:
+      - ./deploy/local/identity/ensure-admin-access.sh:/opt/eisenhower/ensure-admin-access.sh:ro
+      - ./deploy/local/identity/eisenhower-admin-claims.json:/opt/eisenhower/eisenhower-admin-claims.json:ro
+    tmpfs:
+      - /opt/keycloak/.keycloak:mode=0700,uid=1000,gid=0
+
   mcp-service:
     <<: *common
     image: ${MCP_IMAGE:?MCP_IMAGE must be a versioned tag or digest}
@@ -563,11 +589,16 @@ services:
     <<: *common
     image: ${OAUTH2_PROXY_IMAGE:-quay.io/oauth2-proxy/oauth2-proxy:v7.12.0-alpine}
     depends_on:
-      identity-service:
-        condition: service_started
+      identity-admin-bootstrap:
+        condition: service_completed_successfully
     command:
       - --provider=keycloak-oidc
       - --oidc-issuer-url=${OIDC_ISSUER:?OIDC_ISSUER is required}
+      - --skip-oidc-discovery=true
+      - --login-url=${OIDC_ISSUER:?OIDC_ISSUER is required}/protocol/openid-connect/auth
+      - --redeem-url=http://identity-service:8080/identity/realms/eisenhower/protocol/openid-connect/token
+      - --profile-url=http://identity-service:8080/identity/realms/eisenhower/protocol/openid-connect/userinfo
+      - --oidc-jwks-url=http://identity-service:8080/identity/realms/eisenhower/protocol/openid-connect/certs
       - --client-id=eisenhower-admin-access
       - --client-secret=${ADMIN_OIDC_CLIENT_SECRET:?ADMIN_OIDC_CLIENT_SECRET is required}
       - --redirect-url=${ADMIN_OIDC_REDIRECT_URI:?ADMIN_OIDC_REDIRECT_URI is required}
@@ -575,8 +606,10 @@ services:
       - --cookie-name=_eisenhower_admin
       - --cookie-secure=true
       - --cookie-samesite=lax
+      - --cookie-expire=15m
+      - --cookie-refresh=1m
       - --email-domain=*
-      - --scope=openid profile email roles
+      - --scope=openid
       - --allowed-role=eisenhower-admin
       - --reverse-proxy=true
       - --set-xauthrequest=true
@@ -598,6 +631,8 @@ services:
         condition: service_healthy
       identity-service:
         condition: service_started
+      identity-admin-bootstrap:
+        condition: service_completed_successfully
       mcp-service:
         condition: service_started
       n8n:
@@ -613,6 +648,7 @@ services:
     environment:
       - ACCESS_GATEWAY_HOST=${ACCESS_GATEWAY_HOST:?ACCESS_GATEWAY_HOST is required}
       - ACCESS_GATEWAY_ALLOWED_ORIGIN=${ACCESS_GATEWAY_ALLOWED_ORIGIN:?ACCESS_GATEWAY_ALLOWED_ORIGIN is required}
+      - ACCESS_ADMIN_ALLOWED_ORIGIN=${ACCESS_PUBLIC_ORIGIN:?ACCESS_PUBLIC_ORIGIN is required}
       - IDENTITY_UPSTREAM=${ACCESS_GATEWAY_IDENTITY_UPSTREAM:-identity-service:8080}
       - MCP_UPSTREAM=${ACCESS_GATEWAY_MCP_UPSTREAM:-mcp-service:8000}
       - API_UPSTREAM=${ACCESS_GATEWAY_API_UPSTREAM:-api-service:3001}

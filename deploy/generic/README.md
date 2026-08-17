@@ -22,7 +22,10 @@ could not prove deployment of the released artifacts.
 
 `backup.sh` and confirmation-gated `restore.sh` preserve canonical Mongo data,
 private audit/n8n/Grafana/identity/job volumes and the active immutable release
-manifest with checksums. Prometheus retention data is operational and rebuilt
+manifest with checksums. Backup deliberately quiesces stateful writers and the
+identity database before copying SQLite/PostgreSQL-backed volumes, then restarts
+the complete graph. Restore keeps those services stopped until replacement is
+complete. Prometheus retention data is operational and rebuilt
 from live scrape targets after restore. Qdrant is deliberately excluded because Mongo remains canonical;
 the projection must be rebuilt or restored through the separately verified
 Qdrant snapshot/reindex procedure before traffic acceptance.

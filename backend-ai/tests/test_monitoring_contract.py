@@ -11,6 +11,7 @@ def test_prometheus_scrapes_the_real_private_inference_service():
   jobs = {item["job_name"]: item for item in config["scrape_configs"]}
 
   assert jobs["prometheus"]["static_configs"] == [{"targets": ["localhost:9090"]}]
+  assert jobs["prometheus"]["metrics_path"] == "/admin/prometheus/metrics"
   assert jobs["eisenhower-ai"]["static_configs"] == [{"targets": ["ai-service:8000"]}]
   assert jobs["inference"]["static_configs"] == [{"targets": ["inference:8000"]}]
   assert config["rule_files"] == ["alert_rules.yml"]
