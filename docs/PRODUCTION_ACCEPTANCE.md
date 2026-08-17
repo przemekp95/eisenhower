@@ -25,6 +25,10 @@ A candidate worktree is locally acceptable when:
 - OCR rejects invalid or over-limit dimensions/pixel counts before decoding for OCR;
 - `git diff --check`, shell validation, type checking, and workflow YAML parsing pass.
 
+The local Keycloak migration rehearsal is `deploy/tests/rehearse_admin_access_runtime.sh`.
+It imports the realm into the pinned Keycloak image, executes the admin bootstrap twice,
+and checks the role, confidential client, scope and three claim mappers.
+
 Local tests do not prove that an image was built, scanned, published, pulled, started, or
 accepted by a person.
 

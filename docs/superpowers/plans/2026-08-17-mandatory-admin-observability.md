@@ -86,6 +86,7 @@ PROMETHEUS_RETENTION_TIME=15d
 backend-ai/venv/bin/python -m pytest -o addopts='' \
   deploy/tests/test_compose_contract.py::test_dev_and_prod_render_the_identical_service_graph -vv
 docker run --rm quay.io/oauth2-proxy/oauth2-proxy:v7.12.0-alpine --version
+deploy/tests/rehearse_admin_access_runtime.sh
 ```
 
 - [ ] Rerun Task 1 tests and record GREEN, then simplify repeated assertions/helpers without weakening behavior.

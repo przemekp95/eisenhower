@@ -1,0 +1,15 @@
+{
+  "name": "realm-roles",
+  "protocol": "openid-connect",
+  "protocolMapper": "oidc-usermodel-realm-role-mapper",
+  "consentRequired": false,
+  "config": {
+    "claim.name": "realm_access.roles",
+    "jsonType.label": "String",
+    "multivalued": "true",
+    "usermodel.realmRoleMapping.rolePrefix": "",
+    "access.token.claim": "true",
+    "id.token.claim": "true",
+    "userinfo.token.claim": "true"
+  }
+}

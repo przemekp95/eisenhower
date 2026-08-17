@@ -47,9 +47,52 @@ if [ -z "$scope_uuid" ]; then
   )
 else
   /opt/keycloak/bin/kcadm.sh update "client-scopes/$scope_uuid" -r eisenhower \
-    -f /opt/eisenhower/eisenhower-admin-claims.json >/dev/null
+    -s 'description=Minimal identity and realm-role claims consumed by the admin access proxy' \
+    -s protocol=openid-connect >/dev/null
 fi
 test -n "$scope_uuid"
+
+reconcile_mapper() {
+  mapper_name=$1
+  mapper_file=$2
+  case "$mapper_name" in
+    preferred-username)
+      mapper_type=oidc-usermodel-property-mapper
+      mapper_config='{"user.attribute":"username","claim.name":"preferred_username","jsonType.label":"String","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true"}'
+      ;;
+    email)
+      mapper_type=oidc-usermodel-property-mapper
+      mapper_config='{"user.attribute":"email","claim.name":"email","jsonType.label":"String","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true"}'
+      ;;
+    realm-roles)
+      mapper_type=oidc-usermodel-realm-role-mapper
+      mapper_config='{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","usermodel.realmRoleMapping.rolePrefix":"","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true"}'
+      ;;
+    *) echo "Unsupported admin claim mapper: $mapper_name" >&2; exit 1 ;;
+  esac
+  mapper_uuid=$(
+    /opt/keycloak/bin/kcadm.sh get \
+      "client-scopes/$scope_uuid/protocol-mappers/models" -r eisenhower \
+      --fields id,name --format csv --noquotes \
+      | grep -F ",$mapper_name" | cut -d, -f1 | tail -n 1
+  )
+  if [ -z "$mapper_uuid" ]; then
+    /opt/keycloak/bin/kcadm.sh create \
+      "client-scopes/$scope_uuid/protocol-mappers/models" -r eisenhower \
+      -f "$mapper_file" >/dev/null
+  else
+    /opt/keycloak/bin/kcadm.sh update \
+      "client-scopes/$scope_uuid/protocol-mappers/models/$mapper_uuid" -r eisenhower \
+      -s protocol=openid-connect \
+      -s "protocolMapper=$mapper_type" \
+      -s consentRequired=false \
+      -s "config=$mapper_config" >/dev/null
+  fi
+}
+
+reconcile_mapper preferred-username /opt/eisenhower/admin-claim-mappers/preferred-username.json
+reconcile_mapper email /opt/eisenhower/admin-claim-mappers/email.json
+reconcile_mapper realm-roles /opt/eisenhower/admin-claim-mappers/realm-roles.json
 
 client_uuid=$(
   /opt/keycloak/bin/kcadm.sh get clients -r eisenhower \

@@ -98,6 +98,9 @@ def test_existing_keycloak_realm_gets_an_idempotent_admin_access_migration():
   assert "clientId=eisenhower-admin-access" in script
   assert "name=eisenhower-admin-claims" in script
   assert "kcadm.sh update" in script
+  assert "client-scopes/$scope_uuid/protocol-mappers/models" in script
+  for mapper in ("preferred-username", "email", "realm-roles"):
+    assert f"{mapper}.json" in script
   assert "directAccessGrantsEnabled=false" in script
 
 

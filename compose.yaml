@@ -546,6 +546,7 @@ services:
     volumes:
       - ./deploy/local/identity/ensure-admin-access.sh:/opt/eisenhower/ensure-admin-access.sh:ro
       - ./deploy/local/identity/eisenhower-admin-claims.json:/opt/eisenhower/eisenhower-admin-claims.json:ro
+      - ./deploy/local/identity/admin-claim-mappers:/opt/eisenhower/admin-claim-mappers:ro
     tmpfs:
       - /opt/keycloak/.keycloak:mode=0700,uid=1000,gid=0
 
