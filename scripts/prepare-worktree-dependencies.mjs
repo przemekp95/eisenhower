@@ -8,12 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const DEFAULT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const STAMP_NAME = '.eisenhower-dependency-input.sha256';
-const NODE_COMPONENTS = [
-  'backend-node',
-  'packages/api-client',
-  'web',
-  'mobile/eisenhower-matrix',
-];
+const NODE_COMPONENTS = ['backend-node', 'packages/api-client', 'web', 'mobile/eisenhower-matrix'];
 
 function parseArguments(argv) {
   let root = DEFAULT_ROOT;
@@ -153,7 +148,11 @@ function pipInvocation(pip, venv) {
 function preparePythonDependencies({ force, pip, python, root, venv }) {
   const requirements = join(root, 'backend-ai', 'requirements-dev.txt');
   const files = collectRequirementFiles(requirements);
-  const digest = digestFiles(root, files, `python=${python}\0version=${pythonIdentity(python, root)}\0`);
+  const digest = digestFiles(
+    root,
+    files,
+    `python=${python}\0version=${pythonIdentity(python, root)}\0`
+  );
   const stamp = join(venv, STAMP_NAME);
   if (!force && existsSync(venv) && readStamp(stamp) === digest) {
     console.log('[prepare] backend-ai dependencies are current');

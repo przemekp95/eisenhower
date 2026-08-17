@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import test from 'node:test';
@@ -8,12 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PREPARE_SCRIPT = join(REPOSITORY_ROOT, 'scripts', 'prepare-worktree-dependencies.mjs');
-const NODE_COMPONENTS = [
-  'backend-node',
-  'packages/api-client',
-  'web',
-  'mobile/eisenhower-matrix',
-];
+const NODE_COMPONENTS = ['backend-node', 'packages/api-client', 'web', 'mobile/eisenhower-matrix'];
 
 function writeExecutable(path, source) {
   mkdirSync(dirname(path), { recursive: true });
@@ -31,8 +34,14 @@ function createFixture() {
   }
 
   mkdirSync(join(root, 'backend-ai'), { recursive: true });
-  writeFileSync(join(root, 'backend-ai', 'requirements-dev.txt'), '-r requirements.txt\n-r requirements-knowledge.txt\n');
-  writeFileSync(join(root, 'backend-ai', 'requirements.txt'), '-r requirements-ingest.txt\nfastapi==1.0\n');
+  writeFileSync(
+    join(root, 'backend-ai', 'requirements-dev.txt'),
+    '-r requirements.txt\n-r requirements-knowledge.txt\n'
+  );
+  writeFileSync(
+    join(root, 'backend-ai', 'requirements.txt'),
+    '-r requirements-ingest.txt\nfastapi==1.0\n'
+  );
   writeFileSync(join(root, 'backend-ai', 'requirements-ingest.txt'), 'pillow==1.0\n');
   writeFileSync(join(root, 'backend-ai', 'requirements-knowledge.txt'), 'qdrant-client==1.0\n');
 
@@ -51,7 +60,7 @@ if (process.env.FAIL_COMPONENT === component) {
 }
 appendFileSync(process.env.PREPARE_LOG, \`npm:\${component}\\n\`);
 mkdirSync('node_modules', { recursive: true });
-`,
+`
   );
   writeExecutable(
     python,
@@ -64,13 +73,13 @@ if (process.argv[2] === '--version') {
   appendFileSync(process.env.PREPARE_LOG, \`python-venv:\${relative(process.env.PREPARE_ROOT, venv)}\\n\`);
   mkdirSync(venv, { recursive: true });
 }
-`,
+`
   );
   writeExecutable(
     pip,
     `import { appendFileSync } from 'node:fs';
 appendFileSync(process.env.PREPARE_LOG, 'pip:backend-ai\\n');
-`,
+`
   );
 
   return { root, log, npm, python, pip };
@@ -131,13 +140,19 @@ test('prepares every dependency surface once in a fresh worktree', () => {
     assert.equal(readLog(fixture.log).length, 6);
     for (const component of NODE_COMPONENTS) {
       assert.match(
-        readFileSync(join(fixture.root, component, 'node_modules', '.eisenhower-dependency-input.sha256'), 'utf8'),
-        /^[a-f0-9]{64}\n$/,
+        readFileSync(
+          join(fixture.root, component, 'node_modules', '.eisenhower-dependency-input.sha256'),
+          'utf8'
+        ),
+        /^[a-f0-9]{64}\n$/
       );
     }
     assert.match(
-      readFileSync(join(fixture.root, 'backend-ai', 'venv', '.eisenhower-dependency-input.sha256'), 'utf8'),
-      /^[a-f0-9]{64}\n$/,
+      readFileSync(
+        join(fixture.root, 'backend-ai', 'venv', '.eisenhower-dependency-input.sha256'),
+        'utf8'
+      ),
+      /^[a-f0-9]{64}\n$/
     );
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
@@ -166,8 +181,10 @@ test('does not mark a component current when its installation fails', () => {
     assert.equal(result.status, 1);
     assert.match(result.stderr, /Failed to prepare backend-node/);
     assert.equal(
-      existsSync(join(fixture.root, 'backend-node', 'node_modules', '.eisenhower-dependency-input.sha256')),
-      false,
+      existsSync(
+        join(fixture.root, 'backend-node', 'node_modules', '.eisenhower-dependency-input.sha256')
+      ),
+      false
     );
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
@@ -211,8 +228,9 @@ test('Make exposes incremental and force preparation before verification', () =>
     encoding: 'utf8',
   });
   assert.ok(
-    verification.indexOf('prepare-worktree-dependencies.mjs') < verification.indexOf('audit-production'),
-    'dependency preparation must run before repository verification',
+    verification.indexOf('prepare-worktree-dependencies.mjs') <
+      verification.indexOf('audit-production'),
+    'dependency preparation must run before repository verification'
   );
 });
 
@@ -224,7 +242,7 @@ test('uses venv Python when the pip launcher is absent from a partial environmen
       venvPython,
       `import { appendFileSync } from 'node:fs';
 appendFileSync(process.env.PREPARE_LOG, 'pip:backend-ai\\n');
-`,
+`
     );
 
     const result = runPrepareResult(fixture, {

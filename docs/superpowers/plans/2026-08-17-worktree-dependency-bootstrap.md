@@ -22,10 +22,12 @@
 ### Task 1: Hash-bound dependency preparation
 
 **Files:**
+
 - Create: `scripts/prepare-worktree-dependencies.mjs`
 - Create: `scripts/prepare-worktree-dependencies.test.mjs`
 
 **Interfaces:**
+
 - Consumes: repository root from the script location or `--root`, executables from `NPM`, `PYTHON` and optional `BACKEND_AI_PIP`.
 - Produces: exit code zero after all components are current; ignored `.eisenhower-dependency-input.sha256` stamps under each dependency directory.
 
@@ -44,12 +46,7 @@ Expected: FAIL because `scripts/prepare-worktree-dependencies.mjs` does not exis
 Implement these concrete operations with Node built-ins:
 
 ```js
-const nodeComponents = [
-  'backend-node',
-  'packages/api-client',
-  'web',
-  'mobile/eisenhower-matrix',
-];
+const nodeComponents = ['backend-node', 'packages/api-client', 'web', 'mobile/eisenhower-matrix'];
 
 function digestFiles(files, prefix = '') {
   const hash = createHash('sha256');
@@ -88,11 +85,13 @@ git commit -m "feat: prepare worktree dependencies incrementally"
 ### Task 2: Make and documentation integration
 
 **Files:**
+
 - Modify: `Makefile`
 - Modify: `README.md`
 - Test: `scripts/prepare-worktree-dependencies.test.mjs`
 
 **Interfaces:**
+
 - Consumes: `node scripts/prepare-worktree-dependencies.mjs` with `NPM`, `PYTHON`, `BACKEND_AI_VENV` and `BACKEND_AI_PIP` forwarded by Make.
 - Produces: `make prepare-verify`, force-refreshing `make setup`, and automatic preparation before `make verify`.
 
@@ -144,11 +143,13 @@ git commit -m "build: bootstrap verification dependencies"
 ### Task 3: Repository acceptance and TaskPlanner completion
 
 **Files:**
+
 - Modify: `.tasks/IN_PROGRESS.md`
 - Modify: `.tasks/DONE.md`
 - Modify: `.tasks/WORK_LOG.md`
 
 **Interfaces:**
+
 - Consumes: completed preparation and Make integration.
 - Produces: fresh-worktree evidence, full repository verification and one completed TASK-064 record.
 
