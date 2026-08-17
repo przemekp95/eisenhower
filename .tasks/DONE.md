@@ -1,5 +1,24 @@
 # Done
 
+## TASK-064: Bootstrap fresh worktree dependencies automatically
+**Priority:** P1 | **Tags:** developer-experience, worktree, dependencies, verification
+
+Make `make verify` prepare missing or stale lockfile-bound Node and backend-AI dependencies automatically so isolated worktrees do not fail with misleading missing-module or missing-venv errors.
+
+### Plan
+
+- Freeze failing contracts for a fresh checkout, an unchanged prepared checkout, a changed lockfile and a failed installation.
+- Add a portable hash-bound dependency bootstrap used by `make verify` while retaining an explicit force-install `make setup` path.
+- Document the behavior and verify focused contracts, a disposable fresh-worktree rehearsal and the full repository suite.
+
+### Outcome
+
+Added a dependency-free, hash-bound worktree preparer for all four Node lockfiles and the recursively referenced backend-AI development requirements. `make verify` now prepares only missing or stale components, `make setup` retains an explicit force refresh, successful installs receive atomic ignored stamps, failures cannot mark a component current, and partial Python environments fall back safely to `venv/bin/python -m pip` when the pip launcher is absent.
+
+Strict red-green tests covered the absent preparer, Make integration, selected-interpreter changes and the real partial-venv failure. All 6 focused contracts pass. A disposable detached worktree proved all five dependency surfaces absent, installed them on the first `make prepare-verify`, reported every component current on the second run and was removed. Fresh final `make verify` passed: backend AI 832 passed/13 skipped at 87.67%; Node 263 tests at 100% plus build/typecheck; 21 BDD scenarios/149 steps; web 217 tests at 100%, 2 integration tests and production build; mobile 199 tests; MCP 50; n8n 13 Python plus 5 Node; API client 28 plus typecheck; dependency audits; and Pylint 10.00/10. Prettier, actionlint 1.7.11, workflow YAML parsing and `git diff --check` also passed. No package publication, image release or deployment occurred.
+
+---
+
 ## TASK-062: Consolidate host-neutral deployment and release
 **Priority:** P0 | **Tags:** deployment, release, compose, security, calendar, ocr
 

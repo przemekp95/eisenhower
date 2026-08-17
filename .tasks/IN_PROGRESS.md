@@ -1,18 +1,5 @@
 # In Progress
 
-## TASK-064: Bootstrap fresh worktree dependencies automatically
-**Priority:** P1 | **Tags:** developer-experience, worktree, dependencies, verification
-
-Make `make verify` prepare missing or stale lockfile-bound Node and backend-AI dependencies automatically so isolated worktrees do not fail with misleading missing-module or missing-venv errors.
-
-### Plan
-
-- Freeze failing contracts for a fresh checkout, an unchanged prepared checkout, a changed lockfile and a failed installation.
-- Add a portable hash-bound dependency bootstrap used by `make verify` while retaining an explicit force-install `make setup` path.
-- Document the behavior and verify focused contracts, a disposable fresh-worktree rehearsal and the full repository suite.
-
----
-
 ## TASK-028: Add Grounded RAG and camera parity across web and mobile
 **Priority:** P2 | **Tags:** product, rag, mobile, web, parity
 
