@@ -6,19 +6,19 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "platforms": ["ios", "android"],
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#020617"
-    },
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "ios": {
       "bundleIdentifier": "com.przemekp95.eisenhowermatrix",
       "supportsTablet": true
     },
     "android": {
       "package": "com.przemekp95.eisenhowermatrix",
-      "permissions": ["android.permission.CAMERA"],
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#020617"
@@ -32,6 +32,15 @@
           "photosPermission": "Allow Eisenhower Matrix to read tasks from selected images.",
           "cameraPermission": "Allow Eisenhower Matrix to capture a task note only when you choose Take photo.",
           "microphonePermission": false
+        }
+      ],
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#020617"
         }
       ]
     ]

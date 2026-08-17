@@ -1,4 +1,6 @@
-import { createAiApi } from '@eisenhower/api-client';
+import { createAiApi, stripJpegMetadata } from '@eisenhower/api-client';
+import { File } from 'expo-file-system';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import * as Network from 'expo-network';
 import { createTaskRecord, quadrantToFlags } from '../utils/taskUtils';
@@ -24,6 +26,32 @@ function normalizeAsset(asset, source) {
     name: asset.fileName || `scan-${Date.now()}.jpg`,
     type: asset.mimeType || 'image/jpeg',
     source,
+  };
+}
+
+async function createPrivateOcrUpload(image) {
+  const context = ImageManipulator.manipulate(image.uri);
+  const rendered = await context.renderAsync();
+  const result = await rendered.saveAsync({
+    compress: 1,
+    format: SaveFormat.JPEG,
+  });
+  const temporaryFile = new File(result.uri);
+
+  try {
+    temporaryFile.write(stripJpegMetadata(await temporaryFile.bytes()));
+  } catch (error) {
+    temporaryFile.delete();
+    throw error;
+  }
+
+  return {
+    image: {
+      uri: result.uri,
+      name: `${image.name.replace(/\.[^.]+$/, '') || 'scan'}-sanitized.jpg`,
+      type: 'image/jpeg',
+    },
+    temporaryFile,
   };
 }
 
@@ -62,14 +90,15 @@ export async function extractTasksFromSelectedImage(image, language = 'pl', opti
   if (network.isConnected !== true || network.isInternetReachable === false) {
     throw mediaError('media_offline', 'Image upload requires an internet connection');
   }
-  return mapOcrResponseToTasks(
-    language,
-    await getAiApi().extractTasksFromImage({
-      uri: image.uri,
-      name: image.name,
-      type: image.type,
-    }, options)
-  );
+  const upload = await createPrivateOcrUpload(image);
+  try {
+    return mapOcrResponseToTasks(
+      language,
+      await getAiApi().extractTasksFromImage(upload.image, options)
+    );
+  } finally {
+    upload.temporaryFile.delete();
+  }
 }
 
 export function mapOcrResponseToTasks(language, payload, idFactory = Date.now) {
