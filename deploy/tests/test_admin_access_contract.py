@@ -3,10 +3,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[2]
 GATEWAY_TEMPLATE = ROOT / "deploy" / "local" / "access-gateway.conf.template"
 REALM_IMPORT = ROOT / "deploy" / "local" / "identity" / "eisenhower-realm.json"
+IDENTITY_BOOTSTRAP = ROOT / "deploy" / "local" / "identity" / "ensure-admin-access.sh"
 
 
 def _location_block(config: str, path: str) -> str:
@@ -50,3 +53,20 @@ def test_keycloak_has_dedicated_admin_role_and_confidential_client():
   assert admin_client["directAccessGrantsEnabled"] is False
   assert admin_client["secret"] == "${ADMIN_OIDC_CLIENT_SECRET}"
   assert admin_client["redirectUris"] == ["${ADMIN_OIDC_REDIRECT_URI}"]
+
+
+def test_existing_keycloak_realm_gets_an_idempotent_admin_access_migration():
+  compose = yaml.safe_load((ROOT / "compose.yaml").read_text(encoding="utf-8"))
+  services = compose["services"]
+  bootstrap = services["identity-admin-bootstrap"]
+  script = IDENTITY_BOOTSTRAP.read_text(encoding="utf-8")
+
+  assert bootstrap["restart"] == "no"
+  assert not bootstrap.get("ports")
+  assert bootstrap["depends_on"]["identity-service"]["condition"] == "service_started"
+  assert services["oauth2-proxy"]["depends_on"]["identity-admin-bootstrap"]["condition"] == "service_completed_successfully"
+  assert services["gateway"]["depends_on"]["identity-admin-bootstrap"]["condition"] == "service_completed_successfully"
+  assert "roles/eisenhower-admin" in script
+  assert "clientId=eisenhower-admin-access" in script
+  assert "kcadm.sh update" in script
+  assert "directAccessGrantsEnabled=false" in script
