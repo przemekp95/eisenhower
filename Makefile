@@ -1,5 +1,6 @@
 PYTHON ?= python3
 NPM ?= npm
+NODE ?= node
 UV ?= uv
 BACKEND_AI_VENV ?= backend-ai/venv
 BACKEND_AI_PYTHON ?= $(BACKEND_AI_VENV)/bin/python
@@ -7,15 +8,13 @@ BACKEND_AI_PIP ?= $(BACKEND_AI_VENV)/bin/pip
 BACKEND_AI_PYTHONPATH ?=
 BACKEND_AI_TEST_ENV = $(if $(BACKEND_AI_PYTHONPATH),PYTHONPATH=$(BACKEND_AI_PYTHONPATH),)
 
-.PHONY: setup test test-bdd test-ai test-api-client test-mcp test-n8n test-n8n-runtime typecheck-node lint lint-ai format format-web format-check format-check-web build audit-production verify dev-web dev-api dev-ai dev-mobile
+.PHONY: setup prepare-verify test test-bdd test-ai test-api-client test-mcp test-n8n test-n8n-runtime typecheck-node lint lint-ai format format-web format-check format-check-web build audit-production verify dev-web dev-api dev-ai dev-mobile
 
 setup:
-	cd backend-node && $(NPM) ci
-	$(NPM) --prefix packages/api-client ci
-	cd web && $(NPM) ci
-	cd mobile/eisenhower-matrix && $(NPM) ci
-	test -x $(BACKEND_AI_PYTHON) || $(PYTHON) -m venv $(BACKEND_AI_VENV)
-	$(BACKEND_AI_PIP) install -r backend-ai/requirements-dev.txt
+	NPM="$(NPM)" PYTHON="$(PYTHON)" BACKEND_AI_VENV="$(BACKEND_AI_VENV)" BACKEND_AI_PIP="$(BACKEND_AI_PIP)" $(NODE) scripts/prepare-worktree-dependencies.mjs --force
+
+prepare-verify:
+	NPM="$(NPM)" PYTHON="$(PYTHON)" BACKEND_AI_VENV="$(BACKEND_AI_VENV)" BACKEND_AI_PIP="$(BACKEND_AI_PIP)" $(NODE) scripts/prepare-worktree-dependencies.mjs
 
 test:
 	cd backend-node && $(NPM) test
@@ -77,7 +76,7 @@ audit-production:
 	$(BACKEND_AI_PYTHON) -m pip_audit -r backend-ai/requirements-boundary.txt --progress-spinner off
 	$(BACKEND_AI_PYTHON) -m pip_audit -r backend-ai/requirements-knowledge.txt --progress-spinner off
 
-verify:
+verify: prepare-verify
 	$(MAKE) audit-production
 	$(MAKE) test-api-client
 	$(MAKE) test-mcp

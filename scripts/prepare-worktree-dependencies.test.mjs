@@ -190,3 +190,28 @@ test('refreshes Python dependencies when the selected interpreter changes', () =
     rmSync(fixture.root, { recursive: true, force: true });
   }
 });
+
+test('Make exposes incremental and force preparation before verification', () => {
+  const incremental = spawnSync('make', ['-n', 'prepare-verify'], {
+    cwd: REPOSITORY_ROOT,
+    encoding: 'utf8',
+  });
+  assert.equal(incremental.status, 0, incremental.stderr);
+  assert.match(incremental.stdout, /prepare-worktree-dependencies\.mjs(?:\s|$)/);
+  assert.doesNotMatch(incremental.stdout, /--force/);
+
+  const force = execFileSync('make', ['-n', 'setup'], {
+    cwd: REPOSITORY_ROOT,
+    encoding: 'utf8',
+  });
+  assert.match(force, /prepare-worktree-dependencies\.mjs --force/);
+
+  const verification = execFileSync('make', ['-n', 'verify'], {
+    cwd: REPOSITORY_ROOT,
+    encoding: 'utf8',
+  });
+  assert.ok(
+    verification.indexOf('prepare-worktree-dependencies.mjs') < verification.indexOf('audit-production'),
+    'dependency preparation must run before repository verification',
+  );
+});
