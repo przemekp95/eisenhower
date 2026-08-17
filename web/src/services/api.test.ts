@@ -40,6 +40,13 @@ const jpegWithoutPrivateMetadata = Uint8Array.from([
   0xff, 0xd8, 0xff, 0xda, 0x00, 0x04, 0x01, 0x02, 0x10, 0x20, 0xff, 0xd9,
 ]);
 
+const pngWithPrivateMetadata = Uint8Array.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x01, 0x49, 0x48, 0x44, 0x52,
+  0x01, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x02, 0x65, 0x58, 0x49, 0x66, 0x10, 0x11, 0xbb,
+  0xbb, 0xbb, 0xbb, 0x00, 0x00, 0x00, 0x02, 0x49, 0x44, 0x41, 0x54, 0x30, 0x31, 0xdd, 0xdd, 0xdd,
+  0xdd, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xee, 0xee, 0xee, 0xee,
+]);
+
 function readFileBytes(file: File): Promise<number[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -48,6 +55,8 @@ function readFileBytes(file: File): Promise<number[]> {
     reader.readAsArrayBuffer(file);
   });
 }
+
+const asciiBytes = (value: string) => Array.from(value, (character) => character.charCodeAt(0));
 
 describe('OCR file privacy', () => {
   it('removes private JPEG metadata before the browser upload boundary', async () => {
@@ -91,6 +100,16 @@ describe('OCR file privacy', () => {
     await expect(readFileBytes(sanitized)).resolves.toEqual(Array.from(jpegWithoutPrivateMetadata));
   });
 
+  it('sanitizes PNG metadata and supplies a safe basename when none remains', async () => {
+    const original = new File([pngWithPrivateMetadata], '.png', { type: 'image/png' });
+
+    const sanitized = await sanitizeOcrFile(original);
+
+    expect(sanitized.name).toBe('scan-sanitized.png');
+    expect(sanitized.type).toBe('image/png');
+    expect(await readFileBytes(sanitized)).not.toContain(0x65);
+  });
+
   it('rejects malformed image bytes even when the file claims to be text', async () => {
     const malformedJpeg = new File(
       [Uint8Array.from([0xff, 0xd8, 0xff, 0xe1, 0x00, 0x10, 0x45])],
@@ -111,6 +130,91 @@ describe('OCR file privacy', () => {
     const text = new File(['1234ftyp task'], 'tasks.txt', { type: 'text/plain' });
 
     await expect(sanitizeOcrFile(text)).resolves.toBe(text);
+  });
+
+  it.each([
+    ['PNG', [0x89, 0x50, 0x4e, 0x47]],
+    ['GIF87a', asciiBytes('GIF87a')],
+    ['GIF89a', asciiBytes('GIF89a')],
+    ['BMP', asciiBytes('BM')],
+    ['WebP', asciiBytes('RIFFxxxxWEBP')],
+    ['AVIF', [0x00, 0x00, 0x00, 0x0c, ...asciiBytes('ftypmsf1')]],
+  ])('rejects a malformed %s signature even when it is labeled as text', async (_name, bytes) => {
+    const disguisedImage = new File([Uint8Array.from(bytes)], 'tasks.txt', {
+      type: 'text/plain',
+    });
+
+    await expect(sanitizeOcrFile(disguisedImage)).rejects.toThrow('Unsupported image format');
+  });
+
+  it.each([
+    [Uint8Array.from([0x00, 0x00, 0x00, 0x08, ...asciiBytes('ftyp')])],
+    [Uint8Array.from([0x00, 0x00, 0x00, 0x0c, ...asciiBytes('nopeavif')])],
+    [Uint8Array.from([0x00, 0x00, 0x00, 0x0c, ...asciiBytes('ftypnope')])],
+  ])('does not treat an invalid ISO-BMFF header as an image signature', async (bytes) => {
+    const text = new File([bytes], 'tasks.txt', { type: 'text/plain' });
+
+    await expect(sanitizeOcrFile(text)).rejects.toThrow('Unsupported image format');
+  });
+
+  it.each([new DOMException('read failed'), null])(
+    'rejects when the browser cannot read image bytes (error: %s)',
+    async (readerError) => {
+      const readSpy = jest
+        .spyOn(FileReader.prototype, 'readAsArrayBuffer')
+        .mockImplementation(function () {
+          Object.defineProperty(this, 'error', { configurable: true, value: readerError });
+          this.onerror?.(new ProgressEvent('error'));
+        });
+
+      await expect(
+        sanitizeOcrFile(new File(['Task'], 'tasks.txt', { type: 'text/plain' }))
+      ).rejects.toThrow(readerError ?? 'Unable to read image bytes');
+      readSpy.mockRestore();
+    }
+  );
+
+  it('rejects when the browser returns a non-binary image result', async () => {
+    const readSpy = jest
+      .spyOn(FileReader.prototype, 'readAsArrayBuffer')
+      .mockImplementation(function () {
+        Object.defineProperty(this, 'result', { configurable: true, value: 'not binary' });
+        this.onload?.(new ProgressEvent('load'));
+      });
+
+    await expect(
+      sanitizeOcrFile(new File(['Task'], 'tasks.txt', { type: 'text/plain' }))
+    ).rejects.toThrow('Unable to read image bytes');
+    readSpy.mockRestore();
+  });
+
+  it.each([new DOMException('text read failed'), null])(
+    'fails closed when browser text fallback cannot be read (error: %s)',
+    async (readerError) => {
+      const textReadSpy = jest
+        .spyOn(FileReader.prototype, 'readAsText')
+        .mockImplementation(function () {
+          Object.defineProperty(this, 'error', { configurable: true, value: readerError });
+          this.onerror?.(new ProgressEvent('error'));
+        });
+      const text = new File(['Task'], 'tasks.txt', { type: 'text/plain' });
+
+      await expect(sanitizeOcrFile(text)).rejects.toThrow('Unsupported image format');
+      textReadSpy.mockRestore();
+    }
+  );
+
+  it('treats a non-string browser text result as empty safe text', async () => {
+    const textReadSpy = jest
+      .spyOn(FileReader.prototype, 'readAsText')
+      .mockImplementation(function () {
+        Object.defineProperty(this, 'result', { configurable: true, value: new ArrayBuffer(0) });
+        this.onload?.(new ProgressEvent('load'));
+      });
+    const text = new File(['Task'], 'tasks.txt', { type: 'text/plain' });
+
+    await expect(sanitizeOcrFile(text)).resolves.toBe(text);
+    textReadSpy.mockRestore();
   });
 });
 
