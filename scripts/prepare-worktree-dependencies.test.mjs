@@ -215,3 +215,25 @@ test('Make exposes incremental and force preparation before verification', () =>
     'dependency preparation must run before repository verification',
   );
 });
+
+test('uses venv Python when the pip launcher is absent from a partial environment', () => {
+  const fixture = createFixture();
+  try {
+    const venvPython = join(fixture.root, 'backend-ai', 'venv', 'bin', 'python');
+    writeExecutable(
+      venvPython,
+      `import { appendFileSync } from 'node:fs';
+appendFileSync(process.env.PREPARE_LOG, 'pip:backend-ai\\n');
+`,
+    );
+
+    const result = runPrepareResult(fixture, {
+      BACKEND_AI_PIP: join(fixture.root, 'backend-ai', 'venv', 'bin', 'pip'),
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(readLog(fixture.log).at(-1), 'pip:backend-ai');
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});

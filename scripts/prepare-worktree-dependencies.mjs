@@ -139,6 +139,17 @@ function pythonIdentity(python, root) {
   return `${result.stdout ?? ''}${result.stderr ?? ''}`.trim();
 }
 
+function pipInvocation(pip, venv) {
+  if (pip && ((!isAbsolute(pip) && !pip.includes(sep)) || existsSync(pip))) {
+    return { args: [], command: pip };
+  }
+  const venvPython = join(venv, 'bin', 'python');
+  if (!existsSync(venvPython)) {
+    throw new Error(`Neither the configured pip launcher nor ${venvPython} exists`);
+  }
+  return { args: ['-m', 'pip'], command: venvPython };
+}
+
 function preparePythonDependencies({ force, pip, python, root, venv }) {
   const requirements = join(root, 'backend-ai', 'requirements-dev.txt');
   const files = collectRequirementFiles(requirements);
@@ -154,7 +165,12 @@ function preparePythonDependencies({ force, pip, python, root, venv }) {
     if (!existsSync(venv)) {
       run(python, ['-m', 'venv', venv], { cwd: root, env: process.env, stdio: 'inherit' });
     }
-    run(pip, ['install', '-r', requirements], { cwd: root, env: process.env, stdio: 'inherit' });
+    const invocation = pipInvocation(pip, venv);
+    run(invocation.command, [...invocation.args, 'install', '-r', requirements], {
+      cwd: root,
+      env: process.env,
+      stdio: 'inherit',
+    });
     if (!existsSync(venv)) {
       throw new Error('Python setup completed without creating the virtual environment');
     }
