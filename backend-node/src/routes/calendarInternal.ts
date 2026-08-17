@@ -6,6 +6,7 @@ import {
   CalendarBindingModel,
   CalendarConflictModel,
   CalendarConnectionModel,
+  CalendarInternalRequestReceiptModel,
   CalendarOutboxModel,
   CalendarSyncStateModel,
 } from '../models/calendar';
@@ -15,6 +16,8 @@ const MAX_OUTBOX_ATTEMPTS = 5;
 // Covers the bounded provider pull plus every 250-command apply batch at the
 // workflow's configured timeout/retry ceiling, preventing overlapping workers.
 const OUTBOX_LEASE_MS = 35 * 60_000;
+const INTERNAL_REQUEST_RECEIPT_TTL_MS = 24 * 60 * 60_000;
+const internalRequestContext = new WeakMap<Request, { requestId: string; fingerprint: string }>();
 
 function validSignature(actual: string, expected: string) {
   const left = Buffer.from(actual, 'hex');
@@ -51,21 +54,69 @@ export function isCalendarInboundCommand(value: unknown): value is CalendarInbou
 }
 
 export function requireCalendarInternalHmac(key: string) {
-  return (request: Request, response: Response, next: NextFunction) => {
+  return async (request: Request, response: Response, next: NextFunction) => {
+    // Express enters the broader /internal/calendar router before the separately
+    // mounted provider router. Let that narrower router authenticate exactly once.
+    if (request.baseUrl.endsWith('/calendar') && request.path.startsWith('/provider/')) return next();
     const timestamp = request.get('x-eisenhower-timestamp') ?? '';
+    const requestId = request.get('x-eisenhower-request-id') ?? '';
     const signature = request.get('x-eisenhower-signature') ?? '';
     const epoch = Number(timestamp);
     if (!Number.isInteger(epoch) || Math.abs(Date.now() / 1000 - epoch) > MAX_CLOCK_SKEW_SECONDS) {
       return response.status(401).json({ error: 'Invalid calendar dispatch timestamp' });
     }
+    if (!/^[A-Za-z0-9._:-]{16,128}$/.test(requestId)) {
+      return response.status(401).json({ error: 'Invalid calendar dispatch request id' });
+    }
     const rawBody = request.rawBody?.toString('utf8') ?? '';
+    const requestPath = request.originalUrl.split('?')[0];
     const expected = createHmac('sha256', key)
-      .update(`v1\n${timestamp}\n${request.method}\n${request.originalUrl.split('?')[0]}\n${rawBody}`)
+      .update(`v1\n${timestamp}\n${requestId}\n${request.method}\n${requestPath}\n${rawBody}`)
       .digest('hex');
     if (!/^[a-f0-9]{64}$/.test(signature) || !validSignature(signature, expected)) {
       return response.status(401).json({ error: 'Invalid calendar dispatch signature' });
     }
-    return next();
+    const fingerprint = createHash('sha256')
+      .update(`${request.method}\n${requestPath}\n${rawBody}`)
+      .digest('hex');
+    try {
+      await CalendarInternalRequestReceiptModel.create({
+        requestId,
+        fingerprint,
+        status: 'pending',
+        expiresAt: new Date(Date.now() + INTERNAL_REQUEST_RECEIPT_TTL_MS),
+      });
+      internalRequestContext.set(request, { requestId, fingerprint });
+      let responseBody: unknown;
+      const originalJson = response.json.bind(response);
+      response.json = ((body: unknown) => {
+        responseBody = body;
+        return originalJson(body);
+      }) as typeof response.json;
+      response.once('finish', () => {
+        void CalendarInternalRequestReceiptModel.updateOne(
+          { requestId, fingerprint, status: 'pending' },
+          { $set: { status: 'completed', statusCode: response.statusCode, responseBody } },
+        ).catch(() => undefined);
+      });
+      return next();
+    } catch (error) {
+      if (!(error instanceof mongoose.mongo.MongoServerError) || error.code !== 11000) return next(error);
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        const receipt = await CalendarInternalRequestReceiptModel.findOne({ requestId }).lean();
+        if (!receipt || receipt.fingerprint !== fingerprint) {
+          return response.status(409).json({ error: 'calendar_request_id_reused' });
+        }
+        if (receipt.status === 'completed' && receipt.statusCode) {
+          if (receipt.responseBody === undefined || receipt.statusCode === 204) {
+            return response.status(receipt.statusCode).send();
+          }
+          return response.status(receipt.statusCode).json(receipt.responseBody);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      return response.status(409).json({ error: 'calendar_request_in_progress' });
+    }
   };
 }
 
@@ -139,65 +190,88 @@ export function createCalendarInternalRouter(key: string, service = new Calendar
     }
   });
 
-  const claimOutbox = async (_req: Request, res: Response, next: NextFunction) => {
+  const claimOutbox = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const now = new Date();
       const leaseId = randomUUID();
-      await CalendarOutboxModel.updateMany(
-        { status: 'leased', leaseUntil: { $lte: now }, attempts: { $gte: MAX_OUTBOX_ATTEMPTS } },
-        { $set: { status: 'dead_letter', lastError: 'calendar_dispatch_attempts_exhausted' }, $unset: { leaseId: 1, leaseUntil: 1 } },
-      );
-      const event = await CalendarOutboxModel.findOneAndUpdate(
-        {
-          attempts: { $lt: MAX_OUTBOX_ATTEMPTS },
-          $or: [
-            { status: 'pending', availableAt: { $lte: now } },
-            { status: 'leased', leaseUntil: { $lte: now } },
-          ],
-        },
-        { $set: { status: 'leased', leaseId, leaseUntil: new Date(now.getTime() + OUTBOX_LEASE_MS) }, $inc: { attempts: 1 } },
-        { sort: { availableAt: 1 }, returnDocument: 'after' },
-      ).lean();
-      if (!event) return res.status(204).send();
-      const connection = await CalendarConnectionModel.findOne({
-        tenantId: event.tenantId, ownerId: event.ownerId, status: 'active',
-      }).lean();
-      const binding = await CalendarBindingModel.findOne({
-        tenantId: event.tenantId, ownerId: event.ownerId, taskId: event.aggregateId,
-      }).lean();
-      const syncState = event.type === 'calendar.sync.requested'
-        ? await CalendarSyncStateModel.findOne({
-            tenantId: event.tenantId, ownerId: event.ownerId, connectionId: connection?._id,
-          }).lean()
-        : null;
-      if (!connection || (['event_update', 'event_delete'].includes(event.type) && !binding)) {
-        await CalendarOutboxModel.updateOne(
-          { _id: event._id },
-          { $set: { status: 'dead_letter', lastError: connection ? 'calendar_binding_missing' : 'calendar_connection_missing' }, $unset: { leaseId: 1, leaseUntil: 1 } },
-        );
-        return res.status(409).json({ error: 'Calendar dispatch target is unavailable' });
+      let statusCode = 204;
+      let responseBody: Record<string, unknown> | undefined;
+      const context = internalRequestContext.get(req);
+      if (!context) throw new Error('calendar_request_receipt_missing');
+      const session = await mongoose.startSession();
+      try {
+        await session.withTransaction(async () => {
+          await CalendarOutboxModel.updateMany(
+            { status: 'leased', leaseUntil: { $lte: now }, attempts: { $gte: MAX_OUTBOX_ATTEMPTS } },
+            { $set: { status: 'dead_letter', lastError: 'calendar_dispatch_attempts_exhausted' }, $unset: { leaseId: 1, leaseUntil: 1 } },
+            { session },
+          );
+          const event = await CalendarOutboxModel.findOneAndUpdate(
+            {
+              attempts: { $lt: MAX_OUTBOX_ATTEMPTS },
+              $or: [
+                { status: 'pending', availableAt: { $lte: now } },
+                { status: 'leased', leaseUntil: { $lte: now } },
+              ],
+            },
+            { $set: { status: 'leased', leaseId, leaseUntil: new Date(now.getTime() + OUTBOX_LEASE_MS) }, $inc: { attempts: 1 } },
+            { sort: { availableAt: 1 }, returnDocument: 'after', session },
+          ).lean();
+          if (event) {
+            const connection = await CalendarConnectionModel.findOne({
+              tenantId: event.tenantId, ownerId: event.ownerId, status: 'active',
+            }).session(session).lean();
+            const binding = await CalendarBindingModel.findOne({
+              tenantId: event.tenantId, ownerId: event.ownerId, taskId: event.aggregateId,
+            }).session(session).lean();
+            const syncState = event.type === 'calendar.sync.requested'
+              ? await CalendarSyncStateModel.findOne({
+                  tenantId: event.tenantId, ownerId: event.ownerId, connectionId: connection?._id,
+                }).session(session).lean()
+              : null;
+            if (!connection || (['event_update', 'event_delete'].includes(event.type) && !binding)) {
+              await CalendarOutboxModel.updateOne(
+                { _id: event._id },
+                { $set: { status: 'dead_letter', lastError: connection ? 'calendar_binding_missing' : 'calendar_connection_missing' }, $unset: { leaseId: 1, leaseUntil: 1 } },
+                { session },
+              );
+              statusCode = 409;
+              responseBody = { error: 'Calendar dispatch target is unavailable' };
+            } else {
+              statusCode = 200;
+              responseBody = {
+                eventId: event.eventId,
+                leaseId: event.leaseId,
+                type: event.type,
+                tenantId: event.tenantId,
+                ownerId: event.ownerId,
+                aggregateId: event.aggregateId,
+                aggregateRevision: event.aggregateRevision,
+                payload: event.payload,
+                ...(event.type === 'calendar.sync.requested'
+                  ? { checkpoint: syncState?.pageToken ?? syncState?.syncToken ?? 'full-resync' }
+                  : {}),
+                provider: {
+                  connectionId: String(connection._id),
+                  calendarId: connection.calendarId,
+                  ...(binding ? {
+                    providerEventId: binding.providerEventId,
+                    providerEtag: binding.providerEtag,
+                  } : {}),
+                },
+              };
+            }
+          }
+          await CalendarInternalRequestReceiptModel.updateOne(
+            { requestId: context.requestId, fingerprint: context.fingerprint, status: 'pending' },
+            { $set: { status: 'completed', statusCode, responseBody } },
+            { session },
+          );
+        });
+      } finally {
+        await session.endSession();
       }
-      return res.json({
-        eventId: event.eventId,
-        leaseId: event.leaseId,
-        type: event.type,
-        tenantId: event.tenantId,
-        ownerId: event.ownerId,
-        aggregateId: event.aggregateId,
-        aggregateRevision: event.aggregateRevision,
-        payload: event.payload,
-        ...(event.type === 'calendar.sync.requested'
-          ? { checkpoint: syncState?.pageToken ?? syncState?.syncToken ?? 'full-resync' }
-          : {}),
-        provider: {
-          connectionId: String(connection._id),
-          calendarId: connection.calendarId,
-          ...(binding ? {
-            providerEventId: binding.providerEventId,
-            providerEtag: binding.providerEtag,
-          } : {}),
-        },
-      });
+      return responseBody ? res.status(statusCode).json(responseBody) : res.status(statusCode).send();
     } catch (error) { return next(error); }
   };
   router.post('/outbound/claim', claimOutbox);

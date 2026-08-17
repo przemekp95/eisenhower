@@ -1,4 +1,4 @@
-import { createHash, createHmac } from 'node:crypto';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
 import request from 'supertest';
 import mongoose from 'mongoose';
 import { createApp } from '../src/app';
@@ -20,11 +20,21 @@ const internalKey = 'calendar-internal-test-key-at-least-32-bytes';
 
 function signed(requestPath: string, body: unknown, method = 'POST') {
   const timestamp = String(Math.floor(Date.now() / 1000));
+  const requestId = randomUUID();
   const rawBody = JSON.stringify(body) ?? '';
   const signature = createHmac('sha256', internalKey)
-    .update(`v1\n${timestamp}\n${method}\n${requestPath}\n${rawBody}`)
+    .update(`v1\n${timestamp}\n${requestId}\n${method}\n${requestPath}\n${rawBody}`)
     .digest('hex');
-  return { timestamp, signature };
+  return { timestamp, requestId, signature };
+}
+
+function signedWithRequestId(requestPath: string, body: unknown, requestId: string, method = 'POST') {
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const rawBody = JSON.stringify(body) ?? '';
+  const signature = createHmac('sha256', internalKey)
+    .update(`v1\n${timestamp}\n${requestId}\n${method}\n${requestPath}\n${rawBody}`)
+    .digest('hex');
+  return { timestamp, requestId, signature };
 }
 
 describe('calendar integration boundary', () => {
@@ -116,6 +126,7 @@ describe('calendar integration boundary', () => {
     const response = await request(app).post(path)
       .set('Content-Type', 'application/json')
       .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Request-Id', auth.requestId)
       .set('X-Eisenhower-Signature', auth.signature)
       .send(body);
 
@@ -148,6 +159,7 @@ describe('calendar integration boundary', () => {
     const response = await request(app).post(path)
       .set('Content-Type', 'application/json')
       .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Request-Id', auth.requestId)
       .set('X-Eisenhower-Signature', auth.signature)
       .send(body);
 
@@ -183,6 +195,7 @@ describe('calendar integration boundary', () => {
     const firstAuth = signed(path, first);
     const firstResponse = await request(app).post(path)
       .set('X-Eisenhower-Timestamp', firstAuth.timestamp)
+      .set('X-Eisenhower-Request-Id', firstAuth.requestId)
       .set('X-Eisenhower-Signature', firstAuth.signature).send(first);
     const final = {
       operationId: 'sync-page-2', tenantId: 'local', ownerId: 'local-user',
@@ -191,6 +204,7 @@ describe('calendar integration boundary', () => {
     const finalAuth = signed(path, final);
     const finalResponse = await request(app).post(path)
       .set('X-Eisenhower-Timestamp', finalAuth.timestamp)
+      .set('X-Eisenhower-Request-Id', finalAuth.requestId)
       .set('X-Eisenhower-Signature', finalAuth.signature).send(final);
 
     expect(firstResponse.status).toBe(202);
@@ -259,6 +273,7 @@ describe('calendar integration boundary', () => {
     const auth = signed(path, body);
     const response = await request(app).post(path)
       .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Request-Id', auth.requestId)
       .set('X-Eisenhower-Signature', auth.signature).send(body);
 
     expect(response.status).toBe(200);
@@ -267,6 +282,84 @@ describe('calendar integration boundary', () => {
       provider: { connectionId: connection.id, calendarId: 'primary', providerEventId: 'event-bound', providerEtag: 'etag-bound' },
     });
     expect(JSON.stringify(response.body)).not.toContain('credentialRef');
+  });
+
+  it('binds a durable request id to HMAC and returns the identical outbox claim on replay', async () => {
+    const connection = await CalendarConnectionModel.create({
+      tenantId: 'local', ownerId: 'local-user', provider: 'google', calendarId: 'primary',
+      credentialRef: 'n8n:credential:google-replay', status: 'active',
+    });
+    for (const eventId of ['dispatch-replay-1', 'dispatch-replay-2']) {
+      await CalendarOutboxModel.create({
+        eventId, tenantId: 'local', ownerId: 'local-user', aggregateId: connection.id,
+        aggregateRevision: 0, type: 'calendar.sync.requested', payload: { connectionId: connection.id },
+        status: 'pending',
+      });
+    }
+    const path = '/internal/calendar/outbox/claim';
+    const body = {};
+    const auth = signedWithRequestId(path, body, 'claim-retry-after-lost-response');
+    const send = () => request(app).post(path)
+      .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Request-Id', auth.requestId)
+      .set('X-Eisenhower-Signature', auth.signature)
+      .send(body);
+
+    const first = await send();
+    const replay = await send();
+
+    expect(first.status).toBe(200);
+    expect(replay.status).toBe(200);
+    expect(replay.body).toEqual(first.body);
+    expect(await CalendarOutboxModel.countDocuments({ status: 'leased' })).toBe(1);
+    expect(await CalendarOutboxModel.findOne({ eventId: 'dispatch-replay-2' })).toMatchObject({
+      status: 'pending', attempts: 0,
+    });
+  });
+
+  it('leases only one event for concurrent replays of the same signed claim', async () => {
+    const connection = await CalendarConnectionModel.create({
+      tenantId: 'local', ownerId: 'local-user', provider: 'google', calendarId: 'primary',
+      credentialRef: 'n8n:credential:google-concurrent-replay', status: 'active',
+    });
+    for (const eventId of ['dispatch-concurrent-1', 'dispatch-concurrent-2']) {
+      await CalendarOutboxModel.create({
+        eventId, tenantId: 'local', ownerId: 'local-user', aggregateId: connection.id,
+        aggregateRevision: 0, type: 'calendar.sync.requested', payload: { connectionId: connection.id },
+        status: 'pending',
+      });
+    }
+    const path = '/internal/calendar/outbox/claim';
+    const body = {};
+    const auth = signedWithRequestId(path, body, 'claim-concurrent-replay');
+    const send = () => request(app).post(path)
+      .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Request-Id', auth.requestId)
+      .set('X-Eisenhower-Signature', auth.signature)
+      .send(body);
+
+    const [first, replay] = await Promise.all([send(), send()]);
+
+    expect(first.status).toBe(200);
+    expect(replay.status).toBe(200);
+    expect(replay.body).toEqual(first.body);
+    expect(await CalendarOutboxModel.countDocuments({ status: 'leased' })).toBe(1);
+    expect(await CalendarOutboxModel.countDocuments({ status: 'pending', attempts: 0 })).toBe(1);
+  });
+
+  it('rejects a missing request id even when the legacy HMAC is otherwise valid', async () => {
+    const path = '/internal/calendar/status';
+    const body = {};
+    const auth = signed(path, body);
+    const response = await request(app).post(path)
+      .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Signature', auth.signature)
+      .send(body);
+
+    expect(response).toMatchObject({
+      status: 401,
+      body: { error: 'Invalid calendar dispatch request id' },
+    });
   });
 
   it('lists active reconciliation jobs with persisted cursors through the HMAC boundary', async () => {
@@ -283,6 +376,7 @@ describe('calendar integration boundary', () => {
     const auth = signed(path, body);
     const response = await request(app).post(path)
       .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Request-Id', auth.requestId)
       .set('X-Eisenhower-Signature', auth.signature).send(body);
 
     expect(response.status).toBe(200);
@@ -308,6 +402,7 @@ describe('calendar integration boundary', () => {
     const auth = signed(path, body);
     const response = await request(app).post(path)
       .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Request-Id', auth.requestId)
       .set('X-Eisenhower-Signature', auth.signature).send(body);
 
     expect(response.status).toBe(200);
@@ -392,6 +487,7 @@ describe('calendar integration boundary', () => {
     const auth = signed(path, body);
     return request(app).post(path)
       .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Request-Id', auth.requestId)
       .set('X-Eisenhower-Signature', auth.signature)
       .send(body);
   }

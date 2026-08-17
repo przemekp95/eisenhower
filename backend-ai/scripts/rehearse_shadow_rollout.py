@@ -77,9 +77,9 @@ def _resolve(value: str, environment: dict[str, str]) -> str:
 
 
 def _flag_contract(repository_root: Path, environment: dict[str, str]) -> tuple[dict, dict]:
-  base = yaml.safe_load((repository_root / "deploy/local/compose.yaml").read_text(encoding="utf-8"))
+  base = yaml.safe_load((repository_root / "compose.yaml").read_text(encoding="utf-8"))
   amd = yaml.safe_load(
-    (repository_root / "deploy/local/compose.amd.yaml").read_text(encoding="utf-8")
+    (repository_root / "deploy/inference/compose.amd.yaml").read_text(encoding="utf-8")
   )
   knowledge = _service_environment(base["services"]["knowledge-service"])
   effective = {
@@ -225,8 +225,8 @@ def main() -> int:
   })
   restored = dict(effective)
   inputs = (
-    repository_root / "deploy/local/compose.yaml",
-    repository_root / "deploy/local/compose.amd.yaml",
+    repository_root / "compose.yaml",
+    repository_root / "deploy/inference/compose.amd.yaml",
     repository_root / "backend-ai/app/ops/response_canary.py",
     repository_root / "backend-ai/app/metrics.py",
   )

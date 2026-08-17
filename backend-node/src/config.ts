@@ -100,6 +100,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   if (!['static', 'oidc'].includes(authMode)) {
     throw new Error('AUTH_MODE must be static or oidc.');
   }
+  if (production && authMode !== 'oidc') {
+    throw new Error('Production requires AUTH_MODE=oidc.');
+  }
   if (authMode === 'oidc' && !(oidcIssuer && oidcAudience && oidcJwksUrl)) {
     throw new Error('OIDC_ISSUER, OIDC_AUDIENCE and OIDC_JWKS_URL are required for OIDC auth.');
   }

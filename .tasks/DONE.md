@@ -1,5 +1,28 @@
 # Done
 
+## TASK-062: Consolidate host-neutral deployment and release
+**Priority:** P0 | **Tags:** deployment, release, compose, security, calendar, ocr
+
+Replace deployment drift with one host-neutral application topology and an auditable release boundary while preserving the existing exact-green-master-SHA gate, private service boundaries, provider-independent inference and rollback safety.
+
+### Plan
+
+- Freeze failing contracts for the Compose graph, environment/auth validation, Calendar HMAC replay protection, OCR image preflight and release/deploy responsibility boundaries.
+- Consolidate dev and production onto one canonical Compose graph with one ingress, optional n8n, private state/application services and one inference contract; isolate AMD/NVIDIA provider stacks.
+- Make Calendar replay prevention durable and atomic, reject unsafe OCR images before full decode/OCR, and validate `APP_ENV`/`AUTH_MODE` fail-closed without weakening domain/outbox or ports-and-adapters boundaries.
+- Preserve the existing full-green-master-SHA release preflight, publish only scanned immutable artifacts/digests, and separate generic deployment from provider-specific execution or unverifiable AWS force-redeploy behavior.
+- Migrate scripts and documentation, then remove obsolete manifests only after focused and broad verification including safe Compose renders, Node/MCP/FastAPI/BDD/workflow and proportional backup/restore/rollback tests.
+
+### Outcome
+
+Replaced the root/local/Mikrus topology drift with one `compose.yaml`: only the gateway publishes a host port, n8n is an optional private profile, application inference uses exactly three provider-neutral variables, and standalone AMD/NVIDIA stacks attach to the same private network. Production now fails closed on invalid `APP_ENV` or non-OIDC `AUTH_MODE`. Removed the unverifiable AWS force-redeploy and provider-named deployment jobs; release keeps the existing exact-green-master preflight, builds/scans/SBOMs seven first-party images, publishes immutable digests and produces one checksum-bound final gate, while generic deployment consumes only a selected release manifest and rolls back both digests and the prior n8n profile.
+
+Calendar internal HMAC now binds a durable unique request ID, method, path and raw body; `/outbox/claim` atomically records its response with the lease so retries cannot claim twice. OCR rejects invalid, oversized-dimension and over-pixel images before the OCR decode path. Obsolete manifests, provider-specific deployment scripts and stale documentation were removed only after their replacement contracts passed. The still-unapproved retrieval candidate and all-PENDING review template were mechanically re-hashed because the production-acceptance corpus document changed; no human outcome was invented.
+
+Strict red-green evidence covered four missing Compose properties, three release-boundary failures, APP_ENV/static-production failures, Calendar replay (including concurrent claim), OCR bomb limits, MCP mutable base and rollback profile drift. Fresh green verification: backend AI 832 passed/13 skipped at 87.67% coverage; Node 261 tests plus build/typecheck; 21 BDD scenarios/149 steps; web 217 tests plus production build; MCP 50; n8n 13 Python plus 5 Node contracts; API client 28 plus typecheck; 12 Compose/release/backup/restore/rollback contracts; release preflight 3; safe canonical and provider Compose renders; actionlint, shellcheck/bash syntax/YAML parsing/diff check. The MCP image built locally from digest-pinned Wolfi and its all-severity Trivy scan found 0 vulnerabilities with a 60-component CycloneDX SBOM. No merge, push, registry publication, deployment, cutover or production mutation occurred; CI, real registry digests, live n8n activation/execution, target backup restore, provider hardware, public HTTPS, physical Android and human acceptance remain external gates.
+
+---
+
 ## TASK-061: Harden and optimize CI/CD orchestration
 **Priority:** P1 | **Tags:** ci, security, release, performance
 

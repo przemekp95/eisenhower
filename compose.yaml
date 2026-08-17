@@ -1,4 +1,4 @@
-name: eisenhower-local-production
+name: eisenhower
 
 x-common: &common
   restart: unless-stopped
@@ -8,7 +8,6 @@ x-common: &common
 services:
   web:
     <<: *common
-    profiles: [access, response, full]
     image: ${WEB_IMAGE:?WEB_IMAGE must be a versioned tag or digest}
     environment:
       - VITE_API_URL=/api
@@ -34,13 +33,11 @@ services:
         condition: service_healthy
       audit-volume-init:
         condition: service_completed_successfully
-    ports:
-      - "${NODE_BIND_ADDRESS:-127.0.0.1}:${NODE_BIND_PORT:-3001}:3001"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=${APP_ENV:?APP_ENV is required}
       - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/eisenhower?replicaSet=rs0}
       - AI_SERVICE_URL=${AI_SERVICE_URL:-http://ai-service:8000}
-      - AUTH_MODE=oidc
+      - AUTH_MODE=${AUTH_MODE:?AUTH_MODE is required}
       - OIDC_ISSUER=${OIDC_ISSUER:?OIDC_ISSUER is required}
       - OIDC_AUDIENCE=${OIDC_AUDIENCE:?OIDC_AUDIENCE is required}
       - OIDC_JWKS_URL=${OIDC_JWKS_URL:?OIDC_JWKS_URL is required}
@@ -72,6 +69,18 @@ services:
     volumes:
       - audit_data:/audit
 
+  backup-volume-helper:
+    <<: *common
+    image: ${VOLUME_INIT_IMAGE:-alpine:3.20}
+    profiles: [maintenance]
+    restart: "no"
+    command: ["true"]
+    volumes:
+      - audit_data:/volumes/audit
+      - n8n_data:/volumes/n8n
+      - identity_db_data:/volumes/identity
+      - rag_jobs:/volumes/rag-jobs
+
   mongodb:
     <<: *common
     image: ${MONGODB_IMAGE:-mongo:7.0.24-jammy}
@@ -85,8 +94,6 @@ services:
     mem_limit: ${MONGODB_MEMORY_LIMIT:-1g}
     cpus: ${MONGODB_CPUS:-1.0}
     pids_limit: 512
-    ports:
-      - "${MONGODB_BIND_ADDRESS:-127.0.0.1}:${MONGODB_BIND_PORT:-27017}:27017"
     environment:
       - MONGO_INITDB_DATABASE=eisenhower
     volumes:
@@ -106,11 +113,9 @@ services:
     <<: *common
     image: ${AI_BOUNDARY_IMAGE:?AI_BOUNDARY_IMAGE must be a versioned tag or digest}
     group_add: ["1001"]
-    ports:
-      - "${AI_BIND_ADDRESS:-127.0.0.1}:${AI_BIND_PORT:-8000}:8000"
     environment:
-      - APP_ENV=production
-      - AUTH_MODE=oidc
+      - APP_ENV=${APP_ENV:?APP_ENV is required}
+      - AUTH_MODE=${AUTH_MODE:?AUTH_MODE is required}
       - EISENHOWER_API_TOKEN=${EISENHOWER_API_TOKEN:-unused-in-oidc-mode}
       - EISENHOWER_ADMIN_TOKEN=${EISENHOWER_ADMIN_TOKEN:-unused-in-oidc-mode}
       - EISENHOWER_INTERNAL_API_TOKEN=${EISENHOWER_INTERNAL_API_TOKEN:?EISENHOWER_INTERNAL_API_TOKEN is required}
@@ -136,8 +141,8 @@ services:
     image: ${AI_CLASSIFIER_IMAGE:?AI_CLASSIFIER_IMAGE must be a versioned tag or digest}
     group_add: ["1001"]
     environment:
-      - APP_ENV=production
-      - AUTH_MODE=oidc
+      - APP_ENV=${APP_ENV:?APP_ENV is required}
+      - AUTH_MODE=${AUTH_MODE:?AUTH_MODE is required}
       - EISENHOWER_INTERNAL_API_TOKEN=${EISENHOWER_INTERNAL_API_TOKEN:?EISENHOWER_INTERNAL_API_TOKEN is required}
       - EISENHOWER_WEBHOOK_SECRET=${EISENHOWER_WEBHOOK_SECRET:?EISENHOWER_WEBHOOK_SECRET is required}
       - INTERNAL_ALLOWED_TENANTS=${INTERNAL_ALLOWED_TENANTS:?INTERNAL_ALLOWED_TENANTS is required}
@@ -188,7 +193,6 @@ services:
       - RERANKER_ALLOWED_HOSTS=${RERANKER_ALLOWED_HOSTS:-reranker}
       - INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}
       - INFERENCE_API_KEY=${INFERENCE_API_KEY:-}
-      - INFERENCE_MODEL=${INFERENCE_MODEL:-}
       - INFERENCE_ALLOWED_HOSTS=${INFERENCE_ALLOWED_HOSTS:-inference}
       - JOBS_DATABASE_PATH=/app/data/jobs.sqlite3
       - JOBS_MAX_QUEUED=${JOBS_MAX_QUEUED:?measured bounded queue capacity is required}
@@ -208,7 +212,7 @@ services:
       - ${AI_CLASSIFIER_ARTIFACT_ROOT:?approved classifier artifact directory is required}:/app/model-artifacts:ro
       - ${AI_EVALUATION_FILE:?approved evaluation file is required}:/app/evaluation/production.json:ro
       - ${AI_PROMOTION_ROOT:-./.runtime/promotion}:/app/promotion:ro
-      - ${MEMORY_POLICY_FILE:-../../docs/ai-rebuild/memory-policy-v1.json}:/app/policies/memory-policy-v1.json:ro
+      - ${MEMORY_POLICY_FILE:-./docs/ai-rebuild/memory-policy-v1.json}:/app/policies/memory-policy-v1.json:ro
     mem_limit: ${AI_CLASSIFIER_MEMORY_LIMIT:?calibrated classifier memory limit is required}
     cpus: ${AI_CLASSIFIER_CPU_LIMIT:?calibrated classifier CPU limit is required}
     pids_limit: ${AI_CLASSIFIER_PID_LIMIT:?calibrated classifier PID limit is required}
@@ -217,7 +221,6 @@ services:
     <<: *common
     image: ${AI_KNOWLEDGE_IMAGE:?AI_KNOWLEDGE_IMAGE must be a versioned tag or digest}
     command: ["python", "-m", "uvicorn", "app.knowledge_runtime:from_environment", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
-    profiles: [retrieval, response, full]
     group_add: ["1001"]
     depends_on:
       mongodb:
@@ -227,8 +230,8 @@ services:
       audit-volume-init:
         condition: service_completed_successfully
     environment:
-      - APP_ENV=production
-      - AUTH_MODE=oidc
+      - APP_ENV=${APP_ENV:?APP_ENV is required}
+      - AUTH_MODE=${AUTH_MODE:?AUTH_MODE is required}
       - OIDC_ISSUER=${OIDC_ISSUER:?OIDC_ISSUER is required}
       - OIDC_AUDIENCE=${OIDC_AUDIENCE:?OIDC_AUDIENCE is required}
       - OIDC_JWKS_URL=${OIDC_JWKS_URL:?OIDC_JWKS_URL is required}
@@ -266,7 +269,6 @@ services:
       - RERANKER_ALLOWED_HOSTS=${RERANKER_ALLOWED_HOSTS:-reranker}
       - INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}
       - INFERENCE_API_KEY=${INFERENCE_API_KEY:-}
-      - INFERENCE_MODEL=${INFERENCE_MODEL:-}
       - INFERENCE_ALLOWED_HOSTS=${INFERENCE_ALLOWED_HOSTS:-inference}
       - PROMPT_VERSION=${PROMPT_VERSION:-1.2.0}
       - KNOWLEDGE_PROMPT_VERSION=${KNOWLEDGE_PROMPT_VERSION:-1.0.0}
@@ -298,10 +300,9 @@ services:
     image: ${AI_INGEST_IMAGE:?AI_INGEST_IMAGE must be a versioned tag or digest}
     command: ["python", "-m", "app.worker_runtime"]
     init: true
-    profiles: [retrieval, response, full]
     environment:
-      - APP_ENV=production
-      - AUTH_MODE=oidc
+      - APP_ENV=${APP_ENV:?APP_ENV is required}
+      - AUTH_MODE=${AUTH_MODE:?AUTH_MODE is required}
       - OIDC_ISSUER=${OIDC_ISSUER:?OIDC_ISSUER is required}
       - OIDC_AUDIENCE=${OIDC_AUDIENCE:?OIDC_AUDIENCE is required}
       - OIDC_JWKS_URL=${OIDC_JWKS_URL:?OIDC_JWKS_URL is required}
@@ -360,10 +361,10 @@ services:
       - ${AI_DOCLING_ARTIFACT_ROOT:?approved Docling artifact directory is required}:/app/docling-artifacts:ro
       - ${AI_CLASSIFIER_ARTIFACT_ROOT:?approved classifier artifact directory is required}:/app/model-artifacts:ro
       - ${AI_EVALUATION_FILE:?approved evaluation file is required}:/app/evaluation/production.json:ro
-      - ../../README.md:/corpus/README.md:ro
-      - ../../docs:/corpus/docs:ro
-      - ../../corpus:/corpus/corpus:ro
-      - ../../.tasks:/corpus/.tasks:ro
+      - ./README.md:/corpus/README.md:ro
+      - ./docs:/corpus/docs:ro
+      - ./corpus:/corpus/corpus:ro
+      - ./.tasks:/corpus/.tasks:ro
     mem_limit: ${AI_INGEST_MEMORY_LIMIT:?calibrated ingest memory limit is required}
     cpus: ${AI_INGEST_CPU_LIMIT:?calibrated ingest CPU limit is required}
     pids_limit: ${AI_INGEST_PID_LIMIT:?calibrated ingest PID limit is required}
@@ -383,10 +384,7 @@ services:
 
   qdrant:
     <<: *common
-    profiles: [retrieval, response, full]
     image: ${QDRANT_IMAGE:-qdrant/qdrant:v1.12.0}
-    ports:
-      - "${QDRANT_BIND_ADDRESS:-127.0.0.1}:${QDRANT_BIND_PORT:-6333}:6333"
     environment:
       - QDRANT__LOG_LEVEL=info
       - QDRANT__TELEMETRY_DISABLED=true
@@ -395,10 +393,8 @@ services:
 
   n8n:
     <<: *common
-    profiles: [automation, full]
+    profiles: [n8n]
     image: ${N8N_IMAGE:-n8nio/n8n:2.4.6}
-    ports:
-      - "${N8N_BIND_ADDRESS:-127.0.0.1}:${N8N_BIND_PORT:-5678}:5678"
     environment:
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY is required}
       - N8N_DIAGNOSTICS_ENABLED=false
@@ -418,14 +414,13 @@ services:
       - NODE_FUNCTION_ALLOW_BUILTIN=crypto
     volumes:
       - n8n_data:/home/node/.n8n
-      - ../../n8n/workflows:/workflows:ro
-      - ../../n8n:/repo-n8n:ro
+      - ./n8n/workflows:/workflows:ro
+      - ./n8n:/repo-n8n:ro
     tmpfs:
       - /reconcile:mode=0700,uid=1000,gid=1000
 
   identity-db:
     <<: *common
-    profiles: [identity, access, response, full]
     image: ${IDENTITY_DB_IMAGE:-postgres:17.6-alpine}
     environment:
       - POSTGRES_DB=keycloak
@@ -441,7 +436,6 @@ services:
 
   identity-service:
     <<: *common
-    profiles: [identity, access, response, full]
     image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.7.0}
     command: ["start", "--import-realm"]
     depends_on:
@@ -467,12 +461,11 @@ services:
       - EISENHOWER_MCP_CLIENT_SECRET=${EISENHOWER_MCP_CLIENT_SECRET:?EISENHOWER_MCP_CLIENT_SECRET is required}
       - OIDC_MCP_RESOURCE_URL=${OIDC_MCP_RESOURCE_URL:?OIDC_MCP_RESOURCE_URL is required}
     volumes:
-      - ./identity/eisenhower-realm.json:/opt/keycloak/data/import/eisenhower-realm.json:ro
-      - ./identity/eisenhower-user-profile.json:/opt/keycloak/conf/eisenhower-user-profile.json:ro
+      - ./deploy/local/identity/eisenhower-realm.json:/opt/keycloak/data/import/eisenhower-realm.json:ro
+      - ./deploy/local/identity/eisenhower-user-profile.json:/opt/keycloak/conf/eisenhower-user-profile.json:ro
 
   mcp-service:
     <<: *common
-    profiles: [access, response, full]
     image: ${MCP_IMAGE:?MCP_IMAGE must be a versioned tag or digest}
     depends_on:
       api-service:
@@ -507,9 +500,8 @@ services:
     tmpfs:
       - /run/eisenhower:mode=0700,uid=1001,gid=1001
 
-  access-gateway:
+  gateway:
     <<: *common
-    profiles: [access, response, full]
     image: ${ACCESS_GATEWAY_IMAGE:-nginx:1.27.5-alpine}
     depends_on:
       web:
@@ -519,7 +511,7 @@ services:
       mcp-service:
         condition: service_started
     ports:
-      - "127.0.0.1:${ACCESS_GATEWAY_BIND_PORT:-8790}:8080"
+      - "${GATEWAY_BIND_ADDRESS:-127.0.0.1}:${GATEWAY_PORT:-8790}:8080"
     environment:
       - ACCESS_GATEWAY_HOST=${ACCESS_GATEWAY_HOST:?ACCESS_GATEWAY_HOST is required}
       - ACCESS_GATEWAY_ALLOWED_ORIGIN=${ACCESS_GATEWAY_ALLOWED_ORIGIN:?ACCESS_GATEWAY_ALLOWED_ORIGIN is required}
@@ -529,25 +521,9 @@ services:
       - AI_UPSTREAM=${ACCESS_GATEWAY_AI_UPSTREAM:-ai-service:8000}
       - KNOWLEDGE_UPSTREAM=${ACCESS_GATEWAY_KNOWLEDGE_UPSTREAM:-knowledge-service:8000}
       - WEB_UPSTREAM=${ACCESS_GATEWAY_WEB_UPSTREAM:-web:3000}
-    volumes:
-      - ./access-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
-
-  calendar-gateway:
-    <<: *common
-    profiles: [automation, full]
-    image: ${CALENDAR_GATEWAY_IMAGE:-nginx:1.27.5-alpine}
-    depends_on:
-      api-service:
-        condition: service_started
-      n8n:
-        condition: service_started
-    ports:
-      - "127.0.0.1:${CALENDAR_GATEWAY_BIND_PORT:-8787}:8080"
-    environment:
       - N8N_UPSTREAM=${CALENDAR_GATEWAY_N8N_UPSTREAM:-n8n:5678}
-      - API_UPSTREAM=${CALENDAR_GATEWAY_API_UPSTREAM:-api-service:3001}
     volumes:
-      - ./calendar-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./deploy/local/access-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
 
 volumes:
   mongodb_data:
@@ -563,4 +539,4 @@ volumes:
 
 networks:
   private:
-    name: ${COMPOSE_PRIVATE_NETWORK:-eisenhower-local-private}
+    name: ${COMPOSE_PRIVATE_NETWORK:-eisenhower-private}

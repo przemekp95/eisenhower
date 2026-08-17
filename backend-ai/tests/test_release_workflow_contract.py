@@ -6,14 +6,53 @@ ROOT = Path(__file__).parents[2]
 
 def test_source_promotion_cannot_implicitly_release_or_deploy():
   workflow = ROOT.joinpath(".github/workflows/release.yml").read_text(encoding="utf-8")
+  deploy_workflow = ROOT.joinpath(".github/workflows/deploy.yml")
 
   assert "workflow_run:" not in workflow
   assert "workflow_dispatch:" in workflow
   assert "release_sha:" in workflow
-  assert "deploy:" in workflow
-  assert "default: false" in workflow
-  assert "github.event.inputs.deploy == 'true'" in workflow
-  assert "IMAGE_TAG: ${{ needs.release-preflight.outputs.release_sha }}" in workflow
+  assert "force-new-deployment" not in workflow
+  assert "AWS_" not in workflow
+  assert "mikrus" not in workflow.lower()
+  assert "deploy:" not in workflow
+  assert deploy_workflow.is_file()
+
+
+def test_release_has_one_aggregate_publication_gate_and_immutable_manifest():
+  workflow = ROOT.joinpath(".github/workflows/release.yml").read_text(encoding="utf-8")
+
+  build = workflow[workflow.index("  docker-build-scan:"):workflow.index("  publish-release:")]
+  publish = workflow[workflow.index("  publish-release:"):]
+  assert "docker push" not in build
+  assert "push: false" in build
+  assert "needs:\n      - docker-build-scan" in publish
+  assert "release-manifest.json" in publish
+  assert "RepoDigests" in publish
+  assert "sha256sum" in publish
+  assert "docker push" in publish
+
+
+def test_generic_deploy_consumes_release_manifest_without_provider_specific_jobs():
+  workflow = ROOT.joinpath(".github/workflows/deploy.yml").read_text(encoding="utf-8")
+
+  assert "workflow_dispatch:" in workflow
+  assert "release_run_id:" in workflow
+  assert "release-manifest.json" in workflow
+  assert "deploy-release" in workflow
+  assert "aws" not in workflow.lower()
+  assert "mikrus" not in workflow.lower()
+  assert "force-new-deployment" not in workflow
+
+
+def test_final_release_gate_binds_container_and_android_artifacts():
+  workflow = ROOT.joinpath(".github/workflows/release.yml").read_text(encoding="utf-8")
+  final_gate = workflow[workflow.index("  final-release-gate:"):]
+
+  assert "- publish-release" in final_gate
+  assert "- android-release" in final_gate
+  assert "final-release.json" in final_gate
+  assert "release-manifest.json.sha256" in final_gate
+  assert "android-release-" in final_gate
 
 
 def test_release_secrets_are_gated_by_exact_green_master_preflight():

@@ -32,6 +32,7 @@ server {
     set $ai_upstream ${AI_UPSTREAM};
     set $knowledge_upstream ${KNOWLEDGE_UPSTREAM};
     set $web_upstream ${WEB_UPSTREAM};
+    set $n8n_upstream ${N8N_UPSTREAM};
     access_log off;
     server_tokens off;
     client_max_body_size 1m;
@@ -63,6 +64,19 @@ server {
 
     location = /.well-known/oauth-protected-resource/mcp {
         proxy_pass http://$mcp_upstream/.well-known/oauth-protected-resource/mcp;
+    }
+
+    # These are the only public Calendar integration routes. n8n remains a
+    # private optional profile and is resolved dynamically when enabled.
+    location = /eisenhower/google-calendar/webhook {
+        if ($request_method != POST) { return 404; }
+        proxy_set_header Authorization "";
+        proxy_pass http://$n8n_upstream/webhook/eisenhower-google-calendar;
+    }
+
+    location = /eisenhower/google-calendar/oauth/callback {
+        if ($request_method != GET) { return 404; }
+        proxy_pass http://$api_upstream/calendar/oauth/callback;
     }
 
     location /api/ {

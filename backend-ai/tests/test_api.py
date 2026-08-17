@@ -1,10 +1,12 @@
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
+from io import BytesIO
 import hmac
 import json
 
 from fastapi.testclient import TestClient
+from PIL import Image
 import pytest
 
 from app.config import Settings
@@ -1465,6 +1467,66 @@ def test_batch_and_extract_routes(real_model_bundle):
   assert upload.json()["ocr"]["method"] == "plain-text"
   assert upload.json()["classified_tasks"][0]["similar_examples_used"] >= 1
   assert upload.json()["classified_tasks"][0]["top_similar_examples"]
+
+
+def test_extract_route_maps_unsafe_image_to_safe_4xx(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(
+    settings=settings,
+    store=store,
+    local_model=FakeLocalModel(),
+    ocr_runner=lambda *_args, **_kwargs: "must not run",
+  )
+  service._tesseract_available = lambda: True  # type: ignore[method-assign]
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service),
+    headers={"Authorization": "Bearer test-admin-token"},
+    raise_server_exceptions=False,
+  )
+  payload = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+
+  response = client.post(
+    "/extract-tasks-from-image",
+    files={"file": ("unsafe.png", payload, "image/png")},
+  )
+
+  assert response.status_code == 422
+  assert response.json() == {"error": "invalid_image"}
+
+
+def test_extract_route_maps_excessive_image_dimensions_to_413(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    ocr_max_pixels=8,
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(
+    settings=settings,
+    store=store,
+    local_model=FakeLocalModel(),
+    ocr_runner=lambda *_args, **_kwargs: "must not run",
+  )
+  service._tesseract_available = lambda: True  # type: ignore[method-assign]
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service),
+    headers={"Authorization": "Bearer test-admin-token"},
+  )
+  image = Image.new("RGB", (4, 4), "white")
+  buffer = BytesIO()
+  image.save(buffer, format="PNG")
+
+  response = client.post(
+    "/extract-tasks-from-image",
+    files={"file": ("oversized.png", buffer.getvalue(), "image/png")},
+  )
+
+  assert response.status_code == 413
+  assert response.json() == {"error": "image_dimensions_exceeded"}
 
 
 def test_client_facing_payloads_keep_the_fields_used_by_web_and_mobile(real_model_bundle):

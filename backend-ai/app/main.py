@@ -31,7 +31,7 @@ from .rag.models import (
   KnowledgeAnswerResponse,
   RetrievalSummary,
 )
-from .service import ProviderDisabledError, QuadrantAIService
+from .service import OCRImageRejectedError, ProviderDisabledError, QuadrantAIService
 from .security_controls import SlidingWindowRateLimiter
 from .runtime_limits import configure_torch_threads
 from .store import TrainingStore
@@ -961,7 +961,14 @@ def create_app(
     payload = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(payload) > MAX_UPLOAD_BYTES:
       raise HTTPException(status_code=413, detail="Upload exceeds the 10 MiB limit.")
-    return resolved_ai_service.extract_tasks_from_image(file.filename or "upload", payload, file.content_type)
+    try:
+      return resolved_ai_service.extract_tasks_from_image(
+        file.filename or "upload",
+        payload,
+        file.content_type,
+      )
+    except OCRImageRejectedError as exception:
+      raise HTTPException(status_code=exception.status_code, detail=exception.code) from exception
 
   @app.post("/batch-analyze")
   def batch_analyze_tasks(request: BatchRequest):
