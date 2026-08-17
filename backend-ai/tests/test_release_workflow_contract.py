@@ -42,6 +42,8 @@ def test_generic_deploy_consumes_release_manifest_without_provider_specific_jobs
   assert "aws" not in workflow.lower()
   assert "mikrus" not in workflow.lower()
   assert "force-new-deployment" not in workflow
+  assert "enable_n8n" not in workflow
+  assert "--profile n8n" not in workflow
 
 
 def test_final_release_gate_binds_container_and_android_artifacts():
