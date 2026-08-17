@@ -18,6 +18,7 @@ import {
   confirmMemory,
   exportMemory,
   requestCalendarSync,
+  sanitizeOcrFile,
   disconnectCalendar,
   resolveCalendarConflict,
   transitionTaskLifecycle,
@@ -29,6 +30,67 @@ import {
   setApiToken,
   startCalendarConnection,
 } from './api';
+
+const jpegWithPrivateMetadata = Uint8Array.from([
+  0xff, 0xd8, 0xff, 0xe1, 0x00, 0x08, 0x45, 0x78, 0x69, 0x66, 0x00, 0x00, 0xff, 0xda, 0x00, 0x04,
+  0x01, 0x02, 0x10, 0x20, 0xff, 0xd9,
+]);
+
+const jpegWithoutPrivateMetadata = Uint8Array.from([
+  0xff, 0xd8, 0xff, 0xda, 0x00, 0x04, 0x01, 0x02, 0x10, 0x20, 0xff, 0xd9,
+]);
+
+function readFileBytes(file: File): Promise<number[]> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => resolve(Array.from(new Uint8Array(reader.result as ArrayBuffer)));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+describe('OCR file privacy', () => {
+  it('removes private JPEG metadata before the browser upload boundary', async () => {
+    const original = new File([jpegWithPrivateMetadata], 'camera.jpg', {
+      type: 'image/jpeg',
+      lastModified: 123,
+    });
+
+    const sanitized = await sanitizeOcrFile(original);
+
+    expect(sanitized).not.toBe(original);
+    expect(sanitized.name).toBe('camera-sanitized.jpg');
+    expect(sanitized.type).toBe('image/jpeg');
+    await expect(readFileBytes(sanitized)).resolves.toEqual(Array.from(jpegWithoutPrivateMetadata));
+  });
+
+  it('passes non-image text through and rejects unsupported image formats', async () => {
+    const text = new File(['Task'], 'tasks.txt', { type: 'text/plain' });
+    await expect(sanitizeOcrFile(text)).resolves.toBe(text);
+    await expect(
+      sanitizeOcrFile(new File(['RIFF'], 'camera.webp', { type: 'image/webp' }))
+    ).rejects.toThrow('Unsupported image format');
+  });
+
+  it('derives the sanitized content type from bytes instead of trusting picker metadata', async () => {
+    const mislabeled = new File([jpegWithPrivateMetadata], 'camera.png', { type: 'image/png' });
+
+    const sanitized = await sanitizeOcrFile(mislabeled);
+
+    expect(sanitized.name).toBe('camera-sanitized.jpg');
+    expect(sanitized.type).toBe('image/jpeg');
+  });
+
+  it('sanitizes JPEG bytes when the browser provides no MIME type', async () => {
+    const original = new File([jpegWithPrivateMetadata], 'camera.jpg');
+
+    const sanitized = await sanitizeOcrFile(original);
+
+    expect(sanitized).not.toBe(original);
+    expect(sanitized.type).toBe('image/jpeg');
+    await expect(readFileBytes(sanitized)).resolves.toEqual(Array.from(jpegWithoutPrivateMetadata));
+  });
+});
 
 const taskResponse = {
   _id: '1',

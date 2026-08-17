@@ -26,7 +26,7 @@ import { runtimeConfig } from '../config';
 import type { Language } from '../i18n/translations';
 import { clearApiToken, getAccessToken, setApiToken, rejectApiToken } from '../authSession';
 
-const { createAiApi, createTaskApi } = apiClient;
+const { createAiApi, createTaskApi, stripImageMetadata } = apiClient;
 
 export { clearApiToken, setApiToken };
 
@@ -195,11 +195,46 @@ export async function answerKnowledge(
 /** @deprecated Use analyzeTask. */
 export const analyzeWithLangChain = analyzeTask;
 
+function readFileBytes(file: File): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('Unable to read image bytes'));
+    reader.onload = () => {
+      if (!(reader.result instanceof ArrayBuffer)) {
+        reject(new Error('Unable to read image bytes'));
+        return;
+      }
+      resolve(new Uint8Array(reader.result));
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+export async function sanitizeOcrFile(file: File): Promise<File> {
+  const bytes = await readFileBytes(file);
+  let sanitized: Uint8Array;
+  try {
+    sanitized = stripImageMetadata(bytes);
+  } catch (error) {
+    if (file.type.startsWith('text/') || /\.txt$/i.test(file.name)) {
+      return file;
+    }
+    throw error;
+  }
+  const pngSignature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  const extension = pngSignature.every((byte, index) => sanitized[index] === byte) ? 'png' : 'jpg';
+  const baseName = file.name.replace(/\.[^.]+$/, '') || 'scan';
+  return new File([sanitized], `${baseName}-sanitized.${extension}`, {
+    type: extension === 'png' ? 'image/png' : 'image/jpeg',
+    lastModified: file.lastModified,
+  });
+}
+
 export async function extractTasksFromImage(
   file: File,
   options: { signal?: AbortSignal } = {}
 ): Promise<OCRResult> {
-  return getAiApi().extractTasksFromImage(file, options);
+  return getAiApi().extractTasksFromImage(await sanitizeOcrFile(file), options);
 }
 
 export async function batchAnalyzeTasks(

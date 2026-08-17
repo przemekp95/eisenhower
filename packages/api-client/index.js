@@ -57,6 +57,172 @@ const AI_API_PATHS = Object.freeze({
 // analysis endpoint, not proof that LangChain or generative RAG handled a request.
 const ANALYZE_TASK_PATH = AI_API_PATHS.analyzeTask;
 
+function concatenateBytes(chunks) {
+  const totalLength = chunks.reduce((total, chunk) => total + chunk.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
+}
+
+function stripJpegMetadata(bytes) {
+  if (!(bytes instanceof Uint8Array) || bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) {
+    throw new TypeError('Expected JPEG bytes');
+  }
+
+  const chunks = [bytes.subarray(0, 2)];
+  let offset = 2;
+  let inScan = false;
+  while (offset < bytes.length) {
+    if (inScan) {
+      const scanStart = offset;
+      let markerStart = -1;
+      while (offset < bytes.length) {
+        if (bytes[offset] !== 0xff) {
+          offset += 1;
+          continue;
+        }
+
+        const candidateStart = offset;
+        while (offset < bytes.length && bytes[offset] === 0xff) {
+          offset += 1;
+        }
+        if (offset >= bytes.length) {
+          throw new TypeError('Malformed JPEG without EOI');
+        }
+
+        const candidate = bytes[offset];
+        if (candidate === 0x00 || candidate === 0x01 || (candidate >= 0xd0 && candidate <= 0xd7)) {
+          offset += 1;
+          continue;
+        }
+        markerStart = candidateStart;
+        break;
+      }
+
+      if (markerStart < 0) {
+        throw new TypeError('Malformed JPEG without EOI');
+      }
+      chunks.push(bytes.subarray(scanStart, markerStart));
+      offset = markerStart;
+      inScan = false;
+    }
+
+    const markerStart = offset;
+    if (bytes[offset] !== 0xff) {
+      throw new TypeError('Malformed JPEG marker');
+    }
+    while (offset < bytes.length && bytes[offset] === 0xff) {
+      offset += 1;
+    }
+    if (offset >= bytes.length) {
+      throw new TypeError('Malformed JPEG marker');
+    }
+
+    const marker = bytes[offset];
+    offset += 1;
+    if (marker === 0xda) {
+      if (offset + 2 > bytes.length) {
+        throw new TypeError('Malformed JPEG segment');
+      }
+      const length = (bytes[offset] << 8) | bytes[offset + 1];
+      if (length < 2 || offset + length > bytes.length) {
+        throw new TypeError('Malformed JPEG segment');
+      }
+      chunks.push(bytes.subarray(markerStart, offset + length));
+      offset += length;
+      inScan = true;
+      continue;
+    }
+    if (marker === 0xd9) {
+      if (offset !== bytes.length) {
+        throw new TypeError('Malformed JPEG trailing data');
+      }
+      chunks.push(bytes.subarray(markerStart, offset));
+      return concatenateBytes(chunks);
+    }
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      chunks.push(bytes.subarray(markerStart, offset));
+      continue;
+    }
+    if (offset + 2 > bytes.length) {
+      throw new TypeError('Malformed JPEG segment');
+    }
+
+    const length = (bytes[offset] << 8) | bytes[offset + 1];
+    const segmentEnd = offset + length;
+    if (length < 2 || segmentEnd > bytes.length) {
+      throw new TypeError('Malformed JPEG segment');
+    }
+    if (![0xe1, 0xed, 0xfe].includes(marker)) {
+      chunks.push(bytes.subarray(markerStart, segmentEnd));
+    }
+    offset = segmentEnd;
+  }
+
+  throw new TypeError('Malformed JPEG without image data');
+}
+
+function isPng(bytes) {
+  const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  return bytes.length >= signature.length && signature.every((byte, index) => bytes[index] === byte);
+}
+
+function stripPngMetadata(bytes) {
+  const chunks = [bytes.subarray(0, 8)];
+  const privateChunkTypes = new Set(['eXIf', 'tEXt', 'zTXt', 'iTXt']);
+  let offset = 8;
+
+  while (offset < bytes.length) {
+    if (offset + 12 > bytes.length) {
+      throw new TypeError('Malformed PNG chunk');
+    }
+    const length =
+      bytes[offset] * 0x1000000 +
+      bytes[offset + 1] * 0x10000 +
+      bytes[offset + 2] * 0x100 +
+      bytes[offset + 3];
+    const chunkEnd = offset + 12 + length;
+    if (!Number.isSafeInteger(chunkEnd) || chunkEnd > bytes.length) {
+      throw new TypeError('Malformed PNG chunk');
+    }
+    const type = String.fromCharCode(
+      bytes[offset + 4],
+      bytes[offset + 5],
+      bytes[offset + 6],
+      bytes[offset + 7]
+    );
+    if (!privateChunkTypes.has(type)) {
+      chunks.push(bytes.subarray(offset, chunkEnd));
+    }
+    offset = chunkEnd;
+    if (type === 'IEND') {
+      if (length !== 0 || offset !== bytes.length) {
+        throw new TypeError('Malformed PNG chunk');
+      }
+      return concatenateBytes(chunks);
+    }
+  }
+
+  throw new TypeError('Malformed PNG without IEND');
+}
+
+function stripImageMetadata(bytes) {
+  if (!(bytes instanceof Uint8Array)) {
+    throw new TypeError('Expected image bytes');
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+    return stripJpegMetadata(bytes);
+  }
+  if (isPng(bytes)) {
+    return stripPngMetadata(bytes);
+  }
+  throw new TypeError('Unsupported image format');
+}
+
 function getProviderPath(provider) {
   return `/providers/${encodeURIComponent(provider)}`;
 }
@@ -1527,6 +1693,8 @@ module.exports = {
   isTaskDto,
   readJson,
   resolveTaskQuadrant,
+  stripImageMetadata,
+  stripJpegMetadata,
   toAcceptedOcrLearningPayload,
   toTaskInputDto,
   toTaskPatchDto,

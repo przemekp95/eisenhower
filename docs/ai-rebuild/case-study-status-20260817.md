@@ -19,6 +19,30 @@ Until its exact promotion evidence is recorded, this is not an immutable release
 | Grounded RAG parity | Mobile now uses `/v2/knowledge/answer` with citations, no-answer, cancellation and editable apply preview; web adds explicit cancellation | Automated client contract only; real backend traffic remains unproven |
 | Camera parity | Separate web/mobile camera and gallery paths, mobile permission/offline state and review-before-upload/import; contract SHA-256 `4638add205bd935258cf3679214e0908c8e3db29a0fdc2f9a7eeb96206708169` | Android release build and mocked behavior are not physical camera evidence; `exif:false` is not proof that file bytes were scrubbed |
 
+### Image-upload privacy addendum
+
+The current worktree candidate closes the earlier byte-scrubbing caveat without changing the frozen
+case-study draft. A shared fail-closed parser removes JPEG EXIF/XMP, IPTC and comment segments plus PNG
+EXIF/text chunks. The web creates and uploads a new sanitized JPEG/PNG `File`, passes plain text through
+unchanged and rejects unsupported image encodings. Mobile re-encodes the reviewed picker asset to a
+temporary JPEG, scrubs its bytes, uploads only that cache URI and deletes it after success or failure;
+offline selection still creates no upload file.
+
+Fresh candidate evidence:
+
+- API client: `33 passed` plus TypeScript declarations, including literal JPEG/PNG byte fixtures,
+  progressive-scan metadata removal and malformed-input rejection;
+- web: `221 passed`, formatting and production build, including image sanitization when the browser
+  supplies no MIME type;
+- mobile: `202 passed`, `5` security tests and production dependency audit with `0` vulnerabilities;
+- native Android: clean Expo prebuild followed by `352` Gradle release tasks, with `BUILD SUCCESSFUL`;
+- local CI-candidate APK: v2 signature verified, SHA-256
+  `8337163cde3308c8ae766996d037bee397576fc4ada875930a321274b59187cf`.
+
+This is source, test and local-build evidence only. The APK is not production-signed or installed, the
+candidate has no promoted immutable SHA, and no physical camera, assistive-technology, real-backend or
+public-runtime acceptance is implied.
+
 Final local verification:
 
 - backend AI: `819 passed, 12 skipped`; local deployment contract: `30 passed`;
@@ -38,8 +62,8 @@ claim that those skipped wheels were vulnerability-audited.
   telemetry, an authorized cohort, real traffic, reviewed sampling and a signed decision.
 - TASK-019 is not running for users: the consent, retrieval and response flags remain disabled and the
   repository policy still refuses deployment.
-- TASK-028 has automated contract parity, not physical Android/iOS/mobile-browser camera or assistive-
-  technology acceptance.
+- TASK-028 has automated contract parity and byte-level upload privacy, not physical
+  Android/iOS/mobile-browser camera or assistive-technology acceptance.
 - TASK-047 still lacks the dual-human classifier annotation and genuine production benchmark.
 - No public HTTPS demo, public deployment or publication approval exists.
 
