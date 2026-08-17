@@ -50,17 +50,34 @@ kcadm=(docker exec "$identity_container" /opt/keycloak/bin/kcadm.sh)
 "${kcadm[@]}" config credentials \
   --server http://127.0.0.1:8080/identity --realm master \
   --user contract-admin --password contract-admin-password >/dev/null
-scope_id=$("${kcadm[@]}" get client-scopes -r eisenhower \
-  -q name=eisenhower-admin-claims --fields id --format csv --noquotes | tail -n 1)
-test -n "$scope_id"
-test "$("${kcadm[@]}" get roles/eisenhower-admin -r eisenhower \
-  --fields name --format csv --noquotes)" = eisenhower-admin
-test "$("${kcadm[@]}" get clients -r eisenhower \
-  -q clientId=eisenhower-admin-access --fields clientId,directAccessGrantsEnabled \
-  --format csv --noquotes)" = eisenhower-admin-access,false
-mapper_names=$("${kcadm[@]}" get \
-  "client-scopes/$scope_id/protocol-mappers/models" -r eisenhower \
-  --fields name --format csv --noquotes | sort)
-test "$mapper_names" = $'email\npreferred-username\nrealm-roles'
+verification_attempt=1
+while true; do
+  scope_id=$("${kcadm[@]}" get client-scopes -r eisenhower \
+    -q name=eisenhower-admin-claims --fields id --format csv --noquotes \
+    2>/dev/null | tail -n 1 || true)
+  role_name=$("${kcadm[@]}" get roles/eisenhower-admin -r eisenhower \
+    --fields name --format csv --noquotes 2>/dev/null || true)
+  client_state=$("${kcadm[@]}" get clients -r eisenhower \
+    -q clientId=eisenhower-admin-access --fields clientId,directAccessGrantsEnabled \
+    --format csv --noquotes 2>/dev/null || true)
+  mapper_names=$(
+    if [ -n "$scope_id" ]; then
+      "${kcadm[@]}" get "client-scopes/$scope_id/protocol-mappers/models" \
+        -r eisenhower --fields name --format csv --noquotes 2>/dev/null | sort
+    fi
+  )
+  if [ "$role_name" = eisenhower-admin ] \
+    && [ "$client_state" = eisenhower-admin-access,false ] \
+    && [ "$mapper_names" = $'email\npreferred-username\nrealm-roles' ]; then
+    break
+  fi
+  if [ "$verification_attempt" -ge 20 ]; then
+    printf 'Keycloak state did not converge: scope=%s role=%s client=%s mappers=%s\n' \
+      "$scope_id" "$role_name" "$client_state" "$mapper_names" >&2
+    exit 1
+  fi
+  verification_attempt=$((verification_attempt + 1))
+  sleep 1
+done
 
 echo "Keycloak admin bootstrap passed twice with the expected role, client, scope, and mappers."

@@ -1,5 +1,27 @@
 # Done
 
+## TASK-063: Make automation and observability mandatory and admin-only
+**Priority:** P0 | **Tags:** deployment, n8n, prometheus, grafana, oidc, monitoring
+
+Make n8n, Prometheus and Grafana mandatory members of the canonical dev/prod topology and expose their administrative interfaces only through the single gateway to Keycloak users holding the `eisenhower-admin` role.
+
+### Plan
+
+- Freeze failing Compose, gateway, identity, deployment and backup contracts for mandatory n8n/Prometheus/Grafana and admin-only access.
+- Add a private OIDC authorization proxy, mandatory health-gated services, persistent provisioning and the explicit public Calendar webhook exception.
+- Remove the optional n8n input/profile and profile-aware rollback state while preserving one ingress, private service ports and identical dev/prod graphs.
+- Render both environments, exercise access decisions and service configuration, run proportional Node/FastAPI/n8n/monitoring/lifecycle/workflow regression, then document exact local and external gates.
+
+### Outcome
+
+n8n, Prometheus and Grafana are unconditional, private and health-gated in the one canonical Compose graph. Only the gateway publishes a host port. Their consoles use `/admin/n8n/`, `/admin/prometheus/` and `/admin/grafana/`; a private OAuth2 Proxy accepts only the dedicated Keycloak `eisenhower-admin` realm role. Admin Origin admission is limited to `/admin/*` and `/oauth2/*`, sessions refresh every minute and expire after 15 minutes, refreshed split cookies are propagated, and the exact Calendar webhook is the only public n8n route with bearer, cookie and proxy identity headers cleared.
+
+Fresh and existing realms converge through a mandatory idempotent bootstrap. A real Keycloak 26.7 rehearsal imported the realm, ran the bootstrap twice, and verified the role, confidential client, scope and three claim mappers. OAuth2 Proxy uses the public issuer for validation/login and explicit internal token, userinfo and JWKS endpoints to avoid a gateway startup cycle. Grafana runtime plugin installation and update checks are disabled; Prometheus self-scrapes its configured subpath. Backup quiesces SQLite/PostgreSQL writers and identity storage; restore keeps identity storage stopped during replacement.
+
+Strict TDD recorded failing then green contracts for the mandatory graph, deployment lifecycle, admin boundary, identity migration, cookies, origin, public webhook and runtime drift. Fresh verification: 25 deployment/monitoring/release contracts; real Nginx, OAuth2 Proxy, Grafana and Keycloak checks; Node 263/263 at 100% coverage plus 21 BDD scenarios/149 steps; FastAPI 832 passed/13 skipped at 87.67%; MCP 50; n8n 13 Python plus 5 Node; API client 28; shellcheck/bash syntax and workflow YAML parsing. `actionlint` was unavailable. No merge, push, image publication, deployment, cutover or production mutation occurred; live named-user login/revocation, imported active n8n workflows, real metrics/alerts, target-volume restore/rollback, public TLS and production acceptance remain external gates.
+
+---
+
 ## TASK-062: Consolidate host-neutral deployment and release
 **Priority:** P0 | **Tags:** deployment, release, compose, security, calendar, ocr
 
@@ -14,6 +36,8 @@ Replace deployment drift with one host-neutral application topology and an audit
 - Migrate scripts and documentation, then remove obsolete manifests only after focused and broad verification including safe Compose renders, Node/MCP/FastAPI/BDD/workflow and proportional backup/restore/rollback tests.
 
 ### Outcome
+
+The optional-n8n topology described below is historical TASK-062 state and was superseded by TASK-063, which makes n8n, Prometheus and Grafana unconditional and removes profile-aware rollback state.
 
 Replaced the root/local/Mikrus topology drift with one `compose.yaml`: only the gateway publishes a host port, n8n is an optional private profile, application inference uses exactly three provider-neutral variables, and standalone AMD/NVIDIA stacks attach to the same private network. Production now fails closed on invalid `APP_ENV` or non-OIDC `AUTH_MODE`. Removed the unverifiable AWS force-redeploy and provider-named deployment jobs; release keeps the existing exact-green-master preflight, builds/scans/SBOMs seven first-party images, publishes immutable digests and produces one checksum-bound final gate, while generic deployment consumes only a selected release manifest and rolls back both digests and the prior n8n profile.
 
