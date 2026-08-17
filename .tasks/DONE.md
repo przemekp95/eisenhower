@@ -1,5 +1,23 @@
 # Done
 
+## TASK-006: Revisit the React Native 0.84 migration when Expo supports it
+**Priority:** P3 | **Tags:** mobile, dependencies, deferred
+
+Keep the supported Expo 55 dependency baseline. Reassess React Native 0.84 or newer only after a stable Expo release supports it and the full mobile and native Android gates can run.
+
+### Plan
+
+- Check the stable Expo compatibility matrix when a newer supported line exists.
+- Upgrade as one deliberate platform migration and run the complete mobile/native Android verification.
+
+### Outcome
+
+Migrated the supported mobile baseline to Expo 57.0.14, React Native 0.86.2 and React 19.2.3. Expo 57.0.9+ was selected over SDK 56 because the current official release notes and Expo Doctor identify the SDK 56 Hermes V1 memory regression as fixed by React Native 0.86.2. Aligned Expo modules and Jest tooling, moved the legacy splash configuration to `expo-splash-screen`, and removed the obsolete Metro symlink override.
+
+Fresh verification passed: 199 Jest tests, 5 security tests, zero production-audit vulnerabilities, Expo dependency compatibility, Expo Doctor 21/21, and a clean Expo prebuild plus Android release build (`352` tasks, `BUILD SUCCESSFUL`). The local CI-candidate APK verifies with Android signature scheme v2 and SHA-256 `c41deb5e437d23a7a2157546235c3e041af3587ba15118b2eee88fb3b4ee86f0`. It is debug-signed and was not installed on physical hardware, published, store-submitted or deployed.
+
+---
+
 ## TASK-064: Bootstrap fresh worktree dependencies automatically
 **Priority:** P1 | **Tags:** developer-experience, worktree, dependencies, verification
 

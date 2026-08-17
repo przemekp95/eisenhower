@@ -35,13 +35,14 @@ Fresh candidate evidence:
 - web: `223 passed`, formatting and production build, including image sanitization when the browser
   supplies no MIME type and rejection of image bytes disguised as text;
 - mobile: `202 passed`, `5` security tests and production dependency audit with `0` vulnerabilities;
-- native Android: clean Expo prebuild followed by `352` Gradle release tasks, with `BUILD SUCCESSFUL`;
+- Expo 57 integration: dependency check current and Expo Doctor `21/21`;
+- native Android: clean Expo 57 prebuild followed by `352` Gradle release tasks, with `BUILD SUCCESSFUL`;
 - local CI-candidate APK: v2 signature verified, SHA-256
-  `8337163cde3308c8ae766996d037bee397576fc4ada875930a321274b59187cf`.
+  `2bd9c5e845eac0393bc4ce2b2275e62cfaa42615a412c4c912e0043af4f23cc7`.
 
-This is source, test and local-build evidence only. The APK is not production-signed or installed, the
-candidate has no promoted immutable SHA, and no physical camera, assistive-technology, real-backend or
-public-runtime acceptance is implied.
+This is source, test and local-build evidence only. The APK is not production-signed or installed; at
+the time of this local evidence capture the candidate had no promoted immutable SHA. No physical camera,
+assistive-technology, real-backend or public-runtime acceptance is implied.
 
 Final local verification:
 
