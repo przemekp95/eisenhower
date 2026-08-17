@@ -15,7 +15,11 @@ PROVIDER_STACKS = (
   ROOT / "deploy" / "inference" / "compose.amd.yaml",
   ROOT / "deploy" / "inference" / "compose.nvidia.yaml",
 )
-PRIVATE_SERVICES = {"mongodb", "qdrant", "api-service", "ai-service", "n8n"}
+PRIVATE_SERVICES = {
+  "mongodb", "qdrant", "api-service", "ai-service", "n8n",
+  "prometheus", "grafana", "oauth2-proxy",
+}
+MANDATORY_ADMIN_SERVICES = {"n8n", "prometheus", "grafana", "oauth2-proxy"}
 INFERENCE_CONTRACT = {
   "INFERENCE_BASE_URL",
   "INFERENCE_API_KEY",
@@ -99,12 +103,17 @@ def test_canonical_compose_has_one_ingress_and_private_internal_services():
     assert not services[name].get("ports"), f"{name} must remain private"
 
 
-def test_n8n_is_optional_and_uses_the_same_private_graph():
+def test_admin_services_are_mandatory_healthy_and_use_the_same_private_graph():
   services = _compose()["services"]
 
-  assert services["n8n"].get("profiles") == ["n8n"]
-  assert "gateway" in services
-  assert not services["n8n"].get("ports")
+  assert MANDATORY_ADMIN_SERVICES <= set(services)
+  for name in MANDATORY_ADMIN_SERVICES:
+    assert not services[name].get("profiles"), f"{name} must be unconditional"
+    assert not services[name].get("ports"), f"{name} must remain private"
+    assert services[name].get("healthcheck"), f"{name} must be health-gated"
+
+  gateway_dependencies = set(services["gateway"].get("depends_on", {}))
+  assert MANDATORY_ADMIN_SERVICES <= gateway_dependencies
 
 
 def test_application_uses_one_three_variable_inference_contract_and_external_provider_stacks():
