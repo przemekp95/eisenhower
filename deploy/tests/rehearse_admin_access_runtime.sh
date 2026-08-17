@@ -31,7 +31,7 @@ docker run -d --name "$identity_container" \
 
 bootstrap=(
   docker run --rm --network "$runtime_network" --read-only
-  --tmpfs /opt/keycloak/.keycloak:mode=0700,uid=1000,gid=0
+  --tmpfs "/opt/keycloak/.keycloak:mode=0700,uid=1000,gid=0"
   --entrypoint /bin/sh
   -e KC_BOOTSTRAP_ADMIN_USERNAME=contract-admin
   -e KC_BOOTSTRAP_ADMIN_PASSWORD=contract-admin-password
