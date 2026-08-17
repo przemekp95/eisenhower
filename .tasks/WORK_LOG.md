@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-17 — TASK-062 promotion follow-up: Restored the Prettier gate on the canonical release-image contract and passed fresh full repository verification, actionlint 1.7.11, workflow YAML parsing and diff checks before source publication.
+
 2026-08-17 — TASK-063: Made n8n, Prometheus and Grafana mandatory and private behind the single gateway and a dedicated Keycloak admin role; hardened idempotent realm migration, bounded sessions, Origin/cookie/webhook handling, runtime plugin drift and state-safe backup/restore; passed full local and real-container verification without merge, push, publication or deployment.
 
 2026-08-17 — TASK-062: Consolidated dev/prod onto one private host-neutral Compose graph, hardened Calendar replay/OCR/env auth, separated scanned immutable release from generic digest deployment with rollback, removed unverifiable AWS/Mikrus drift, and passed full Node/AI/web/MCP/n8n/BDD/Compose/lifecycle verification without push, publication or deployment.

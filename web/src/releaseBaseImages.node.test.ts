@@ -21,10 +21,7 @@ describe('release base image policy', () => {
   });
 
   it('requires the canonical MongoDB image to remain an explicit deployment input', () => {
-    const compose = fs.readFileSync(
-      path.resolve(__dirname, '../../compose.yaml'),
-      'utf8'
-    );
+    const compose = fs.readFileSync(path.resolve(__dirname, '../../compose.yaml'), 'utf8');
     const mongoImage = compose.match(/^\s+image:\s+(\$\{MONGODB_IMAGE[^}]+\})$/m)?.[1];
 
     expect(mongoImage).toContain('MONGODB_IMAGE');
