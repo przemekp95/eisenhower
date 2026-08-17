@@ -27,8 +27,10 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 - `backend-node`: REST API for tasks and health checks
 - `backend-ai`: FastAPI service for classification, OCR, and batch analysis
 - `mobile/eisenhower-matrix`: Expo / React Native client
-- `qdrant`: opt-in vector store for the canonical local RAG profile; not enabled in the current Mikrus runtime
-- `minio`: experimental local-profile service, not a dependency of the supported runtime
+- `qdrant`: private rebuildable projection for canonical RAG data
+- `n8n`: mandatory private automation runtime; only the explicit Calendar webhook is routed publicly
+- `prometheus`: mandatory private metrics and alert-rule runtime
+- `grafana`: mandatory private operational dashboard runtime
 
 Plain-language browser instructions are available in [`docs/WEB_GUIDE.md`](docs/WEB_GUIDE.md).
 
@@ -113,42 +115,43 @@ Before starting the root Docker Compose stack, copy `.env.example` to `.env` and
 
 The standard backend AI development environment installs `requirements-dev.txt`, which includes core runtime and test/audit tools but excludes research frameworks. Install `requirements-experimental.txt` separately only to run the opt-in LangChain/MinIO experiments.
 
-The retrieval topology is opt-in and remains independent from the inference host:
+The canonical application graph is `compose.yaml` for both development and production. Set
+`APP_ENV` and `AUTH_MODE` explicitly; production accepts only OIDC. The default graph exposes
+one host port from `gateway`; MongoDB, Qdrant, Node, FastAPI, n8n, Prometheus,
+Grafana and OAuth2 Proxy have no host ports.
 
 ```bash
-docker compose --profile rag up qdrant rag-worker ai-service
+docker compose --env-file .env config
+docker compose --env-file .env up -d --wait
 ```
 
-For a local NVIDIA/CUDA or AMD/ROCm inference candidate, add exactly one disabled profile file:
+n8n, Prometheus and Grafana are mandatory in that graph. Their consoles are
+available only through the gateway after Keycloak grants the dedicated
+`eisenhower-admin` realm role:
+
+- `/admin/n8n/`
+- `/admin/prometheus/`
+- `/admin/grafana/`
+
+The OAuth2 Proxy callback is `/oauth2/callback`. The only unauthenticated n8n
+exception is `POST /eisenhower/google-calendar/webhook`; it does not expose the
+editor or arbitrary n8n webhook paths. Assign `eisenhower-admin` only to named
+operators and supply unique `ADMIN_OIDC_CLIENT_SECRET` and
+`ADMIN_OIDC_COOKIE_SECRET` values outside version control. The admin session is
+refreshed every minute and expires after 15 minutes; the gateway forwards refreshed
+cookies so role revocation is re-evaluated within that bounded session window.
+
+AMD and NVIDIA are standalone provider projects, not overlays of the application topology:
 
 ```bash
-docker compose -f docker-compose.yml -f deploy/inference/compose.nvidia.yaml \
-  --profile rag --profile inference-nvidia up qdrant rag-worker inference ai-service
-docker compose -f docker-compose.yml -f deploy/inference/compose.amd.yaml \
-  --profile rag --profile inference-amd up qdrant rag-worker inference ai-service
+docker compose --env-file .env -f deploy/inference/compose.amd.yaml --profile inference-amd up -d
+docker compose --env-file .env -f deploy/inference/compose.nvidia.yaml --profile inference-nvidia up -d
 ```
 
-For a dedicated or user-computer GPU host, run only the private inference service there and set
-`INFERENCE_BASE_URL`, `INFERENCE_ALLOWED_HOSTS`, `INFERENCE_API_KEY` and `INFERENCE_MODEL` on
-FastAPI. Neither profile publishes port 8000 on the host. These definitions are contract-only
-candidates, not proof of image compatibility, model loading, GPU capacity, performance or production readiness.
-
-RAG rollout uses independent server-side flags. Start with
-`RAG_RETRIEVAL_ENABLED=true`, `RAG_GENERATION_ENABLED=false`, and
-`RAG_RESPONSE_ENABLED=false` to exercise Qdrant retrieval and aggregate shadow metrics without
-calling inference or exposing retrieved content in analysis responses. Enable generation only after the
-retrieval gates pass, and enable responses only for an approved tenant cohort. `RAG_ENABLED` is a
-legacy compatibility switch that enables both retrieval and generation when the explicit flags are
-absent; new environments should use the phase-specific flags.
-
-The retrieval-only local topology does not require the GPU profile:
-
-```bash
-docker compose --profile rag up qdrant rag-worker ai-service
-```
-
-This still requires an approved synthetic or real corpus command path before a search can return
-useful hits; starting empty services is not a corpus, quality, privacy, or production gate.
+The application-side inference contract is exactly `INFERENCE_BASE_URL`,
+`INFERENCE_API_KEY`, and `INFERENCE_ALLOWED_HOSTS`. Model and hardware settings belong only
+to the provider project. Starting containers is not corpus, model-quality, deployment, or
+production-acceptance evidence.
 
 Per-service fallback:
 
@@ -170,7 +173,7 @@ PYTHONPATH=. python scripts/benchmark_classifier.py --output /tmp/eisenhower-cla
 
 This report is local classifier evidence only. The bundled 32-example synthetic set is a development smoke set, not canonical production evidence. It does not exercise RAG and does not prove that any artifact is deployed in production.
 
-Production promotion is fail-closed. `deploy/mikrus/docker-compose.yml` requires an externally supplied, read-only evaluation file (`AI_EVALUATION_FILE`) and its approved SHA-256 (`LOCAL_MODEL_APPROVED_EVALUATION_SHA256`). A production evaluation must be frozen, independent from training, dual-annotated by two humans, have both raw agreement and Cohen's kappa of at least `0.80`, contain at least 240 examples, and contain at least 30 examples for every language/class slice. The default MiniLM encoder is pinned to the immutable Hugging Face revision `e8f8c211226b894fcb81acc59f3b34ba3efd5f42`, and saved MLP artifacts from another encoder revision are rejected. Training-management endpoints are disabled in that production compose profile; approved retraining is an explicit offline operation. The liveness and readiness endpoints are `/health/live` and `/health/ready`.
+Production promotion is fail-closed. `compose.yaml` requires an externally supplied, read-only evaluation file (`AI_EVALUATION_FILE`) and its approved SHA-256 (`LOCAL_MODEL_APPROVED_EVALUATION_SHA256`). A production evaluation must be frozen, independent from training, dual-annotated by two humans, have both raw agreement and Cohen's kappa of at least `0.80`, contain at least 240 examples, and contain at least 30 examples for every language/class slice. The default MiniLM encoder is pinned to the immutable Hugging Face revision `e8f8c211226b894fcb81acc59f3b34ba3efd5f42`, and saved MLP artifacts from another encoder revision are rejected. Training-management endpoints are disabled in that production compose profile; approved retraining is an explicit offline operation. The liveness and readiness endpoints are `/health/live` and `/health/ready`.
 
 The human packet is under `backend-ai/evaluation/production-v1/`. Give each annotator only `pool.jsonl`, one separate blank response file, and `annotation-guide.md`; keep `internal-strata.jsonl`, model output, and the other annotator's file hidden until both blind files are complete and hashed. After human adjudication, `scripts/finalize_annotations.py` produces a still-unapproved candidate and `scripts/freeze_evaluation.py` requires a named human approval before it emits the canonical dataset and SHA-256 manifest. Neither script can turn blank annotations into production evidence.
 
@@ -188,9 +191,10 @@ The manual AI smoke does the opposite: it does not start any local test servers 
 
 ### Production AI scope
 
-The current Mikrus production runtime is intentionally limited to the local multilingual MiniLM classifier, its local similarity index, deterministic explanations, and Tesseract OCR. Legacy endpoint and payload names containing `langchain` or `rag` are retained for client compatibility, but they do not claim an active LLM, LangChain retrieval chain, Qdrant dependency, or generative reasoning.
-
-Qdrant is the selected vector store behind the opt-in canonical RAG ports and its client is a core dependency, but Qdrant/vLLM/RAG are not enabled by the current Mikrus Compose file. LangChain and MinIO remain research-only integrations whose dependencies live in `requirements-experimental.txt`; they are not installed by the production image or standard dev setup and are never eagerly imported by the core vector package. None of these opt-in paths is production acceptance evidence without the separate runtime gates.
+The canonical runtime keeps MongoDB and Qdrant private and routes AI only through the gateway.
+Classifier, retrieval and generated-response capabilities retain independent fail-closed gates.
+Provider readiness, image rendering, or a green release does not prove real traffic, human quality
+or public production acceptance.
 
 ---
 
@@ -201,22 +205,23 @@ Qdrant is the selected vector store behind the opt-in canonical RAG ports and it
 
 The integration suite renders the React app in JSDOM, but talks to a real Express API backed by `mongodb-memory-server`, so CRUD is exercised without mocking `./services/api` or `fetch`.
 
-## Mikrus Deployment
+## Deployment and release
 
-A successful `CI` push run on `master` triggers `release.yml`, which builds images tagged with the full commit SHA and can deploy them to Mikrus over SSH when secrets are configured. A full-SHA tag identifies the intended source revision but remains a mutable registry tag; the current deployment does not yet bind the three first-party images by registry digest.
+`ci.yml` proves the source SHA. `release.yml` preserves the existing exact-green-master-SHA
+preflight, then builds and scans every complete first-party image before the aggregate
+`publish-release` job can publish anything. The final artifact binds the source SHA to registry
+RepoDigests and SHA-256 checksums of every Trivy report and CycloneDX SBOM.
 
-The existing `deploy/mikrus/docker-compose.yml` topology deliberately runs `backend-node` with
-`AUTH_MODE=static` and the shared `EISENHOWER_API_TOKEN`. It is a static, single-tenant deployment:
-the authenticated principal is always `tenantId=local`, `ownerId=local-user`. This profile is not
-OIDC, does not establish per-person accounts, and must not be described as multi-user production.
-An OIDC deployment must instead supply the issuer, audience and same-origin HTTPS JWKS settings and
-isolate every task by both the authenticated tenant and subject.
+`deploy.yml` is deliberately separate and generic. It downloads that immutable manifest and calls
+`deploy/generic/deploy.sh`, which forces `APP_ENV=production` and `AUTH_MODE=oidc`, renders the
+single Compose graph, pulls only manifest-bound digests, verifies OCI revision labels, and preserves
+a rollback manifest. The historical AWS force-redeploy and Mikrus-specific workflow were removed:
+neither proved that the requested release digest was running.
 
-Node readiness calls the AI service's `/health/ready` endpoint with a bounded timeout. MongoDB remains a
-required readiness dependency; unavailable AI is reported as degraded but does not block web/task CRUD.
-The Mikrus rollout applies the same boundary: core web/API readiness and smoke checks can succeed without
-private knowledge or GPU, while AI readiness remains separately observable and AI requests still fail
-closed when their grounded upstream is unavailable.
+Backup and confirmation-gated restore live in `deploy/generic/`. MongoDB is canonical; Qdrant is
+rebuildable and follows its separately verified snapshot/reindex procedure. A green workflow,
+published manifest, or successful local render remains distinct from an authorized deploy, public
+runtime checks and human acceptance.
 
 ### Task HTTP concurrency and pagination
 
@@ -228,8 +233,8 @@ legacy requests without `If-Match` remain accepted while clients migrate to cond
 `GET /tasks` still returns the historical JSON array. Optional `limit` (1-200) and opaque `cursor`
 query parameters add cursor pagination without changing that body shape. When another page exists,
 the response exposes `X-Next-Cursor` and an RFC 8288-style `Link` header. In OIDC mode list, update
-and delete operations always scope records by both `tenantId` and `ownerId`; the static profile maps
-to the fixed local principal described above.
+and delete operations always scope records by both `tenantId` and `ownerId`; production rejects a
+host-selected static authentication mode.
 
 `POST /tasks` accepts a scoped `Idempotency-Key`. An exact replay returns the original task, while
 reusing the key with another payload returns `409`. Deleting an idempotently created task retains
@@ -237,23 +242,12 @@ only a redacted operation tombstone: later exact replays return
 `410 code=idempotency_result_deleted` and cannot recreate the deleted task or recover its private
 title or description.
 
-- `DOCKER_HUB_USERNAME`: Docker Hub namespace used for images
-- `DOCKER_HUB_TOKEN`: Docker Hub token required for a publishable release and Mikrus deployment
-- `MIKRUS_HOST`: server host (IPv6 is supported)
-- `MIKRUS_USER`: SSH user (`root` supported)
-- `MIKRUS_SSH_KEY`: private key content used by GitHub Actions
-- `MIKRUS_ENV_FILE`: full `.env` content written on the server
-- `MIKRUS_APP_DIR`: required absolute deploy directory
-- `MIKRUS_PUBLIC_URL`: public HTTPS origin used by post-deploy smoke checks
-
-The deploy script creates and verifies `.eisenhower-deployment`; it refuses a non-empty target without that ownership marker. Existing deployments must add a marker containing exactly `eisenhower` before the first hardened deployment.
-The example Mikrus env uses `WEB_PORT=8080` to avoid common `3000` collisions on shared hosts. Only the frontend publishes a host port; API and AI stay on the Compose network. If the frontend port is occupied, update `WEB_PORT` in `MIKRUS_ENV_FILE` before redeploying.
 For HTTPS deployments behind a public host, prefer `VITE_API_URL=/api` and `VITE_AI_API_URL=/ai`, and set `CORS_ALLOW_ORIGINS` to the public frontend origin.
 Reference files:
 
-- `deploy/mikrus/docker-compose.yml`
-- `deploy/mikrus/.env.example`
-- `deploy/mikrus/backup.sh` and `restore.sh` for checksum-verified data recovery; restore additionally requires `RESTORE_CONFIRM=restore-eisenhower-data`
+- `compose.yaml` for the canonical application topology
+- `.env.example` for host-neutral configuration names without operational secrets
+- `deploy/generic/` for manifest-bound deploy, backup, restore and rollback
 - [`docs/RELEASE_BASE_IMAGES.md`](docs/RELEASE_BASE_IMAGES.md) for digest policy, current exceptions and the controlled update procedure
 
 ## Quality Gates
@@ -285,6 +279,8 @@ The `test-mobile-native-android` job uploads a downloadable CI candidate APK fro
 
 ---
 
-## Experimental local profiles
+## Maintenance profile
 
-The root Compose file exposes Qdrant under the `rag` profile for the canonical local RAG topology and under `experimental` for isolated vector research. MinIO remains experimental. None of these services is consumed by the default classifier runtime or enabled by the current Mikrus deployment.
+The canonical graph always starts n8n, Prometheus and Grafana. The only profile is
+`maintenance`, which exposes no host port and is used by backup/restore helpers.
+AMD/NVIDIA inference runs as a separate provider project and never changes the application graph.

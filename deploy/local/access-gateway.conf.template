@@ -7,6 +7,17 @@ map $http_origin $standard_origin_allowed {
     "${ACCESS_GATEWAY_ALLOWED_ORIGIN}" 1;
 }
 
+map $http_origin $admin_origin_match {
+    default 0;
+    "${ACCESS_ADMIN_ALLOWED_ORIGIN}" 1;
+}
+
+map "$uri|$admin_origin_match" $admin_origin_allowed {
+    default 0;
+    ~^/admin/.*\|1$ 1;
+    ~^/oauth2/.*\|1$ 1;
+}
+
 # Keycloak login form navigations are emitted with Origin: null by Chromium.
 # Admit that opaque origin only for Keycloak's state- and cookie-bound login action;
 # API, AI, MCP and every other identity route retain the standard origin policy.
@@ -15,11 +26,11 @@ map "$uri|$http_origin" $keycloak_form_origin_allowed {
     ~^/identity/realms/eisenhower/login-actions/.*\|null$ 1;
 }
 
-map "$standard_origin_allowed:$keycloak_form_origin_allowed" $origin_allowed {
+map "$standard_origin_allowed:$admin_origin_allowed:$keycloak_form_origin_allowed" $origin_allowed {
     default 0;
-    "1:0" 1;
-    "1:1" 1;
-    "0:1" 1;
+    ~^1: 1;
+    ~^0:1: 1;
+    ~^0:0:1$ 1;
 }
 
 server {
@@ -32,6 +43,10 @@ server {
     set $ai_upstream ${AI_UPSTREAM};
     set $knowledge_upstream ${KNOWLEDGE_UPSTREAM};
     set $web_upstream ${WEB_UPSTREAM};
+    set $n8n_upstream ${N8N_UPSTREAM};
+    set $prometheus_upstream ${PROMETHEUS_UPSTREAM};
+    set $grafana_upstream ${GRAFANA_UPSTREAM};
+    set $admin_auth_upstream ${ADMIN_AUTH_UPSTREAM};
     access_log off;
     server_tokens off;
     client_max_body_size 1m;
@@ -63,6 +78,87 @@ server {
 
     location = /.well-known/oauth-protected-resource/mcp {
         proxy_pass http://$mcp_upstream/.well-known/oauth-protected-resource/mcp;
+    }
+
+    location = /oauth2/auth {
+        internal;
+        proxy_pass http://$admin_auth_upstream;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header X-Original-URL $scheme://$http_host$request_uri;
+    }
+
+    location /oauth2/ {
+        proxy_pass http://$admin_auth_upstream;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Auth-Request-Redirect $request_uri;
+    }
+
+    location = /admin/n8n { return 308 /admin/n8n/; }
+    location /admin/n8n/ {
+        auth_request /oauth2/auth;
+        error_page 401 = /oauth2/start;
+        auth_request_set $admin_user $upstream_http_x_auth_request_user;
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        auth_request_set $auth_cookie_upstream_1 $upstream_cookie__eisenhower_admin_1;
+        add_header Set-Cookie $auth_cookie always;
+        if ($auth_cookie_upstream_1) {
+            add_header Set-Cookie "_eisenhower_admin_1=$auth_cookie_upstream_1; Path=/; Secure; HttpOnly; SameSite=Lax" always;
+        }
+        proxy_set_header X-WEBAUTH-USER $admin_user;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_pass http://$n8n_upstream/;
+    }
+
+    location = /admin/prometheus { return 308 /admin/prometheus/; }
+    location /admin/prometheus/ {
+        auth_request /oauth2/auth;
+        error_page 401 = /oauth2/start;
+        auth_request_set $admin_user $upstream_http_x_auth_request_user;
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        auth_request_set $auth_cookie_upstream_1 $upstream_cookie__eisenhower_admin_1;
+        add_header Set-Cookie $auth_cookie always;
+        if ($auth_cookie_upstream_1) {
+            add_header Set-Cookie "_eisenhower_admin_1=$auth_cookie_upstream_1; Path=/; Secure; HttpOnly; SameSite=Lax" always;
+        }
+        proxy_set_header X-WEBAUTH-USER $admin_user;
+        proxy_pass http://$prometheus_upstream;
+    }
+
+    location = /admin/grafana { return 308 /admin/grafana/; }
+    location /admin/grafana/ {
+        auth_request /oauth2/auth;
+        error_page 401 = /oauth2/start;
+        auth_request_set $admin_user $upstream_http_x_auth_request_user;
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        auth_request_set $auth_cookie_upstream_1 $upstream_cookie__eisenhower_admin_1;
+        add_header Set-Cookie $auth_cookie always;
+        if ($auth_cookie_upstream_1) {
+            add_header Set-Cookie "_eisenhower_admin_1=$auth_cookie_upstream_1; Path=/; Secure; HttpOnly; SameSite=Lax" always;
+        }
+        proxy_set_header X-WEBAUTH-USER $admin_user;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_pass http://$grafana_upstream;
+    }
+
+    # This is the only public n8n route. It is intentionally narrow and keeps
+    # the editor plus every other n8n endpoint behind the admin role gate.
+    location = /eisenhower/google-calendar/webhook {
+        if ($request_method != POST) { return 404; }
+        proxy_set_header Authorization "";
+        proxy_set_header Cookie "";
+        proxy_set_header X-WEBAUTH-USER "";
+        proxy_set_header X-Auth-Request-User "";
+        proxy_set_header X-Auth-Request-Email "";
+        proxy_set_header X-Auth-Request-Groups "";
+        proxy_pass http://$n8n_upstream/webhook/eisenhower-google-calendar;
+    }
+
+    location = /eisenhower/google-calendar/oauth/callback {
+        if ($request_method != GET) { return 404; }
+        proxy_pass http://$api_upstream/calendar/oauth/callback;
     }
 
     location /api/ {

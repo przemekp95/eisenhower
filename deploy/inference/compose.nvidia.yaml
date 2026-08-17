@@ -1,13 +1,22 @@
-name: eisenhower
+name: eisenhower-inference-nvidia
 
 services:
   inference:
-    image: vllm/vllm-openai:v0.20.0
-    expose:
-      - "8000"
+    image: ${NVIDIA_INFERENCE_IMAGE:?immutable NVIDIA inference image digest is required}
+    profiles: [inference-nvidia]
+    expose: ["8000"]
+    networks: [application]
+    environment:
+      - VLLM_API_KEY=${INFERENCE_API_KEY:?INFERENCE_API_KEY is required}
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
     command:
       - --model
-      - ${INFERENCE_MODEL:?INFERENCE_MODEL is required}
+      - ${INFERENCE_MODEL:?INFERENCE_MODEL is provider configuration}
+      - --revision
+      - ${INFERENCE_MODEL_REVISION:?INFERENCE_MODEL_REVISION is required}
+      - --served-model-name
+      - ${INFERENCE_MODEL:?INFERENCE_MODEL is provider configuration}
       - --api-key
       - ${INFERENCE_API_KEY:?INFERENCE_API_KEY is required}
       - --disable-log-requests
@@ -20,11 +29,11 @@ services:
               count: 1
               capabilities: [gpu]
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 120s
-    profiles:
-      - inference-nvidia
+    mem_limit: ${INFERENCE_MEMORY_LIMIT:?calibrated inference memory limit is required}
+    cpus: ${INFERENCE_CPU_LIMIT:?calibrated inference CPU limit is required}
+    pids_limit: ${INFERENCE_PID_LIMIT:?calibrated inference PID limit is required}
+
+networks:
+  application:
+    external: true
+    name: ${INFERENCE_NETWORK_NAME:-eisenhower-private}

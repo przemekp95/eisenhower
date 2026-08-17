@@ -2,6 +2,7 @@ from io import BytesIO
 from pathlib import Path
 
 from PIL import Image
+import pytest
 
 from app.config import Settings
 from app.local_model import LocalMiniLMClassifier, LocalPrediction, ModelNotReadyError, SimilarExample
@@ -335,6 +336,44 @@ def test_extract_tasks_from_image_prefers_text_and_tesseract_and_filename(real_m
   assert fallback_upload["classified_tasks"][0]["text"] == "urgent outage"
   assert service._looks_like_image("tasks.png", None) is True
   assert service._looks_like_image("tasks.bin", None) is False
+
+
+def test_extract_tasks_from_image_rejects_decompression_bomb_before_ocr(tmp_path, monkeypatch):
+  ocr_called = False
+
+  def ocr_runner(*_args, **_kwargs):
+    nonlocal ocr_called
+    ocr_called = True
+    return "must not run"
+
+  service = build_service(tmp_path, ocr_runner=ocr_runner)
+  monkeypatch.setattr(service, "_tesseract_available", lambda: True)
+  monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 8)
+
+  with pytest.raises(ValueError, match="image_dimensions_exceeded"):
+    service.extract_tasks_from_image("bomb.png", png_payload(), "image/png")
+  assert ocr_called is False
+
+
+def test_extract_tasks_from_image_rejects_invalid_image_without_filename_fallback(tmp_path, monkeypatch):
+  service = build_service(tmp_path, ocr_runner=lambda *_args, **_kwargs: "must not run")
+  monkeypatch.setattr(service, "_tesseract_available", lambda: True)
+
+  with pytest.raises(ValueError, match="invalid_image"):
+    service.extract_tasks_from_image("urgent-outage.png", b"not an image", "image/png")
+
+
+def test_extract_tasks_from_image_accepts_an_image_within_explicit_limits(tmp_path, monkeypatch):
+  service = build_service(
+    tmp_path,
+    ocr_runner=lambda *_args, **_kwargs: "critical production incident",
+  )
+  monkeypatch.setattr(service, "_tesseract_available", lambda: True)
+
+  result = service.extract_tasks_from_image("valid.png", png_payload(), "image/png")
+
+  assert result["ocr"]["method"] == "tesseract"
+  assert result["summary"]["total_tasks"] == 1
 
 
 def test_extract_tasks_from_image_uses_batch_prediction_with_rag(tmp_path: Path):

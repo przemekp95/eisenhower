@@ -6,6 +6,7 @@ import logging
 import mimetypes
 import re
 import shutil
+import warnings
 
 from .config import Settings
 from .defaults import QUADRANT_NAMES, get_quadrant_name, normalize_language
@@ -184,6 +185,8 @@ class QuadrantAIService:
       try:
         tasks, extracted_text = self._extract_tasks_with_tesseract(payload)
         method = "tesseract"
+      except OCRImageRejectedError:
+        raise
       except Exception:
         tasks = []
 
@@ -405,11 +408,38 @@ class QuadrantAIService:
     }
 
   def _extract_tasks_with_tesseract(self, payload: bytes) -> tuple[list[str], str]:
-    from PIL import Image
-
-    image = Image.open(BytesIO(payload))
-    extracted_text = self.ocr_runner(image, lang=self.settings.tesseract_languages)
+    image = self._open_preflighted_ocr_image(payload)
+    try:
+      extracted_text = self.ocr_runner(image, lang=self.settings.tesseract_languages)
+    finally:
+      image.close()
     return normalize_extracted_tasks(extracted_text.splitlines()), extracted_text
+
+  def _open_preflighted_ocr_image(self, payload: bytes):
+    from PIL import Image, UnidentifiedImageError
+
+    def open_image():
+      with warnings.catch_warnings():
+        warnings.simplefilter("error", Image.DecompressionBombWarning)
+        return Image.open(BytesIO(payload))
+
+    try:
+      with open_image() as image:
+        width, height = image.size
+        if (
+          width > self.settings.ocr_max_width
+          or height > self.settings.ocr_max_height
+          or width * height > self.settings.ocr_max_pixels
+        ):
+          raise OCRImageRejectedError("image_dimensions_exceeded", status_code=413)
+        image.verify()
+      return open_image()
+    except OCRImageRejectedError:
+      raise
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning) as issue:
+      raise OCRImageRejectedError("image_dimensions_exceeded", status_code=413) from issue
+    except (UnidentifiedImageError, OSError, SyntaxError, ValueError) as issue:
+      raise OCRImageRejectedError("invalid_image", status_code=422) from issue
 
   def _looks_like_image(self, filename: str, content_type: str | None) -> bool:
     if content_type and content_type.startswith("image/"):
@@ -476,3 +506,10 @@ class QuadrantAIService:
 
 class ProviderDisabledError(RuntimeError):
   pass
+
+
+class OCRImageRejectedError(ValueError):
+  def __init__(self, code: str, *, status_code: int):
+    super().__init__(code)
+    self.code = code
+    self.status_code = status_code

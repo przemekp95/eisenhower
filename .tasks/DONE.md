@@ -1,5 +1,54 @@
 # Done
 
+## TASK-062: Consolidate host-neutral deployment and release
+**Priority:** P0 | **Tags:** deployment, release, compose, security, calendar, ocr
+
+Replace deployment drift with one host-neutral application topology and an auditable release boundary while preserving the existing exact-green-master-SHA gate, private service boundaries, provider-independent inference and rollback safety.
+
+### Plan
+
+- Freeze failing contracts for the Compose graph, environment/auth validation, Calendar HMAC replay protection, OCR image preflight and release/deploy responsibility boundaries.
+- Consolidate dev and production onto one canonical Compose graph with one ingress, optional n8n, private state/application services and one inference contract; isolate AMD/NVIDIA provider stacks.
+- Make Calendar replay prevention durable and atomic, reject unsafe OCR images before full decode/OCR, and validate `APP_ENV`/`AUTH_MODE` fail-closed without weakening domain/outbox or ports-and-adapters boundaries.
+- Preserve the existing full-green-master-SHA release preflight, publish only scanned immutable artifacts/digests, and separate generic deployment from provider-specific execution or unverifiable AWS force-redeploy behavior.
+- Migrate scripts and documentation, then remove obsolete manifests only after focused and broad verification including safe Compose renders, Node/MCP/FastAPI/BDD/workflow and proportional backup/restore/rollback tests.
+- Restore the repository formatting gate on the canonical release-image contract and rerun the full verification suite before publication.
+- Restore the complete stable CI context list in production acceptance documentation and rerun the fail-closed workflow contracts.
+
+### Outcome
+
+The optional-n8n topology described below is historical TASK-062 state and was superseded by TASK-063, which makes n8n, Prometheus and Grafana unconditional and removes profile-aware rollback state.
+
+Replaced the root/local/Mikrus topology drift with one `compose.yaml`: only the gateway publishes a host port, n8n is an optional private profile, application inference uses exactly three provider-neutral variables, and standalone AMD/NVIDIA stacks attach to the same private network. Production now fails closed on invalid `APP_ENV` or non-OIDC `AUTH_MODE`. Removed the unverifiable AWS force-redeploy and provider-named deployment jobs; release keeps the existing exact-green-master preflight, builds/scans/SBOMs seven first-party images, publishes immutable digests and produces one checksum-bound final gate, while generic deployment consumes only a selected release manifest and rolls back both digests and the prior n8n profile.
+
+Calendar internal HMAC now binds a durable unique request ID, method, path and raw body; `/outbox/claim` atomically records its response with the lease so retries cannot claim twice. OCR rejects invalid, oversized-dimension and over-pixel images before the OCR decode path. Obsolete manifests, provider-specific deployment scripts and stale documentation were removed only after their replacement contracts passed. The still-unapproved retrieval candidate and all-PENDING review template were mechanically re-hashed because the production-acceptance corpus document changed; no human outcome was invented.
+
+Strict red-green evidence covered four missing Compose properties, three release-boundary failures, APP_ENV/static-production failures, Calendar replay (including concurrent claim), OCR bomb limits, MCP mutable base and rollback profile drift. The promotion preflight restored the repository Prettier gate on the changed release-image contract, then fresh `make verify` passed: backend AI 832 passed/13 skipped at 87.67% coverage; Node 263 tests at 100% plus build/typecheck; 21 BDD scenarios/149 steps; web 217 tests at 100%, 2 integration tests and production build; mobile 199 tests above coverage gates; MCP 50; n8n 13 Python plus 5 Node contracts; API client 28 plus typecheck; production dependency audits; and Pylint 10.00/10. The first PR run exposed that the rewritten production-acceptance document no longer enumerated the stable CI context names; the documentation now restores the exact fail-closed set, and all 21 workflow/planner/preflight contracts pass. Because that document belongs to the frozen RAG corpus, the candidate content hashes and candidate SHA were mechanically regenerated; all 42 human review outcomes, reviewer identity and approval fields remain `PENDING`, and the hash-binding tests plus the full backend AI suite pass. Separate `actionlint` 1.7.11, workflow YAML parsing and `git diff --check` also passed. The earlier MCP image build and all-severity Trivy scan remain source-bound evidence; real registry digests, live n8n activation/execution, target backup restore, provider hardware, public HTTPS, physical Android and human acceptance remain external gates.
+
+---
+
+## TASK-063: Make automation and observability mandatory and admin-only
+**Priority:** P0 | **Tags:** deployment, n8n, prometheus, grafana, oidc, monitoring
+
+Make n8n, Prometheus and Grafana mandatory members of the canonical dev/prod topology and expose their administrative interfaces only through the single gateway to Keycloak users holding the `eisenhower-admin` role.
+
+### Plan
+
+- Freeze failing Compose, gateway, identity, deployment and backup contracts for mandatory n8n/Prometheus/Grafana and admin-only access.
+- Add a private OIDC authorization proxy, mandatory health-gated services, persistent provisioning and the explicit public Calendar webhook exception.
+- Remove the optional n8n input/profile and profile-aware rollback state while preserving one ingress, private service ports and identical dev/prod graphs.
+- Render both environments, exercise access decisions and service configuration, run proportional Node/FastAPI/n8n/monitoring/lifecycle/workflow regression, then document exact local and external gates.
+
+### Outcome
+
+n8n, Prometheus and Grafana are unconditional, private and health-gated in the one canonical Compose graph. Only the gateway publishes a host port. Their consoles use `/admin/n8n/`, `/admin/prometheus/` and `/admin/grafana/`; a private OAuth2 Proxy accepts only the dedicated Keycloak `eisenhower-admin` realm role. Admin Origin admission is limited to `/admin/*` and `/oauth2/*`, sessions refresh every minute and expire after 15 minutes, refreshed split cookies are propagated, and the exact Calendar webhook is the only public n8n route with bearer, cookie and proxy identity headers cleared.
+
+Fresh and existing realms converge through a mandatory idempotent bootstrap. A real Keycloak 26.7 rehearsal imported the realm, ran the bootstrap twice, and verified the role, confidential client, scope and three claim mappers. OAuth2 Proxy uses the public issuer for validation/login and explicit internal token, userinfo and JWKS endpoints to avoid a gateway startup cycle. Grafana runtime plugin installation and update checks are disabled; Prometheus self-scrapes its configured subpath. Backup quiesces SQLite/PostgreSQL writers and identity storage; restore keeps identity storage stopped during replacement.
+
+Strict TDD recorded failing then green contracts for the mandatory graph, deployment lifecycle, admin boundary, identity migration, cookies, origin, public webhook and runtime drift. Fresh verification: 25 deployment/monitoring/release contracts; real Nginx, OAuth2 Proxy, Grafana and Keycloak checks; Node 263/263 at 100% coverage plus 21 BDD scenarios/149 steps; FastAPI 832 passed/13 skipped at 87.67%; MCP 50; n8n 13 Python plus 5 Node; API client 28; shellcheck/bash syntax and workflow YAML parsing. `actionlint` was unavailable. No merge, push, image publication, deployment, cutover or production mutation occurred; live named-user login/revocation, imported active n8n workflows, real metrics/alerts, target-volume restore/rollback, public TLS and production acceptance remain external gates.
+
+---
+
 ## TASK-061: Harden and optimize CI/CD orchestration
 **Priority:** P1 | **Tags:** ci, security, release, performance
 

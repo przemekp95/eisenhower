@@ -1,5 +1,11 @@
 # Completion log
 
+2026-08-17 — TASK-062 promotion follow-up: Restored the Prettier gate and complete production-acceptance CI context list, mechanically refreshed the hash-bound all-PENDING retrieval packet, and passed full repository/backend AI verification, all 21 workflow contracts, actionlint 1.7.11, YAML and diff checks.
+
+2026-08-17 — TASK-063: Made n8n, Prometheus and Grafana mandatory and private behind the single gateway and a dedicated Keycloak admin role; hardened idempotent realm migration, bounded sessions, Origin/cookie/webhook handling, runtime plugin drift and state-safe backup/restore; passed full local and real-container verification without merge, push, publication or deployment.
+
+2026-08-17 — TASK-062: Consolidated dev/prod onto one private host-neutral Compose graph, hardened Calendar replay/OCR/env auth, separated scanned immutable release from generic digest deployment with rollback, removed unverifiable AWS/Mikrus drift, and passed full Node/AI/web/MCP/n8n/BDD/Compose/lifecycle verification without push, publication or deployment.
+
 2026-08-17 — TASK-061: Added exact-green-master release preflight, least-privilege tokens, immutable Actions/images, bounded/serialized workflows, selective security audits and exact-SHA master-to-dev CI reuse; 21 Node contracts, 10 Python contracts, actionlint, live preflight and independent review passed without source promotion, release or deployment.
 
 2026-08-17 — TASK-047/TASK-014/TASK-019/TASK-023/TASK-020 governance follow-up: Added one mandatory cross-capability activation decision gate with separate enable/hold/reject records for classifier, retrieval, responses and each MAG stage, exact-SHA evidence, cohort, expiry, monitoring, stop and rollback fields, plus an independent publication decision so green automation cannot silently activate or publish a capability.

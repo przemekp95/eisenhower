@@ -30,7 +30,7 @@ test('allowlist gives stable identities and enables only Calendar by default', a
     [false, false],
   );
 
-  const compose = await readFile(path.join(root, 'deploy/local/compose.yaml'), 'utf8');
+  const compose = await readFile(path.join(root, 'compose.yaml'), 'utf8');
   assert.match(compose, /EISENHOWER_INTERNAL_API_URL[^\n]*api-service:3001/);
   assert.match(compose, /EISENHOWER_NODE_INTERNAL_API_URL[^\n]*api-service:3001/);
   assert.match(

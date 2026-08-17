@@ -7,7 +7,7 @@ import { GoogleOAuthPort, GoogleTokenSet } from '../src/application/googleOAuth'
 import { CalendarBindingModel, CalendarConnectionModel, CalendarOutboxModel, CalendarSyncStateModel, GoogleOAuthGrantModel } from '../src/models/calendar';
 import mongoose from 'mongoose';
 import { clearMongo, startMongo, stopMongo } from './helpers/mongo';
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 
 class OAuthFake implements GoogleOAuthPort {
   expiresSoon = false;
@@ -25,7 +25,7 @@ class CalendarFake implements GoogleCalendarPort {
   async watch(input: Record<string, unknown>) { this.calls.push({ kind: 'watch', ...input }); return { channelId: String(input.channelId), resourceId: 'resource-1', expiresAt: new Date(Date.now() + 3600_000) }; }
 }
 const hmacKey = 'provider-internal-key-at-least-32-bytes';
-function signed(path: string, body: unknown) { const timestamp = String(Math.floor(Date.now() / 1000)); const raw = JSON.stringify(body); return { timestamp, signature: createHmac('sha256', hmacKey).update(`v1\n${timestamp}\nPOST\n${path}\n${raw}`).digest('hex') }; }
+function signed(path: string, body: unknown, requestId: string = randomUUID()) { const timestamp = String(Math.floor(Date.now() / 1000)); const raw = JSON.stringify(body); return { timestamp, requestId, signature: createHmac('sha256', hmacKey).update(`v1\n${timestamp}\n${requestId}\nPOST\n${path}\n${raw}`).digest('hex') }; }
 
 describe('Google Calendar provider boundary', () => {
   const oauth = new OAuthFake();
@@ -39,7 +39,7 @@ describe('Google Calendar provider boundary', () => {
   beforeAll(startMongo); afterEach(async () => { calendar.calls = []; oauth.expiresSoon = false; await clearMongo(); }); afterAll(stopMongo);
 
   async function connect() { const start = await request(app).post('/calendar/oauth/start').set('Authorization', 'Bearer test-api-token').send({ returnPath: '/' }); const state = new URL(start.body.authorizationUrl).searchParams.get('state')!; await request(app).get('/calendar/oauth/callback').query({ state, code: 'code' }); return CalendarConnectionModel.findOne(); }
-  async function post(path: string, body: Record<string, unknown>) { const auth = signed(path, body); return request(app).post(path).set('X-Eisenhower-Timestamp', auth.timestamp).set('X-Eisenhower-Signature', auth.signature).send(body); }
+  async function post(path: string, body: Record<string, unknown>) { const auth = signed(path, body); return request(app).post(path).set('X-Eisenhower-Timestamp', auth.timestamp).set('X-Eisenhower-Request-Id', auth.requestId).set('X-Eisenhower-Signature', auth.signature).send(body); }
 
   it('resolves an outbox event through its own OAuth grant and returns no tokens', async () => {
     const connection = await connect();
@@ -62,6 +62,29 @@ describe('Google Calendar provider boundary', () => {
     connection!.status = 'revoked'; await connection!.save();
     expect((await post('/internal/calendar/provider/changes', { connectionId: connection!.id, checkpoint: 'sync-current' })).status).toBe(409);
     expect((await post('/internal/calendar/provider/outbound', {})).status).toBe(400);
+  });
+
+  it('replays a cached provider response without repeating the external side effect', async () => {
+    const connection = await connect();
+    await CalendarSyncStateModel.create({
+      tenantId: 'local', ownerId: 'local-user', connectionId: connection!.id,
+      syncToken: 'sync-current', fullResyncRequired: false,
+    });
+    const path = '/internal/calendar/provider/changes';
+    const body = { connectionId: connection!.id, checkpoint: 'sync-current' };
+    const auth = signed(path, body, 'provider-changes-retry');
+    const send = () => request(app).post(path)
+      .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Request-Id', auth.requestId)
+      .set('X-Eisenhower-Signature', auth.signature)
+      .send(body);
+
+    const first = await send();
+    const replay = await send();
+
+    expect(first.status).toBe(200);
+    expect(replay.body).toEqual(first.body);
+    expect(calendar.calls.filter((call) => call.kind === 'changes')).toHaveLength(1);
   });
 
   it('permits an explicitly claimed full resync without accepting arbitrary checkpoints', async () => {
@@ -255,11 +278,13 @@ describe('Google Calendar provider boundary', () => {
   it('rejects provider requests with no parsed body', async () => {
     const emptyPost = (path: string) => {
       const timestamp = String(Math.floor(Date.now() / 1000));
+      const requestId = randomUUID();
       const signature = createHmac('sha256', hmacKey)
-        .update(`v1\n${timestamp}\nPOST\n${path}\n`)
+        .update(`v1\n${timestamp}\n${requestId}\nPOST\n${path}\n`)
         .digest('hex');
       return request(app).post(path)
         .set('X-Eisenhower-Timestamp', timestamp)
+        .set('X-Eisenhower-Request-Id', requestId)
         .set('X-Eisenhower-Signature', signature);
     };
 

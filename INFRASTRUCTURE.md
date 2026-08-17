@@ -1,226 +1,57 @@
-# Eisenhower Matrix Infrastructure
+# Infrastructure
 
-Last updated: 2026-08-09
+## Canonical topology
 
-This document describes the current infrastructure and delivery model of the Eisenhower Matrix monorepo. It favors the state that is implemented in the repository today over aspirational architecture.
+`compose.yaml` is the only application Compose manifest. Development and
+production render the same services, dependencies, volumes and networks;
+`APP_ENV`, `AUTH_MODE`, image references and secrets are environment inputs.
+Production is fail-closed to `APP_ENV=production` plus `AUTH_MODE=oidc`.
 
-## System Overview
+Only `gateway` publishes a host port. MongoDB, Qdrant, Node, every FastAPI role,
+MCP and n8n remain private. The gateway exposes the web application, explicit
+API/AI/MCP/identity paths, the Calendar OAuth callback, and the single Calendar
+webhook. n8n is enabled only by the `n8n` profile.
 
-| Component | Stack | Purpose |
-| --- | --- | --- |
-| `web` | React 19, TypeScript, Vite, Tailwind | Browser UI for task management and AI tools |
-| `backend-node` | Node.js, Express, TypeScript, MongoDB | Task API and health endpoints |
-| `backend-ai` | Python 3.11, FastAPI, PyTorch, MiniLM, Tesseract | Local task classification, deterministic explanations, OCR, and training data management |
-| `mobile/eisenhower-matrix` | Expo, React Native, Expo Image Picker | Mobile client with local cache, task API sync, and AI-assisted flows |
-| `docker-compose.yml` | Docker Compose | Local multi-service stack |
-| `.github/workflows/*.yml` | GitHub Actions | CI, branch policy, and release automation |
-| `qdrant`, `minio` | Experimental local profile | Optional research services, not initialized by the supported runtime |
+MongoDB is canonical. Qdrant is a rebuildable projection. Calendar state
+changes and the outbox remain transactional in Node; n8n performs private
+provider orchestration and never owns canonical state.
 
+## Provider boundary
 
-## Repository Topology
+`deploy/inference/compose.amd.yaml` and `compose.nvidia.yaml` are standalone
+provider projects joined to the private application network. Model, runtime and
+hardware variables stay inside those projects. Application services consume
+only:
 
-```text
-web/                        Frontend application
-backend-node/               Node/Express API
-backend-ai/                 FastAPI AI service
-mobile/eisenhower-matrix/   Expo mobile client
-monitoring/                 Prometheus and Grafana assets
-docker-compose.yml          Local service orchestration
-.github/workflows/          Branch policy, CI, and release workflows
-```
+- `INFERENCE_BASE_URL`
+- `INFERENCE_API_KEY`
+- `INFERENCE_ALLOWED_HOSTS`
 
-## Runtime Architecture
+Provider qualification and physical GPU evidence are independent from an
+application release or deployment.
 
-```mermaid
-graph TB
-    Web["Web app (React/Vite)"]
-    Mobile["Mobile app (Expo)"]
-    Api["Node API"]
-    Ai["AI service (FastAPI)"]
-    Mongo["MongoDB"]
-    Redis["Redis (optional)"]
-    Nginx["Nginx (optional production profile)"]
+## CI, release and deploy
 
-    Web --> Api
-    Web --> Ai
-    Mobile --> Api
-    Mobile --> Ai
-    Api --> Mongo
-    Api --> Ai
-    Api --> Redis
-    Nginx --> Web
-    Nginx --> Api
-    Nginx --> Ai
-```
+- `.github/workflows/ci.yml` validates source and preserves stable required jobs.
+- `.github/workflows/release.yml` preserves the exact-green-master-SHA preflight,
+  builds/scans all first-party images, then publishes them only behind one
+  aggregate job and emits a SHA-to-RepoDigest/security-evidence manifest.
+- `.github/workflows/deploy.yml` is a separately authorized generic deployment
+  that consumes only that manifest.
 
-### Core request paths
+`deploy/generic/deploy.sh` renders the canonical graph with digest-bound images,
+waits for health, verifies OCI source labels and performs immutable-manifest
+rollback on failure. `backup.sh`/`restore.sh` checksum canonical Mongo and
+private state volumes. Qdrant uses its separately governed snapshot/reindex
+path because it is rebuildable.
 
-- Web task CRUD flows call `backend-node`.
-- Web AI tooling and the mobile client call `backend-ai`.
-- The mobile client reads and mutates tasks through `backend-node` when the API is reachable, while keeping AsyncStorage as a local cache.
-- `backend-node` persists tasks in MongoDB.
-- Redis, Nginx, Prometheus, and Grafana are available in Docker Compose as optional infrastructure layers.
+The former AWS action was removed because forcing the current ECS task
+definition did not bind the requested SHA or digest and therefore was not
+deployment evidence. No provider-specific deploy job is part of release.
 
-## Local Docker Stack
+## Evidence boundary
 
-The repository ships a root `docker-compose.yml` with the following services:
-
-- `frontend`
-- `api-service`
-- `ai-service`
-- `mongodb`
-- `redis`
-- `nginx` using the `production` profile
-- `prometheus` and `grafana` using the `monitoring` profile
-- `qdrant` and `minio` using the isolated `experimental` profile
-
-Example commands:
-
-```bash
-docker compose up --build
-docker compose --profile monitoring up --build
-docker compose --profile production up --build
-```
-
-## Service Boundaries
-
-### Web
-
-- Uses `VITE_API_URL` for task CRUD.
-- Uses `VITE_AI_API_URL` for AI-specific requests.
-- Production container injects these values at runtime via `/runtime-config.js`.
-- Production can route both values through same-origin reverse proxy paths such as `/api` and `/ai` to avoid mixed-content and CORS issues.
-- Includes lazy-loaded AI and 3D modules to keep the main bundle smaller.
-
-### Backend Node
-
-- Exported through an app factory, so tests can import the Express app without starting a server.
-- Exposes `GET /health`, `GET /tasks`, `POST /tasks`, `PUT /tasks/:id`, and `DELETE /tasks/:id`.
-- Uses MongoDB as the primary datastore.
-
-### Backend AI
-
-- Exported through `create_app()` to keep imports side-effect free.
-- Supports local MiniLM-based task classification, deterministic advanced analysis, OCR upload handling, training-data endpoints, and persisted provider toggles for `local_model` and `tesseract`.
-- Boots from a cached local classifier artifact or trains one from the current training data on first start.
-- Keeps the local model injectable so tests can replace it with lightweight fakes.
-- Does not initialize the experimental Qdrant, LangChain, llama.cpp, or MinIO modules in the supported production path.
-
-### Mobile
-
-- Expo-managed package with Jest and React Native Testing Library coverage gates.
-- Stores a local task cache with AsyncStorage.
-- Can derive both backend URLs from a shared `EXPO_PUBLIC_APP_ORIGIN_URL` such as the production web origin.
-- Uses `EXPO_PUBLIC_API_URL` for task CRUD sync and `EXPO_PUBLIC_AI_API_URL` for AI and OCR requests.
-- Uses `expo-image-picker` to select images for OCR uploads.
-
-## Configuration Matrix
-
-| Area | Variable | Purpose |
-| --- | --- | --- |
-| Web | `VITE_API_URL` | Node API base URL |
-| Web | `VITE_AI_API_URL` | AI service base URL |
-| Backend Node | `PORT` | HTTP port for the API service |
-| Backend Node | `MONGODB_URI` | MongoDB connection string |
-| Backend Node | `AI_SERVICE_URL` | AI service base URL |
-| Backend Node/AI | `EISENHOWER_API_TOKEN` | User Bearer token for ordinary task and AI operations; at least 32 characters in production |
-| Backend AI | `EISENHOWER_ADMIN_TOKEN` | Distinct Bearer token for training and provider administration; at least 32 characters in production |
-| Backend Node/AI | `CORS_ALLOW_ORIGINS` | Explicit trusted frontend origin allowlist; required in production, also for same-origin browser writes |
-| Backend AI | `TRAINING_DATA_PATH` | Training examples path |
-| Backend AI | `MODEL_CACHE_DIR` | Cache and model artifacts |
-| Backend AI | `LOCAL_MODEL_NAME` | Frozen sentence-transformer encoder |
-| Backend AI | `LOCAL_MODEL_EPOCHS` | Max epochs for explicit retraining |
-| Mobile | `EXPO_PUBLIC_APP_ORIGIN_URL` | Shared HTTPS origin that maps to `/api` and `/ai` |
-| Mobile | `EXPO_PUBLIC_AI_API_URL` | AI service base URL for Expo; if set, it must not be empty |
-| Mobile | `EXPO_PUBLIC_API_URL` | Node API base URL for Expo; if set, it must not be empty |
-
-For the Android CI build, `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_AI_API_URL` repository variables are mandatory and must point at the public production endpoints. The current production values are `https://tymon169-8081.mikrus.cloud/api` and `https://tymon169-8081.mikrus.cloud/ai`. `EXPO_PUBLIC_APP_ORIGIN_URL` is optional and can be set to `https://tymon169-8081.mikrus.cloud`. The Android artifact build also fails if the packaged APK still contains loopback development URLs.
-
-## CI and Branch Governance
-
-The repository uses three workflows:
-
-- `branch-policy.yml`
-  Ensures only `dev` can open pull requests into `master`.
-- `ci.yml`
-  Runs security, production dependency, unit/coverage, integration, isolated browser E2E, AI, mobile, and native Android release checks on `dev` and `master`. The Android job uploads a downloadable release APK, validates the embedded public backend URLs, and the workflow can also be started manually with `workflow_dispatch`.
-- `release.yml`
-  Runs only for an explicitly selected green `master` SHA, builds each split first-party production image locally, blocks publication on any LOW, MEDIUM, HIGH or CRITICAL image finding, retains its vulnerability report and CycloneDX SBOM, and performs optional deployments only after verified publication.
-
-Protected branches:
-
-- `dev`
-- `master`
-
-Ruleset expectations:
-
-- no direct pushes
-- no force pushes
-- no branch deletion
-- pull requests required
-- resolved conversations required
-- branch must be up to date before merge
-
-## Security Baseline
-
-Current repository-level controls include:
-
-- protected branch flow through `feature/* -> dev -> master`
-- mandatory CI checks on protected branches
-- Trivy SARIF upload in CI
-- fail-closed Python dependency auditing: `pip-audit` may leave only the exact
-  `torch==2.13.0+cpu` and `torchvision==0.28.0+cpu` blind spots, whose public
-  PyTorch CPU wheel source and SHA-256 resolution are checked separately
-- fail-closed post-`master` image publication: every complete boundary,
-  classifier, knowledge, ingest, Node and web production image is loaded
-  locally, scanned with digest-pinned Trivy, and rejected on any LOW, MEDIUM,
-  HIGH or CRITICAL finding before `docker push`; a CycloneDX SBOM and the
-  vulnerability report are retained for 90 days
-- server-side Bearer authentication on all non-health Node and AI routes, with a separate administrator credential for AI management
-- exact Origin validation on browser state changes in addition to least-privilege CORS; header-based auth uses no cookies, so classical CSRF is not applicable
-- runtime-only user and administrator token entry in web/mobile clients; neither token is bundled or persisted
-- production API and AI services reachable only on the Compose network
-- service-specific coverage thresholds, with `100%` on web/backends and `95/90` gates on mobile
-
-Recommended production additions that are not fully implemented in this repository:
-
-- independently archived or registry-attached release SBOM and vulnerability
-  attestations beyond the 90-day GitHub artifact retention window
-- centralized secret storage
-- managed TLS termination
-- external log aggregation
-- explicit backup and restore procedures for MongoDB
-
-## Delivery Model
-
-```mermaid
-flowchart LR
-    Feature["feature/* branch"] --> Dev["PR into dev"]
-    Dev --> Master["PR from dev into master"]
-    Master --> CI["Required CI on exact SHA"]
-    CI --> Release["Immutable Docker release"]
-    Release --> DeployMikrus["Optional Mikrus deployment when secrets exist"]
-    Release --> DeployEcs["Optional ECS deployment when secrets exist"]
-```
-
-## Data Flow
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant W as Web or Mobile
-    participant A as Node API
-    participant AI as AI Service
-    participant M as MongoDB
-
-    U->>W: Create or update task
-    W->>A: CRUD request
-    A->>M: Persist task
-    A-->>W: Stored task payload
-    W->>AI: Optional AI analysis
-    AI-->>W: Quadrant and metadata
-```
-
-## Notes
-
-- If the runtime contract changes, update this document together with the relevant service README or configuration file.
+Compose rendering, tests, CI, image scans, a release manifest and local runtime
+health are separate evidence layers. None alone proves an authorized deploy,
+public production, real n8n activation/execution, physical GPU compatibility or
+human acceptance.

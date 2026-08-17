@@ -165,8 +165,10 @@ describe('app middleware', () => {
 
   it('rejects incomplete production audit identity configuration', () => {
     process.env.NODE_ENV = 'production';
-    process.env.AUTH_MODE = 'static';
-    process.env.EISENHOWER_API_TOKEN = 'production-api-token-at-least-32-characters';
+    process.env.AUTH_MODE = 'oidc';
+    process.env.OIDC_ISSUER = 'https://identity.example.com';
+    process.env.OIDC_AUDIENCE = 'eisenhower-api';
+    process.env.OIDC_JWKS_URL = 'https://identity.example.com/.well-known/jwks.json';
     process.env.CORS_ALLOW_ORIGINS = 'https://tasks.example.com';
     process.env.MONGODB_URI = 'mongodb://mongodb:27017/eisenhower';
     process.env.AI_SERVICE_URL = 'http://ai-service:8000';
@@ -339,8 +341,10 @@ describe('app middleware', () => {
 
   it('does not expose exception details in production', async () => {
     process.env.NODE_ENV = 'production';
-    process.env.AUTH_MODE = 'static';
-    process.env.EISENHOWER_API_TOKEN = 'production-api-token-at-least-32-characters';
+    process.env.AUTH_MODE = 'oidc';
+    process.env.OIDC_ISSUER = 'https://identity.example.com';
+    process.env.OIDC_AUDIENCE = 'eisenhower-api';
+    process.env.OIDC_JWKS_URL = 'https://identity.example.com/.well-known/jwks.json';
     process.env.CORS_ALLOW_ORIGINS = 'https://tasks.example.com';
     process.env.MONGODB_URI = 'mongodb://mongodb:27017/eisenhower';
     process.env.AI_SERVICE_URL = 'http://ai-service:8000';
@@ -357,6 +361,9 @@ describe('app middleware', () => {
     const app = createApp({
       aiHealthChecker: async () => 'healthy',
       databaseStatusResolver: () => 'connected',
+      oidcTokenVerifier: async () => ({
+        tenantId: 'tenant-a', userId: 'user-a', roles: [], projectIds: [], scopes: ['tasks:read'],
+      }),
     });
 
     const response = await request(app)
@@ -385,8 +392,10 @@ describe('app middleware', () => {
 
   it('uses one trusted nginx hop for rate limiting and ignores a spoofed leftmost address', async () => {
     process.env.NODE_ENV = 'production';
-    process.env.AUTH_MODE = 'static';
-    process.env.EISENHOWER_API_TOKEN = 'production-api-token-at-least-32-characters';
+    process.env.AUTH_MODE = 'oidc';
+    process.env.OIDC_ISSUER = 'https://identity.example.com';
+    process.env.OIDC_AUDIENCE = 'eisenhower-api';
+    process.env.OIDC_JWKS_URL = 'https://identity.example.com/.well-known/jwks.json';
     process.env.CORS_ALLOW_ORIGINS = 'https://tasks.example.com';
     process.env.MONGODB_URI = 'mongodb://mongodb:27017/eisenhower';
     process.env.AI_SERVICE_URL = 'http://ai-service:8000';

@@ -35,17 +35,15 @@ describe('loadConfig', () => {
     expect(config.authMode).toBe('oidc');
   });
 
-  it('keeps strong static bearer auth available for existing production deployments', () => {
-    const config = loadConfig({
+  it('rejects host-selected static auth in production', () => {
+    expect(() => loadConfig({
       NODE_ENV: 'production',
       AUTH_MODE: 'static',
       EISENHOWER_API_TOKEN: 'production-api-token-at-least-32-characters',
       CORS_ALLOW_ORIGINS: 'https://app.example.com',
       MONGODB_URI: 'mongodb://mongodb:27017/eisenhower',
       AI_SERVICE_URL: 'http://ai-service:8000',
-    });
-
-    expect(config.authMode).toBe('static');
+    })).toThrow('Production requires AUTH_MODE=oidc.');
   });
 
   it('rejects an unknown authentication mode', () => {
@@ -54,7 +52,7 @@ describe('loadConfig', () => {
     );
   });
 
-  it('rejects a weak production static token', () => {
+  it('rejects every production static token regardless of strength', () => {
     expect(() => loadConfig({
       NODE_ENV: 'production',
       AUTH_MODE: 'static',
@@ -62,14 +60,16 @@ describe('loadConfig', () => {
       CORS_ALLOW_ORIGINS: 'https://app.example.com',
       MONGODB_URI: 'mongodb://mongodb:27017/eisenhower',
       AI_SERVICE_URL: 'http://ai-service:8000',
-    })).toThrow('EISENHOWER_API_TOKEN must be at least 32 characters in production.');
+    })).toThrow('Production requires AUTH_MODE=oidc.');
   });
 
   it('rejects an empty production CORS allowlist', () => {
     expect(() => loadConfig({
       NODE_ENV: 'production',
-      AUTH_MODE: 'static',
-      EISENHOWER_API_TOKEN: 'production-api-token-at-least-32-characters',
+      AUTH_MODE: 'oidc',
+      OIDC_ISSUER: 'https://identity.example.com',
+      OIDC_AUDIENCE: 'eisenhower-api',
+      OIDC_JWKS_URL: 'https://identity.example.com/jwks',
       CORS_ALLOW_ORIGINS: ' , ',
       MONGODB_URI: 'mongodb://mongodb:27017/eisenhower',
       AI_SERVICE_URL: 'http://ai-service:8000',
@@ -86,8 +86,10 @@ describe('loadConfig', () => {
   it('requires explicit database, AI, and CORS configuration in production', () => {
     const base = {
       NODE_ENV: 'production',
-      AUTH_MODE: 'static',
-      EISENHOWER_API_TOKEN: 'production-api-token-at-least-32-characters',
+      AUTH_MODE: 'oidc',
+      OIDC_ISSUER: 'https://identity.example.com',
+      OIDC_AUDIENCE: 'eisenhower-api',
+      OIDC_JWKS_URL: 'https://identity.example.com/jwks',
       CORS_ALLOW_ORIGINS: 'https://app.example.com',
       MONGODB_URI: 'mongodb://mongodb:27017/eisenhower',
       AI_SERVICE_URL: 'http://ai-service:8000',
@@ -103,8 +105,10 @@ describe('loadConfig', () => {
   it('rejects malformed production service URLs and browser origins', () => {
     const base = {
       NODE_ENV: 'production',
-      AUTH_MODE: 'static',
-      EISENHOWER_API_TOKEN: 'production-api-token-at-least-32-characters',
+      AUTH_MODE: 'oidc',
+      OIDC_ISSUER: 'https://identity.example.com',
+      OIDC_AUDIENCE: 'eisenhower-api',
+      OIDC_JWKS_URL: 'https://identity.example.com/jwks',
       CORS_ALLOW_ORIGINS: 'https://app.example.com',
       MONGODB_URI: 'mongodb://mongodb:27017/eisenhower',
       AI_SERVICE_URL: 'http://ai-service:8000',

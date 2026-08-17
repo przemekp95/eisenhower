@@ -100,11 +100,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   if (!['static', 'oidc'].includes(authMode)) {
     throw new Error('AUTH_MODE must be static or oidc.');
   }
+  if (production && authMode !== 'oidc') {
+    throw new Error('Production requires AUTH_MODE=oidc.');
+  }
   if (authMode === 'oidc' && !(oidcIssuer && oidcAudience && oidcJwksUrl)) {
     throw new Error('OIDC_ISSUER, OIDC_AUDIENCE and OIDC_JWKS_URL are required for OIDC auth.');
-  }
-  if (authMode === 'static' && production && apiToken.length < 32) {
-    throw new Error('EISENHOWER_API_TOKEN must be at least 32 characters in production.');
   }
   const mongodbUri = production
     ? requiredProductionValue(env, 'MONGODB_URI')

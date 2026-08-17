@@ -1,126 +1,129 @@
 # Production acceptance
 
-Last reviewed: 2026-08-11
+Last reviewed: 2026-08-17
 
-This checklist deliberately separates evidence produced on a developer machine, evidence produced by GitHub Actions, and evidence from the public Mikrus runtime. Passing one level does not imply that either of the others passed.
+This checklist separates local source verification, release publication, target deployment,
+public behavior, and human or physical acceptance. Passing one level never implies another.
 
-## 1. Local candidate
+## Local candidate
 
-The candidate is locally acceptable only when all of the following pass from a clean dependency install:
+A candidate worktree is locally acceptable when:
 
-- `make verify`, including production dependency policy, builds, formatting, unit tests, integration tests and coverage gates.
-- `cd web && npm run test:e2e` against the isolated real Node/Mongo test stack.
-- `docker compose config --quiet` and a Mikrus runtime-config smoke that parses the exactly rendered
-  `api-service` environment and executes the Node configuration loader against it. Plain Compose
-  interpolation alone is insufficient because it does not prove that production authentication can boot.
-- an Expo Android export and a native APK build from a disposable copy of the mobile project;
-- the production-signing path is exercised with a disposable non-debug certificate, while the real production certificate remains an external release gate.
-- `git diff --check`.
+- `make verify`, the Compose contract tests, release workflow contract tests, and
+  generic backup/restore/rollback tests pass from a clean dependency install;
+- `compose.yaml` renders with safe placeholders for both development and production,
+  with the same service graph and only `gateway` publishing host ports;
+- n8n, Prometheus and Grafana are mandatory, private and health-gated; their consoles
+  are routed only at `/admin/n8n/`, `/admin/prometheus/` and `/admin/grafana/` after
+  OAuth2 Proxy confirms the Keycloak `eisenhower-admin` realm role;
+- `APP_ENV` and `AUTH_MODE` are explicit and validated, and production accepts only OIDC;
+- the three application-facing inference variables are exactly `INFERENCE_BASE_URL`,
+  `INFERENCE_API_KEY`, and `INFERENCE_ALLOWED_HOSTS`;
+- the AMD and NVIDIA inference stacks render independently of the application topology;
+- Calendar internal HTTP requests bind timestamp, request ID, method, path and exact raw
+  body into HMAC, and a durable unique receipt makes replays idempotent or rejects them;
+- OCR rejects invalid or over-limit dimensions/pixel counts before decoding for OCR;
+- `git diff --check`, shell validation, type checking, and workflow YAML parsing pass.
 
-Security behavior must also be covered by executable tests:
+The local Keycloak migration rehearsal is `deploy/tests/rehearse_admin_access_runtime.sh`.
+It imports the realm into the pinned Keycloak image, executes the admin bootstrap twice,
+and checks the role, confidential client, scope and three claim mappers.
 
-- every non-health Node and AI route requires a valid Bearer credential;
-- all AI training-data writes (including feedback), retraining and provider management require the distinct administrator credential;
-- unsafe browser requests from an untrusted `Origin` receive `403`;
-- CORS uses an explicit production allowlist and never enables credentials;
-- credentials are entered at runtime and are not persisted or embedded in web/mobile bundles.
-- sensitive FastAPI mutations and auth/ACL rejections write a durable privacy-safe audit event bound
-  to the exact `RELEASE_SHA` and request ID; an unavailable sink fails closed before mutation.
+Local tests do not prove that an image was built, scanned, published, pulled, started, or
+accepted by a person.
 
-The current Mikrus Compose profile is intentionally static single-tenant: it must render
-`NODE_ENV=production`, `AUTH_MODE=static`, a strong `EISENHOWER_API_TOKEN`, and the production CORS
-allowlist. It maps all task access to `local/local-user`; it is not evidence of OIDC or multi-user
-production. An OIDC candidate additionally requires negative tests proving that two subjects in one
-tenant cannot list, update, or delete one another's tasks.
+## Release candidate
 
-The AI and Node services additionally require a separate `AUDIT_HMAC_KEY`, exact 40-character
-`RELEASE_SHA` and persistent `/app/audit` volume. FastAPI uses the integrity-chained SQLite ledger;
-Node uses a separate HMAC-chained file and authenticated head for auth/Origin rejections. Raw
-task/document/prompt/token/MCP-argument content is forbidden
-from the audit schema. Local chain verification does not prove deployed retention, access review or
-an alert receiver.
+The manually dispatched release retains the existing full-green-master-SHA preflight. It
+must validate the full SHA, prove ancestry from `origin/master`, find the exact successful
+master push run, and recheck all stable CI contexts before any secret-bearing job runs.
+Those stable contexts are `resolve-run-mode`, `security-lint`, `test-backend-node`,
+`test-api-client`, `test-mcp-adapter`, `test-n8n-workflows`, `test-frontend`,
+`test-frontend-integration`, `test-frontend-e2e`, `test-backend-ai`, `test-mobile`, and
+`test-mobile-native-android`. The separate `branch-policy` context continues to enforce the
+allowed branch flow.
 
-The supported Mikrus Compose now includes a private, digest-pinned Prometheus instance with a
-15-day metrics volume and bounded AI/audit/RAG rules. Deployment checks the process-exposed
-`eisenhower_release_info` against `IMAGE_TAG` and verifies the rules API. Prometheus is not publicly
-published; notification routing to an external receiver remains an environment acceptance item.
+The release workflow builds every first-party image, scans it, creates an SBOM, publishes
+immutable registry digests, and emits a checksum-protected release manifest. The final gate
+binds that container manifest and the verified release APK to the same SHA. A mutable tag,
+green source CI alone, or a locally rendered Compose file is not a released artifact.
 
-Task-write acceptance includes the additive `ETag`/`If-Match` contract: a stale conditional write
-returns `412` without overwriting the stored revision. A deleted idempotent create must retain only
-a redacted operation tombstone and must never be recreated by a delayed retry. Cursor pagination
-must preserve the legacy array response, use the compound owner/sort index, and be consumed to
-completion by the supported web, mobile, shared-client and MCP readers without cursor cycles.
+Provider-specific deployment is not part of release. The historical AWS ECS force-redeploy
+was removed because it restarted the currently configured task definition without proving
+that it contained the requested SHA or digest.
 
-## 2. CI candidate
+## Generic target deployment
 
-The GitHub commit is acceptable only when all CI jobs pass on the exact commit SHA:
+`.github/workflows/deploy.yml` consumes a selected release-run manifest. The generic deploy
+script uses only manifest digests, forces `APP_ENV=production` and `AUTH_MODE=oidc`, waits for
+readiness, and checks each first-party container's OCI revision label against the release SHA.
+On failure it restores the previous immutable manifest and topology.
 
-- `branch-policy`
-- `resolve-run-mode`
-- `security-lint`
-- `test-backend-node`
-- `test-api-client`
-- `test-mcp-adapter`
-- `test-n8n-workflows`
-- `test-frontend`
-- `test-frontend-integration`
-- `test-frontend-e2e`
-- `test-backend-ai`
-- `test-mobile`
-- `test-mobile-native-android`
+Before target acceptance, operators must independently prove:
 
-Branch protection for `dev` and `master` must require those checks before merge. Every context remains present for selective runs and reports a fast successful not-applicable result when its owned surface is unaffected. A local workflow edit does not change GitHub rulesets; rulesets must be verified after the change is pushed.
+- secret provisioning, target TLS, DNS, storage capacity and network policy;
+- live backup and confirmation-gated restore on representative data;
+- rollback after a deliberately failed rollout;
+- live Keycloak login for a named user with `eisenhower-admin`, plus rejection of an
+  unauthenticated user and an authenticated user without that role; verify that
+  role revocation is enforced after the one-minute refresh and no later than the
+  15-minute session expiry;
+- imported and active n8n workflows plus successful execution history;
+- healthy Prometheus targets/rules, populated Grafana dashboards and alert delivery;
+- provider-specific AMD or NVIDIA runtime health and model quality where inference is enabled.
 
-The versioned `ci-impact-plan/v1` artifact records the merge-base, rename/delete-aware path set, selected targets, reasons and SHA-256 input digest. Changes to workflows, lockfiles, root configuration, Docker/Compose, deployment infrastructure, unknown paths, planner errors, `master`, `release/*`, and the weekly schedule fail closed to full CI. Backend HTTP/API/auth and ports-and-adapters changes retain executable BDD and consumer checks; browser/CSRF changes retain integration/E2E; webhook/job/messaging changes retain backend AI and n8n contract checks. Manifests select the complete production dependency audit, while executable repository changes select Trivy. Documentation-only changes retain stable successful contexts without paying for unrelated dependency installation and scanning. A trusted exact-master reuse marker may suppress a second heavy matrix only for the identical SHA after all required master push jobs passed.
+## Public and physical acceptance
 
-The manually dispatched release workflow first validates a full 40-character SHA, proves it is an ancestor of `origin/master`, locates the exact successful `CI` push run for `master`, and rechecks every stable required job. Jobs holding Docker, signing or deployment secrets depend on that preflight and check out only its validated SHA. `latest` is not a deployment input, but a full-SHA tag is still mutable registry metadata; release acceptance must not call the image immutable until the deployment records and consumes each image digest.
+The deployed SHA is publicly accepted only after exact-status HTTPS checks prove gateway,
+API and AI readiness; unauthenticated access fails closed; OIDC user CRUD and authorization
+boundaries work; `POST /eisenhower/google-calendar/webhook` is the only public n8n route;
+and browser requests have no mixed content. Physical Android installation and end-to-end
+use, plus any required human model evaluation, remain separate gates.
 
-The native Android CI job produces only a debug-signed installability candidate. A releasable APK is a distinct post-`master` artifact: its signing key is supplied from GitHub secrets, its public certificate SHA-256 is pinned in `ANDROID_RELEASE_CERT_SHA256`, APK Signature Scheme v2 is verified, and an Android Debug certificate is rejected. The production keystore must have an independently retained recovery copy before release.
+## Backup scope
 
-## 3. Public runtime
+`deploy/generic/backup.sh` archives MongoDB and the durable audit, identity, n8n, Grafana and
+RAG job volumes with checksums and the active release manifest. `restore.sh` requires an
+explicit confirmation. Backup quiesces stateful writers and identity storage before copying
+SQLite/PostgreSQL-backed volumes; restore keeps them stopped until replacement completes.
+Prometheus retention data is operational and is rebuilt from live
+scrape targets after restore. Qdrant is rebuildable from canonical MongoDB data and is
+intentionally not a canonical backup source.
 
-The release is publicly accepted only after the deployment job passes all of these checks over HTTPS:
+## Architecture, transport and methodology
 
-- `GET /health` returns `200` from the frontend;
-- `GET /api/health` returns `200` from the Node service;
-- `GET /ai/` returns `200` from the AI service;
-- unauthenticated task/AI reads and writes return `401`;
-- a valid user token can create, read, update and delete a disposable task;
-- a user token receives `403` on AI administration routes;
-- an administrator token can read provider/training status;
-- MiniLM classification and Tesseract OCR complete successfully;
-- the browser loads without mixed content and state-changing requests work only from the configured public origin;
-- the Android APK can be installed on a physical device and completes task CRUD plus AI classification against the public HTTPS endpoints.
-
-The deploy script must roll back automatically when container readiness or the public smoke fails. `deploy/mikrus/backup.sh` and confirmation-gated `restore.sh` cover MongoDB and AI data, but an independently verified backup/restore drill is still required before the service can be called disaster-recovery ready.
+- CSRF: product API credentials are Bearer tokens rather than cookies, CORS credentials
+  remain disabled, and unsafe untrusted origins are rejected. Admin console access adds a
+  secure SameSite=Lax OAuth2 Proxy session cookie; the gateway's Origin allowlist rejects
+  cross-site unsafe requests, while n8n and Grafana retain their own request protections.
+  OAuth2 Proxy refreshes the cookie every minute and expires it after 15 minutes, and Nginx
+  propagates refreshed split cookies from the authorization subrequest.
+  CORS and Origin checks are defense in depth, not authentication.
+- HTTP/webhooks: the gateway is the only ingress. MongoDB, Qdrant, API/AI, MCP and n8n stay
+  private, as do Prometheus, Grafana and OAuth2 Proxy. Only explicit Calendar OAuth and
+  webhook routes proxy publicly to n8n/API contracts; admin routes require the role gate.
+- Messaging/outbox: Calendar retains its durable outbox claim/lease/ack semantics. The replay
+  receipt and claim mutation are atomic for `/outbox/claim`; n8n reuses one request ID across
+  HTTP retries. No general-purpose message bus is claimed.
+- DDD: this is a pragmatic layered monorepo with useful domain language and boundaries, not
+  proven repository-wide DDD with formal bounded contexts and aggregate discipline.
+- CQRS and hexagonal architecture: task commands and reads are separated at application ports
+  in useful areas, and provider adapters are bounded, but there is no independent CQRS read
+  model or strict repository-wide ports-and-adapters architecture.
+- TDD: the new behavior has recorded red-green-refactor evidence. Existing tests alone do not
+  prove historical repository-wide TDD practice.
+- BDD: executable Cucumber scenarios cover the supported task lifecycle and security behavior.
+  The new deployment, HMAC replay and OCR protections are covered by contract/unit tests, not
+  new Gherkin scenarios, so repository-wide BDD is not claimed.
 
 ## Dependency exception
 
 Backend Node and web production audits must report zero high or critical vulnerabilities.
-
-The current Expo/Metro build chain carries two high-severity `image-size` advisories ([GHSA-w3rx-r6r6-pgpr](https://github.com/advisories/GHSA-w3rx-r6r6-pgpr) and [GHSA-5p2g-fcmc-qvqq](https://github.com/advisories/GHSA-5p2g-fcmc-qvqq)). They are transitive build-tool findings and the registry currently has no patched `image-size` release. `npm run audit:production` permits only that exact dependency chain, rejects every critical or new advisory, and expires after 2026-10-31. It must be removed as soon as Expo/Metro ships a patched chain.
-
-## Architecture and methodology claims
-
-- New security, deployment and dependency-policy work must show a failing test before the implementation and a passing test afterward. Historical repository-wide TDD adoption is not proven by the presence of tests.
-- The system is a pragmatic layered monorepo. It has useful domain names and service boundaries, but no evidenced bounded-context model, aggregate discipline, or strict domain/application/infrastructure separation; it must not be marketed as full DDD.
-- The backend Node task lifecycle has a bounded executable Cucumber/Gherkin acceptance slice covering all four quadrants, movement, deletion, tenant isolation, bearer authentication, browser-origin protection, and request validation. This is living feature documentation for that supported behavior, not evidence of repository-wide BDD; the cross-service AI/RAG scenarios remain specified but not executable.
-- The supported runtime uses direct HTTP request/response calls. Experimental code contains a signed webhook, a durable SQLite job queue, a worker and RAG-oriented ports/adapters, but none is activated in the supported Mikrus topology; it is therefore not evidence of a production message bus, webhook pipeline or strict repository-wide hexagonal architecture.
-- There is no CQRS read/write model split or event sourcing. The MiniLM/OCR release path remains pragmatic layered code; the experimental RAG package has useful ports and adapters but does not make the whole monorepo hexagonal.
-
-## Current evidence snapshot
-
-Evidence is deliberately scoped; later rows never inherit a pass from earlier rows.
-
-| Level | Status on 2026-08-10 | Evidence |
-| --- | --- | --- |
-| LOCAL | green for the current candidate worktree, excluding external release credentials | After integrating the latest `dev`, `make verify` passed: Node 66 tests at 100%, web 125 unit plus 2 integration tests at 100%, AI 206 passed/2 explicitly skipped at 89% coverage, and mobile 95 tests above its coverage gates. Playwright passed 2/2 against an isolated real Node/Mongo stack. Root and Mikrus Compose configurations validated with disposable non-secret values. The Android production-signing path was exercised end to end against the real Expo-generated Gradle project using a one-time non-debug certificate: `assembleRelease`, v2 signature verification, pinned certificate comparison, public endpoint embedding and loopback rejection all passed. The verifier independently rejected the earlier debug-signed CI artifact. This disposable key is not production evidence. The development classifier report is `backend-ai/evaluation/development-benchmark-20260810.json`; its development gate passes and its production gate fails closed. |
-| CI | green through published `dev` SHA `f5c7ddbcfe84fd701b59c674af5c5530486640ea` | Push run `31383971990` passed all nine required jobs after PR #146. The earlier evaluation merge SHA `7c97b40a83ab651f26c04cb61e70d11dc8ec1d32` also passed all nine in run `31382275926`; its downloaded APK is structurally valid and v2-signed, but its signer is `CN=Android Debug`, so it proves CI installability only and is not a production release APK. Branch rulesets for `dev` and `master` require all nine checks. The Android-signing and exact-HTTP candidate described here still requires its own PR CI before merge. |
-| PUBLIC RUNTIME | red | A fresh no-follow check at 2026-08-10 13:29 Europe/Warsaw showed that `https://tymon169-8081.mikrus.cloud` returns `301` to `/error-wykres/` for frontend, Node health and AI health/readiness paths. Host inspection confirmed that no Eisenhower container is running, while both data volumes remain present. The final page is a generic Cloudflare-served error page. The deployment smoke previously used `curl --fail`, which accepts `301`; the candidate now uses an exact-status, no-redirect verifier so this failure cannot be reported green. The expired `mikrus-tymon169` Actions registration was backed up, re-registered, enabled in systemd and independently observed `online`/idle in GitHub. |
-| HUMAN EVALUATION | blocked | The 240-item blind PL/EN packet exists, but both human annotation files are blank. No agreement, adjudication, frozen production dataset or approved SHA exists. |
-| PHYSICAL ANDROID | unverified | A debug-signed CI candidate alone does not prove a production-signed installation or task CRUD plus classification on a physical device. The production keystore secrets and pinned public certificate digest are not configured yet. |
-| DATA BACKUP/RESTORE | data drill green; application rollback pending | With all Eisenhower containers stopped, the preserved `eisenhower_mongodb_data` and `eisenhower_ai_data` volumes were independently archived to `/root/eisenhower-backups/20260810T114224Z` with permissions `0600`. MongoDB contained 146 files and AI data 4 files. Both archives passed gzip and archive SHA-256 checks, were restored to isolated disposable Docker volumes, and the restored per-file SHA-256 manifests matched their sources exactly. Only the temporary restore volumes were removed after comparison; the source volumes and verified archives remain. Rollback of a running application SHA still requires a new approved release. |
+The time-bounded Expo/Metro `image-size` exception remains governed by the existing
+`npm run audit:production` policy and must not be generalized to release images.
 
 ## Go/no-go
 
-Production go requires all three levels above on the same commit SHA plus a successful backup/restore rehearsal. Until the public checks and physical Android smoke pass, the correct status is “locally/CI qualified candidate”, not “production ready”.
+Until release artifacts exist and the target, public, backup/restore, n8n, provider, Android
+and human gates relevant to a deployment pass on the same SHA, the correct status is
+"locally verified release candidate", not "deployed" or "production ready".

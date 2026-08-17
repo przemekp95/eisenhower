@@ -41,39 +41,36 @@ def test_rocm_knowledge_image_is_dedicated_and_does_not_include_vllm_or_ingest_t
   assert "poppler" not in dockerfile
   assert "pytesseract" not in dockerfile
 
-  deploy_script = (ROOT / "deploy" / "local" / "deploy.sh").read_text(encoding="utf-8")
-  assert "-f backend-ai/Dockerfile.rocm" in deploy_script
+  provider = (ROOT / "deploy" / "inference" / "compose.amd.yaml").read_text(encoding="utf-8")
+  assert "AMD_INFERENCE_IMAGE" in provider
 
 
 def test_rocm_response_image_is_hardened_pinned_and_built_for_both_response_roles():
   dockerfile = (ROOT / "backend-ai" / "Dockerfile.response-rocm").read_text(encoding="utf-8")
-  deploy_script = (ROOT / "deploy" / "local" / "deploy.sh").read_text(encoding="utf-8")
+  provider = (ROOT / "deploy" / "inference" / "compose.amd.yaml").read_text(encoding="utf-8")
 
   assert "vllm/vllm-openai-rocm@sha256:5709fafe47123becb2f5e61c32d0b97beff1a629bb40bb753c15464f69a97a18" in dockerfile
   assert "apt-get upgrade -y" in dockerfile
   assert "pip uninstall -y PyGObject" in dockerfile
   assert "python -m pip check" in dockerfile
   assert 'ENTRYPOINT ["vllm", "serve"]' in dockerfile
-  assert 'VLLM_RESPONSE_IMAGE="local/eisenhower-vllm-rocm:${release_sha}"' in deploy_script
-  assert 'export AMD_INFERENCE_IMAGE="$response_image_id"' in deploy_script
-  assert 'export AMD_RERANKER_IMAGE="$response_image_id"' in deploy_script
-  assert "-f backend-ai/Dockerfile.response-rocm" in deploy_script
-  assert 'for image_ref in "$VLLM_RESPONSE_IMAGE" "$MCP_IMAGE" "$WEB_IMAGE"' in deploy_script
+  assert "AMD_INFERENCE_IMAGE" in provider
+  assert "AMD_RERANKER_IMAGE" in provider
+  assert "ports:" not in provider
 
 
-def test_local_compose_defaults_to_core_and_keeps_heavy_roles_explicit():
-  compose = yaml.safe_load((ROOT / "deploy" / "local" / "compose.yaml").read_text())
+def test_canonical_compose_keeps_roles_private_and_admin_stack_mandatory():
+  compose = yaml.safe_load((ROOT / "compose.yaml").read_text())
   services = compose["services"]
 
   assert services["ai-service"]["image"].startswith("${AI_BOUNDARY_IMAGE")
   assert "profiles" not in services["ai-service"]
   assert "profiles" not in services["classifier-service"]
-  for service in ("knowledge-service", "rag-worker", "qdrant"):
-    assert {"retrieval", "response", "full"}.issubset(services[service]["profiles"])
-  for service in ("n8n", "calendar-gateway"):
-    assert {"automation", "full"}.issubset(services[service]["profiles"])
-  for service in ("identity-db", "identity-service"):
-    assert {"identity", "full"}.issubset(services[service]["profiles"])
+  for service in ("n8n", "prometheus", "grafana", "oauth2-proxy"):
+    assert "profiles" not in services[service]
+    assert "ports" not in services[service]
+    assert services[service]["healthcheck"]
+  assert {name for name, service in services.items() if service.get("ports")} == {"gateway"}
   assert services["ai-service"]["mem_limit"]
   assert services["ai-service"]["cpus"]
   assert services["ai-service"]["pids_limit"]
@@ -100,69 +97,34 @@ def test_local_compose_defaults_to_core_and_keeps_heavy_roles_explicit():
   assert "MPLCONFIGDIR=/app/runtime/matplotlib" in worker["environment"]
   assert "XDG_CACHE_HOME=/app/runtime/cache" in worker["environment"]
 
-  deploy_script = (ROOT / "deploy" / "local" / "deploy.sh").read_text(encoding="utf-8")
-  for action in ("deploy-core", "deploy-retrieval", "deploy-response", "deploy-full"):
-    assert f"{action})" in deploy_script
-  assert "deploy) deploy_core" in deploy_script
-  assert "validate_docling_approval" in deploy_script
-  assert "Docling artifact manifest digest mismatch" in deploy_script
+  deploy_script = (ROOT / "deploy" / "generic" / "deploy.sh").read_text(encoding="utf-8")
+  assert "release-manifest" in deploy_script
+  assert "APP_ENV=production" in deploy_script
+  assert "AUTH_MODE=oidc" in deploy_script
 
 
 def test_amd_vllm_lifecycle_is_private_bounded_and_opt_in():
-  compose = yaml.safe_load((ROOT / "deploy" / "local" / "compose.amd.yaml").read_text())
+  compose = yaml.safe_load((ROOT / "deploy" / "inference" / "compose.amd.yaml").read_text())
   inference = compose["services"]["inference"]
-  deploy_script = (ROOT / "deploy" / "local" / "deploy.sh").read_text(encoding="utf-8")
 
   assert "--enable-sleep-mode" not in inference["command"]
   assert "VLLM_SERVER_DEV_MODE" not in str(inference)
-  assert inference["ports"][0].startswith("${INFERENCE_BIND_ADDRESS:-127.0.0.1}")
+  assert "ports" not in inference
+  assert inference["expose"] == ["8000"]
   assert inference["pids_limit"]
   assert inference["mem_limit"]
   assert inference["cpus"]
   assert "HF_HUB_OFFLINE=1" in inference["environment"]
   assert "TRANSFORMERS_OFFLINE=1" in inference["environment"]
   assert "HF_HUB_OFFLINE=1" in compose["services"]["reranker"]["environment"]
-  assert "sleep-response" in deploy_script
-  assert "wake-response" in deploy_script
-  assert "/v1/models" in deploy_script
-  assert "compose_response start reranker" in deploy_script
-  assert "compose_response start inference" in deploy_script
-  assert "compose_response up --no-deps -d reranker" in deploy_script
-  assert "compose_response up --no-deps -d inference" in deploy_script
-  assert compose["services"]["knowledge-service"]["image"].startswith("${AI_ROCM_IMAGE")
-  assert "render" not in compose["services"]["knowledge-service"]["group_add"]
-  assert "110" in compose["services"]["knowledge-service"]["group_add"]
-  assert "rag-worker" not in compose["services"]
-  assert 'AI_ROCM_IMAGE="local/eisenhower-ai-rocm:${release_sha}"' in deploy_script
-  assert "Dockerfile.knowledge-rocm-candidate" not in deploy_script
-  assert 'export AMD_INFERENCE_IMAGE="$response_image_id"' in deploy_script
-  assert 'export AMD_RERANKER_IMAGE="$response_image_id"' in deploy_script
+  assert set(compose["services"]) == {"inference", "reranker"}
+  assert compose["networks"]["application"]["external"] is True
 
 
-def test_response_cold_wake_serializes_reranker_before_inference():
-  deploy_script = (ROOT / "deploy" / "local" / "deploy.sh").read_text(encoding="utf-8")
-  wake = deploy_script.split("wake_response() {", 1)[1].split("\n}\n", 1)[0]
+def test_generic_deploy_has_manifest_bound_rollback_state():
+  deploy_script = (ROOT / "deploy" / "generic" / "deploy.sh").read_text(encoding="utf-8")
 
-  assert "start reranker" in wake
-  assert "wait_for_response_service reranker" in wake
-  assert "start inference" in wake
-  assert "wait_for_response_service inference" in wake
-  assert wake.index("start reranker") < wake.index("wait_for_response_service reranker")
-  assert wake.index("wait_for_response_service reranker") < wake.index("start inference")
-  assert wake.index("start inference") < wake.index("wait_for_response_service inference")
-
-
-def test_response_lifecycle_has_io_timeout_mutex_and_start_failure_cleanup():
-  deploy_script = (ROOT / "deploy" / "local" / "deploy.sh").read_text(encoding="utf-8")
-  wait = deploy_script.split("wait_for_response_service() {", 1)[1].split("\n}\n", 1)[0]
-  wake = deploy_script.split("wake_response() {", 1)[1].split("\n}\n", 1)[0]
-  sleep = deploy_script.split("sleep_response() {", 1)[1].split("\n}\n", 1)[0]
-
-  assert "--connect-timeout" in wait
-  assert "--max-time" in wait
-  assert "acquire_response_lifecycle_lock" in wake
-  assert "acquire_response_lifecycle_lock" in sleep
-  assert "flock -w" in deploy_script
-  assert wake.count("compose_response stop inference reranker") >= 3
-  assert "if ! compose_response up --no-deps -d reranker" in wake
-  assert "if ! compose_response up --no-deps -d inference" in wake
+  assert "active-release-manifest.json" in deploy_script
+  assert "rollback-release-manifest.json" in deploy_script
+  assert "docker compose" in deploy_script
+  assert "up -d --remove-orphans --wait" in deploy_script

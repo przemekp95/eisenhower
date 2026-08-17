@@ -1,4 +1,4 @@
-name: eisenhower-local-production
+name: eisenhower
 
 x-common: &common
   restart: unless-stopped
@@ -8,7 +8,6 @@ x-common: &common
 services:
   web:
     <<: *common
-    profiles: [access, response, full]
     image: ${WEB_IMAGE:?WEB_IMAGE must be a versioned tag or digest}
     environment:
       - VITE_API_URL=/api
@@ -34,13 +33,11 @@ services:
         condition: service_healthy
       audit-volume-init:
         condition: service_completed_successfully
-    ports:
-      - "${NODE_BIND_ADDRESS:-127.0.0.1}:${NODE_BIND_PORT:-3001}:3001"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=${APP_ENV:?APP_ENV is required}
       - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/eisenhower?replicaSet=rs0}
       - AI_SERVICE_URL=${AI_SERVICE_URL:-http://ai-service:8000}
-      - AUTH_MODE=oidc
+      - AUTH_MODE=${AUTH_MODE:?AUTH_MODE is required}
       - OIDC_ISSUER=${OIDC_ISSUER:?OIDC_ISSUER is required}
       - OIDC_AUDIENCE=${OIDC_AUDIENCE:?OIDC_AUDIENCE is required}
       - OIDC_JWKS_URL=${OIDC_JWKS_URL:?OIDC_JWKS_URL is required}
@@ -72,6 +69,19 @@ services:
     volumes:
       - audit_data:/audit
 
+  backup-volume-helper:
+    <<: *common
+    image: ${VOLUME_INIT_IMAGE:-alpine:3.20}
+    profiles: [maintenance]
+    restart: "no"
+    command: ["true"]
+    volumes:
+      - audit_data:/volumes/audit
+      - n8n_data:/volumes/n8n
+      - grafana_data:/volumes/grafana
+      - identity_db_data:/volumes/identity
+      - rag_jobs:/volumes/rag-jobs
+
   mongodb:
     <<: *common
     image: ${MONGODB_IMAGE:-mongo:7.0.24-jammy}
@@ -85,8 +95,6 @@ services:
     mem_limit: ${MONGODB_MEMORY_LIMIT:-1g}
     cpus: ${MONGODB_CPUS:-1.0}
     pids_limit: 512
-    ports:
-      - "${MONGODB_BIND_ADDRESS:-127.0.0.1}:${MONGODB_BIND_PORT:-27017}:27017"
     environment:
       - MONGO_INITDB_DATABASE=eisenhower
     volumes:
@@ -106,11 +114,9 @@ services:
     <<: *common
     image: ${AI_BOUNDARY_IMAGE:?AI_BOUNDARY_IMAGE must be a versioned tag or digest}
     group_add: ["1001"]
-    ports:
-      - "${AI_BIND_ADDRESS:-127.0.0.1}:${AI_BIND_PORT:-8000}:8000"
     environment:
-      - APP_ENV=production
-      - AUTH_MODE=oidc
+      - APP_ENV=${APP_ENV:?APP_ENV is required}
+      - AUTH_MODE=${AUTH_MODE:?AUTH_MODE is required}
       - EISENHOWER_API_TOKEN=${EISENHOWER_API_TOKEN:-unused-in-oidc-mode}
       - EISENHOWER_ADMIN_TOKEN=${EISENHOWER_ADMIN_TOKEN:-unused-in-oidc-mode}
       - EISENHOWER_INTERNAL_API_TOKEN=${EISENHOWER_INTERNAL_API_TOKEN:?EISENHOWER_INTERNAL_API_TOKEN is required}
@@ -136,8 +142,8 @@ services:
     image: ${AI_CLASSIFIER_IMAGE:?AI_CLASSIFIER_IMAGE must be a versioned tag or digest}
     group_add: ["1001"]
     environment:
-      - APP_ENV=production
-      - AUTH_MODE=oidc
+      - APP_ENV=${APP_ENV:?APP_ENV is required}
+      - AUTH_MODE=${AUTH_MODE:?AUTH_MODE is required}
       - EISENHOWER_INTERNAL_API_TOKEN=${EISENHOWER_INTERNAL_API_TOKEN:?EISENHOWER_INTERNAL_API_TOKEN is required}
       - EISENHOWER_WEBHOOK_SECRET=${EISENHOWER_WEBHOOK_SECRET:?EISENHOWER_WEBHOOK_SECRET is required}
       - INTERNAL_ALLOWED_TENANTS=${INTERNAL_ALLOWED_TENANTS:?INTERNAL_ALLOWED_TENANTS is required}
@@ -188,7 +194,6 @@ services:
       - RERANKER_ALLOWED_HOSTS=${RERANKER_ALLOWED_HOSTS:-reranker}
       - INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}
       - INFERENCE_API_KEY=${INFERENCE_API_KEY:-}
-      - INFERENCE_MODEL=${INFERENCE_MODEL:-}
       - INFERENCE_ALLOWED_HOSTS=${INFERENCE_ALLOWED_HOSTS:-inference}
       - JOBS_DATABASE_PATH=/app/data/jobs.sqlite3
       - JOBS_MAX_QUEUED=${JOBS_MAX_QUEUED:?measured bounded queue capacity is required}
@@ -208,7 +213,7 @@ services:
       - ${AI_CLASSIFIER_ARTIFACT_ROOT:?approved classifier artifact directory is required}:/app/model-artifacts:ro
       - ${AI_EVALUATION_FILE:?approved evaluation file is required}:/app/evaluation/production.json:ro
       - ${AI_PROMOTION_ROOT:-./.runtime/promotion}:/app/promotion:ro
-      - ${MEMORY_POLICY_FILE:-../../docs/ai-rebuild/memory-policy-v1.json}:/app/policies/memory-policy-v1.json:ro
+      - ${MEMORY_POLICY_FILE:-./docs/ai-rebuild/memory-policy-v1.json}:/app/policies/memory-policy-v1.json:ro
     mem_limit: ${AI_CLASSIFIER_MEMORY_LIMIT:?calibrated classifier memory limit is required}
     cpus: ${AI_CLASSIFIER_CPU_LIMIT:?calibrated classifier CPU limit is required}
     pids_limit: ${AI_CLASSIFIER_PID_LIMIT:?calibrated classifier PID limit is required}
@@ -217,7 +222,6 @@ services:
     <<: *common
     image: ${AI_KNOWLEDGE_IMAGE:?AI_KNOWLEDGE_IMAGE must be a versioned tag or digest}
     command: ["python", "-m", "uvicorn", "app.knowledge_runtime:from_environment", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
-    profiles: [retrieval, response, full]
     group_add: ["1001"]
     depends_on:
       mongodb:
@@ -227,8 +231,8 @@ services:
       audit-volume-init:
         condition: service_completed_successfully
     environment:
-      - APP_ENV=production
-      - AUTH_MODE=oidc
+      - APP_ENV=${APP_ENV:?APP_ENV is required}
+      - AUTH_MODE=${AUTH_MODE:?AUTH_MODE is required}
       - OIDC_ISSUER=${OIDC_ISSUER:?OIDC_ISSUER is required}
       - OIDC_AUDIENCE=${OIDC_AUDIENCE:?OIDC_AUDIENCE is required}
       - OIDC_JWKS_URL=${OIDC_JWKS_URL:?OIDC_JWKS_URL is required}
@@ -266,7 +270,6 @@ services:
       - RERANKER_ALLOWED_HOSTS=${RERANKER_ALLOWED_HOSTS:-reranker}
       - INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}
       - INFERENCE_API_KEY=${INFERENCE_API_KEY:-}
-      - INFERENCE_MODEL=${INFERENCE_MODEL:-}
       - INFERENCE_ALLOWED_HOSTS=${INFERENCE_ALLOWED_HOSTS:-inference}
       - PROMPT_VERSION=${PROMPT_VERSION:-1.2.0}
       - KNOWLEDGE_PROMPT_VERSION=${KNOWLEDGE_PROMPT_VERSION:-1.0.0}
@@ -298,10 +301,9 @@ services:
     image: ${AI_INGEST_IMAGE:?AI_INGEST_IMAGE must be a versioned tag or digest}
     command: ["python", "-m", "app.worker_runtime"]
     init: true
-    profiles: [retrieval, response, full]
     environment:
-      - APP_ENV=production
-      - AUTH_MODE=oidc
+      - APP_ENV=${APP_ENV:?APP_ENV is required}
+      - AUTH_MODE=${AUTH_MODE:?AUTH_MODE is required}
       - OIDC_ISSUER=${OIDC_ISSUER:?OIDC_ISSUER is required}
       - OIDC_AUDIENCE=${OIDC_AUDIENCE:?OIDC_AUDIENCE is required}
       - OIDC_JWKS_URL=${OIDC_JWKS_URL:?OIDC_JWKS_URL is required}
@@ -360,10 +362,10 @@ services:
       - ${AI_DOCLING_ARTIFACT_ROOT:?approved Docling artifact directory is required}:/app/docling-artifacts:ro
       - ${AI_CLASSIFIER_ARTIFACT_ROOT:?approved classifier artifact directory is required}:/app/model-artifacts:ro
       - ${AI_EVALUATION_FILE:?approved evaluation file is required}:/app/evaluation/production.json:ro
-      - ../../README.md:/corpus/README.md:ro
-      - ../../docs:/corpus/docs:ro
-      - ../../corpus:/corpus/corpus:ro
-      - ../../.tasks:/corpus/.tasks:ro
+      - ./README.md:/corpus/README.md:ro
+      - ./docs:/corpus/docs:ro
+      - ./corpus:/corpus/corpus:ro
+      - ./.tasks:/corpus/.tasks:ro
     mem_limit: ${AI_INGEST_MEMORY_LIMIT:?calibrated ingest memory limit is required}
     cpus: ${AI_INGEST_CPU_LIMIT:?calibrated ingest CPU limit is required}
     pids_limit: ${AI_INGEST_PID_LIMIT:?calibrated ingest PID limit is required}
@@ -383,10 +385,7 @@ services:
 
   qdrant:
     <<: *common
-    profiles: [retrieval, response, full]
     image: ${QDRANT_IMAGE:-qdrant/qdrant:v1.12.0}
-    ports:
-      - "${QDRANT_BIND_ADDRESS:-127.0.0.1}:${QDRANT_BIND_PORT:-6333}:6333"
     environment:
       - QDRANT__LOG_LEVEL=info
       - QDRANT__TELEMETRY_DISABLED=true
@@ -395,13 +394,13 @@ services:
 
   n8n:
     <<: *common
-    profiles: [automation, full]
     image: ${N8N_IMAGE:-n8nio/n8n:2.4.6}
-    ports:
-      - "${N8N_BIND_ADDRESS:-127.0.0.1}:${N8N_BIND_PORT:-5678}:5678"
     environment:
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY is required}
       - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_PATH=/admin/n8n/
+      - N8N_EDITOR_BASE_URL=${ACCESS_PUBLIC_ORIGIN:?ACCESS_PUBLIC_ORIGIN is required}/admin/n8n/
+      - N8N_PROXY_HOPS=1
       - N8N_RAG_HEADER_AUTH_CREDENTIAL_ID=${N8N_RAG_HEADER_AUTH_CREDENTIAL_ID:-}
       - EXECUTIONS_DATA_SAVE_ON_SUCCESS=none
       - EXECUTIONS_DATA_PRUNE=true
@@ -418,14 +417,72 @@ services:
       - NODE_FUNCTION_ALLOW_BUILTIN=crypto
     volumes:
       - n8n_data:/home/node/.n8n
-      - ../../n8n/workflows:/workflows:ro
-      - ../../n8n:/repo-n8n:ro
+      - ./n8n/workflows:/workflows:ro
+      - ./n8n:/repo-n8n:ro
     tmpfs:
       - /reconcile:mode=0700,uid=1000,gid=1000
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5678/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+  prometheus:
+    <<: *common
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.5.0}
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-15d}
+      - --web.external-url=${ACCESS_PUBLIC_ORIGIN:?ACCESS_PUBLIC_ORIGIN is required}/admin/prometheus/
+      - --web.route-prefix=/admin/prometheus/
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9090/admin/prometheus/-/ready >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+
+  grafana:
+    <<: *common
+    image: ${GRAFANA_IMAGE:-grafana/grafana:12.1.0}
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    environment:
+      - GF_SERVER_ROOT_URL=${ACCESS_PUBLIC_ORIGIN:?ACCESS_PUBLIC_ORIGIN is required}/admin/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_AUTH_PROXY_ENABLED=true
+      - GF_AUTH_PROXY_HEADER_NAME=X-WEBAUTH-USER
+      - GF_AUTH_PROXY_HEADER_PROPERTY=username
+      - GF_AUTH_PROXY_AUTO_SIGN_UP=true
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Admin
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES=false
+      - GF_PLUGINS_PLUGIN_ADMIN_ENABLED=false
+      - GF_PLUGINS_PREINSTALL_DISABLED=true
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/admin/grafana/api/health >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
 
   identity-db:
     <<: *common
-    profiles: [identity, access, response, full]
     image: ${IDENTITY_DB_IMAGE:-postgres:17.6-alpine}
     environment:
       - POSTGRES_DB=keycloak
@@ -441,7 +498,6 @@ services:
 
   identity-service:
     <<: *common
-    profiles: [identity, access, response, full]
     image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.7.0}
     command: ["start", "--import-realm"]
     depends_on:
@@ -466,13 +522,36 @@ services:
       - EISENHOWER_MCP_REDIRECT_URI=${EISENHOWER_MCP_REDIRECT_URI:?EISENHOWER_MCP_REDIRECT_URI is required}
       - EISENHOWER_MCP_CLIENT_SECRET=${EISENHOWER_MCP_CLIENT_SECRET:?EISENHOWER_MCP_CLIENT_SECRET is required}
       - OIDC_MCP_RESOURCE_URL=${OIDC_MCP_RESOURCE_URL:?OIDC_MCP_RESOURCE_URL is required}
+      - ADMIN_OIDC_CLIENT_SECRET=${ADMIN_OIDC_CLIENT_SECRET:?ADMIN_OIDC_CLIENT_SECRET is required}
+      - ADMIN_OIDC_REDIRECT_URI=${ADMIN_OIDC_REDIRECT_URI:?ADMIN_OIDC_REDIRECT_URI is required}
     volumes:
-      - ./identity/eisenhower-realm.json:/opt/keycloak/data/import/eisenhower-realm.json:ro
-      - ./identity/eisenhower-user-profile.json:/opt/keycloak/conf/eisenhower-user-profile.json:ro
+      - ./deploy/local/identity/eisenhower-realm.json:/opt/keycloak/data/import/eisenhower-realm.json:ro
+      - ./deploy/local/identity/eisenhower-user-profile.json:/opt/keycloak/conf/eisenhower-user-profile.json:ro
+
+  identity-admin-bootstrap:
+    <<: *common
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.7.0}
+    restart: "no"
+    read_only: true
+    entrypoint: ["/bin/sh", "/opt/eisenhower/ensure-admin-access.sh"]
+    depends_on:
+      identity-service:
+        condition: service_started
+    environment:
+      - KC_BOOTSTRAP_ADMIN_USERNAME=${KC_BOOTSTRAP_ADMIN_USERNAME:?KC_BOOTSTRAP_ADMIN_USERNAME is required}
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=${KC_BOOTSTRAP_ADMIN_PASSWORD:?KC_BOOTSTRAP_ADMIN_PASSWORD is required}
+      - ADMIN_OIDC_CLIENT_SECRET=${ADMIN_OIDC_CLIENT_SECRET:?ADMIN_OIDC_CLIENT_SECRET is required}
+      - ADMIN_OIDC_REDIRECT_URI=${ADMIN_OIDC_REDIRECT_URI:?ADMIN_OIDC_REDIRECT_URI is required}
+      - IDENTITY_ADMIN_URL=http://identity-service:8080/identity
+    volumes:
+      - ./deploy/local/identity/ensure-admin-access.sh:/opt/eisenhower/ensure-admin-access.sh:ro
+      - ./deploy/local/identity/eisenhower-admin-claims.json:/opt/eisenhower/eisenhower-admin-claims.json:ro
+      - ./deploy/local/identity/admin-claim-mappers:/opt/eisenhower/admin-claim-mappers:ro
+    tmpfs:
+      - /opt/keycloak/.keycloak:mode=0700,uid=1000,gid=0
 
   mcp-service:
     <<: *common
-    profiles: [access, response, full]
     image: ${MCP_IMAGE:?MCP_IMAGE must be a versioned tag or digest}
     depends_on:
       api-service:
@@ -507,52 +586,89 @@ services:
     tmpfs:
       - /run/eisenhower:mode=0700,uid=1001,gid=1001
 
-  access-gateway:
+  oauth2-proxy:
     <<: *common
-    profiles: [access, response, full]
+    image: ${OAUTH2_PROXY_IMAGE:-quay.io/oauth2-proxy/oauth2-proxy:v7.12.0-alpine}
+    depends_on:
+      identity-admin-bootstrap:
+        condition: service_completed_successfully
+    command:
+      - --provider=keycloak-oidc
+      - --oidc-issuer-url=${OIDC_ISSUER:?OIDC_ISSUER is required}
+      - --skip-oidc-discovery=true
+      - --login-url=${OIDC_ISSUER:?OIDC_ISSUER is required}/protocol/openid-connect/auth
+      - --redeem-url=http://identity-service:8080/identity/realms/eisenhower/protocol/openid-connect/token
+      - --profile-url=http://identity-service:8080/identity/realms/eisenhower/protocol/openid-connect/userinfo
+      - --oidc-jwks-url=http://identity-service:8080/identity/realms/eisenhower/protocol/openid-connect/certs
+      - --client-id=eisenhower-admin-access
+      - --client-secret=${ADMIN_OIDC_CLIENT_SECRET:?ADMIN_OIDC_CLIENT_SECRET is required}
+      - --redirect-url=${ADMIN_OIDC_REDIRECT_URI:?ADMIN_OIDC_REDIRECT_URI is required}
+      - --cookie-secret=${ADMIN_OIDC_COOKIE_SECRET:?ADMIN_OIDC_COOKIE_SECRET is required}
+      - --cookie-name=_eisenhower_admin
+      - --cookie-secure=true
+      - --cookie-samesite=lax
+      - --cookie-expire=15m
+      - --cookie-refresh=1m
+      - --email-domain=*
+      - --scope=openid
+      - --allowed-role=eisenhower-admin
+      - --reverse-proxy=true
+      - --set-xauthrequest=true
+      - --skip-provider-button=true
+      - --upstream=static://202
+      - --http-address=0.0.0.0:4180
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4180/ping >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+
+  gateway:
+    <<: *common
     image: ${ACCESS_GATEWAY_IMAGE:-nginx:1.27.5-alpine}
     depends_on:
       web:
         condition: service_healthy
       identity-service:
         condition: service_started
+      identity-admin-bootstrap:
+        condition: service_completed_successfully
       mcp-service:
         condition: service_started
+      n8n:
+        condition: service_healthy
+      prometheus:
+        condition: service_healthy
+      grafana:
+        condition: service_healthy
+      oauth2-proxy:
+        condition: service_healthy
     ports:
-      - "127.0.0.1:${ACCESS_GATEWAY_BIND_PORT:-8790}:8080"
+      - "${GATEWAY_BIND_ADDRESS:-127.0.0.1}:${GATEWAY_PORT:-8790}:8080"
     environment:
       - ACCESS_GATEWAY_HOST=${ACCESS_GATEWAY_HOST:?ACCESS_GATEWAY_HOST is required}
       - ACCESS_GATEWAY_ALLOWED_ORIGIN=${ACCESS_GATEWAY_ALLOWED_ORIGIN:?ACCESS_GATEWAY_ALLOWED_ORIGIN is required}
+      - ACCESS_ADMIN_ALLOWED_ORIGIN=${ACCESS_PUBLIC_ORIGIN:?ACCESS_PUBLIC_ORIGIN is required}
       - IDENTITY_UPSTREAM=${ACCESS_GATEWAY_IDENTITY_UPSTREAM:-identity-service:8080}
       - MCP_UPSTREAM=${ACCESS_GATEWAY_MCP_UPSTREAM:-mcp-service:8000}
       - API_UPSTREAM=${ACCESS_GATEWAY_API_UPSTREAM:-api-service:3001}
       - AI_UPSTREAM=${ACCESS_GATEWAY_AI_UPSTREAM:-ai-service:8000}
       - KNOWLEDGE_UPSTREAM=${ACCESS_GATEWAY_KNOWLEDGE_UPSTREAM:-knowledge-service:8000}
       - WEB_UPSTREAM=${ACCESS_GATEWAY_WEB_UPSTREAM:-web:3000}
-    volumes:
-      - ./access-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
-
-  calendar-gateway:
-    <<: *common
-    profiles: [automation, full]
-    image: ${CALENDAR_GATEWAY_IMAGE:-nginx:1.27.5-alpine}
-    depends_on:
-      api-service:
-        condition: service_started
-      n8n:
-        condition: service_started
-    ports:
-      - "127.0.0.1:${CALENDAR_GATEWAY_BIND_PORT:-8787}:8080"
-    environment:
       - N8N_UPSTREAM=${CALENDAR_GATEWAY_N8N_UPSTREAM:-n8n:5678}
-      - API_UPSTREAM=${CALENDAR_GATEWAY_API_UPSTREAM:-api-service:3001}
+      - PROMETHEUS_UPSTREAM=${ACCESS_GATEWAY_PROMETHEUS_UPSTREAM:-prometheus:9090}
+      - GRAFANA_UPSTREAM=${ACCESS_GATEWAY_GRAFANA_UPSTREAM:-grafana:3000}
+      - ADMIN_AUTH_UPSTREAM=${ACCESS_GATEWAY_ADMIN_AUTH_UPSTREAM:-oauth2-proxy:4180}
     volumes:
-      - ./calendar-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./deploy/local/access-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
 
 volumes:
   mongodb_data:
   qdrant_data:
   n8n_data:
+  prometheus_data:
+  grafana_data:
   rag_jobs:
   model_cache:
   classifier_runtime:
@@ -563,4 +679,4 @@ volumes:
 
 networks:
   private:
-    name: ${COMPOSE_PRIVATE_NETWORK:-eisenhower-local-private}
+    name: ${COMPOSE_PRIVATE_NETWORK:-eisenhower-private}
