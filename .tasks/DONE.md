@@ -1,5 +1,25 @@
 # Done
 
+## TASK-061: Harden and optimize CI/CD orchestration
+**Priority:** P1 | **Tags:** ci, security, release, performance
+
+Reduce avoidable GitHub Actions work without weakening required checks, and ensure release jobs receive secrets only after an exact green master SHA is proven.
+
+### Plan
+
+- Add test-first contracts for exact-master release preflight, minimal token permissions, bounded execution and safe concurrency.
+- Preserve stable required status contexts while wiring deterministic impact outputs to the expensive security and dependency steps.
+- Avoid repeating full CI for an identical already-green master SHA during governed master-to-dev synchronization.
+- Verify planner and workflow contracts, actionlint and representative CI-mode behavior; independently enforce and re-read the repository token default without publishing, deploying or promoting source.
+
+### Outcome
+
+Added a fail-closed release preflight that validates a complete master-ancestor SHA, exact successful master push CI and all stable required jobs before any secret-bearing job runs. Removed shell interpolation of the dispatch input, serialized release and sync workflows, pinned all Actions and CI service images, bounded every job, scoped BuildKit caches, and made dependency audits plus Trivy follow the deterministic impact plan. A trusted exact-master marker now preserves all required contexts while avoiding a second heavy matrix on the identical master-to-dev SHA. Repository Actions defaults are live and re-read as `read` with workflow PR approval disabled.
+
+Test-first red failures covered the absent preflight, unbounded/movable workflow dependencies, unsafe dispatch interpolation and missing reuse/audit wiring. Fresh green verification passed 21 Node workflow/planner/preflight contracts, 10 focused Python release/runtime contracts, actionlint 1.7.11, live read-only preflight against master `608bfd9b2557364922293f9e5de4988d61c922b3`, non-master rejection, syntax checks and `git diff --check`; independent review found no remaining P0-P3 issue. The first published GitHub run must still measure actual savings. No source was pushed or merged, no release/image publication or deployment occurred. An unrelated Mikrus boundary test remains red identically on the untouched `dev` baseline.
+
+---
+
 ## TASK-015: Qualify the selected live GPU, runtime, model and quantization
 **Priority:** P2 | **Tags:** rag, vllm, gpu, citations
 
