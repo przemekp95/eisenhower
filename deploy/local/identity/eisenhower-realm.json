@@ -15,7 +15,8 @@
   "roles": {
     "realm": [
       { "name": "user", "description": "Ordinary Eisenhower user" },
-      { "name": "admin", "description": "Eisenhower administrator" }
+      { "name": "admin", "description": "Eisenhower application administrator" },
+      { "name": "eisenhower-admin", "description": "Access to private n8n and observability consoles" }
     ]
   },
   "clientScopes": [
@@ -244,6 +245,25 @@
         "eisenhower-claims", "mcp:tools", "tasks:read", "tasks:write",
         "calendar:read", "calendar:write", "knowledge:read", "ai:analyze"
       ]
+    },
+    {
+      "clientId": "eisenhower-admin-access",
+      "name": "Eisenhower admin gateway",
+      "description": "Confidential Authorization Code client used only by the admin access proxy",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${ADMIN_OIDC_CLIENT_SECRET}",
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": true,
+      "redirectUris": ["${ADMIN_OIDC_REDIRECT_URI}"],
+      "webOrigins": [],
+      "defaultClientScopes": ["eisenhower-claims", "roles"]
     },
     {
       "clientId": "eisenhower-mcp-exchange",

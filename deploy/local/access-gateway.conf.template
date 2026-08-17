@@ -33,6 +33,9 @@ server {
     set $knowledge_upstream ${KNOWLEDGE_UPSTREAM};
     set $web_upstream ${WEB_UPSTREAM};
     set $n8n_upstream ${N8N_UPSTREAM};
+    set $prometheus_upstream ${PROMETHEUS_UPSTREAM};
+    set $grafana_upstream ${GRAFANA_UPSTREAM};
+    set $admin_auth_upstream ${ADMIN_AUTH_UPSTREAM};
     access_log off;
     server_tokens off;
     client_max_body_size 1m;
@@ -66,8 +69,52 @@ server {
         proxy_pass http://$mcp_upstream/.well-known/oauth-protected-resource/mcp;
     }
 
-    # These are the only public Calendar integration routes. n8n remains a
-    # private optional profile and is resolved dynamically when enabled.
+    location = /oauth2/auth {
+        proxy_pass http://$admin_auth_upstream;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header X-Original-URL $scheme://$http_host$request_uri;
+    }
+
+    location /oauth2/ {
+        proxy_pass http://$admin_auth_upstream;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Auth-Request-Redirect $scheme://$http_host$request_uri;
+    }
+
+    location = /admin/n8n { return 308 /admin/n8n/; }
+    location /admin/n8n/ {
+        auth_request /oauth2/auth;
+        error_page 401 = /oauth2/start;
+        auth_request_set $admin_user $upstream_http_x_auth_request_user;
+        proxy_set_header X-WEBAUTH-USER $admin_user;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_pass http://$n8n_upstream;
+    }
+
+    location = /admin/prometheus { return 308 /admin/prometheus/; }
+    location /admin/prometheus/ {
+        auth_request /oauth2/auth;
+        error_page 401 = /oauth2/start;
+        auth_request_set $admin_user $upstream_http_x_auth_request_user;
+        proxy_set_header X-WEBAUTH-USER $admin_user;
+        proxy_pass http://$prometheus_upstream;
+    }
+
+    location = /admin/grafana { return 308 /admin/grafana/; }
+    location /admin/grafana/ {
+        auth_request /oauth2/auth;
+        error_page 401 = /oauth2/start;
+        auth_request_set $admin_user $upstream_http_x_auth_request_user;
+        proxy_set_header X-WEBAUTH-USER $admin_user;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_pass http://$grafana_upstream;
+    }
+
+    # This is the only public n8n route. It is intentionally narrow and keeps
+    # the editor plus every other n8n endpoint behind the admin role gate.
     location = /eisenhower/google-calendar/webhook {
         if ($request_method != POST) { return 404; }
         proxy_set_header Authorization "";

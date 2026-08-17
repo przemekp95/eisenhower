@@ -78,6 +78,7 @@ services:
     volumes:
       - audit_data:/volumes/audit
       - n8n_data:/volumes/n8n
+      - grafana_data:/volumes/grafana
       - identity_db_data:/volumes/identity
       - rag_jobs:/volumes/rag-jobs
 
@@ -393,11 +394,13 @@ services:
 
   n8n:
     <<: *common
-    profiles: [n8n]
     image: ${N8N_IMAGE:-n8nio/n8n:2.4.6}
     environment:
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY is required}
       - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_PATH=/admin/n8n/
+      - N8N_EDITOR_BASE_URL=${ACCESS_PUBLIC_ORIGIN:?ACCESS_PUBLIC_ORIGIN is required}/admin/n8n/
+      - N8N_PROXY_HOPS=1
       - N8N_RAG_HEADER_AUTH_CREDENTIAL_ID=${N8N_RAG_HEADER_AUTH_CREDENTIAL_ID:-}
       - EXECUTIONS_DATA_SAVE_ON_SUCCESS=none
       - EXECUTIONS_DATA_PRUNE=true
@@ -418,6 +421,60 @@ services:
       - ./n8n:/repo-n8n:ro
     tmpfs:
       - /reconcile:mode=0700,uid=1000,gid=1000
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5678/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+  prometheus:
+    <<: *common
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.5.0}
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-15d}
+      - --web.external-url=${ACCESS_PUBLIC_ORIGIN:?ACCESS_PUBLIC_ORIGIN is required}/admin/prometheus/
+      - --web.route-prefix=/admin/prometheus/
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9090/admin/prometheus/-/ready >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+
+  grafana:
+    <<: *common
+    image: ${GRAFANA_IMAGE:-grafana/grafana:12.1.0}
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    environment:
+      - GF_SERVER_ROOT_URL=${ACCESS_PUBLIC_ORIGIN:?ACCESS_PUBLIC_ORIGIN is required}/admin/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_AUTH_PROXY_ENABLED=true
+      - GF_AUTH_PROXY_HEADER_NAME=X-WEBAUTH-USER
+      - GF_AUTH_PROXY_HEADER_PROPERTY=username
+      - GF_AUTH_PROXY_AUTO_SIGN_UP=true
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/admin/grafana/api/health >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
 
   identity-db:
     <<: *common
@@ -460,6 +517,8 @@ services:
       - EISENHOWER_MCP_REDIRECT_URI=${EISENHOWER_MCP_REDIRECT_URI:?EISENHOWER_MCP_REDIRECT_URI is required}
       - EISENHOWER_MCP_CLIENT_SECRET=${EISENHOWER_MCP_CLIENT_SECRET:?EISENHOWER_MCP_CLIENT_SECRET is required}
       - OIDC_MCP_RESOURCE_URL=${OIDC_MCP_RESOURCE_URL:?OIDC_MCP_RESOURCE_URL is required}
+      - ADMIN_OIDC_CLIENT_SECRET=${ADMIN_OIDC_CLIENT_SECRET:?ADMIN_OIDC_CLIENT_SECRET is required}
+      - ADMIN_OIDC_REDIRECT_URI=${ADMIN_OIDC_REDIRECT_URI:?ADMIN_OIDC_REDIRECT_URI is required}
     volumes:
       - ./deploy/local/identity/eisenhower-realm.json:/opt/keycloak/data/import/eisenhower-realm.json:ro
       - ./deploy/local/identity/eisenhower-user-profile.json:/opt/keycloak/conf/eisenhower-user-profile.json:ro
@@ -500,6 +559,37 @@ services:
     tmpfs:
       - /run/eisenhower:mode=0700,uid=1001,gid=1001
 
+  oauth2-proxy:
+    <<: *common
+    image: ${OAUTH2_PROXY_IMAGE:-quay.io/oauth2-proxy/oauth2-proxy:v7.12.0-alpine}
+    depends_on:
+      identity-service:
+        condition: service_started
+    command:
+      - --provider=keycloak-oidc
+      - --oidc-issuer-url=${OIDC_ISSUER:?OIDC_ISSUER is required}
+      - --client-id=eisenhower-admin-access
+      - --client-secret=${ADMIN_OIDC_CLIENT_SECRET:?ADMIN_OIDC_CLIENT_SECRET is required}
+      - --redirect-url=${ADMIN_OIDC_REDIRECT_URI:?ADMIN_OIDC_REDIRECT_URI is required}
+      - --cookie-secret=${ADMIN_OIDC_COOKIE_SECRET:?ADMIN_OIDC_COOKIE_SECRET is required}
+      - --cookie-name=_eisenhower_admin
+      - --cookie-secure=true
+      - --cookie-samesite=lax
+      - --email-domain=*
+      - --scope=openid profile email roles
+      - --allowed-role=eisenhower-admin
+      - --reverse-proxy=true
+      - --set-xauthrequest=true
+      - --skip-provider-button=true
+      - --upstream=static://202
+      - --http-address=0.0.0.0:4180
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4180/ping >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+
   gateway:
     <<: *common
     image: ${ACCESS_GATEWAY_IMAGE:-nginx:1.27.5-alpine}
@@ -510,6 +600,14 @@ services:
         condition: service_started
       mcp-service:
         condition: service_started
+      n8n:
+        condition: service_healthy
+      prometheus:
+        condition: service_healthy
+      grafana:
+        condition: service_healthy
+      oauth2-proxy:
+        condition: service_healthy
     ports:
       - "${GATEWAY_BIND_ADDRESS:-127.0.0.1}:${GATEWAY_PORT:-8790}:8080"
     environment:
@@ -522,6 +620,9 @@ services:
       - KNOWLEDGE_UPSTREAM=${ACCESS_GATEWAY_KNOWLEDGE_UPSTREAM:-knowledge-service:8000}
       - WEB_UPSTREAM=${ACCESS_GATEWAY_WEB_UPSTREAM:-web:3000}
       - N8N_UPSTREAM=${CALENDAR_GATEWAY_N8N_UPSTREAM:-n8n:5678}
+      - PROMETHEUS_UPSTREAM=${ACCESS_GATEWAY_PROMETHEUS_UPSTREAM:-prometheus:9090}
+      - GRAFANA_UPSTREAM=${ACCESS_GATEWAY_GRAFANA_UPSTREAM:-grafana:3000}
+      - ADMIN_AUTH_UPSTREAM=${ACCESS_GATEWAY_ADMIN_AUTH_UPSTREAM:-oauth2-proxy:4180}
     volumes:
       - ./deploy/local/access-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
 
@@ -529,6 +630,8 @@ volumes:
   mongodb_data:
   qdrant_data:
   n8n_data:
+  prometheus_data:
+  grafana_data:
   rag_jobs:
   model_cache:
   classifier_runtime:
