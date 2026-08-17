@@ -106,6 +106,12 @@ describe('OCR file privacy', () => {
     await expect(sanitizeOcrFile(malformedJpeg)).rejects.toThrow('Malformed JPEG segment');
     await expect(sanitizeOcrFile(disguisedWebp)).rejects.toThrow('Unsupported image format');
   });
+
+  it('passes valid text containing an ftyp token through unchanged', async () => {
+    const text = new File(['1234ftyp task'], 'tasks.txt', { type: 'text/plain' });
+
+    await expect(sanitizeOcrFile(text)).resolves.toBe(text);
+  });
 });
 
 const taskResponse = {

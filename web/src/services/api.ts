@@ -215,6 +215,15 @@ function hasKnownImageSignature(bytes: Uint8Array): boolean {
     Array.from(value).every(
       (character, index) => bytes[offset + index] === character.charCodeAt(0)
     );
+  const bmffBoxLength = bytes[0] * 0x1000000 + bytes[1] * 0x10000 + bytes[2] * 0x100 + bytes[3];
+  const isIsoBmffImage =
+    bytes.length >= 12 &&
+    bmffBoxLength >= 12 &&
+    bmffBoxLength <= bytes.length &&
+    asciiAt(4, 'ftyp') &&
+    ['avif', 'avis', 'heic', 'heix', 'hevc', 'hevx', 'mif1', 'msf1'].some((brand) =>
+      asciiAt(8, brand)
+    );
 
   return (
     (bytes[0] === 0xff && bytes[1] === 0xd8) ||
@@ -223,7 +232,7 @@ function hasKnownImageSignature(bytes: Uint8Array): boolean {
     asciiAt(0, 'GIF89a') ||
     asciiAt(0, 'BM') ||
     (asciiAt(0, 'RIFF') && asciiAt(8, 'WEBP')) ||
-    asciiAt(4, 'ftyp')
+    isIsoBmffImage
   );
 }
 
