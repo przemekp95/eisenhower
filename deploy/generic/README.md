@@ -10,9 +10,10 @@ The target host must provide a private environment file and an explicit
 start either `deploy/inference/compose.amd.yaml` or
 `deploy/inference/compose.nvidia.yaml` separately and expose only the three-value
 `INFERENCE_BASE_URL`, `INFERENCE_API_KEY`, `INFERENCE_ALLOWED_HOSTS` contract to
-the application network. n8n, Prometheus and Grafana are mandatory private
-services in that canonical graph; their consoles are exposed only through the
-gateway's Keycloak-backed `eisenhower-admin` role gate.
+the application network. n8n, Prometheus and Grafana are each mandatory private
+services in that canonical graph; their consoles are exposed only at
+`/admin/n8n/`, `/admin/prometheus/` and `/admin/grafana/` through the gateway's
+Keycloak-backed `eisenhower-admin` role gate.
 
 AWS ECS was removed from the supported contract because the historical action
 only forced the current task definition to restart. It never bound a task

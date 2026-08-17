@@ -28,7 +28,9 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 - `backend-ai`: FastAPI service for classification, OCR, and batch analysis
 - `mobile/eisenhower-matrix`: Expo / React Native client
 - `qdrant`: private rebuildable projection for canonical RAG data
-- `n8n`: optional private automation profile; only the explicit Calendar webhook is routed publicly
+- `n8n`: mandatory private automation runtime; only the explicit Calendar webhook is routed publicly
+- `prometheus`: mandatory private metrics and alert-rule runtime
+- `grafana`: mandatory private operational dashboard runtime
 
 Plain-language browser instructions are available in [`docs/WEB_GUIDE.md`](docs/WEB_GUIDE.md).
 
@@ -115,13 +117,27 @@ The standard backend AI development environment installs `requirements-dev.txt`,
 
 The canonical application graph is `compose.yaml` for both development and production. Set
 `APP_ENV` and `AUTH_MODE` explicitly; production accepts only OIDC. The default graph exposes
-one host port from `gateway`; MongoDB, Qdrant, Node, FastAPI and n8n have no host ports.
+one host port from `gateway`; MongoDB, Qdrant, Node, FastAPI, n8n, Prometheus,
+Grafana and OAuth2 Proxy have no host ports.
 
 ```bash
 docker compose --env-file .env config
 docker compose --env-file .env up -d --wait
-docker compose --env-file .env --profile n8n up -d --wait
 ```
+
+n8n, Prometheus and Grafana are mandatory in that graph. Their consoles are
+available only through the gateway after Keycloak grants the dedicated
+`eisenhower-admin` realm role:
+
+- `/admin/n8n/`
+- `/admin/prometheus/`
+- `/admin/grafana/`
+
+The OAuth2 Proxy callback is `/oauth2/callback`. The only unauthenticated n8n
+exception is `POST /eisenhower/google-calendar/webhook`; it does not expose the
+editor or arbitrary n8n webhook paths. Assign `eisenhower-admin` only to named
+operators and supply unique `ADMIN_OIDC_CLIENT_SECRET` and
+`ADMIN_OIDC_COOKIE_SECRET` values outside version control.
 
 AMD and NVIDIA are standalone provider projects, not overlays of the application topology:
 

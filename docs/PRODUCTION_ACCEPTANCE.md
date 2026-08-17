@@ -12,8 +12,10 @@ A candidate worktree is locally acceptable when:
 - `make verify`, the Compose contract tests, release workflow contract tests, and
   generic backup/restore/rollback tests pass from a clean dependency install;
 - `compose.yaml` renders with safe placeholders for both development and production,
-  with the same service graph, only `gateway` publishing host ports, and n8n available
-  only through its optional `n8n` profile;
+  with the same service graph and only `gateway` publishing host ports;
+- n8n, Prometheus and Grafana are mandatory, private and health-gated; their consoles
+  are routed only at `/admin/n8n/`, `/admin/prometheus/` and `/admin/grafana/` after
+  OAuth2 Proxy confirms the Keycloak `eisenhower-admin` realm role;
 - `APP_ENV` and `AUTH_MODE` are explicit and validated, and production accepts only OIDC;
 - the three application-facing inference variables are exactly `INFERENCE_BASE_URL`,
   `INFERENCE_API_KEY`, and `INFERENCE_ALLOWED_HOSTS`;
@@ -53,31 +55,38 @@ Before target acceptance, operators must independently prove:
 - secret provisioning, target TLS, DNS, storage capacity and network policy;
 - live backup and confirmation-gated restore on representative data;
 - rollback after a deliberately failed rollout;
+- live Keycloak login for a named user with `eisenhower-admin`, plus rejection of an
+  unauthenticated user and an authenticated user without that role;
 - imported and active n8n workflows plus successful execution history;
+- healthy Prometheus targets/rules, populated Grafana dashboards and alert delivery;
 - provider-specific AMD or NVIDIA runtime health and model quality where inference is enabled.
 
 ## Public and physical acceptance
 
 The deployed SHA is publicly accepted only after exact-status HTTPS checks prove gateway,
 API and AI readiness; unauthenticated access fails closed; OIDC user CRUD and authorization
-boundaries work; Calendar callbacks/webhooks reach only their explicit gateway routes; and
-browser requests have no mixed content. Physical Android installation and end-to-end use,
-plus any required human model evaluation, remain separate gates.
+boundaries work; `POST /eisenhower/google-calendar/webhook` is the only public n8n route;
+and browser requests have no mixed content. Physical Android installation and end-to-end
+use, plus any required human model evaluation, remain separate gates.
 
 ## Backup scope
 
-`deploy/generic/backup.sh` archives MongoDB and the durable audit, identity, n8n and RAG job
-volumes with checksums and the active release manifest. `restore.sh` requires an explicit
-confirmation. Qdrant is rebuildable from canonical MongoDB data and is intentionally not a
-canonical backup source.
+`deploy/generic/backup.sh` archives MongoDB and the durable audit, identity, n8n, Grafana and
+RAG job volumes with checksums and the active release manifest. `restore.sh` requires an
+explicit confirmation. Prometheus retention data is operational and is rebuilt from live
+scrape targets after restore. Qdrant is rebuildable from canonical MongoDB data and is
+intentionally not a canonical backup source.
 
 ## Architecture, transport and methodology
 
-- CSRF: browser credentials are Bearer tokens rather than cookies, CORS credentials remain
-  disabled, and unsafe untrusted origins are rejected. This is defense in depth; CORS is not
-  authentication.
+- CSRF: product API credentials are Bearer tokens rather than cookies, CORS credentials
+  remain disabled, and unsafe untrusted origins are rejected. Admin console access adds a
+  secure SameSite=Lax OAuth2 Proxy session cookie; the gateway's Origin allowlist rejects
+  cross-site unsafe requests, while n8n and Grafana retain their own request protections.
+  CORS and Origin checks are defense in depth, not authentication.
 - HTTP/webhooks: the gateway is the only ingress. MongoDB, Qdrant, API/AI, MCP and n8n stay
-  private; only explicit Calendar OAuth and webhook routes proxy to n8n/API contracts.
+  private, as do Prometheus, Grafana and OAuth2 Proxy. Only explicit Calendar OAuth and
+  webhook routes proxy publicly to n8n/API contracts; admin routes require the role gate.
 - Messaging/outbox: Calendar retains its durable outbox claim/lease/ack semantics. The replay
   receipt and claim mutation are atomic for `/outbox/claim`; n8n reuses one request ID across
   HTTP retries. No general-purpose message bus is claimed.

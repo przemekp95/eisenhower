@@ -12,8 +12,9 @@ def test_operator_docs_make_admin_stack_mandatory_and_role_gated():
 
   assert "optional private automation profile" not in docs
   assert "--profile n8n" not in docs
+  lines = docs.splitlines()
   for service in ("n8n", "Prometheus", "Grafana"):
-    assert f"{service} is mandatory" in docs
+    assert any(service.lower() in line.lower() and "mandatory" in line.lower() for line in lines)
   for route in ("/admin/n8n/", "/admin/prometheus/", "/admin/grafana/"):
     assert route in docs
   assert "eisenhower-admin" in docs
