@@ -56,7 +56,8 @@ for arg in \"$@\"; do
 done
 case \" $* \" in
   *' exec -T mongodb mongodump '*) printf 'mongo-backup' ;;
-  *' run --rm --no-deps -T backup-volume-helper '*) cat \"{archive or '/dev/null'}\" ;;
+  *' run --rm --no-deps -T backup-volume-helper '*' tar -C /volumes -czf - '*) cat \"{archive or '/dev/null'}\" ;;
+  *' run --rm --no-deps -T backup-volume-helper '*) cat >/dev/null ;;
   *' up -d --remove-orphans --wait '* )
     value=0; [ -f \"{count}\" ] && value=$(cat \"{count}\"); value=$((value + 1)); printf '%s' \"$value\" > \"{count}\"
     {'[ "$value" -ne 1 ] || exit 42' if fail_first_up else ':'}
@@ -71,14 +72,13 @@ exit 0
 def test_failed_rollout_executes_previous_manifest_rollback(tmp_path):
   host, env_file = _host(tmp_path)
   previous = host / ".deploy" / "active-release-manifest.json"
-  (host / ".deploy" / "active-n8n-profile").write_text("true\n")
   candidate = tmp_path / "candidate.json"
   _manifest(previous, "1" * 40, "a")
   _manifest(candidate, "2" * 40, "b")
   env = _fake_docker(tmp_path, fail_first_up=True)
   env["EISENHOWER_DEPLOY_ROOT"] = str(host)
 
-  result = subprocess.run([DEPLOY, candidate, env_file, "false"], env=env, text=True, capture_output=True)
+  result = subprocess.run([DEPLOY, candidate, env_file], env=env, text=True, capture_output=True)
 
   assert result.returncode != 0
   assert json.loads(previous.read_text())["release_sha"] == "1" * 40
@@ -86,7 +86,21 @@ def test_failed_rollout_executes_previous_manifest_rollback(tmp_path):
   assert log.count("up -d --remove-orphans --wait") == 2
   assert f"RELEASE_SHA={'2' * 40}" in log
   assert f"RELEASE_SHA={'1' * 40}" in log
-  assert "--profile n8n up -d --remove-orphans --wait" in log
+  assert "--profile n8n" not in log
+  assert not (host / ".deploy" / "active-n8n-profile").exists()
+
+
+def test_deploy_rejects_removed_optional_profile_argument(tmp_path):
+  host, env_file = _host(tmp_path)
+  candidate = tmp_path / "candidate.json"
+  _manifest(candidate, "2" * 40, "b")
+  env = _fake_docker(tmp_path)
+  env["EISENHOWER_DEPLOY_ROOT"] = str(host)
+
+  result = subprocess.run([DEPLOY, candidate, env_file, "false"], env=env, text=True, capture_output=True)
+
+  assert result.returncode != 0
+  assert not (tmp_path / "docker.log").exists()
 
 
 def test_backup_is_checksummed_and_restore_requires_explicit_confirmation(tmp_path):
@@ -96,7 +110,7 @@ def test_backup_is_checksummed_and_restore_requires_explicit_confirmation(tmp_pa
   archive = tmp_path / "volumes.tar.gz"
   source = tmp_path / "volume-source"
   source.mkdir()
-  for name in ("audit", "n8n", "identity", "rag-jobs"):
+  for name in ("audit", "n8n", "grafana", "identity", "rag-jobs"):
     (source / name).mkdir()
   with tarfile.open(archive, "w:gz") as bundle:
     for child in source.iterdir():
@@ -119,3 +133,14 @@ def test_backup_is_checksummed_and_restore_requires_explicit_confirmation(tmp_pa
   refused = subprocess.run([RESTORE], env=restore_env, text=True, capture_output=True)
   assert refused.returncode != 0
   assert "confirmation" in refused.stderr.lower()
+
+  accepted = subprocess.run(
+    [RESTORE],
+    env={**restore_env, "RESTORE_CONFIRM": "restore-eisenhower-data"},
+    text=True,
+    capture_output=True,
+  )
+  assert accepted.returncode == 0, accepted.stderr
+  log = (tmp_path / "docker.log").read_text()
+  assert "tar -C /volumes -czf - audit n8n grafana identity rag-jobs" in log
+  assert "/volumes/grafana" in log
