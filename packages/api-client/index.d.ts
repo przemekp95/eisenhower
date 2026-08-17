@@ -624,6 +624,8 @@ export function readJson<T>(
 export function toTaskInputDto(task: Partial<TaskInputDto> & { title: string }): TaskInputDto;
 export function toTaskPatchDto(patch: Partial<TaskInputDto>): Partial<TaskInputDto>;
 export function resolveTaskQuadrant(task: AcceptedOcrLearningTaskLike): Quadrant;
+export function stripImageMetadata(bytes: Uint8Array): Uint8Array;
+export function stripJpegMetadata(bytes: Uint8Array): Uint8Array;
 export function toAcceptedOcrLearningPayload(
   tasks: AcceptedOcrLearningTaskLike[]
 ): Array<{ task: string; quadrant: Quadrant }>;

@@ -26,7 +26,7 @@ import { runtimeConfig } from '../config';
 import type { Language } from '../i18n/translations';
 import { clearApiToken, getAccessToken, setApiToken, rejectApiToken } from '../authSession';
 
-const { createAiApi, createTaskApi } = apiClient;
+const { createAiApi, createTaskApi, stripImageMetadata } = apiClient;
 
 export { clearApiToken, setApiToken };
 
@@ -195,11 +195,103 @@ export async function answerKnowledge(
 /** @deprecated Use analyzeTask. */
 export const analyzeWithLangChain = analyzeTask;
 
+function readFileBytes(file: File): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('Unable to read image bytes'));
+    reader.onload = () => {
+      if (!(reader.result instanceof ArrayBuffer)) {
+        reject(new Error('Unable to read image bytes'));
+        return;
+      }
+      resolve(new Uint8Array(reader.result));
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function hasKnownImageSignature(bytes: Uint8Array): boolean {
+  const asciiAt = (offset: number, value: string) =>
+    Array.from(value).every(
+      (character, index) => bytes[offset + index] === character.charCodeAt(0)
+    );
+  const bmffBoxLength = bytes[0] * 0x1000000 + bytes[1] * 0x10000 + bytes[2] * 0x100 + bytes[3];
+  const isIsoBmffImage =
+    bytes.length >= 12 &&
+    bmffBoxLength >= 12 &&
+    bmffBoxLength <= bytes.length &&
+    asciiAt(4, 'ftyp') &&
+    ['avif', 'avis', 'heic', 'heix', 'hevc', 'hevx', 'mif1', 'msf1'].some((brand) =>
+      asciiAt(8, brand)
+    );
+
+  return (
+    (bytes[0] === 0xff && bytes[1] === 0xd8) ||
+    (bytes[0] === 0x89 && asciiAt(1, 'PNG')) ||
+    asciiAt(0, 'GIF87a') ||
+    asciiAt(0, 'GIF89a') ||
+    asciiAt(0, 'BM') ||
+    (asciiAt(0, 'RIFF') && asciiAt(8, 'WEBP')) ||
+    isIsoBmffImage
+  );
+}
+
+function readFileText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('Unable to read text bytes'));
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') {
+        reject(new Error('Unable to read text bytes'));
+        return;
+      }
+      resolve(reader.result);
+    };
+    reader.readAsText(file, 'utf-8');
+  });
+}
+
+async function isSafeTextUpload(file: File, bytes: Uint8Array): Promise<boolean> {
+  if (
+    !(file.type.startsWith('text/') || /\.txt$/i.test(file.name)) ||
+    hasKnownImageSignature(bytes)
+  ) {
+    return false;
+  }
+
+  try {
+    const text = await readFileText(file);
+    return !/[\ufffd\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(text);
+  } catch {
+    return false;
+  }
+}
+
+export async function sanitizeOcrFile(file: File): Promise<File> {
+  const bytes = await readFileBytes(file);
+  let sanitized: Uint8Array;
+  try {
+    sanitized = stripImageMetadata(bytes);
+  } catch (error) {
+    if (await isSafeTextUpload(file, bytes)) {
+      return file;
+    }
+    throw error;
+  }
+  const pngSignature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  const extension = pngSignature.every((byte, index) => sanitized[index] === byte) ? 'png' : 'jpg';
+  const baseName = file.name.replace(/\.[^.]+$/, '') || 'scan';
+  return new File([sanitized], `${baseName}-sanitized.${extension}`, {
+    type: extension === 'png' ? 'image/png' : 'image/jpeg',
+    lastModified: file.lastModified,
+  });
+}
+
 export async function extractTasksFromImage(
   file: File,
   options: { signal?: AbortSignal } = {}
 ): Promise<OCRResult> {
-  return getAiApi().extractTasksFromImage(file, options);
+  return getAiApi().extractTasksFromImage(await sanitizeOcrFile(file), options);
 }
 
 export async function batchAnalyzeTasks(
