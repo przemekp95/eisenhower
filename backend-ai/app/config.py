@@ -6,6 +6,7 @@ import os
 
 
 DEFAULT_PROMPT_ARTIFACT_DIR = Path(__file__).resolve().parent.parent / "prompts"
+APP_ENV_VALUES = frozenset({"development", "test", "production"})
 
 
 def parse_csv_list(value: str | None, default: tuple[str, ...]) -> tuple[str, ...]:
@@ -129,6 +130,9 @@ class Settings:
   ai_management_enabled: bool = True
   jobs_max_queued: int = 1000
   tesseract_languages: str = "eng+pol"
+  ocr_max_width: int = 12_000
+  ocr_max_height: int = 12_000
+  ocr_max_pixels: int = 40_000_000
   app_name: str = "AI Quadrant Classifier"
   cors_allow_origins: tuple[str, ...] = (
     "http://localhost:3000",
@@ -138,6 +142,14 @@ class Settings:
   )
 
   def __post_init__(self) -> None:
+    if self.app_env not in APP_ENV_VALUES:
+      raise ValueError("APP_ENV must be 'development', 'test', or 'production'.")
+    if self.auth_mode not in {"static", "oidc"}:
+      raise ValueError("AUTH_MODE must be 'static' or 'oidc'.")
+    if self.app_env == "production" and self.auth_mode != "oidc":
+      raise ValueError("Production requires AUTH_MODE=oidc.")
+    if min(self.ocr_max_width, self.ocr_max_height, self.ocr_max_pixels) < 1:
+      raise ValueError("OCR image limits must be positive integers.")
     if self.local_model_artifact_dir is None:
       object.__setattr__(self, "local_model_artifact_dir", self.model_cache_dir)
     if self.audit_database_path is None:
@@ -274,6 +286,8 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
   base_dir = Path(__file__).resolve().parent.parent
   app_env = source.get("APP_ENV", "development").lower()
   auth_mode = source.get("AUTH_MODE", "static").lower()
+  if app_env not in APP_ENV_VALUES:
+    raise ValueError("APP_ENV must be 'development', 'test', or 'production'.")
   api_token = source.get("EISENHOWER_API_TOKEN", "test-api-token" if app_env != "production" else "")
   admin_token = source.get("EISENHOWER_ADMIN_TOKEN", "test-admin-token" if app_env != "production" else "")
   oidc_issuer = source.get("OIDC_ISSUER") or None
@@ -290,6 +304,8 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
 
   if auth_mode not in {"static", "oidc"}:
     raise ValueError("AUTH_MODE must be 'static' or 'oidc'.")
+  if app_env == "production" and auth_mode != "oidc":
+    raise ValueError("Production requires AUTH_MODE=oidc.")
   if app_env == "production" and not cors_allow_origins:
     raise ValueError("CORS_ALLOW_ORIGINS must list trusted browser origins in production.")
   if app_env == "production" and auth_mode == "oidc" and not (oidc_issuer and oidc_audience):
@@ -486,6 +502,9 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     ai_management_enabled=source.get("AI_MANAGEMENT_ENABLED", "true").lower() in ("true", "1", "yes"),
     jobs_max_queued=int(source.get("JOBS_MAX_QUEUED", "1000")),
     tesseract_languages=source.get("TESSERACT_LANGUAGES", "eng+pol"),
+    ocr_max_width=int(source.get("OCR_MAX_WIDTH", "12000")),
+    ocr_max_height=int(source.get("OCR_MAX_HEIGHT", "12000")),
+    ocr_max_pixels=int(source.get("OCR_MAX_PIXELS", "40000000")),
     # MinIO Object Storage
     minio_endpoint=source.get("MINIO_ENDPOINT") or None,
     minio_access_key=source.get("MINIO_ACCESS_KEY") or None,

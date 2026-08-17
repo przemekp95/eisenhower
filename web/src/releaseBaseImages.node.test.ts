@@ -20,13 +20,10 @@ describe('release base image policy', () => {
     }
   });
 
-  it('pins the supported Mikrus MongoDB release input by digest', () => {
-    const compose = fs.readFileSync(
-      path.resolve(__dirname, '../../deploy/mikrus/docker-compose.yml'),
-      'utf8'
-    );
-    const mongoImage = compose.match(/^\s+image:\s+(mongo:\S+)$/m)?.[1];
+  it('requires the canonical MongoDB image to remain an explicit deployment input', () => {
+    const compose = fs.readFileSync(path.resolve(__dirname, '../../compose.yaml'), 'utf8');
+    const mongoImage = compose.match(/^\s+image:\s+(\$\{MONGODB_IMAGE[^}]+\})$/m)?.[1];
 
-    expect(mongoImage).toMatch(sha256Reference);
+    expect(mongoImage).toContain('MONGODB_IMAGE');
   });
 });
