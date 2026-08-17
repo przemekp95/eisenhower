@@ -47,6 +47,12 @@ const pngWithPrivateMetadata = Uint8Array.from([
   0xdd, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xee, 0xee, 0xee, 0xee,
 ]);
 
+const pngWithoutPrivateMetadata = Uint8Array.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x01, 0x49, 0x48, 0x44, 0x52,
+  0x01, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x02, 0x49, 0x44, 0x41, 0x54, 0x30, 0x31, 0xdd,
+  0xdd, 0xdd, 0xdd, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xee, 0xee, 0xee, 0xee,
+]);
+
 function readFileBytes(file: File): Promise<number[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -107,7 +113,7 @@ describe('OCR file privacy', () => {
 
     expect(sanitized.name).toBe('scan-sanitized.png');
     expect(sanitized.type).toBe('image/png');
-    expect(await readFileBytes(sanitized)).not.toContain(0x65);
+    await expect(readFileBytes(sanitized)).resolves.toEqual(Array.from(pngWithoutPrivateMetadata));
   });
 
   it('rejects malformed image bytes even when the file claims to be text', async () => {
@@ -204,7 +210,7 @@ describe('OCR file privacy', () => {
     }
   );
 
-  it('treats a non-string browser text result as empty safe text', async () => {
+  it('fails closed when the browser returns a non-string text result', async () => {
     const textReadSpy = jest
       .spyOn(FileReader.prototype, 'readAsText')
       .mockImplementation(function () {
@@ -213,7 +219,7 @@ describe('OCR file privacy', () => {
       });
     const text = new File(['Task'], 'tasks.txt', { type: 'text/plain' });
 
-    await expect(sanitizeOcrFile(text)).resolves.toBe(text);
+    await expect(sanitizeOcrFile(text)).rejects.toThrow('Unsupported image format');
     textReadSpy.mockRestore();
   });
 });

@@ -240,7 +240,13 @@ function readFileText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(reader.error ?? new Error('Unable to read text bytes'));
-    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') {
+        reject(new Error('Unable to read text bytes'));
+        return;
+      }
+      resolve(reader.result);
+    };
     reader.readAsText(file, 'utf-8');
   });
 }
