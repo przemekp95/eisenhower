@@ -6,6 +6,10 @@ on:
       - master
   workflow_dispatch:
 
+concurrency:
+  group: sync-master-into-dev
+  cancel-in-progress: false
+
 permissions:
   actions: write
   contents: write
@@ -16,9 +20,10 @@ jobs:
   sync-master-into-dev:
     name: sync-master-into-dev
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -163,6 +168,15 @@ jobs:
             -f context=branch-policy \
             -f state=success \
             -f description="Fast-forward sync from master into dev is allowed." \
+            -f target_url="$target_url"
+
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/statuses/$target_sha" \
+            -f context=ci/master-exact-sha-reuse \
+            -f state=success \
+            -f description="Exact SHA already passed every required master CI job." \
             -f target_url="$target_url"
 
       - name: Configure fast-forward deploy key

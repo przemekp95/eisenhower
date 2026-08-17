@@ -31,10 +31,27 @@ test("a backend HTTP change selects backend, BDD, browser integration, and consu
     "mcp",
     "mobile",
     "n8n",
+    "security-lint",
     "web",
   ]);
   assert.match(plan.reasons["backend-node"][0], /backend-node/);
   assert.match(plan.inputDigest, /^sha256:[a-f0-9]{64}$/);
+});
+
+test("an exact green master SHA reused on dev preserves contexts without repeating heavy targets", () => {
+  const plan = buildImpactPlan({
+    eventName: "push",
+    refName: "dev",
+    baseRefName: "dev",
+    mergeBase: "a".repeat(40),
+    headSha: "b".repeat(40),
+    changes: [change("M", "backend-ai/app/main.py")],
+    reuseMasterCi: true,
+  });
+
+  assert.equal(plan.fullCi, false);
+  assert.equal(plan.reusedMasterCi, true);
+  assert.deepEqual(plan.targets, []);
 });
 
 test("contract changes propagate through every HTTP and browser consumer", () => {
@@ -55,6 +72,7 @@ test("contract changes propagate through every HTTP and browser consumer", () =>
     "mcp",
     "mobile",
     "n8n",
+    "security-lint",
     "web",
   ]);
 });
@@ -90,7 +108,7 @@ test("module manifests select dependency audits without forcing unrelated suites
   });
 
   assert.equal(plan.fullCi, false);
-  assert.deepEqual(plan.targets, ["dependency-audit", "mcp"]);
+  assert.deepEqual(plan.targets, ["dependency-audit", "mcp", "security-lint"]);
 });
 
 test("every mobile application change validates the bundled Android release surface", () => {
@@ -274,7 +292,6 @@ test("required contexts stay synchronized and expose explicit not-applicable job
     workflow,
     /- name: Enforce clean Python lint gate\n\s+if: \$\{\{ needs\.resolve-run-mode\.outputs\.backend_ai == 'true' \}\}/,
   );
-  assert.doesNotMatch(workflow, /- name: Run Trivy scan\n\s+if:/);
   assert.doesNotMatch(workflow, /security scan not applicable/i);
   assert.equal((workflow.match(/^    if: \$\{\{ always\(\) \}\}$/gm) ?? []).length, 11);
   assert.equal(
@@ -295,11 +312,14 @@ test("required contexts stay synchronized and expose explicit not-applicable job
     'python -m pip_audit --requirement "$RUNNER_TEMP/mcp-requirements.txt" --require-hashes --disable-pip --progress-spinner off',
   ];
   for (const command of auditCommands) assert.ok(workflow.includes(command), command);
-  assert.match(workflow, /- name: Audit every production dependency surface\n\s+run: \|/);
+  assert.match(
+    workflow,
+    /- name: Audit every production dependency surface\n\s+if: \$\{\{ needs\.resolve-run-mode\.outputs\.dependency_audit == 'true' \}\}\n\s+run: \|/,
+  );
   assert.match(workflow, /- name: Preserve Trivy SARIF artifact\n\s+if: \$\{\{ always\(\)/);
   assert.match(
     workflow,
-    /- name: Run Trivy scan\n\s+id: trivy-scan\n\s+if: \$\{\{ always\(\) && steps\.checkout\.outcome == 'success' \}\}/,
+    /- name: Run Trivy scan\n\s+id: trivy-scan\n\s+if: \$\{\{ always\(\) && needs\.resolve-run-mode\.outputs\.security_lint == 'true' && steps\.checkout\.outcome == 'success' \}\}/,
   );
   assert.match(
     workflow,
@@ -308,6 +328,6 @@ test("required contexts stay synchronized and expose explicit not-applicable job
   assert.ok(workflow.includes("github.actor != 'dependabot[bot]'"));
   assert.match(
     workflow,
-    /- name: Enforce Trivy gate\n\s+if: \$\{\{ always\(\) && steps\.trivy-scan\.outputs\.exit_code != '0' \}\}/,
+    /- name: Enforce Trivy gate\n\s+if: \$\{\{ always\(\) && needs\.resolve-run-mode\.outputs\.security_lint == 'true' && steps\.trivy-scan\.outputs\.exit_code != '0' \}\}/,
   );
 });

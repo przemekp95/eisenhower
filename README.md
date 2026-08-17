@@ -276,6 +276,8 @@ Target required checks for both `dev` and `master`:
 
 The workflow implements these stable checks with explicit successful not-applicable paths driven by the versioned, merge-base-aware `ci-impact-plan/v1`. Risky, unknown, release and scheduled inputs fail closed to full CI. GitHub branch rules are external state and must be verified after the changes are published. See [`docs/PRODUCTION_ACCEPTANCE.md`](docs/PRODUCTION_ACCEPTANCE.md) for the exact separation between local, CI, and public-runtime evidence.
 
+Workflows use read-only tokens by default, grant write scopes only to the governed master-to-dev synchronizer, pin external Actions and CI service images immutably, and bound every job with a timeout. Release secrets stay behind an exact-green-master preflight. Repository-wide default token permissions are external GitHub state and must be independently verified as read-only with workflow PR approvals disabled.
+
 The impact graph, fail-closed rules and measured baseline/savings boundary are documented in [`docs/CI_IMPACT_PLAN.md`](docs/CI_IMPACT_PLAN.md).
 
 Coverage thresholds remain service-specific. The web and backend services enforce `100%`, while the Expo mobile client currently enforces `95%` statements/functions/lines and `90%` branches.
