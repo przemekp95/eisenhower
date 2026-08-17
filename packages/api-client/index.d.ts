@@ -322,6 +322,88 @@ export interface AICapabilitiesDto {
   local_similar_examples: boolean;
   ocr: boolean;
   batch_analysis: boolean;
+  memory_write?: boolean;
+  memory_retrieval?: boolean;
+  memory_response?: boolean;
+}
+
+export type MemoryAction = 'create' | 'supersede' | 'revoke' | 'delete';
+
+export interface MemoryCreateIntentDto {
+  action: 'create';
+  memory_id: string;
+  memory_type: 'communication_preference';
+  conflict_key: string;
+  content: string;
+  source_event_id: string;
+  provenance: string;
+  confidence: number;
+  salience: number;
+  retention_class: 'user_controlled';
+  expires_at: string;
+}
+
+export interface MemorySupersedeIntentDto {
+  action: 'supersede';
+  memory_id: string;
+  replacement_id: string;
+  content: string;
+}
+
+export interface MemoryLifecycleIntentDto {
+  action: 'revoke' | 'delete';
+  memory_id: string;
+}
+
+export type MemoryIntentDto =
+  | MemoryCreateIntentDto
+  | MemorySupersedeIntentDto
+  | MemoryLifecycleIntentDto;
+
+export interface MemoryConsentReceipt {
+  confirmation_id: string;
+  actor_user_id: string;
+  action: MemoryAction;
+  intent_checksum: string;
+  policy_version: string;
+  confirmed_at: string;
+  expires_at: string;
+}
+
+export interface MemoryPrepareResponseDto {
+  action: MemoryAction;
+  memory_id: string;
+  receipt: MemoryConsentReceipt;
+}
+
+export interface MemoryConfirmResponseDto {
+  memory_id: string;
+  status: 'active' | 'superseded' | 'consent_revoked' | 'deleted';
+  projection_state: 'synchronized' | 'pending' | 'not_configured';
+}
+
+export interface MemoryExportItemDto {
+  memory_id: string;
+  memory_type: string;
+  conflict_key: string;
+  content: string;
+  provenance: string;
+  confidence: number;
+  salience: number;
+  retention_class: string;
+  created_at: string;
+  updated_at: string;
+  expires_at: string;
+  status: 'active' | 'superseded' | 'consent_revoked' | 'deleted';
+  supersedes_id: string | null;
+  superseded_by_id: string | null;
+  consent_action: MemoryAction;
+  consent_policy_version: string;
+  consented_at: string;
+}
+
+export interface MemoryExportResponseDto {
+  items: MemoryExportItemDto[];
 }
 
 export interface TrainingDataClearResultDto {
@@ -401,6 +483,9 @@ export const AI_API_PATHS: {
   readonly analyzeTaskWithRag: '/v2/ai/analyze';
   readonly knowledgeSearch: '/v2/knowledge/search';
   readonly knowledgeAnswer: '/v2/knowledge/answer';
+  readonly memoryPrepare: '/v2/memory/prepare';
+  readonly memoryConfirm: '/v2/memory/confirm';
+  readonly memoryExport: '/v2/memory/export';
   readonly extractTasksFromImage: '/extract-tasks-from-image';
   readonly batchAnalyzeTasks: '/batch-analyze';
   readonly addTrainingExample: '/add-example';
@@ -488,6 +573,17 @@ export interface AiApiClient {
     limit?: number,
     options?: AIRequestOptions
   ): Promise<KnowledgeAnswerDto>;
+  prepareMemory(
+    intent: MemoryIntentDto,
+    options?: AIRequestOptions
+  ): Promise<MemoryPrepareResponseDto>;
+  confirmMemory(
+    intent: MemoryIntentDto,
+    receipt: MemoryConsentReceipt,
+    idempotencyKey: string,
+    options?: AIRequestOptions
+  ): Promise<MemoryConfirmResponseDto>;
+  exportMemory(options?: AIRequestOptions): Promise<MemoryExportResponseDto>;
   extractTasksFromImage(file: unknown, options?: AIRequestOptions): Promise<OcrResultDto>;
   batchAnalyzeTasks(tasks: string[], options?: AIRequestOptions): Promise<BatchAnalysisResultDto>;
   fetchCapabilities(options?: AIRequestOptions): Promise<AICapabilitiesDto>;

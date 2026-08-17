@@ -1,0 +1,77 @@
+{
+  "deployment_gate": {
+    "deployment_attempted": false,
+    "reason": "classifier_evaluation_missing_and_owner_approval_expired",
+    "status": "blocked"
+  },
+  "disable_restore": {
+    "disabled": {
+      "generation_enabled": false,
+      "memory_response_enabled": false,
+      "memory_retrieval_enabled": false,
+      "memory_write_enabled": false,
+      "response_enabled": false,
+      "retrieval_enabled": false,
+      "retrieval_strategy": "hybrid-bge-v1"
+    },
+    "initial": {
+      "generation_enabled": false,
+      "memory_response_enabled": false,
+      "memory_retrieval_enabled": false,
+      "memory_write_enabled": false,
+      "response_enabled": false,
+      "retrieval_enabled": true,
+      "retrieval_strategy": "hybrid-bge-v1"
+    },
+    "restored": {
+      "generation_enabled": false,
+      "memory_response_enabled": false,
+      "memory_retrieval_enabled": false,
+      "memory_write_enabled": false,
+      "response_enabled": false,
+      "retrieval_enabled": true,
+      "retrieval_strategy": "hybrid-bge-v1"
+    },
+    "restored_matches_initial": true,
+    "runtime_mutated": false
+  },
+  "effective_retrieval_only": {
+    "generation_enabled": false,
+    "memory_response_enabled": false,
+    "memory_retrieval_enabled": false,
+    "memory_write_enabled": false,
+    "response_enabled": false,
+    "retrieval_enabled": true,
+    "retrieval_strategy": "hybrid-bge-v1"
+  },
+  "evidence_boundary": {
+    "deterministic_local_rehearsal": true,
+    "publication": false,
+    "real_cohort": false,
+    "real_user_traffic": false,
+    "runtime_mutated": false,
+    "task_014_closed": false,
+    "task_023_closed": false
+  },
+  "input_sha256": {
+    "backend-ai/app/metrics.py": "58b8e0db84675340b5cbdd6f1b37be8f93881156dd16f01c082cde3b0604e2d7",
+    "backend-ai/app/ops/response_canary.py": "f637f2937f4a488e11a4d2b1c025d0a8b7199ba6bf814ecbba393c5da73600ed",
+    "deploy/local/compose.amd.yaml": "6992f4442943d65455693b006efab76db490dc8e7ddd85f7641a4768e43dc34b",
+    "deploy/local/compose.yaml": "928498fd3aa71d5ab4af1137916ab8434dcd4afb94114db08fbc9d68903adfb9"
+  },
+  "observed_at": "2026-08-16T23:25:00+00:00",
+  "pinned_reranker": {
+    "max_model_len": 192,
+    "model": "BAAI/bge-reranker-v2-m3",
+    "revision": "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e"
+  },
+  "post_expiry": {
+    "decision": "response_approval_expired",
+    "generated_response_exposed": false,
+    "metric": "eisenhower_response_canary_decisions_total{outcome=\"approval_expired\"} 1",
+    "subject": "synthetic_only"
+  },
+  "runtime_release_sha": "a018f986fefae8a1add6c4c5f929da5320771fde",
+  "schema_version": "shadow-rollout-local-rehearsal-v1",
+  "source_sha": "608bfd9b2557364922293f9e5de4988d61c922b3"
+}

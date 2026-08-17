@@ -158,18 +158,28 @@ export function buildImpactPlan(rawInput) {
     mergeBase: String(rawInput.mergeBase ?? "unknown"),
     headSha: String(rawInput.headSha ?? "unknown"),
     changes,
+    reuseMasterCi: rawInput.reuseMasterCi === true,
     error: rawInput.error ? String(rawInput.error) : null,
   };
   const inputDigest = `sha256:${createHash("sha256").update(canonicalJson(input)).digest("hex")}`;
   const reasons = Object.fromEntries(ALL_TARGETS.map((target) => [target, []]));
   const planReasons = [];
   let fullCi = false;
+  const reusedMasterCi =
+    input.reuseMasterCi &&
+    input.eventName === "push" &&
+    input.refName === "dev" &&
+    input.baseRefName === "dev" &&
+    !input.error;
 
   const forceFull = (reason) => {
     fullCi = true;
     planReasons.push(reason);
   };
 
+  if (input.reuseMasterCi && !reusedMasterCi) {
+    forceFull("invalid exact-master CI reuse request");
+  }
   if (input.error) forceFull(`planner-error: ${input.error}`);
   if (input.eventName === "schedule") forceFull("scheduled full dependency and security scan");
   const protectedRef = [input.refName, input.baseRefName].find(
@@ -178,9 +188,9 @@ export function buildImpactPlan(rawInput) {
   if (protectedRef) {
     forceFull(`protected release ref: ${protectedRef}`);
   }
-  if (changes.length === 0) forceFull("empty or unavailable change set");
+  if (changes.length === 0 && !reusedMasterCi) forceFull("empty or unavailable change set");
 
-  for (const entry of changes) {
+  for (const entry of reusedMasterCi ? [] : changes) {
     if (!/^[ACDMRT](?:\d{1,3})?$/.test(entry.status)) {
       forceFull(`unknown or unsafe git status: ${entry.status}`);
     }
@@ -195,6 +205,7 @@ export function buildImpactPlan(rawInput) {
       for (const rule of DIRECT_RULES) {
         if (!rule.pattern.test(path)) continue;
         owned = true;
+        reasons["security-lint"].push(`executable repository surface: ${path}`);
         for (const target of rule.targets) {
           reasons[target].push(`${rule.reason}: ${path}`);
         }
@@ -213,7 +224,9 @@ export function buildImpactPlan(rawInput) {
     }
   }
 
-  const targets = fullCi
+  const targets = reusedMasterCi
+    ? []
+    : fullCi
     ? [...ALL_TARGETS]
     : ALL_TARGETS.filter((target) => reasons[target].length > 0);
   const selectedReasons = Object.fromEntries(
@@ -229,6 +242,7 @@ export function buildImpactPlan(rawInput) {
     mergeBase: input.mergeBase,
     headSha: input.headSha,
     fullCi,
+    reusedMasterCi,
     targets,
     reasons: selectedReasons,
     changes,
@@ -261,6 +275,7 @@ function runCli() {
   const baseRefName = options["base-ref"] ?? process.env.GITHUB_BASE_REF ?? refName;
   const headSha = options.head ?? process.env.GITHUB_SHA ?? "HEAD";
   const outputPath = options.output ?? "ci-impact-plan.json";
+  const reuseMasterCi = options["reuse-master-ci"] === "true";
   let mergeBase = "unknown";
   let changes = [];
   let error;
@@ -281,6 +296,7 @@ function runCli() {
     mergeBase,
     headSha,
     changes,
+    reuseMasterCi,
     error,
   });
   writeFileSync(outputPath, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
@@ -290,6 +306,7 @@ function runCli() {
       `version=${plan.version}`,
       `input_digest=${plan.inputDigest}`,
       `full_ci=${plan.fullCi}`,
+      `reused_master_ci=${plan.reusedMasterCi}`,
       `plan_path=${outputPath}`,
       ...ALL_TARGETS.map(
         (target) => `${target.replaceAll("-", "_")}=${plan.targets.includes(target)}`,

@@ -18,6 +18,7 @@
     },
     "android": {
       "package": "com.przemekp95.eisenhowermatrix",
+      "permissions": ["android.permission.CAMERA"],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#020617"
@@ -29,7 +30,7 @@
         "expo-image-picker",
         {
           "photosPermission": "Allow Eisenhower Matrix to read tasks from selected images.",
-          "cameraPermission": false,
+          "cameraPermission": "Allow Eisenhower Matrix to capture a task note only when you choose Take photo.",
           "microphonePermission": false
         }
       ]

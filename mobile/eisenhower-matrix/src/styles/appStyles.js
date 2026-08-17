@@ -57,6 +57,26 @@ const styles = StyleSheet.create({
   batchInput: {
     minHeight: 120,
   },
+  groundedQuestionInput: {
+    minHeight: 96,
+    textAlignVertical: 'top',
+  },
+  groundedPreviewInput: {
+    minHeight: 132,
+    textAlignVertical: 'top',
+  },
+  groundedNoAnswer: {
+    borderLeftWidth: 3,
+    borderLeftColor: '#94a3b8',
+    paddingLeft: 12,
+    gap: 6,
+  },
+  groundedCitation: {
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(148, 163, 184, 0.18)',
+    gap: 4,
+  },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -177,7 +177,7 @@ describe('production deployment boundaries', () => {
     expect(release).toContain('workflow_dispatch:');
     expect(release).toContain('release_sha:');
     expect(release).toContain("github.event.inputs.deploy == 'true'");
-    expect(release).toContain('IMAGE_TAG: ${{ inputs.release_sha }}');
+    expect(release).toContain('IMAGE_TAG: ${{ needs.release-preflight.outputs.release_sha }}');
     expect(release).toContain("format('{0}/{1}:{2}', env.DOCKER_HUB_USERNAME, matrix.tag, env.RELEASE_SHA)");
     expect(release).toMatch(/deploy-mikrus:[\s\S]*?needs:\s*docker-release/);
     expect(release).not.toMatch(/deploy-mikrus:[\s\S]*?needs:\s*\[docker-release, android-release\]/);

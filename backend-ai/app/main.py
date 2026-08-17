@@ -62,6 +62,9 @@ SENSITIVE_ACTIONS = {
   "/internal/rag/ingestion/extract": AuditAction.INGEST,
   "/internal/rag/reindex": AuditAction.REINDEX,
   "/internal/rag/evaluations": AuditAction.ADMIN_OPERATION,
+  "/v2/memory/prepare": AuditAction.CONSENT_CHANGE,
+  "/v2/memory/confirm": AuditAction.MEMORY_CHANGE,
+  "/v2/memory/export": AuditAction.MEMORY_EXPORT,
 }
 
 
@@ -173,6 +176,7 @@ def create_app(
   token_verifier: TokenVerifier | None = None,
   metrics_registry: MetricsRegistry | None = None,
   audit_sink=None,
+  memory_runtime=None,
 ) -> FastAPI:
   resolved_settings = settings or load_settings()
   configure_torch_threads()
@@ -235,6 +239,20 @@ def create_app(
     resolved_settings.audit_database_path,
     hmac_key=resolved_settings.audit_hmac_key.encode("utf-8"),
   )
+  resolved_memory_runtime = memory_runtime
+  memory_requested = bool(
+    resolved_settings.memory_write_enabled
+    or resolved_settings.memory_retrieval_enabled
+    or resolved_settings.memory_response_enabled
+  )
+  if memory_requested and resolved_memory_runtime is None:
+    from .memory.runtime import build_memory_runtime
+
+    resolved_memory_runtime = build_memory_runtime(
+      resolved_settings,
+      resolved_ai_service,
+      audit_sink=audit,
+    )
 
   app = FastAPI(
     title=resolved_settings.app_name,
@@ -245,8 +263,17 @@ def create_app(
     allow_origins=list(resolved_settings.cors_allow_origins),
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Request-ID"],
   )
+  if memory_requested:
+    from .memory.routes import create_memory_router
+
+    app.include_router(create_memory_router(
+      resolved_memory_runtime,
+      write_enabled=resolved_settings.memory_write_enabled,
+      retrieval_enabled=resolved_settings.memory_retrieval_enabled,
+      metrics=metrics,
+    ))
 
   def record_audit(
     request: Request,
@@ -280,7 +307,10 @@ def create_app(
     action = SENSITIVE_ACTIONS.get(request.url.path)
     if action is None and request.url.path.startswith("/providers/"):
       action = AuditAction.ADMIN_OPERATION
-    if action is None or request.method not in UNSAFE_METHODS:
+    if action is None or (
+      request.method not in UNSAFE_METHODS
+      and action is not AuditAction.MEMORY_EXPORT
+    ):
       return await call_next(request)
     try:
       record_audit(request, action, AuditOutcome.ATTEMPT)
@@ -346,6 +376,7 @@ def create_app(
       "/v2/ai/analyze",
       "/v2/knowledge/search",
       "/v2/knowledge/answer",
+      "/v2/memory/retrieval-shadow",
     }:
       rate_key = f"{principal.tenant_id}:{principal.user_id}:{request.url.path}"
       if not ai_rate_limiter.allow(rate_key):
@@ -1031,6 +1062,9 @@ def create_app(
       "local_similar_examples": caps["local_similar_examples"],
       "ocr": caps["ocr"],
       "batch_analysis": caps["batch_analysis"],
+      "memory_write": resolved_settings.memory_write_enabled,
+      "memory_retrieval": resolved_settings.memory_retrieval_enabled,
+      "memory_response": resolved_settings.memory_response_enabled,
     }
 
   @app.get("/operator/capabilities")

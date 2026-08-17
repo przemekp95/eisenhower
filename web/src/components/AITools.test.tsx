@@ -361,6 +361,29 @@ describe('AITools task assistant', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps memory controls hidden unless memory writes are explicitly enabled', async () => {
+    renderTools();
+    await waitForCapabilityCheck();
+    expect(screen.queryByRole('tab', { name: 'Memory controls' })).not.toBeInTheDocument();
+
+    mockedApi.getCapabilities.mockResolvedValueOnce({
+      classification: true,
+      reasoned_local_analysis: true,
+      knowledge_retrieval: true,
+      retrieval_augmented_generation: true,
+      local_similar_examples: true,
+      ocr: true,
+      batch_analysis: true,
+      memory_write: true,
+      memory_retrieval: false,
+      memory_response: false,
+    });
+    renderTools();
+    await waitForCapabilityCheck();
+    fireEvent.click(screen.getByRole('tab', { name: 'Memory controls' }));
+    expect(screen.getByRole('heading', { name: 'Your saved preferences' })).toBeVisible();
+  });
+
   it.each([
     ['classification', true, false],
     ['knowledge', false, true],

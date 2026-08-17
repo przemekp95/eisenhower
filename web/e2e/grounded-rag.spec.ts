@@ -3,10 +3,11 @@ import { expect, test } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
   await page.route('**/capabilities', async (route) => {
+    const requestOrigin = route.request().headers().origin;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      headers: { 'access-control-allow-origin': 'http://127.0.0.1:4173' },
+      headers: requestOrigin ? { 'access-control-allow-origin': requestOrigin } : {},
       body: JSON.stringify({
         classification: true,
         reasoned_local_analysis: true,

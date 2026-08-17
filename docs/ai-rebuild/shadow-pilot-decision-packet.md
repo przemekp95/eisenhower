@@ -2,6 +2,35 @@
 
 Status: **no-go; deployment not authorized and TASK-013 does not pass**
 
+## Deterministic local rehearsal
+
+The 2026-08-17 non-deploying rehearsal is recorded in
+`backend-ai/evaluation/shadow-rollout-local-rehearsal-20260817.json`. It binds the current source SHA
+and relevant Compose/runtime-policy inputs by SHA-256, resolves the effective retrieval-only flags,
+checks the pinned BM25/RRF/reranker contract, simulates disable and exact restore, and drives one
+synthetic expired response decision through the real router and aggregate metrics registry.
+
+The rehearsal made no Docker, pointer, corpus, cohort or runtime mutation. It also records that the
+observed local runtime is on an older SHA and that current deployment is blocked by the missing genuine
+classifier evaluation plus the expired owner approval. Its successful result is local contract evidence
+only: it does not satisfy deployment, real traffic, reviewed sampling, same-SHA telemetry or signed go/no-go
+requirements below.
+
+Reproduce it without starting or changing services:
+
+```bash
+backend-ai/venv/bin/python backend-ai/scripts/rehearse_shadow_rollout.py \
+  --repository-root "$PWD" \
+  --deployment-env deploy/local/.env \
+  --runtime-release-sha "$(curl -fsS http://127.0.0.1:8000/metrics | \
+    sed -n 's/^eisenhower_release_info{sha="\([0-9a-f]\{40\}\)"} 1$/\1/p')" \
+  --now "$(date --iso-8601=seconds)" \
+  --output backend-ai/evaluation/shadow-rollout-local-rehearsal.json
+```
+
+The script reads only an allowlist of non-secret rollout keys from the owner-only environment and never
+prints the environment. Review the generated artifact before retaining it.
+
 ## Current technical gate
 
 The owner-refrozen local candidate report has Recall@5 `0.6667`, MRR@5 `0.5444`, no-answer accuracy `0.9444`, PL Recall@5/MRR@5 `0.4375`/`0.4375`, and holdout Recall@5/MRR@5/no-answer `0.6667`/`0.5`/`0.8333`. It fails the unchanged proposed quality thresholds. The 18 relevance cases and thresholds also require independent human approval. A production shadow pilot must not be used to bypass either failure.

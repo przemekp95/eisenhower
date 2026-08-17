@@ -1,5 +1,6 @@
 import { createAiApi } from '@eisenhower/api-client';
 import * as ImagePicker from 'expo-image-picker';
+import * as Network from 'expo-network';
 import { createTaskRecord, quadrantToFlags } from '../utils/taskUtils';
 import { mobileConfig } from '../config';
 import { clearApiToken, getApiToken } from '../authSession';
@@ -11,28 +12,64 @@ function getAiApi() {
   });
 }
 
-async function pickImageWithExpo() {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+function mediaError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function normalizeAsset(asset, source) {
+  return {
+    uri: asset.uri,
+    name: asset.fileName || `scan-${Date.now()}.jpg`,
+    type: asset.mimeType || 'image/jpeg',
+    source,
+  };
+}
+
+export async function selectImageForOcr(source = 'library') {
+  if (!['camera', 'library'].includes(source)) {
+    throw mediaError('invalid_media_source', 'Unsupported image source');
+  }
+  const camera = source === 'camera';
+  const permission = camera
+    ? await ImagePicker.requestCameraPermissionsAsync()
+    : await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!permission.granted) {
-    return null;
+    throw mediaError(
+      camera ? 'camera_permission_denied' : 'library_permission_denied',
+      camera ? 'Camera permission denied' : 'Photo library permission denied'
+    );
   }
 
-  const result = await ImagePicker.launchImageLibraryAsync({
+  const launch = camera ? ImagePicker.launchCameraAsync : ImagePicker.launchImageLibraryAsync;
+  const result = await launch({
     mediaTypes: ['images'],
     quality: 1,
     allowsEditing: false,
+    exif: false,
   });
 
   if (result.canceled || !result.assets?.length) {
     return null;
   }
 
-  const asset = result.assets[0];
-  return {
-    uri: asset.uri,
-    name: asset.fileName || `scan-${Date.now()}.jpg`,
-    type: asset.mimeType || 'image/jpeg',
-  };
+  return normalizeAsset(result.assets[0], source);
+}
+
+export async function extractTasksFromSelectedImage(image, language = 'pl', options = {}) {
+  const network = await Network.getNetworkStateAsync();
+  if (network.isConnected !== true || network.isInternetReachable === false) {
+    throw mediaError('media_offline', 'Image upload requires an internet connection');
+  }
+  return mapOcrResponseToTasks(
+    language,
+    await getAiApi().extractTasksFromImage({
+      uri: image.uri,
+      name: image.name,
+      type: image.type,
+    }, options)
+  );
 }
 
 export function mapOcrResponseToTasks(language, payload, idFactory = Date.now) {
@@ -56,18 +93,11 @@ export async function scanTasksFromImage(language = 'pl', adapter = null, option
 
   const image = adapter && typeof adapter.pickImage === 'function'
     ? await adapter.pickImage()
-    : await pickImageWithExpo();
+    : await selectImageForOcr('library');
 
   if (!image) {
     return [];
   }
 
-  return mapOcrResponseToTasks(
-    language,
-    await getAiApi().extractTasksFromImage({
-      uri: image.uri,
-      name: image.name,
-      type: image.type,
-    }, options)
-  );
+  return extractTasksFromSelectedImage(image, language, options);
 }

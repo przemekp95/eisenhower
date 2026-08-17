@@ -24,6 +24,7 @@ _RELEASE_SHA = re.compile(r"^(?:[a-f0-9]{40}|[a-f0-9]{64})$")
 class AuditAction(str, Enum):
   ADMIN_OPERATION = "admin_operation"
   MEMORY_CHANGE = "memory_change"
+  MEMORY_EXPORT = "memory_export"
   CONSENT_CHANGE = "consent_change"
   INGEST = "ingest"
   REINDEX = "reindex"

@@ -260,6 +260,20 @@ change deliberately does not run that operation. Live qualification must still p
 strict response contracts, PL/EN behavior, latency, VRAM/OOM recovery, restart/fallback behavior and
 public-network denial as described in `docs/ai-rebuild/inference-portability.md`.
 
+## Disabled MAG runtime contract
+
+The classifier role declares the governed memory runtime but keeps `MEMORY_WRITE_ENABLED`,
+`MEMORY_RETRIEVAL_ENABLED` and `MEMORY_RESPONSE_ENABLED` false by default. Its read-only policy mount is
+safe to render while disabled. Enabling writes later additionally requires an owner-only
+`MEMORY_CONSENT_HMAC_KEY` of at least 32 bytes, the mounted policy's independent deployment approval,
+private MongoDB and a scoped `memory:write` identity. Retrieval also requires the separate configured
+Qdrant memory collection and `memory:read` scope. Response augmentation remains fail-closed and is not
+implemented by this contract.
+
+The public boundary forwards `Idempotency-Key` for confirmed memory commands. It never accepts tenant or
+user scope from the body. Do not set any memory flag true merely because Compose renders or the API tests
+pass; real writes, retrieval shadow and response augmentation keep their separate consent and cohort gates.
+
 ## Contract verification
 
 The lightweight check parses configuration only and does not pull or start images:

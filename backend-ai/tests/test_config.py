@@ -95,6 +95,10 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
       "MEMORY_RETRIEVAL_ENABLED": "true",
       "MEMORY_RESPONSE_ENABLED": "false",
       "MEMORY_POLICY_PATH": str(tmp_path / "memory-policy.json"),
+      "MEMORY_CONSENT_HMAC_KEY": "m" * 32,
+      "MEMORY_CONSENT_HMAC_KEY_ID": "active",
+      "MEMORY_PROJECTION_COLLECTION": "eisenhower-memory-v1-shadow",
+      "MEMORY_PROJECTION_VERSION": "memory-projection-v2",
       "AUDIT_DATABASE_PATH": str(tmp_path / "security-audit.sqlite3"),
       "AUDIT_HMAC_KEY": "a" * 32,
       "RELEASE_SHA": "1" * 40,
@@ -148,6 +152,10 @@ def test_load_settings_accepts_overrides(tmp_path: Path):
   assert settings.memory_retrieval_enabled is True
   assert settings.memory_response_enabled is False
   assert settings.memory_policy_path == tmp_path / "memory-policy.json"
+  assert settings.memory_consent_hmac_key == "m" * 32
+  assert settings.memory_consent_hmac_key_id == "active"
+  assert settings.memory_projection_collection == "eisenhower-memory-v1-shadow"
+  assert settings.memory_projection_version == "memory-projection-v2"
   assert settings.audit_database_path == tmp_path / "security-audit.sqlite3"
   assert settings.audit_hmac_key == "a" * 32
   assert settings.release_sha == "1" * 40
@@ -165,6 +173,25 @@ def test_load_settings_accepts_legacy_vllm_environment_as_compatibility_input():
   assert settings.inference_base_url == "http://legacy-vllm.internal:8000/v1"
   assert settings.inference_api_key == "legacy-token"
   assert settings.inference_model == "legacy-model"
+
+
+def test_memory_write_configuration_requires_policy_and_separate_consent_key(tmp_path):
+  with pytest.raises(ValueError, match="MEMORY_POLICY_PATH"):
+    load_settings({"MEMORY_WRITE_ENABLED": "true"})
+
+  with pytest.raises(ValueError, match="MEMORY_CONSENT_HMAC_KEY"):
+    load_settings({
+      "MEMORY_WRITE_ENABLED": "true",
+      "MEMORY_POLICY_PATH": str(tmp_path / "policy.json"),
+    })
+
+  with pytest.raises(ValueError, match="separate secret"):
+    load_settings({
+      "MEMORY_WRITE_ENABLED": "true",
+      "MEMORY_POLICY_PATH": str(tmp_path / "policy.json"),
+      "MEMORY_CONSENT_HMAC_KEY": "a" * 32,
+      "AUDIT_HMAC_KEY": "a" * 32,
+    })
 
 
 def test_production_oidc_requires_issuer_audience_and_explicit_cors():

@@ -98,6 +98,103 @@ test('clears credentials only for authentication failures, not authorization fai
   assert.equal(adminClears, 1);
 });
 
+test('keeps memory capabilities optional for older runtimes and validates enabled flags', async () => {
+  const responses = [
+    jsonResponse({
+      classification: true,
+      reasoned_local_analysis: true,
+      retrieval_augmented_generation: false,
+      knowledge_retrieval: true,
+      local_similar_examples: true,
+      ocr: false,
+      batch_analysis: true,
+    }),
+    jsonResponse({
+      classification: true,
+      reasoned_local_analysis: true,
+      retrieval_augmented_generation: false,
+      knowledge_retrieval: true,
+      local_similar_examples: true,
+      ocr: false,
+      batch_analysis: true,
+      memory_write: true,
+      memory_retrieval: false,
+      memory_response: false,
+    }),
+  ];
+  const api = createAiApi('https://ai.example.com', async () => responses.shift());
+
+  assert.equal((await api.fetchCapabilities()).memory_write, undefined);
+  assert.equal((await api.fetchCapabilities()).memory_write, true);
+});
+
+test('prepares and confirms memory with a durable idempotency key, then exports it', async () => {
+  const intent = {
+    action: 'create',
+    memory_id: 'preference-1',
+    memory_type: 'communication_preference',
+    conflict_key: 'response-style',
+    content: 'Prefer concise Polish responses',
+    source_event_id: 'web-memory-1',
+    provenance: 'explicit web memory control',
+    confidence: 1,
+    salience: 0.8,
+    retention_class: 'user_controlled',
+    expires_at: '2026-09-17T00:00:00Z',
+  };
+  const receipt = {
+    confirmation_id: `h1:runtime:${'a'.repeat(64)}`,
+    actor_user_id: 'owner-user',
+    action: 'create',
+    intent_checksum: 'b'.repeat(64),
+    policy_version: 'eisenhower-memory-consent-v1',
+    confirmed_at: '2026-08-17T00:00:00Z',
+    expires_at: '2026-08-17T00:05:00Z',
+  };
+  const requests = [];
+  const responses = [
+    jsonResponse({ action: 'create', memory_id: 'preference-1', receipt }),
+    jsonResponse({ memory_id: 'preference-1', status: 'active', projection_state: 'synchronized' }),
+    jsonResponse({
+      items: [{
+        memory_id: 'preference-1',
+        memory_type: 'communication_preference',
+        conflict_key: 'response-style',
+        content: 'Prefer concise Polish responses',
+        provenance: 'explicit web memory control',
+        confidence: 1,
+        salience: 0.8,
+        retention_class: 'user_controlled',
+        created_at: '2026-08-17T00:00:00Z',
+        updated_at: '2026-08-17T00:00:00Z',
+        expires_at: '2026-09-17T00:00:00Z',
+        status: 'active',
+        supersedes_id: null,
+        superseded_by_id: null,
+        consent_action: 'create',
+        consent_policy_version: 'eisenhower-memory-consent-v1',
+        consented_at: '2026-08-17T00:00:00Z',
+      }],
+    }),
+  ];
+  const api = createAiApi('https://ai.example.com', async (url, init) => {
+    requests.push({ url, init });
+    return responses.shift();
+  });
+
+  const prepared = await api.prepareMemory(intent);
+  await api.confirmMemory(intent, prepared.receipt, 'memory-create-1');
+  const exported = await api.exportMemory();
+
+  assert.equal(exported.items[0].memory_id, 'preference-1');
+  assert.equal(requests[0].url, 'https://ai.example.com/v2/memory/prepare');
+  assert.deepEqual(JSON.parse(requests[0].init.body), intent);
+  assert.equal(requests[1].url, 'https://ai.example.com/v2/memory/confirm');
+  assert.equal(requests[1].init.headers['Idempotency-Key'], 'memory-create-1');
+  assert.deepEqual(JSON.parse(requests[1].init.body), { intent, receipt });
+  assert.equal(requests[2].url, 'https://ai.example.com/v2/memory/export');
+});
+
 test('bounds AI requests and maps timeouts to a business-safe error without changing task calls', async () => {
   let aiSignal;
   const ai = createAiApi('https://ai.example.com', {
