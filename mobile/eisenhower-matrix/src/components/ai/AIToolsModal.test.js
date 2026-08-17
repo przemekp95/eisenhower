@@ -155,4 +155,43 @@ describe('AIToolsModal', () => {
     expect(queryByText(/provider|model|trening|administrator/i)).toBeNull();
   });
 
+  it('renders disabled loading states for analysis, OCR review and batch processing', async () => {
+    const view = await render(
+      <AIToolsModal {...createProps({ analysisLoading: true, advancedAnalysis: null })} />
+    );
+
+    expect(view.getByTestId('ai-analysis-run-button').props.accessibilityState).toEqual({
+      disabled: true,
+    });
+    expect(view.getByText(translations.pl.aiAnalysisRunning)).toBeTruthy();
+
+    await view.rerender(
+      <AIToolsModal
+        {...createProps({
+          activeTab: 'ocr',
+          ocrLoading: true,
+          ocrSelectedImage: {
+            uri: 'file:///tmp/loading.jpg',
+            name: 'loading.jpg',
+            type: 'image/jpeg',
+            source: 'camera',
+          },
+        })}
+      />
+    );
+    expect(view.getByTestId('ai-ocr-submit-button').props.accessibilityState).toEqual({
+      disabled: true,
+    });
+    expect(view.getByText(translations.pl.aiOcrRunning)).toBeTruthy();
+    expect(view.getByTestId('ai-ocr-discard-button')).toBeTruthy();
+
+    await view.rerender(
+      <AIToolsModal {...createProps({ activeTab: 'batch', batchLoading: true })} />
+    );
+    expect(view.getByTestId('ai-batch-run-button').props.accessibilityState).toEqual({
+      disabled: true,
+    });
+    expect(view.getByText(translations.pl.aiBatchRunning)).toBeTruthy();
+  });
+
 });

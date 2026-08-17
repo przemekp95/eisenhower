@@ -154,6 +154,14 @@ describe('media service', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('rejects an unsupported image source before requesting permissions', async () => {
+    await expect(selectImageForOcr('clipboard')).rejects.toMatchObject({
+      code: 'invalid_media_source',
+    });
+    expect(ImagePicker.requestCameraPermissionsAsync).not.toHaveBeenCalled();
+    expect(ImagePicker.requestMediaLibraryPermissionsAsync).not.toHaveBeenCalled();
+  });
+
   it('uses the default Expo picker when no adapter is provided', async () => {
     ImagePicker.requestMediaLibraryPermissionsAsync.mockResolvedValue({ granted: true });
     ImagePicker.launchImageLibraryAsync.mockResolvedValue({
