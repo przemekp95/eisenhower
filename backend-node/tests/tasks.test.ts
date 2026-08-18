@@ -205,6 +205,10 @@ describe('task routes', () => {
       .put(`/tasks/${task.id}/schedule`)
       .set('If-Match', '"0"')
       .send({ schedule: { ...validSchedule, recurrence: 'daily' } });
+    const invalidDurations = await Promise.all([4, 1441, 5.5].map((durationMinutes) => api
+      .put(`/tasks/${task.id}/schedule`)
+      .set('If-Match', '"0"')
+      .send({ schedule: { ...validSchedule, durationMinutes } })));
     const stale = await api
       .put(`/tasks/${task.id}/schedule`)
       .set('If-Match', '"7"')
@@ -220,6 +224,7 @@ describe('task routes', () => {
     expect(invalidTimezone.status).toBe(400);
     expect(lateReminder.status).toBe(400);
     expect(recurrence.status).toBe(400);
+    expect(invalidDurations.map((response) => response.status)).toEqual([400, 400, 400]);
     expect(stale.status).toBe(412);
     expect(stale.body.code).toBe('task_revision_conflict');
     expect(foreignResult.status).toBe(404);

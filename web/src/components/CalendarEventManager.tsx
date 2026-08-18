@@ -59,6 +59,7 @@ export default function CalendarEventManager() {
   };
 
   const importSelected = async () => {
+    /* istanbul ignore next -- the import control is disabled while the selection is empty */
     if (!selected.size) return;
     setBusy(true);
     importKey.current ??= operationId('calendar-selected-import');
@@ -85,6 +86,7 @@ export default function CalendarEventManager() {
   };
 
   const showPreview = async () => {
+    /* istanbul ignore next -- the preview control is disabled until both selections exist */
     if (!taskId || !eventId) return;
     setBusy(true);
     try {
@@ -97,6 +99,7 @@ export default function CalendarEventManager() {
   };
 
   const link = async (direction: 'google_to_eisenhower' | 'eisenhower_to_google') => {
+    /* istanbul ignore next -- link controls are rendered only for a resolved preview */
     if (!preview) return;
     const key = `${preview.task.id}:${preview.event.id}:${direction}`;
     const idempotencyKey = linkKeys.current.get(key) ?? operationId('calendar-manual-link');

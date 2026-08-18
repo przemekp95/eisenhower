@@ -146,6 +146,9 @@ describe('AITools task assistant', () => {
     opener.focus();
     fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
     expect(lastAction).toHaveFocus();
+    close.focus();
+    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(close).toHaveFocus();
     view.unmount();
     expect(opener).toHaveFocus();
     expect(document.body.style.overflow).toBe('');

@@ -11,6 +11,8 @@ import {
   extractTasksFromImage,
   getCapabilities,
   getCalendarConflicts,
+  getCalendarDeletedBindings,
+  getCalendarEvents,
   getCalendarStatus,
   getDelegatedTasks,
   getTasks,
@@ -21,6 +23,10 @@ import {
   sanitizeOcrFile,
   disconnectCalendar,
   resolveCalendarConflict,
+  resolveCalendarDeletedBinding,
+  previewCalendarLink,
+  createCalendarLink,
+  importCalendarEvents,
   transitionTaskLifecycle,
   transitionTaskDelegation,
   updateTaskDelegation,
@@ -485,6 +491,123 @@ describe('api service', () => {
           'If-Match': '"2"',
         }),
         body: JSON.stringify({ strategy: 'google' }),
+      })
+    );
+  });
+
+  it('uses bounded calendar deletion, candidate, manual-link and selected-import endpoints', async () => {
+    const event = {
+      id: 'event-1',
+      etag: 'etag-1',
+      title: 'Provider event',
+      start: '2026-08-20T12:00:00.000Z',
+      end: '2026-08-20T12:30:00.000Z',
+      timeZone: 'UTC',
+    };
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => [
+          {
+            _id: 'binding-1',
+            taskId: 'task-1',
+            taskTitle: 'Task',
+            taskRevision: 2,
+            providerEventId: 'event-1',
+            providerDeletedAt: '2026-08-20T12:00:00.000Z',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({
+          outcome: 'detach',
+          taskId: 'task-1',
+          taskRevision: 2,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({ events: [event] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({
+          task: { id: 'task-1', title: 'Task', revision: 2, schedule: null },
+          event,
+          googleToEisenhower: {
+            title: event.title,
+            schedule: { dueAt: event.start, timeZone: 'UTC', durationMinutes: 30 },
+          },
+          eisenhowerToGoogle: { title: 'Task', schedule: null },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        headers: new Headers(),
+        json: async () => ({
+          outcome: 'linked',
+          taskId: 'task-1',
+          taskRevision: 3,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({
+          results: [{ providerEventId: 'event-2', status: 'imported', taskId: 'task-2' }],
+        }),
+      });
+
+    await getCalendarDeletedBindings();
+    await resolveCalendarDeletedBinding('binding/1', 'detach', 2, 'delete-key');
+    await getCalendarEvents('2026-08-01T00:00:00.000Z', '2026-09-01T00:00:00.000Z');
+    await previewCalendarLink('task/1', 'event/1');
+    await createCalendarLink({
+      taskId: 'task/1',
+      providerEventId: 'event/1',
+      providerEtag: 'etag-1',
+      direction: 'google_to_eisenhower',
+      taskRevision: 2,
+      idempotencyKey: 'link-key',
+    });
+    await importCalendarEvents(['event/2'], 'import-key');
+
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      `${runtimeConfig.apiUrl}/calendar/deleted-bindings/binding%2F1/resolve`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'If-Match': '"2"', 'Idempotency-Key': 'delete-key' }),
+      })
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining('/calendar/events?timeMin='),
+      expect.any(Object)
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      5,
+      `${runtimeConfig.apiUrl}/calendar/bindings`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Idempotency-Key': 'link-key' }),
+      })
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      6,
+      `${runtimeConfig.apiUrl}/calendar/imports`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Idempotency-Key': 'import-key' }),
       })
     );
   });

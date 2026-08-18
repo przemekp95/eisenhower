@@ -222,6 +222,36 @@ describe('Matrix', () => {
     expect(screen.getByText('Later task')).toBeInTheDocument();
   });
 
+  it('opens scan and bulk import as separate matrix actions and closes each dialog', async () => {
+    renderMatrix();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skanuj zdjęcie' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Skanuj zdjęcie');
+    fireEvent.click(screen.getByRole('button', { name: 'Zamknij' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dodaj zbiorczo' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Dodaj zadania zbiorczo');
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Zamknij' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('applies a task-scoped quadrant suggestion and closes only that assistant', async () => {
+    const onUpdateTask = jest.fn().mockResolvedValue(undefined);
+    renderMatrix({ onUpdateTask });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pomoc przy zadaniu Urgent task' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply assistant quadrant' }));
+    await waitFor(() =>
+      expect(onUpdateTask).toHaveBeenCalledWith('1', {
+        urgent: true,
+        important: false,
+      })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Close AI tools' }));
+    expect(screen.queryByText('AI tools')).not.toBeInTheDocument();
+  });
+
   it('keeps scan and bulk import visible above the matrix and task help scoped to a saved task', () => {
     renderMatrix();
 

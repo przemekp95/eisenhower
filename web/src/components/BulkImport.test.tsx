@@ -97,4 +97,51 @@ describe('BulkImport', () => {
     expect(onAddTask.mock.calls[1][1]).toBe(firstKey);
     expect(screen.getByTestId('bulk-row-0')).toHaveTextContent('Created');
   });
+
+  it('validates empty input and reports a classifier failure in Polish', async () => {
+    localStorage.setItem('eisenhower-language', 'pl');
+    mockedApi.batchAnalyzeTasks.mockRejectedValueOnce(new Error('offline'));
+    renderBulk();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Klasyfikuj i sprawdź' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Wklej co najmniej jedno');
+    fireEvent.change(screen.getByLabelText('Zadania do importu'), {
+      target: { value: 'Nowe zadanie' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Klasyfikuj i sprawdź' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Nie udało się sklasyfikować');
+    fireEvent.click(screen.getByRole('button', { name: 'Klasyfikuj i sprawdź' }));
+    await screen.findByRole('group', { name: 'Sprawdź przed importem' });
+    fireEvent.click(screen.getByRole('button', { name: 'Potwierdź import' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Dodano 1');
+  });
+
+  it('supports selection edits, a missing classifier prediction, and skips an empty reviewed row', async () => {
+    mockedApi.batchAnalyzeTasks.mockResolvedValueOnce({
+      batch_results: [],
+      summary: { methods: {}, total_tasks: 0 },
+    });
+    const onAddTask = renderBulk();
+    fireEvent.change(screen.getByLabelText('Tasks to import'), {
+      target: { value: 'Fallback quadrant\nEmpty later' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Classify and review' }));
+    await screen.findByRole('group', { name: 'Review before import' });
+
+    const first = screen.getByTestId('bulk-row-0');
+    const second = screen.getByTestId('bulk-row-1');
+    expect(within(first).getByLabelText('Quadrant')).toHaveValue('3');
+    fireEvent.click(within(first).getByRole('checkbox'));
+    fireEvent.click(within(first).getByRole('checkbox'));
+    fireEvent.change(within(second).getByLabelText('Task title'), { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm import' }));
+
+    await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('status')).toHaveTextContent('Created 1');
+    fireEvent.change(within(first).getByLabelText('Task title'), {
+      target: { value: 'Edited after creation' },
+    });
+    expect(first).toHaveTextContent('Created');
+  });
 });

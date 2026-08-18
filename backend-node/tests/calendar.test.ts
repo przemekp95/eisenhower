@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import request from 'supertest';
 import mongoose from 'mongoose';
+import express from 'express';
 import { createApp } from '../src/app';
 import { CalendarApplicationService } from '../src/application/calendar';
 import { createCalendarRouter } from '../src/routes/calendar';
@@ -721,6 +722,139 @@ describe('calendar integration boundary', () => {
     expect(await CalendarOutboxModel.findOne({ aggregateId: recreate.task.id })).toMatchObject({
       type: 'event_create', status: 'pending',
     });
+  });
+
+  it('fails closed for unavailable provider routes and every deletion-decision precondition', async () => {
+    const auth = { Authorization: 'Bearer test-api-token' };
+    expect((await request(app).get('/calendar/events')
+      .query({ timeMin: '2026-08-01T00:00:00.000Z', timeMax: '2026-09-01T00:00:00.000Z' })
+      .set(auth)).status).toBe(404);
+    expect((await request(app).post('/calendar/bindings/preview').set(auth)
+      .send({ taskId: new TaskModel().id, providerEventId: 'event' })).status).toBe(404);
+    expect((await request(app).post('/calendar/bindings').set(auth)
+      .set('If-Match', '"0"').set('Idempotency-Key', 'unavailable-link')
+      .send({ taskId: new TaskModel().id, providerEventId: 'event', providerEtag: 'etag', direction: 'google_to_eisenhower' })).status).toBe(404);
+    expect((await request(app).post('/calendar/imports').set(auth)
+      .set('Idempotency-Key', 'unavailable-import').send({ providerEventIds: ['event'] })).status).toBe(404);
+
+    const connection = await CalendarConnectionModel.create({
+      tenantId: 'local', ownerId: 'local-user', provider: 'google', calendarId: 'primary',
+      credentialRef: 'reference', status: 'active',
+    });
+    const task = await TaskModel.create({ title: 'Deleted decision edge' });
+    const binding = await CalendarBindingModel.create({
+      tenantId: 'local', ownerId: 'local-user', connectionId: connection._id,
+      taskId: task._id, providerEventId: 'deleted-edge', providerEtag: 'etag',
+      lastTaskRevision: 0, lastProviderRevision: 'etag', providerDeletedAt: new Date(),
+    });
+    const url = `/calendar/deleted-bindings/${binding.id}/resolve`;
+    expect((await request(app).post(url).set(auth).send({ strategy: 'detach' })).status).toBe(428);
+    expect((await request(app).post(url).set(auth).set('If-Match', '"0"').send({ strategy: 'detach' })).status).toBe(428);
+    expect((await request(app).post(url).set(auth).set('If-Match', '"0"')
+      .set('Idempotency-Key', 'invalid-strategy').send({ strategy: 'erase' })).status).toBe(400);
+    expect((await request(app).post(`/calendar/deleted-bindings/${new CalendarBindingModel().id}/resolve`)
+      .set(auth).set('If-Match', '"0"').set('Idempotency-Key', 'missing-binding')
+      .send({ strategy: 'detach' })).status).toBe(404);
+    expect((await request(app).post(url).set(auth).set('If-Match', '"1"')
+      .set('Idempotency-Key', 'stale-task').send({ strategy: 'detach' })).status).toBe(412);
+
+    const missingTaskBinding = await CalendarBindingModel.create({
+      tenantId: 'local', ownerId: 'local-user', connectionId: connection._id,
+      taskId: new TaskModel().id, providerEventId: 'missing-task', providerEtag: 'etag',
+      lastTaskRevision: 0, lastProviderRevision: 'etag', providerDeletedAt: new Date(),
+    });
+    expect((await request(app).post(`/calendar/deleted-bindings/${missingTaskBinding.id}/resolve`)
+      .set(auth).set('If-Match', '"0"').set('Idempotency-Key', 'missing-task')
+      .send({ strategy: 'detach' })).status).toBe(409);
+    const legacyClearTask = await TaskModel.create({ title: 'Legacy clear' });
+    await TaskModel.collection.updateOne({ _id: legacyClearTask._id }, { $unset: { revision: '' } });
+    const legacyClearBinding = await CalendarBindingModel.create({
+      tenantId: 'local', ownerId: 'local-user', connectionId: connection._id,
+      taskId: legacyClearTask._id, providerEventId: 'legacy-clear', providerEtag: 'etag',
+      lastTaskRevision: 0, lastProviderRevision: 'etag', providerDeletedAt: new Date(),
+    });
+    expect((await request(app).get('/calendar/deleted-bindings').set(auth)).body)
+      .toContainEqual(expect.objectContaining({ taskId: legacyClearTask.id, taskRevision: 0 }));
+    expect((await request(app).post(`/calendar/deleted-bindings/${legacyClearBinding.id}/resolve`)
+      .set(auth).set('If-Match', '"0"').set('Idempotency-Key', 'legacy-clear')
+      .send({ strategy: 'clear_date' })).body).toMatchObject({ outcome: 'clear_date', taskRevision: 1 });
+
+    const legacyRecreateTask = await TaskModel.create({
+      title: 'Legacy recreate',
+      schedule: { dueAt: new Date('2026-08-20T12:00:00.000Z'), timeZone: 'UTC', durationMinutes: 30 },
+    });
+    await TaskModel.collection.updateOne({ _id: legacyRecreateTask._id }, { $unset: { revision: '' } });
+    const legacyRecreateBinding = await CalendarBindingModel.create({
+      tenantId: 'local', ownerId: 'local-user', connectionId: connection._id,
+      taskId: legacyRecreateTask._id, providerEventId: 'legacy-recreate', providerEtag: 'etag',
+      lastTaskRevision: 0, lastProviderRevision: 'etag', providerDeletedAt: new Date(),
+    });
+    expect((await request(app).post(`/calendar/deleted-bindings/${legacyRecreateBinding.id}/resolve`)
+      .set(auth).set('If-Match', '"0"').set('Idempotency-Key', 'legacy-recreate')
+      .send({ strategy: 'recreate' })).body).toMatchObject({ outcome: 'recreate', taskRevision: 0 });
+    expect((await request(app).post(url).set(auth).set('If-Match', '"0"')
+      .set('Idempotency-Key', 'no-schedule').send({ strategy: 'recreate' })).status).toBe(409);
+
+    const detached = await request(app).post(url).set(auth).set('If-Match', '"0"')
+      .set('Idempotency-Key', 'reuse-decision').send({ strategy: 'detach' });
+    expect(detached.status).toBe(200);
+    expect((await request(app).post(url).set(auth).set('If-Match', '"0"')
+      .set('Idempotency-Key', 'reuse-decision').send({ strategy: 'clear_date' })).status).toBe(409);
+
+    jest.spyOn(CalendarBindingModel, 'find').mockImplementationOnce(() => { throw new Error('list failed'); });
+    expect((await request(app).get('/calendar/deleted-bindings').set(auth)).status).toBe(500);
+  });
+
+  it('fails closed when a provider-deletion transaction produces no result', async () => {
+    const session = {
+      withTransaction: jest.fn(async () => undefined),
+      endSession: jest.fn(async () => undefined),
+    };
+    jest.spyOn(mongoose, 'startSession').mockResolvedValueOnce(session as never);
+
+    const response = await request(app)
+      .post(`/calendar/deleted-bindings/${new CalendarBindingModel().id}/resolve`)
+      .set('Authorization', 'Bearer test-api-token')
+      .set('If-Match', '"0"')
+      .set('Idempotency-Key', 'incomplete-deletion-resolution')
+      .send({ strategy: 'detach' });
+    expect(response).toMatchObject({
+      status: 500,
+      body: { error: 'calendar_provider_deletion_resolution_incomplete' },
+    });
+    expect(session.endSession).toHaveBeenCalled();
+  });
+
+  it('passes non-Error provider and deletion failures to the shared error boundary', async () => {
+    const routerApp = express();
+    routerApp.use(express.json());
+    routerApp.use((req, _res, next) => {
+      req.auth = {
+        tenantId: 'local', userId: 'local-user', roles: [], projectIds: [],
+        scopes: ['calendar:read', 'calendar:write'],
+      };
+      next();
+    });
+    const service = {
+      resolveProviderDeletion: async () => { throw 'deletion rejection'; },
+    } as unknown as CalendarApplicationService;
+    const provider = {
+      linkExisting: async () => { throw 'provider rejection'; },
+    } as never;
+    routerApp.use('/calendar', createCalendarRouter(undefined, service, true, provider));
+    routerApp.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      res.status(500).json({ error: String(error) });
+    });
+
+    const linked = await request(routerApp).post('/calendar/bindings')
+      .set('If-Match', '"0"').set('Idempotency-Key', 'non-error-link')
+      .send({ taskId: 'task', providerEventId: 'event', providerEtag: 'etag', direction: 'google_to_eisenhower' });
+    const deleted = await request(routerApp).post('/calendar/deleted-bindings/binding/resolve')
+      .set('If-Match', '"0"').set('Idempotency-Key', 'non-error-delete')
+      .send({ strategy: 'detach' });
+
+    expect(linked).toMatchObject({ status: 500, body: { error: 'provider rejection' } });
+    expect(deleted).toMatchObject({ status: 500, body: { error: 'deletion rejection' } });
   });
 
   it('validates public sync preconditions and reports pending calendar status', async () => {

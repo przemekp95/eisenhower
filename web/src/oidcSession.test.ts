@@ -43,6 +43,7 @@ describe('OIDC Authorization Code with PKCE', () => {
     );
     expect(buildAccountManagementUrl('javascript:alert(1)')).toBeNull();
     expect(buildAccountManagementUrl(undefined)).toBeNull();
+    expect(buildAccountManagementUrl('not a URL')).toBeNull();
   });
 
   it('rejects a mismatched callback state before contacting the token endpoint', async () => {

@@ -122,6 +122,31 @@ describe('CalendarSyncPanel', () => {
     expect(screen.queryByText('Prepare release')).not.toBeInTheDocument();
   });
 
+  it('keeps a deleted binding visible when its explicit resolution fails', async () => {
+    mockedApi.getCalendarDeletedBindings.mockResolvedValueOnce([
+      {
+        _id: 'binding-failed',
+        taskId: 'task-1',
+        taskTitle: 'Keep visible',
+        taskRevision: 1,
+        providerEventId: 'event-1',
+        providerDeletedAt: '2026-08-20T12:00:00.000Z',
+      },
+    ]);
+    mockedApi.resolveCalendarDeletedBinding.mockRejectedValueOnce(new Error('offline'));
+    render(
+      <LanguageProvider>
+        <CalendarSyncPanel />
+      </LanguageProvider>
+    );
+
+    expect(await screen.findByText('Keep visible')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: /detach binding|odłącz powiązanie/i }));
+
+    expect(await screen.findByRole('status')).not.toBeEmptyDOMElement();
+    expect(screen.getByText('Keep visible')).toBeVisible();
+  });
+
   it('keeps the panel usable and reports a failed sync request', async () => {
     mockedApi.requestCalendarSync.mockRejectedValueOnce(new Error('sync unavailable'));
 
@@ -138,6 +163,18 @@ describe('CalendarSyncPanel', () => {
 
     expect(await screen.findByRole('status')).not.toBeEmptyDOMElement();
     expect(screen.getByRole('button', { name: /sync now|synchronizuj teraz/i })).toBeEnabled();
+  });
+
+  it('reports an initial calendar status load failure without exposing details', async () => {
+    mockedApi.getCalendarStatus.mockRejectedValueOnce(new Error('private provider detail'));
+    render(
+      <LanguageProvider>
+        <CalendarSyncPanel />
+      </LanguageProvider>
+    );
+
+    expect(await screen.findByRole('status')).not.toBeEmptyDOMElement();
+    expect(screen.queryByText('private provider detail')).not.toBeInTheDocument();
   });
 
   it('supports the Google conflict strategy and reports a failed resolution', async () => {

@@ -81,7 +81,12 @@ export function createCalendarRouter(
       const connection = await CalendarConnectionModel.findOne({ ...scope(req), status: 'active' });
       if (!connection) return res.status(409).json({ error: 'Calendar is disconnected' });
       return res.json(await provider.candidateEvents(connection.id, { timeMin, timeMax, ...(pageToken ? { pageToken } : {}) }));
-    } catch (error) { return next(error); }
+    } catch (error) {
+      if (error instanceof Error && error.message === 'calendar_connection_unavailable') {
+        return res.status(409).json({ error: 'Calendar is disconnected' });
+      }
+      return next(error);
+    }
   });
 
   router.post('/bindings/preview', requireScope('calendar:read', onReject), async (req, res, next) => {
@@ -121,6 +126,9 @@ export function createCalendarRouter(
       }));
     } catch (error) {
       if (error instanceof Error) {
+        if (error.message === 'calendar_operation_reused') {
+          return res.status(409).json({ error: error.message });
+        }
         if (error.message === 'calendar_task_revision_mismatch' || error.message === 'calendar_provider_revision_mismatch') {
           return res.status(412).json({ error: error.message });
         }
@@ -144,7 +152,12 @@ export function createCalendarRouter(
       return res.json(await provider.importSelected({
         ...scope(req), actorId: req.auth!.userId, operationId, providerEventIds: ids,
       }));
-    } catch (error) { return next(error); }
+    } catch (error) {
+      if (error instanceof Error && error.message === 'calendar_connection_unavailable') {
+        return res.status(409).json({ error: 'Calendar is disconnected' });
+      }
+      return next(error);
+    }
   });
 
   router.get('/conflicts', requireScope('calendar:read', onReject), async (req, res, next) => {

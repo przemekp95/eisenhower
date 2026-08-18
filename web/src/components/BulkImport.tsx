@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { quadrantToTaskState } from './matrixUtils';
 import { batchAnalyzeTasks } from '../services/api';
 import type { TaskInput } from '../types';
@@ -34,7 +34,6 @@ export default function BulkImport({ existingTitles, onAddTask, onClose }: Props
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
   const [summary, setSummary] = useState('');
-  const requestRef = useRef<AbortController | null>(null);
   const copy =
     language === 'pl'
       ? {
@@ -87,15 +86,12 @@ export default function BulkImport({ existingTitles, onAddTask, onClose }: Props
       setError(copy.empty);
       return;
     }
-    requestRef.current?.abort();
     const controller = new AbortController();
-    requestRef.current = controller;
     setLoading(true);
     setError('');
     setSummary('');
     try {
       const result = await batchAnalyzeTasks(tasks, { signal: controller.signal });
-      if (controller.signal.aborted) return;
       const predictions = new Map(
         result.batch_results.map((entry) => [duplicateKey(entry.task), entry.analyses.rag.quadrant])
       );
@@ -120,13 +116,10 @@ export default function BulkImport({ existingTitles, onAddTask, onClose }: Props
           };
         })
       );
-    } catch (issue) {
-      if (!controller.signal.aborted) setError(copy.requestFailed);
+    } catch {
+      setError(copy.requestFailed);
     } finally {
-      if (requestRef.current === controller) {
-        requestRef.current = null;
-        setLoading(false);
-      }
+      setLoading(false);
     }
   };
 
