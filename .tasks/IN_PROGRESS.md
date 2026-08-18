@@ -1,5 +1,26 @@
 # In Progress
 
+## TASK-065: Align task-first UX, bulk import, Calendar semantics, and governed local AI
+**Priority:** P0 | **Tags:** product, bulk-import, calendar, rag, local-runtime
+
+Deliver the approved task-first product flow across web and mobile, turn batch classification into a reviewable idempotent import, close the explicit Google Calendar lifecycle gaps, and prepare a coherent private local RAG runtime without crossing activation, publication, physical-device, or real-traffic gates.
+
+### Plan
+
+- Put Add task, Scan photo, and Add in bulk above the matrix; keep per-task grounded help scoped to that task, Calendar under Integrations, and language, Keycloak account security, and logout under Account and security.
+- Preserve separate camera/gallery OCR entrypoints, byte-level metadata sanitization, fail-closed image limits/formats, review/correction, idempotency, and honest per-item partial outcomes while leaving physical camera acceptance open.
+- Implement paste-to-classify-to-review-to-deduplicate-to-confirm idempotent bulk import with editable selection/quadrant and per-item results, reusing the MiniLM/PyTorch classifier without presenting it as generation.
+- Make task scheduling drive explicit Google create/update/delete semantics, duration and reminder policy; add selected existing-event linking/import, deletion choices, calendar selection, watch registration, reconciliation, conflicts, ETag/ownership, outbox and replay-safe contracts without implicit whole-calendar import.
+- Keep grounded answers single-turn with sources, preview, and apply-to-description; route capabilities from the actual knowledge runtime, prepare the private allowlisted retrieval/generation topology, and keep user-visible generation and every MAG capability disabled pending separate checksum-bound owner decisions.
+- Use focused red-green-refactor loops for each behavior, then run web/API/n8n/mobile contracts, builds, typechecks, lint, proportional full verification, and an isolated local runtime rehearsal without fabricating physical-device, real-traffic, publication, or production evidence.
+- After the exact candidate passes local verification, promote it through the protected feature-to-dev and dev-to-master flow, require exact-head and post-merge CI, restore final master/dev equality, then deploy that exact SHA to the supported private local runtime while preserving the prior runtime until smoke and rollback checks pass.
+
+### Evidence boundaries
+
+Canonical source, source/CI promotion, release artifact, local deployed release, capability flags, approved corpus size, live model health, actual user traffic, physical camera behavior, public publication and production acceptance are independent evidence classes. Public Mikrus deployment and user-visible generation or MAG activation remain outside this authorization. TASK-065 remains in progress while any required human activation, physical-device, or real-traffic gate is open.
+
+---
+
 ## TASK-028: Add Grounded RAG and camera parity across web and mobile
 **Priority:** P2 | **Tags:** product, rag, mobile, web, parity
 
