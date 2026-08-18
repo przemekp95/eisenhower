@@ -3,7 +3,11 @@ import {
 } from 'node:crypto';
 import mongoose from 'mongoose';
 import {
-  CalendarConnectionModel, GoogleOAuthAttemptModel, GoogleOAuthGrantModel,
+  CalendarConnectionModel,
+  CalendarOutboxModel,
+  CalendarSyncStateModel,
+  GoogleOAuthAttemptModel,
+  GoogleOAuthGrantModel,
 } from '../models/calendar';
 
 export interface GoogleTokenSet {
@@ -105,7 +109,11 @@ function safeReturnUrl(path: string, origins: string[]) {
 }
 
 export class GoogleOAuthService {
-  constructor(private readonly config: GoogleOAuthConfig, private readonly port: GoogleOAuthPort) {
+  constructor(
+    private readonly config: GoogleOAuthConfig,
+    private readonly port: GoogleOAuthPort,
+    private readonly onConnected?: (connectionId: string) => Promise<void>,
+  ) {
     if (!config.clientId || !config.clientSecret || !config.callbackUrl || !config.currentKeyVersion) {
       throw new Error('Google OAuth configuration is incomplete.');
     }
@@ -166,6 +174,7 @@ export class GoogleOAuthService {
     );
     const session = await mongoose.startSession();
     let grantId = '';
+    let connectionId = '';
     try {
       await session.withTransaction(async () => {
         await GoogleOAuthGrantModel.updateMany(
@@ -179,13 +188,34 @@ export class GoogleOAuthService {
           keyVersion: attempt.keyVersion, status: 'active',
         }], { session });
         grantId = grant.id;
-        await CalendarConnectionModel.findOneAndUpdate(
+        const connection = await CalendarConnectionModel.findOneAndUpdate(
           { tenantId: attempt.tenantId, ownerId: attempt.ownerId, provider: 'google', calendarId: 'primary' },
           { $set: { credentialRef: `oauth-grant:${grant.id}`, status: 'active' } },
-          { upsert: true, session, setDefaultsOnInsert: true },
+          { upsert: true, session, setDefaultsOnInsert: true, returnDocument: 'after' },
+        );
+        if (!connection) throw new Error('calendar_connection_create_failed');
+        connectionId = connection.id;
+        await CalendarSyncStateModel.findOneAndUpdate(
+          { tenantId: attempt.tenantId, ownerId: attempt.ownerId, connectionId: connection._id },
+          { $set: { fullResyncRequired: true, lastRequestedAt: new Date() } },
+          { upsert: true, setDefaultsOnInsert: true, session },
+        );
+        await CalendarOutboxModel.create(
+          [{
+            eventId: `calendar-connect:${connection.id}:${grant.id}`,
+            tenantId: attempt.tenantId,
+            ownerId: attempt.ownerId,
+            aggregateId: connection.id,
+            aggregateRevision: 0,
+            type: 'calendar.sync.requested',
+            payload: { connectionId: connection.id },
+            status: 'pending',
+          }],
+          { session },
         );
       });
     } finally { await session.endSession(); }
+    if (this.onConnected && connectionId) await this.onConnected(connectionId);
     return { returnUrl: `${attempt.returnUrl}${attempt.returnUrl.includes('?') ? '&' : '?'}calendar=connected` };
   }
 

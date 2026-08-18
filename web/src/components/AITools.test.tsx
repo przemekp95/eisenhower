@@ -76,7 +76,7 @@ describe('AITools task assistant', () => {
   it('combines task context, priority and grounded answers in one tab', async () => {
     renderTools({ taskDescription: 'Current context' });
     await waitForCapabilityCheck();
-    expect(screen.getByRole('tab', { name: 'Task help' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('dialog', { name: 'Task assistance' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'urgent roadmap' })).toBeInTheDocument();
     expect(screen.getByText('Current context')).toBeInTheDocument();
     expect(screen.getByText('Task priority')).toBeInTheDocument();
@@ -84,23 +84,26 @@ describe('AITools task assistant', () => {
     await screen.findByText('Approved incident guidance.');
   });
 
-  it('navigates utility tabs with arrow keys', () => {
+  it('keeps scan, bulk import, and memory management outside task-scoped help', async () => {
+    mockedApi.getCapabilities.mockResolvedValueOnce({
+      classification: true,
+      reasoned_local_analysis: true,
+      knowledge_retrieval: true,
+      retrieval_augmented_generation: true,
+      ocr: true,
+      batch_analysis: true,
+      memory_write: true,
+      memory_retrieval: true,
+      memory_response: true,
+    } as api.AICapabilities);
+
     renderTools();
-    const assistant = screen.getByRole('tab', { name: 'Task help' });
-    const ocr = screen.getByRole('tab', { name: 'Scan notes' });
-    fireEvent.keyDown(assistant, { key: 'ArrowRight' });
-    expect(ocr).toHaveAttribute('aria-selected', 'true');
-    expect(ocr).toHaveFocus();
-    fireEvent.keyDown(ocr, { key: 'ArrowLeft' });
-    expect(assistant).toHaveAttribute('aria-selected', 'true');
-    fireEvent.keyDown(assistant, { key: 'ArrowLeft' });
-    expect(screen.getByRole('tab', { name: 'Bulk review' })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
-    fireEvent.keyDown(screen.getByRole('tab', { name: 'Bulk review' }), { key: 'Enter' });
-    assistant.focus();
-    fireEvent.keyDown(window, { key: 'Tab' });
+    await waitForCapabilityCheck();
+
+    expect(screen.queryByRole('tab', { name: 'Scan notes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Bulk review' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Memory controls' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'urgent roadmap' })).toBeVisible();
   });
 
   it('applies the default no-op priority callback safely', async () => {
@@ -205,139 +208,6 @@ describe('AITools task assistant', () => {
     });
   });
 
-  it('keeps OCR available as a secondary utility', async () => {
-    const onOCRTasksExtracted = jest.fn().mockResolvedValue(1);
-    mockedApi.extractTasksFromImage.mockResolvedValue({
-      filename: 'tasks.txt',
-      image_info: { size_bytes: 12, shape: 'unknown' },
-      ocr: { extracted_text: 'urgent outage', raw_tasks_detected: 1, method: 'lazy-ocr' },
-      classified_tasks: [
-        { text: 'urgent outage', quadrant: 0, quadrant_name: 'Do Now', confidence: 0.8 },
-      ],
-      summary: {
-        total_tasks: 1,
-        quadrant_distribution: {
-          counts: { 0: 1, 1: 0, 2: 0, 3: 0 },
-          percentages: { 0: 100, 1: 0, 2: 0, 3: 0 },
-          quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
-        },
-      },
-      timestamp: new Date().toISOString(),
-    });
-    renderTools({ onOCRTasksExtracted });
-    await waitForCapabilityCheck();
-    fireEvent.click(screen.getByRole('tab', { name: 'Scan notes' }));
-    fireEvent.change(screen.getByTestId('image-upload-input'), {
-      target: { files: [new File(['urgent outage'], 'tasks.txt', { type: 'text/plain' })] },
-    });
-    await screen.findByDisplayValue('urgent outage');
-    fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
-    await waitFor(() => expect(onOCRTasksExtracted).toHaveBeenCalledTimes(1));
-  });
-
-  it('uses the English plural OCR summary', async () => {
-    mockedApi.extractTasksFromImage.mockResolvedValue({
-      filename: 'tasks.txt',
-      image_info: { size_bytes: 12, shape: 'unknown' },
-      ocr: { extracted_text: 'urgent outage', raw_tasks_detected: 1, method: 'lazy-ocr' },
-      classified_tasks: [
-        { text: 'urgent outage', quadrant: 0, quadrant_name: 'Do Now', confidence: 0.8 },
-      ],
-      summary: {
-        total_tasks: 1,
-        quadrant_distribution: {
-          counts: { 0: 1, 1: 0, 2: 0, 3: 0 },
-          percentages: { 0: 100, 1: 0, 2: 0, 3: 0 },
-          quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
-        },
-      },
-      timestamp: new Date().toISOString(),
-    });
-    renderTools({ onOCRTasksExtracted: jest.fn().mockResolvedValue(2) });
-    await waitForCapabilityCheck();
-    fireEvent.click(screen.getByRole('tab', { name: 'Scan notes' }));
-    fireEvent.change(screen.getByTestId('image-upload-input'), {
-      target: { files: [new File(['urgent outage'], 'tasks.txt', { type: 'text/plain' })] },
-    });
-    await screen.findByDisplayValue('urgent outage');
-    fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
-    await screen.findByText('Added 2 scanned tasks to the matrix.');
-  });
-
-  it('falls back safely when no OCR import callback is provided', async () => {
-    mockedApi.extractTasksFromImage.mockResolvedValue({
-      filename: 'tasks.txt',
-      image_info: { size_bytes: 12, shape: 'unknown' },
-      ocr: { extracted_text: 'urgent outage', raw_tasks_detected: 1, method: 'lazy-ocr' },
-      classified_tasks: [
-        { text: 'urgent outage', quadrant: 0, quadrant_name: 'Do Now', confidence: 0.8 },
-      ],
-      summary: {
-        total_tasks: 1,
-        quadrant_distribution: {
-          counts: { 0: 1, 1: 0, 2: 0, 3: 0 },
-          percentages: { 0: 100, 1: 0, 2: 0, 3: 0 },
-          quadrant_names: { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' },
-        },
-      },
-      timestamp: new Date().toISOString(),
-    });
-    renderTools();
-    await waitForCapabilityCheck();
-    fireEvent.click(screen.getByRole('tab', { name: 'Scan notes' }));
-    fireEvent.change(screen.getByTestId('image-upload-input'), {
-      target: { files: [new File(['urgent outage'], 'tasks.txt', { type: 'text/plain' })] },
-    });
-    await screen.findByDisplayValue('urgent outage');
-    fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
-    await screen.findByText('Added: 0. Not added: 1.');
-  });
-
-  it('reports completed batch review', async () => {
-    renderTools();
-    await waitForCapabilityCheck();
-    fireEvent.click(screen.getByRole('tab', { name: 'Bulk review' }));
-    fireEvent.change(screen.getByPlaceholderText(/One task per line/i), {
-      target: { value: 'urgent outage' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Review task list' }));
-    await screen.findByText(/Bulk review processed 1 tasks/i);
-  });
-
-  it.each([
-    [1, 'Dodano 1 zeskanowane zadanie do macierzy.'],
-    [3, 'Dodano 3 zeskanowane zadania do macierzy.'],
-    [12, 'Dodano 12 zeskanowanych zadań do macierzy.'],
-  ])('uses Polish OCR pluralization for %i imported tasks', async (count, summary) => {
-    localStorage.setItem('eisenhower-language', 'pl');
-    mockedApi.extractTasksFromImage.mockResolvedValue({
-      filename: 'tasks.txt',
-      image_info: { size_bytes: 12, shape: 'unknown' },
-      ocr: { extracted_text: 'zadanie', raw_tasks_detected: 1, method: 'lazy-ocr' },
-      classified_tasks: [
-        { text: 'zadanie', quadrant: 0, quadrant_name: 'Zrób teraz', confidence: 0.8 },
-      ],
-      summary: {
-        total_tasks: 1,
-        quadrant_distribution: {
-          counts: { 0: 1, 1: 0, 2: 0, 3: 0 },
-          percentages: { 0: 100, 1: 0, 2: 0, 3: 0 },
-          quadrant_names: { 0: 'Zrób teraz', 1: 'Deleguj', 2: 'Zaplanuj', 3: 'Usuń' },
-        },
-      },
-      timestamp: new Date().toISOString(),
-    });
-    renderTools({ onOCRTasksExtracted: jest.fn().mockResolvedValue(count) });
-    await waitForCapabilityCheck();
-    fireEvent.click(screen.getByRole('tab', { name: 'Skanuj notatki' }));
-    fireEvent.change(screen.getByTestId('image-upload-input'), {
-      target: { files: [new File(['zadanie'], 'tasks.txt', { type: 'text/plain' })] },
-    });
-    await screen.findByDisplayValue('zadanie');
-    fireEvent.click(screen.getByRole('button', { name: 'Importuj wybrane' }));
-    await screen.findByText(summary);
-  });
-
   it('keeps manual task recovery available when every optional AI capability is offline', async () => {
     mockedApi.getCapabilities.mockResolvedValueOnce({
       classification: false,
@@ -359,29 +229,6 @@ describe('AITools task assistant', () => {
     expect(screen.queryByRole('button', { name: 'Check sources' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /choose the quadrant manually/i }));
     expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps memory controls hidden unless memory writes are explicitly enabled', async () => {
-    renderTools();
-    await waitForCapabilityCheck();
-    expect(screen.queryByRole('tab', { name: 'Memory controls' })).not.toBeInTheDocument();
-
-    mockedApi.getCapabilities.mockResolvedValueOnce({
-      classification: true,
-      reasoned_local_analysis: true,
-      knowledge_retrieval: true,
-      retrieval_augmented_generation: true,
-      local_similar_examples: true,
-      ocr: true,
-      batch_analysis: true,
-      memory_write: true,
-      memory_retrieval: false,
-      memory_response: false,
-    });
-    renderTools();
-    await waitForCapabilityCheck();
-    fireEvent.click(screen.getByRole('tab', { name: 'Memory controls' }));
-    expect(screen.getByRole('heading', { name: 'Your saved preferences' })).toBeVisible();
   });
 
   it.each([
@@ -412,30 +259,6 @@ describe('AITools task assistant', () => {
     }
   );
 
-  it('shows recovery instead of mounting unavailable OCR and batch tools', async () => {
-    mockedApi.getCapabilities.mockResolvedValueOnce({
-      classification: true,
-      reasoned_local_analysis: true,
-      knowledge_retrieval: false,
-      retrieval_augmented_generation: false,
-      langchain_analysis: false,
-      ocr: false,
-      batch_analysis: false,
-      training_management: false,
-      providers: { local_model: true, tesseract: false, ocr: false },
-    } as api.AICapabilities);
-
-    renderTools();
-    await waitForCapabilityCheck();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Scan notes' }));
-    expect(screen.queryByTestId('image-upload-input')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /choose the quadrant manually/i })).toBeVisible();
-    fireEvent.click(screen.getByRole('tab', { name: 'Bulk review' }));
-    expect(screen.queryByRole('button', { name: 'Review task list' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /choose the quadrant manually/i })).toBeVisible();
-  });
-
   it('gates every tool while capability availability is still being checked', async () => {
     let resolveCapabilities!: (capabilities: api.AICapabilities) => void;
     mockedApi.getCapabilities.mockImplementationOnce(
@@ -451,9 +274,7 @@ describe('AITools task assistant', () => {
       screen.getByRole('status', { name: /checking task assistance availability/i })
     ).toHaveAttribute('aria-busy', 'true');
     expect(screen.queryByRole('button', { name: 'Suggest quadrant' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Scan notes' }));
     expect(screen.queryByTestId('image-upload-input')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Bulk review' }));
     expect(screen.queryByRole('button', { name: 'Review task list' })).not.toBeInTheDocument();
 
     await act(async () => resolveCapabilities(await mockedApi.getCapabilities()));

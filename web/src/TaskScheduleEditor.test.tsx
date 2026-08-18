@@ -35,6 +35,9 @@ describe('TaskScheduleEditor', () => {
     fireEvent.change(screen.getByLabelText('Przypomnienie'), {
       target: { value: '2026-08-16T08:30' },
     });
+    fireEvent.change(screen.getByLabelText('Czas trwania (minuty)'), {
+      target: { value: '45' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Zapisz termin' }));
 
     await waitFor(() =>
@@ -42,6 +45,7 @@ describe('TaskScheduleEditor', () => {
         dueAt: '2026-08-16T07:30:00.000Z',
         timeZone: 'Europe/Warsaw',
         remindAt: '2026-08-16T06:30:00.000Z',
+        durationMinutes: 45,
       })
     );
   });

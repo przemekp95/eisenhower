@@ -1,4 +1,4 @@
-import { beginOidcLogin, completeOidcLogin } from './oidcSession';
+import { beginOidcLogin, buildAccountManagementUrl, completeOidcLogin } from './oidcSession';
 import { clearTokens, getApiToken } from './authSession';
 import { webcrypto } from 'node:crypto';
 import { TextEncoder } from 'node:util';
@@ -35,6 +35,14 @@ describe('OIDC Authorization Code with PKCE', () => {
     expect(target.searchParams.get('state')).toBeTruthy();
     expect(sessionStorage.getItem('eisenhower.oidc.verifier')).toBeTruthy();
     expect(getApiToken()).toBeNull();
+  });
+
+  it('builds only an HTTP(S) Keycloak account-management URL from the configured issuer', () => {
+    expect(buildAccountManagementUrl('https://identity.example/identity/realms/eisenhower/')).toBe(
+      'https://identity.example/identity/realms/eisenhower/account'
+    );
+    expect(buildAccountManagementUrl('javascript:alert(1)')).toBeNull();
+    expect(buildAccountManagementUrl(undefined)).toBeNull();
   });
 
   it('rejects a mismatched callback state before contacting the token endpoint', async () => {

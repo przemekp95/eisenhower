@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-19 — TASK-065 implementation checkpoint: Delivered task-first web IA, real idempotent bulk import, account/Keycloak controls, explicit Calendar duration/reminders/provider lifecycle, selected event import/manual linking/deletion decisions/immediate watch baseline, and RAG capability routing independent of classifier health. Focused web 113, API client 34, Node 156 and AI capability 3 checks plus builds pass; full verify, exact-SHA promotion and local deployment remain open, and corpus/generation/MAG/physical/traffic gates remain explicitly unclaimed.
+
 2026-08-17 — TASK-006: Migrated mobile from Expo 55/RN 0.83 to Expo 57.0.14/RN 0.86.2, avoiding the SDK 56 Hermes regression; 199 Jest tests, 5 security tests, zero production vulnerabilities, Expo Doctor 21/21 and a clean 352-task Android release build passed without device installation, publication or deployment.
 
 2026-08-17 — TASK-064: Made `make verify` automatically and incrementally bootstrap hash-bound Node and backend-AI dependencies in fresh or partial worktrees; 6 focused contracts, a disposable clean-worktree rehearsal and full repository verification passed.

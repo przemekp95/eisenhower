@@ -2,11 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import GroundedAIAnalysis from './ai/GroundedAIAnalysis';
 import TaskPrioritySuggestion from './ai/TaskPrioritySuggestion';
-import BatchAnalysis from './ai/BatchAnalysis';
-import ImageUpload from './ai/ImageUpload';
-import MemoryControls from './ai/MemoryControls';
-import type { OCRImportSummary } from './ai/ImageUpload';
-import { AICapabilities, BatchAnalysisResult, getCapabilities, OCRResult } from '../services/api';
+import { AICapabilities, getCapabilities } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
 
 interface Props {
@@ -14,34 +10,18 @@ interface Props {
   taskDescription?: string;
   currentUrgent?: boolean;
   currentImportant?: boolean;
-  initialTab?: Tab;
   onClose: () => void;
   onApplyDescription?: (description: string) => Promise<void> | void;
   onApplyQuadrant?: (patch: { urgent: boolean; important: boolean }) => Promise<void> | void;
-  onOCRTasksExtracted?: (
-    result: OCRResult,
-    learnFromAccepted: boolean
-  ) => Promise<OCRImportSummary | number | void> | OCRImportSummary | number | void;
 }
 
-type Tab = 'assistant' | 'ocr' | 'batch' | 'memory';
 type CapabilityState = 'checking' | 'ready' | 'error';
 
 function hasKnowledgeCapability(capabilities: AICapabilities) {
-  return !(
-    capabilities.knowledge_retrieval === false &&
-    capabilities.retrieval_augmented_generation === false
+  return (
+    capabilities.knowledge_retrieval === true &&
+    capabilities.retrieval_augmented_generation === true
   );
-}
-
-function isTabAvailable(tab: Tab, capabilities: AICapabilities | null, state: CapabilityState) {
-  if (state !== 'ready' || !capabilities) return false;
-  if (tab === 'assistant') {
-    return capabilities.classification || hasKnowledgeCapability(capabilities);
-  }
-  if (tab === 'ocr') return capabilities.ocr;
-  if (tab === 'batch') return capabilities.batch_analysis;
-  return capabilities.memory_write === true;
 }
 
 const FOCUSABLE_SELECTOR =
@@ -52,20 +32,16 @@ export default function AITools({
   taskDescription = '',
   currentUrgent = false,
   currentImportant = false,
-  initialTab = 'assistant',
   onClose,
   onApplyDescription,
   onApplyQuadrant,
-  onOCRTasksExtracted,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
-  const [lastSummary, setLastSummary] = useState('');
   const [capabilities, setCapabilities] = useState<AICapabilities | null>(null);
   const [capabilityState, setCapabilityState] = useState<CapabilityState>('checking');
   const capabilityRequestRef = useRef<AbortController | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const { language, t } = useLanguage();
+  const { t } = useLanguage();
 
   const refreshCapabilities = () => {
     capabilityRequestRef.current?.abort();
@@ -148,62 +124,12 @@ export default function AITools({
         previouslyFocused.focus();
       }
     };
-  }, [initialTab, onClose]);
+  }, [onClose]);
 
-  const format = (template: string, values: Record<string, string | number>) =>
-    Object.entries(values).reduce(
-      (result, [key, value]) => result.replace(`{${key}}`, String(value)),
-      template
-    );
-
-  const tabs: Array<{ id: Tab; label: string }> = [
-    { id: 'assistant', label: t('ai.tabs.assistant') },
-    { id: 'ocr', label: t('ai.tabs.ocr') },
-    { id: 'batch', label: t('ai.tabs.batch') },
-    ...(capabilities?.memory_write === true
-      ? [{ id: 'memory' as const, label: t('ai.tabs.memory') }]
-      : []),
-  ];
-
-  const formatOcrImportedSummary = (count: number) => {
-    if (language === 'pl') {
-      const remainder10 = count % 10;
-      const remainder100 = count % 100;
-
-      if (count === 1) {
-        return t('ai.summary.ocrImported.one');
-      }
-
-      if (remainder10 >= 2 && remainder10 <= 4 && !(remainder100 >= 12 && remainder100 <= 14)) {
-        return format(t('ai.summary.ocrImported.few'), { count });
-      }
-
-      return format(t('ai.summary.ocrImported.other'), { count });
-    }
-
-    return count === 1
-      ? t('ai.summary.ocrImported.one')
-      : format(t('ai.summary.ocrImported.other'), { count });
-  };
-
-  const handleOCR = async (result: OCRResult, learnFromAccepted: boolean) => {
-    const outcome = await onOCRTasksExtracted?.(result, learnFromAccepted);
-    if (typeof outcome === 'number') {
-      setLastSummary(formatOcrImportedSummary(outcome));
-    }
-    return outcome;
-  };
-
-  const handleBatch = (result: BatchAnalysisResult) => {
-    setLastSummary(format(t('ai.summary.batch'), { count: result.summary.total_tasks }));
-  };
-
-  const activeFeatureAvailable = isTabAvailable(activeTab, capabilities, capabilityState);
-  const anyUserFeatureAvailable = tabs.some((tab) =>
-    isTabAvailable(tab.id, capabilities, capabilityState)
-  );
   const classificationAvailable = Boolean(capabilities?.classification);
   const knowledgeAvailable = Boolean(capabilities && hasKnowledgeCapability(capabilities));
+  const taskHelpAvailable =
+    capabilityState === 'ready' && (classificationAvailable || knowledgeAvailable);
 
   const unavailablePanel = (
     <div className="space-y-3 rounded-2xl border border-amber-200/25 bg-amber-200/10 p-4">
@@ -278,40 +204,6 @@ export default function AITools({
                 {t('ai.modal.close')}
               </button>
             </div>
-            <div
-              className="mt-4 flex flex-wrap gap-2"
-              role="tablist"
-              aria-label={t('ai.modal.title')}
-            >
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  id={`ai-tab-${tab.id}`}
-                  aria-selected={activeTab === tab.id}
-                  aria-controls={`ai-panel-${tab.id}`}
-                  tabIndex={activeTab === tab.id ? 0 : -1}
-                  onClick={() => setActiveTab(tab.id)}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-                    event.preventDefault();
-                    const current = tabs.findIndex((item) => item.id === tab.id);
-                    const direction = event.key === 'ArrowRight' ? 1 : -1;
-                    const next = tabs[(current + direction + tabs.length) % tabs.length];
-                    setActiveTab(next.id);
-                    document.getElementById(`ai-tab-${next.id}`)?.focus();
-                  }}
-                  className={`rounded-full px-4 py-2 text-sm transition-all ${
-                    activeTab === tab.id
-                      ? 'bg-white text-slate-950 hover:bg-white/90'
-                      : 'bg-white/10 text-white hover:bg-white/15 hover:text-white'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
             <div aria-live="polite" className="mt-3 text-sm text-white/70">
               {capabilityState === 'error' ? (
                 <span>
@@ -322,86 +214,47 @@ export default function AITools({
                 </span>
               ) : null}
               {capabilityState === 'ready'
-                ? anyUserFeatureAvailable
+                ? taskHelpAvailable
                   ? t('ai.availability.available')
                   : t('ai.availability.unavailable')
                 : null}
             </div>
           </div>
           <div className="px-4 pb-4 pt-4 sm:px-6 sm:pb-6 sm:pt-5">
-            {activeTab === 'assistant' ? (
-              <div
-                role="tabpanel"
-                id="ai-panel-assistant"
-                aria-labelledby="ai-tab-assistant"
-                className="space-y-5"
-              >
-                {capabilityState === 'checking' ? (
-                  checkingPanel
-                ) : activeFeatureAvailable ? (
-                  <>
-                    <section className="rounded-3xl border border-cyan-200/15 bg-cyan-300/5 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100/70">
-                        {t('ai.task.context')}
-                      </p>
-                      <h3 className="mt-2 text-lg font-semibold">{taskTitle}</h3>
-                      {taskDescription ? (
-                        <p className="mt-1 text-sm leading-6 text-white/65">{taskDescription}</p>
-                      ) : null}
-                    </section>
-                    {classificationAvailable ? (
-                      <TaskPrioritySuggestion
-                        taskTitle={taskTitle}
-                        currentUrgent={currentUrgent}
-                        currentImportant={currentImportant}
-                        onApply={onApplyQuadrant ?? (() => undefined)}
-                      />
+            <div className="space-y-5">
+              {capabilityState === 'checking' ? (
+                checkingPanel
+              ) : taskHelpAvailable ? (
+                <>
+                  <section className="rounded-3xl border border-cyan-200/15 bg-cyan-300/5 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100/70">
+                      {t('ai.task.context')}
+                    </p>
+                    <h3 className="mt-2 text-lg font-semibold">{taskTitle}</h3>
+                    {taskDescription ? (
+                      <p className="mt-1 text-sm leading-6 text-white/65">{taskDescription}</p>
                     ) : null}
-                    {knowledgeAvailable ? (
-                      <GroundedAIAnalysis
-                        taskTitle={taskTitle}
-                        taskDescription={taskDescription}
-                        onApplyDescription={onApplyDescription}
-                      />
-                    ) : null}
-                  </>
-                ) : (
-                  unavailablePanel
-                )}
-              </div>
-            ) : null}
-            {activeTab === 'ocr' ? (
-              <div role="tabpanel" id="ai-panel-ocr" aria-labelledby="ai-tab-ocr">
-                {capabilityState === 'checking' ? (
-                  checkingPanel
-                ) : activeFeatureAvailable ? (
-                  <ImageUpload onTasksExtracted={handleOCR} />
-                ) : (
-                  unavailablePanel
-                )}
-              </div>
-            ) : null}
-            {activeTab === 'batch' ? (
-              <div role="tabpanel" id="ai-panel-batch" aria-labelledby="ai-tab-batch">
-                {capabilityState === 'checking' ? (
-                  checkingPanel
-                ) : activeFeatureAvailable ? (
-                  <BatchAnalysis onBatchComplete={handleBatch} />
-                ) : (
-                  unavailablePanel
-                )}
-              </div>
-            ) : null}
-            {activeTab === 'memory' && capabilities?.memory_write === true ? (
-              <div role="tabpanel" id="ai-panel-memory" aria-labelledby="ai-tab-memory">
-                <MemoryControls />
-              </div>
-            ) : null}
-            {lastSummary ? (
-              <p role="status" aria-live="polite" className="mt-4 text-sm text-emerald-200">
-                {lastSummary}
-              </p>
-            ) : null}
+                  </section>
+                  {classificationAvailable ? (
+                    <TaskPrioritySuggestion
+                      taskTitle={taskTitle}
+                      currentUrgent={currentUrgent}
+                      currentImportant={currentImportant}
+                      onApply={onApplyQuadrant ?? (() => undefined)}
+                    />
+                  ) : null}
+                  {knowledgeAvailable ? (
+                    <GroundedAIAnalysis
+                      taskTitle={taskTitle}
+                      taskDescription={taskDescription}
+                      onApplyDescription={onApplyDescription}
+                    />
+                  ) : null}
+                </>
+              ) : (
+                unavailablePanel
+              )}
+            </div>
           </div>
         </div>
       </div>

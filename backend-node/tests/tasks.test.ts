@@ -6,7 +6,11 @@ import { resolveLifecycleTransition } from '../src/application/taskRepository';
 import { TaskModel } from '../src/models/task';
 import { MongooseTaskRepository } from '../src/repositories/mongooseTaskRepository';
 import { createTasksRouter } from '../src/routes/tasks';
-import { CalendarBindingModel, CalendarOutboxModel } from '../src/models/calendar';
+import {
+  CalendarBindingModel,
+  CalendarConnectionModel,
+  CalendarOutboxModel,
+} from '../src/models/calendar';
 import { clearMongo, startMongo, stopMongo } from './helpers/mongo';
 
 describe('task routes', () => {
@@ -447,6 +451,59 @@ describe('task routes', () => {
 
     const types = (await CalendarOutboxModel.find().sort({ createdAt: 1 }).lean()).map((event) => event.type);
     expect(types).toEqual(['event_update', 'event_update', 'event_delete', 'event_update']);
+  });
+
+  it('only enqueues schedule creates for connected owners and deletes for bound tasks', async () => {
+    const repository = new MongooseTaskRepository();
+    const scope = { tenantId: 'local', ownerId: 'local-user' };
+    const disconnectedTask = await TaskModel.create({ title: 'Before connection' });
+
+    await repository.updateSchedule(scope, disconnectedTask.id, 0, {
+      dueAt: new Date('2026-08-20T12:00:00.000Z'),
+      timeZone: 'Europe/Warsaw',
+      durationMinutes: 30,
+    });
+    await repository.updateSchedule(scope, disconnectedTask.id, 1, null);
+    expect(await CalendarOutboxModel.countDocuments()).toBe(0);
+
+    const connection = await CalendarConnectionModel.create({
+      ...scope,
+      provider: 'google',
+      calendarId: 'work',
+      credentialRef: `oauth-grant:${new mongoose.Types.ObjectId()}`,
+      status: 'active',
+    });
+    const connectedTask = await TaskModel.create({ title: 'After connection' });
+    await repository.updateSchedule(scope, connectedTask.id, 0, {
+      dueAt: new Date('2026-08-21T12:00:00.000Z'),
+      timeZone: 'Europe/Warsaw',
+      durationMinutes: 45,
+    });
+    await repository.updateSchedule(scope, connectedTask.id, 1, null);
+    expect((await CalendarOutboxModel.find().lean()).map((event) => event.type)).toEqual([
+      'event_create',
+    ]);
+
+    await CalendarBindingModel.create({
+      ...scope,
+      connectionId: connection._id,
+      taskId: connectedTask.id,
+      providerEventId: 'event-connected',
+      providerEtag: 'etag-connected',
+      lastTaskRevision: 2,
+      lastProviderRevision: 'etag-connected',
+    });
+    await repository.updateSchedule(scope, connectedTask.id, 2, {
+      dueAt: new Date('2026-08-22T12:00:00.000Z'),
+      timeZone: 'Europe/Warsaw',
+      durationMinutes: 45,
+    });
+    await repository.updateSchedule(scope, connectedTask.id, 3, null);
+    expect((await CalendarOutboxModel.find().sort({ createdAt: 1 }).lean()).map((event) => event.type)).toEqual([
+      'event_create',
+      'event_update',
+      'event_delete',
+    ]);
   });
 
   it('maps lifecycle repository failures through the HTTP error boundary', async () => {

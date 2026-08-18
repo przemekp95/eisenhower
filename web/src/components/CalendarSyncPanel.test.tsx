@@ -35,6 +35,9 @@ describe('CalendarSyncPanel', () => {
         },
       },
     ]);
+    mockedApi.getCalendarDeletedBindings.mockResolvedValue([]);
+    mockedApi.getTasks.mockResolvedValue([]);
+    mockedApi.getCalendarEvents.mockResolvedValue({ events: [] });
     mockedApi.requestCalendarSync.mockResolvedValue({ eventId: 'sync-1' });
     mockedApi.startCalendarConnection.mockResolvedValue({
       authorizationUrl: 'https://accounts.google.com/o/oauth2/auth?state=safe',
@@ -78,6 +81,45 @@ describe('CalendarSyncPanel', () => {
       )
     );
     expect(screen.queryByText('Google title')).not.toBeInTheDocument();
+  });
+
+  it('offers three explicit outcomes when Google deleted a linked event', async () => {
+    localStorage.setItem('eisenhower-language', 'pl');
+    mockedApi.getCalendarDeletedBindings.mockResolvedValueOnce([
+      {
+        _id: 'binding-1',
+        taskId: 'task-1',
+        taskTitle: 'Prepare release',
+        taskRevision: 4,
+        providerEventId: 'event-1',
+        providerDeletedAt: '2026-08-20T12:00:00.000Z',
+      },
+    ]);
+    mockedApi.resolveCalendarDeletedBinding.mockResolvedValue({
+      outcome: 'recreate',
+      taskId: 'task-1',
+      taskRevision: 4,
+    });
+
+    render(
+      <LanguageProvider>
+        <CalendarSyncPanel />
+      </LanguageProvider>
+    );
+
+    expect(await screen.findByText('Prepare release')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Usuń datę zadania' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Odłącz powiązanie' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Odtwórz w Google' }));
+    await waitFor(() =>
+      expect(mockedApi.resolveCalendarDeletedBinding).toHaveBeenCalledWith(
+        'binding-1',
+        'recreate',
+        4,
+        expect.any(String)
+      )
+    );
+    expect(screen.queryByText('Prepare release')).not.toBeInTheDocument();
   });
 
   it('keeps the panel usable and reports a failed sync request', async () => {

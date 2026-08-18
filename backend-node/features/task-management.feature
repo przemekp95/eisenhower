@@ -63,7 +63,7 @@ Feature: Manage tasks in the Eisenhower matrix
     Given my task "Prepare release" is in the "Schedule" quadrant
     When I schedule it for "2026-08-15T12:00:00.000Z" in "Europe/Warsaw" with reminder "2026-08-15T10:00:00.000Z"
     Then the request succeeds with status 200
-    And the returned schedule is due "2026-08-15T12:00:00.000Z" in "Europe/Warsaw" with reminder "2026-08-15T10:00:00.000Z"
+    And the returned schedule is due "2026-08-15T12:00:00.000Z" in "Europe/Warsaw" for 30 minutes with reminder "2026-08-15T10:00:00.000Z"
     When I clear the task schedule
     Then the request succeeds with status 200
     And the returned task has no schedule

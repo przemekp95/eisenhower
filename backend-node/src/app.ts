@@ -22,6 +22,7 @@ import {
   loadGoogleCalendarConfig,
 } from './application/googleCalendar';
 import { createGoogleCalendarProviderRouter } from './routes/googleCalendarProvider';
+import { CalendarSyncStateModel } from './models/calendar';
 import { HealthState } from './types';
 import {
   createOidcTokenVerifier,
@@ -179,21 +180,42 @@ export function createApp(options: CreateAppOptions = {}) {
     app.use('/internal/calendar', createCalendarInternalRouter(calendarInternalHmacKey));
   }
 
-  const googleOAuthConfig = options.googleOAuthConfig
-    ?? loadGoogleOAuthConfig(process.env, config.nodeEnv);
+  const googleOAuthConfig = options.googleOAuthConfig ?? loadGoogleOAuthConfig(process.env, config.nodeEnv);
+  const googleCalendarConfig = options.googleCalendarConfig ?? loadGoogleCalendarConfig(process.env);
+  const googleCalendarService =
+    calendarInternalHmacKey && googleOAuthConfig && googleCalendarConfig
+      ? new GoogleCalendarService(
+          googleOAuthConfig,
+          googleCalendarConfig,
+          options.googleCalendarPort ?? new GoogleCalendarHttpAdapter(),
+        )
+      : null;
   const googleOAuthService = googleOAuthConfig
-    ? new GoogleOAuthService(googleOAuthConfig, options.googleOAuthPort ?? new GoogleOAuthHttpClient())
+    ? new GoogleOAuthService(
+        googleOAuthConfig,
+        options.googleOAuthPort ?? new GoogleOAuthHttpClient(),
+        googleCalendarService
+          ? async (connectionId) => {
+              try {
+                await googleCalendarService.registerWatch(connectionId);
+              } catch {
+                await CalendarSyncStateModel.findOneAndUpdate(
+                  { connectionId },
+                  { $set: { fullResyncRequired: true } },
+                  { upsert: true, setDefaultsOnInsert: true },
+                );
+              }
+            }
+          : undefined,
+      )
     : null;
   if (googleOAuthService) {
     app.use('/calendar/oauth', createGoogleOAuthCallbackRouter(googleOAuthService));
   }
-  const googleCalendarConfig = options.googleCalendarConfig ?? loadGoogleCalendarConfig(process.env);
-  if (calendarInternalHmacKey && googleOAuthConfig && googleCalendarConfig) {
+  if (calendarInternalHmacKey && googleCalendarService) {
     app.use('/internal/calendar/provider', createGoogleCalendarProviderRouter(
       calendarInternalHmacKey,
-      new GoogleCalendarService(
-        googleOAuthConfig, googleCalendarConfig, options.googleCalendarPort ?? new GoogleCalendarHttpAdapter(),
-      ),
+      googleCalendarService,
     ));
   }
 
@@ -212,6 +234,7 @@ export function createApp(options: CreateAppOptions = {}) {
     auditRejection,
     new CalendarApplicationService(),
     Boolean(googleOAuthService),
+    googleCalendarService ?? undefined,
   ));
   if (googleOAuthService) {
     app.use('/calendar/oauth', createGoogleOAuthUserRouter(googleOAuthService, auditRejection));

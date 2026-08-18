@@ -1059,13 +1059,44 @@ def create_app(
     }
 
   @app.get("/capabilities")
-  def get_capabilities():
+  def get_capabilities(request: Request):
     caps = resolved_ai_service.capabilities()
+    principal = request.state.principal
+    tenant_enabled = (
+      not resolved_settings.rag_allowed_tenants
+      or principal.tenant_id in resolved_settings.rag_allowed_tenants
+    )
+    user_enabled = (
+      (
+        resolved_settings.app_env != "production"
+        and not resolved_settings.rag_response_allowed_users
+      )
+      or principal.user_id in resolved_settings.rag_response_allowed_users
+    )
+    retrieval_available = bool(
+      resolved_rag_service is not None
+      and resolved_settings.rag_retrieval_enabled
+      and tenant_enabled
+    )
+    generation_available = bool(
+      retrieval_available
+      and resolved_settings.rag_generation_enabled
+      and getattr(resolved_rag_service, "generation_enabled", True)
+    )
+    response_available = bool(
+      generation_available
+      and resolved_settings.rag_response_enabled
+      and user_enabled
+      and (
+        response_canary_router is None
+        or response_canary_router.evaluate(principal.tenant_id, principal.user_id).reason is None
+      )
+    )
     return {
       "classification": caps["classification"],
       "reasoned_local_analysis": caps["reasoned_local_analysis"],
-      "knowledge_retrieval": caps["knowledge_retrieval"],
-      "retrieval_augmented_generation": caps["retrieval_augmented_generation"],
+      "knowledge_retrieval": retrieval_available,
+      "retrieval_augmented_generation": response_available,
       "local_similar_examples": caps["local_similar_examples"],
       "ocr": caps["ocr"],
       "batch_analysis": caps["batch_analysis"],

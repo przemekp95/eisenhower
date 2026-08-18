@@ -10,6 +10,20 @@ export type OidcRuntimeConfig = {
 const STATE_KEY = 'eisenhower.oidc.state';
 const VERIFIER_KEY = 'eisenhower.oidc.verifier';
 
+export function buildAccountManagementUrl(issuer: string | undefined) {
+  if (!issuer) return null;
+  try {
+    const url = new URL(issuer);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    url.search = '';
+    url.hash = '';
+    url.pathname = `${url.pathname.replace(/\/+$/, '')}/account`;
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return null;
+  }
+}
+
 function base64Url(bytes: Uint8Array) {
   let binary = '';
   bytes.forEach((value) => {

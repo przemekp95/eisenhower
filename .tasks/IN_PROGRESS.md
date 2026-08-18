@@ -19,6 +19,14 @@ Deliver the approved task-first product flow across web and mobile, turn batch c
 
 Canonical source, source/CI promotion, release artifact, local deployed release, capability flags, approved corpus size, live model health, actual user traffic, physical camera behavior, public publication and production acceptance are independent evidence classes. Public Mikrus deployment and user-visible generation or MAG activation remain outside this authorization. TASK-065 remains in progress while any required human activation, physical-device, or real-traffic gate is open.
 
+### Progress
+
+The web now exposes Add task, Scan photo and Add in bulk above the matrix; OCR and bulk import are standalone review flows, while sourced help remains bound to a persisted task and can update only that task after an editable preview. Bulk import performs shared-classifier review, editable selection/quadrants, existing/in-batch duplicate detection, durable per-row idempotency keys, retry and honest per-item outcomes. Integrations owns Calendar, and Account and security owns language, Keycloak account/password management and logout.
+
+Calendar scheduling now suppresses provider work before connection, emits create/update/delete only for valid connection/binding states, stores a bounded duration and maps reminders explicitly. The supported Calendar surface adds bounded candidate browsing, previewed direction-selectable unique manual binding, selected-only idempotent import, three explicit Google-deletion decisions, immediate post-OAuth watch registration, and a baseline sync that intentionally discards historical events while retaining syncToken/410/reconciliation/outbox/HMAC/conflict behavior. The current connection still targets its configured calendar ID; a safe Google-owned calendar-list selector is not yet implemented.
+
+Knowledge capabilities are now derived from the authenticated RAG runtime, generator, response flag, allowlists and canary decision rather than classifier readiness. Classifier, OCR and bulk labels state MiniLM embedding + PyTorch/MLP and Tesseract truthfully. The existing local private runtime remains OIDC/allowlisted with retrieval true only in the knowledge role, generation/response and all memory flags false. Its approved canonical collection is empty; the current manifest SHA no longer matches the SHA frozen in the owner packet, so corpus ingest and any generation/MAG activation remain fail-closed pending a fresh checksum-bound decision. Focused web (113), shared client (34), Node Calendar/task (156) and AI capability (3) checks plus web/Node builds are green; full verification, exact-SHA promotion, artifact build and final local deployment remain pending.
+
 ---
 
 ## TASK-028: Add Grounded RAG and camera parity across web and mobile

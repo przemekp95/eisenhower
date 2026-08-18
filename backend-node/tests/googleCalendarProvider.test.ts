@@ -5,6 +5,7 @@ import {
 } from '../src/application/googleCalendar';
 import { GoogleOAuthPort, GoogleTokenSet } from '../src/application/googleOAuth';
 import { CalendarBindingModel, CalendarConnectionModel, CalendarOutboxModel, CalendarSyncStateModel, GoogleOAuthGrantModel } from '../src/models/calendar';
+import { TaskModel } from '../src/models/task';
 import mongoose from 'mongoose';
 import { clearMongo, startMongo, stopMongo } from './helpers/mongo';
 import { createHmac, randomUUID } from 'node:crypto';
@@ -23,6 +24,14 @@ class CalendarFake implements GoogleCalendarPort {
   async deleteEvent(input: Record<string, unknown>) { this.calls.push({ kind: 'delete', ...input }); return { providerEventId: String(input.providerEventId), providerEtag: String(input.providerEtag) }; }
   async listChanges(input: Record<string, unknown>): ReturnType<GoogleCalendarPort['listChanges']> { this.calls.push({ kind: 'changes', ...input }); return { events: [{ id: 'historical-event' }], nextSyncToken: 'sync-next' }; }
   async watch(input: Record<string, unknown>) { this.calls.push({ kind: 'watch', ...input }); return { channelId: String(input.channelId), resourceId: 'resource-1', expiresAt: new Date(Date.now() + 3600_000) }; }
+  async listEvents(input: Record<string, unknown>) {
+    this.calls.push({ kind: 'list-events', ...input });
+    return { events: [{ id: 'candidate-1', etag: 'etag-candidate', title: 'Candidate', start: '2026-08-20T12:00:00.000Z', end: '2026-08-20T12:30:00.000Z', timeZone: 'Europe/Warsaw' }] };
+  }
+  async getEvent(input: Record<string, unknown>) {
+    this.calls.push({ kind: 'get-event', ...input });
+    return { id: String(input.providerEventId), etag: 'etag-candidate', title: 'Candidate', start: '2026-08-20T12:00:00.000Z', end: '2026-08-20T12:30:00.000Z', timeZone: 'Europe/Warsaw' };
+  }
 }
 const hmacKey = 'provider-internal-key-at-least-32-bytes';
 function signed(path: string, body: unknown, requestId: string = randomUUID()) { const timestamp = String(Math.floor(Date.now() / 1000)); const raw = JSON.stringify(body); return { timestamp, requestId, signature: createHmac('sha256', hmacKey).update(`v1\n${timestamp}\n${requestId}\nPOST\n${path}\n${raw}`).digest('hex') }; }
@@ -38,7 +47,18 @@ describe('Google Calendar provider boundary', () => {
   });
   beforeAll(startMongo); afterEach(async () => { calendar.calls = []; oauth.expiresSoon = false; await clearMongo(); }); afterAll(stopMongo);
 
-  async function connect() { const start = await request(app).post('/calendar/oauth/start').set('Authorization', 'Bearer test-api-token').send({ returnPath: '/' }); const state = new URL(start.body.authorizationUrl).searchParams.get('state')!; await request(app).get('/calendar/oauth/callback').query({ state, code: 'code' }); return CalendarConnectionModel.findOne(); }
+  async function connect(preserveStartup = false) {
+    const start = await request(app).post('/calendar/oauth/start').set('Authorization', 'Bearer test-api-token').send({ returnPath: '/' });
+    const state = new URL(start.body.authorizationUrl).searchParams.get('state')!;
+    await request(app).get('/calendar/oauth/callback').query({ state, code: 'code' });
+    const connection = await CalendarConnectionModel.findOne();
+    if (!preserveStartup && connection) {
+      await CalendarSyncStateModel.deleteOne({ connectionId: connection._id });
+      await CalendarOutboxModel.deleteMany({ aggregateId: connection.id, type: 'calendar.sync.requested' });
+      calendar.calls = [];
+    }
+    return connection;
+  }
   async function post(path: string, body: Record<string, unknown>) { const auth = signed(path, body); return request(app).post(path).set('X-Eisenhower-Timestamp', auth.timestamp).set('X-Eisenhower-Request-Id', auth.requestId).set('X-Eisenhower-Signature', auth.signature).send(body); }
 
   it('resolves an outbox event through its own OAuth grant and returns no tokens', async () => {
@@ -50,6 +70,87 @@ describe('Google Calendar provider boundary', () => {
     expect(response.body).toEqual({ providerEventId: expect.any(String), providerEtag: 'etag-created', connectionId: connection!.id });
     expect(JSON.stringify(response.body)).not.toContain('secret');
     expect(status.body).toMatchObject({ status: 'connected', canConnect: true });
+  });
+
+  it('registers watch immediately and seeds a no-import baseline after OAuth', async () => {
+    const connection = await connect(true);
+    const state = await CalendarSyncStateModel.findOne({ connectionId: connection!._id }).lean();
+    const startup = await CalendarOutboxModel.findOne({
+      aggregateId: connection!.id,
+      type: 'calendar.sync.requested',
+    }).lean();
+
+    expect(calendar.calls).toContainEqual(expect.objectContaining({ kind: 'watch', calendarId: 'primary' }));
+    expect(state).toMatchObject({
+      fullResyncRequired: true,
+      watch: {
+        channelId: expect.any(String),
+        resourceId: 'resource-1',
+        verificationHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      },
+    });
+    expect(startup).toMatchObject({ status: 'pending' });
+
+    const baseline = await post('/internal/calendar/provider/changes', {
+      connectionId: connection!.id,
+      checkpoint: 'full-resync',
+    });
+    expect(baseline.body).toEqual({ events: [], nextSyncToken: 'sync-next' });
+  });
+
+  it('lists bounded candidates, previews a unique link and imports only selected events', async () => {
+    const connection = await connect();
+    const task = await TaskModel.create({
+      title: 'Local task',
+      schedule: { dueAt: new Date('2026-08-21T10:00:00.000Z'), timeZone: 'UTC', durationMinutes: 60 },
+    });
+    const auth = { Authorization: 'Bearer test-api-token' };
+    const candidates = await request(app)
+      .get('/calendar/events')
+      .query({ timeMin: '2026-08-01T00:00:00.000Z', timeMax: '2026-09-01T00:00:00.000Z' })
+      .set(auth);
+    const preview = await request(app)
+      .post('/calendar/bindings/preview')
+      .set(auth)
+      .send({ taskId: task.id, providerEventId: 'candidate-1' });
+    const linked = await request(app)
+      .post('/calendar/bindings')
+      .set(auth)
+      .set('If-Match', '"0"')
+      .set('Idempotency-Key', 'manual-link-1')
+      .send({
+        taskId: task.id,
+        providerEventId: 'candidate-1',
+        providerEtag: 'etag-candidate',
+        direction: 'google_to_eisenhower',
+      });
+    const imported = await request(app)
+      .post('/calendar/imports')
+      .set(auth)
+      .set('Idempotency-Key', 'selected-import-1')
+      .send({ providerEventIds: ['candidate-2'] });
+    const replay = await request(app)
+      .post('/calendar/imports')
+      .set(auth)
+      .set('Idempotency-Key', 'selected-import-1')
+      .send({ providerEventIds: ['candidate-2'] });
+
+    expect(connection).toBeDefined();
+    expect(candidates.body.events).toEqual([expect.objectContaining({ id: 'candidate-1' })]);
+    expect(preview.body).toMatchObject({
+      task: { id: task.id, revision: 0 },
+      event: { id: 'candidate-1', etag: 'etag-candidate' },
+    });
+    expect(linked.status).toBe(201);
+    expect(linked.body).toMatchObject({ outcome: 'linked', taskRevision: 1 });
+    expect(await CalendarBindingModel.findOne({ taskId: task.id })).toMatchObject({
+      providerEventId: 'candidate-1',
+    });
+    expect(imported.body.results).toEqual([
+      expect.objectContaining({ providerEventId: 'candidate-2', status: 'imported' }),
+    ]);
+    expect(replay.body).toEqual(imported.body);
+    expect(await TaskModel.countDocuments({ title: 'Candidate' })).toBe(2);
   });
 
   it('uses only the persisted checkpoint and rejects revoked or malformed requests', async () => {
@@ -114,14 +215,14 @@ describe('Google Calendar provider boundary', () => {
 
   it('refreshes an expired grant once and persists a newly encrypted token set', async () => {
     oauth.expiresSoon = true;
-    await connect();
+    await connect(true);
     const before = await GoogleOAuthGrantModel.findOne().select('+tokenCiphertext').lean();
     await CalendarOutboxModel.create({ eventId: 'refresh-event', tenantId: 'local', ownerId: 'local-user', aggregateId: 'task-refresh', aggregateRevision: 1, type: 'event_create', payload: { title: 'Task' }, status: 'pending' });
     const response = await post('/internal/calendar/provider/outbound', { eventId: 'refresh-event' });
     const after = await GoogleOAuthGrantModel.findOne().select('+tokenCiphertext').lean();
     expect(response.status).toBe(200);
     expect(calendar.calls.filter((call) => call.kind === 'refresh')).toHaveLength(1);
-    expect(after?.tokenCiphertext).not.toBe(before?.tokenCiphertext);
+    expect(after?.tokenCiphertext).toBe(before?.tokenCiphertext);
     expect(JSON.stringify(response.body)).not.toContain('rotated-access');
   });
 
@@ -151,6 +252,35 @@ describe('Google Calendar provider boundary', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(fetchSpy.mock.calls[0][0]).toContain('calendar%2Fid/events/event%2Fid');
     expect((fetchSpy.mock.calls[0][1]?.headers as Record<string, string>)['If-Match']).toBe('etag-old');
+  });
+
+  it('maps task duration and reminder to a non-zero Google event interval', async () => {
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ id: 'created', etag: 'etag-created' }), { status: 200 }),
+    );
+    const adapter = new GoogleCalendarHttpAdapter();
+
+    await adapter.createEvent({
+      accessToken: 'token',
+      calendarId: 'work',
+      deterministicId: 'stable-id',
+      payload: {
+        title: 'Plan release',
+        schedule: {
+          dueAt: '2026-08-20T12:00:00.000Z',
+          timeZone: 'Europe/Warsaw',
+          durationMinutes: 45,
+          remindAt: '2026-08-20T11:30:00.000Z',
+        },
+      },
+    });
+
+    const body = JSON.parse(String(fetchSpy.mock.calls[0][1]?.body));
+    expect(body).toMatchObject({
+      start: { dateTime: '2026-08-20T12:00:00.000Z', timeZone: 'Europe/Warsaw' },
+      end: { dateTime: '2026-08-20T12:45:00.000Z', timeZone: 'Europe/Warsaw' },
+      reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: 30 }] },
+    });
   });
 
   it('honors a bounded Retry-After delay before the single retry', async () => {

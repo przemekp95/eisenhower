@@ -171,6 +171,10 @@ describe('calendar integration boundary', () => {
   });
 
   it('writes a schedule mutation and its outbound event atomically', async () => {
+    await CalendarConnectionModel.create({
+      tenantId: 'local', ownerId: 'local-user', provider: 'google', calendarId: 'primary',
+      credentialRef: 'n8n:credential:calendar-local', status: 'active',
+    });
     const task = await TaskModel.create({ title: 'Schedule me' });
     const response = await request(app).put(`/tasks/${task.id}/schedule`)
       .set('Authorization', 'Bearer test-api-token')
@@ -667,6 +671,56 @@ describe('calendar integration boundary', () => {
     await expect(new CalendarApplicationService().applyInbound({
       ...base, operationId: 'direct-checkpoint-missing', kind: 'sync_checkpoint',
     })).resolves.toMatchObject({ outcome: 'rejected', reason: 'checkpoint_token_missing' });
+  });
+
+  it('requires an explicit idempotent decision after Google deletes a bound event', async () => {
+    const connection = await CalendarConnectionModel.create({
+      tenantId: 'local', ownerId: 'local-user', provider: 'google', calendarId: 'primary',
+      credentialRef: 'reference', status: 'active',
+    });
+    const createDeletedBinding = async (title: string) => {
+      const task = await TaskModel.create({
+        title,
+        schedule: {
+          dueAt: new Date('2026-08-20T12:00:00.000Z'),
+          timeZone: 'Europe/Warsaw',
+          durationMinutes: 30,
+        },
+      });
+      const binding = await CalendarBindingModel.create({
+        tenantId: 'local', ownerId: 'local-user', connectionId: connection._id,
+        taskId: task._id, providerEventId: `event-${title}`, providerEtag: 'etag-deleted',
+        lastTaskRevision: 0, lastProviderRevision: 'etag-deleted', providerDeletedAt: new Date(),
+      });
+      return { task, binding };
+    };
+    const clear = await createDeletedBinding('clear');
+    const recreate = await createDeletedBinding('recreate');
+    const detach = await createDeletedBinding('detach');
+
+    const listed = await request(app).get('/calendar/deleted-bindings')
+      .set('Authorization', 'Bearer test-api-token');
+    expect(listed.status).toBe(200);
+    expect(listed.body).toHaveLength(3);
+
+    const decide = (id: string, strategy: string, key: string) => request(app)
+      .post(`/calendar/deleted-bindings/${id}/resolve`)
+      .set('Authorization', 'Bearer test-api-token')
+      .set('If-Match', '"0"')
+      .set('Idempotency-Key', key)
+      .send({ strategy });
+    expect((await decide(clear.binding.id, 'clear_date', 'deletion-clear')).body.outcome).toBe('clear_date');
+    expect((await decide(recreate.binding.id, 'recreate', 'deletion-recreate')).body.outcome).toBe('recreate');
+    expect((await decide(detach.binding.id, 'detach', 'deletion-detach')).body.outcome).toBe('detach');
+    expect((await decide(detach.binding.id, 'detach', 'deletion-detach')).body.outcome).toBe('detach');
+
+    expect((await TaskModel.findById(clear.task.id))?.schedule).toBeUndefined();
+    expect(await CalendarBindingModel.findById(clear.binding.id)).toBeNull();
+    expect(await CalendarBindingModel.findById(detach.binding.id)).toBeNull();
+    expect((await TaskModel.findById(detach.task.id))?.schedule).toBeDefined();
+    expect(await CalendarOutboxModel.findOne({ aggregateId: recreate.task.id })).toMatchObject({
+      type: 'event_create', status: 'pending',
+    });
   });
 
   it('validates public sync preconditions and reports pending calendar status', async () => {
