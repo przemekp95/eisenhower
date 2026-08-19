@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -82,6 +83,13 @@ def main() -> int:
     help="Explicit isolated candidate Qdrant base URL.",
   )
   parser.add_argument(
+    "--reranker-url",
+    help=(
+      "Optional pinned private reranker base URL; credentials are read only from "
+      "EISENHOWER_RERANKER_API_KEY."
+    ),
+  )
+  parser.add_argument(
     "--golden", type=Path,
     default=PROJECT_ROOT / "evaluation" / "retrieval-v1" / "review-candidate-v1.jsonl",
   )
@@ -92,6 +100,8 @@ def main() -> int:
     snapshot_output=snapshot_path,
     mongo_uri=args.mongo_uri,
     qdrant_url=args.qdrant_url,
+    reranker_url=args.reranker_url,
+    reranker_api_key=os.environ.get("EISENHOWER_RERANKER_API_KEY"),
   )
   report = build_ragops_report(retrieval)
   manifest = register_ragops_candidate(

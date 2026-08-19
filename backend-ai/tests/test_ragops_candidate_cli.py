@@ -36,6 +36,19 @@ def test_ragops_candidate_requires_explicit_store_endpoints(tmp_path):
   assert "--qdrant-url" in completed.stderr
 
 
+def test_ragops_cli_can_use_the_pinned_private_reranker_runtime():
+  completed = subprocess.run(
+    [sys.executable, str(SCRIPT), "--help"],
+    cwd=REPOSITORY_ROOT,
+    text=True,
+    capture_output=True,
+    check=True,
+  )
+
+  assert "--reranker-url" in completed.stdout
+  assert "EISENHOWER_RERANKER_API_KEY" in completed.stdout
+
+
 def test_ragops_report_maps_runtime_dataset_version_to_registry_contract():
   retrieval = {
     "ingestion": {"accepted": 19, "pending": 0},
