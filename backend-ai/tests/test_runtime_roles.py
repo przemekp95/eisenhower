@@ -49,11 +49,15 @@ def test_rocm_response_image_is_hardened_pinned_and_built_for_both_response_role
   dockerfile = (ROOT / "backend-ai" / "Dockerfile.response-rocm").read_text(encoding="utf-8")
   provider = (ROOT / "deploy" / "inference" / "compose.amd.yaml").read_text(encoding="utf-8")
 
-  assert "vllm/vllm-openai-rocm@sha256:5709fafe47123becb2f5e61c32d0b97beff1a629bb40bb753c15464f69a97a18" in dockerfile
-  assert "apt-get upgrade -y" in dockerfile
-  assert "pip uninstall -y PyGObject" in dockerfile
+  assert "cgr.dev/chainguard/python@sha256:91418fa26adfd56d959d80e5da0d7470b5653e4f00ba698ef5d8212e58e3f7f8" in dockerfile
+  assert "torch==2.13.0+rocm7.2" in (ROOT / "backend-ai/requirements-response-rocm.txt").read_text()
+  assert "requirements-response-rocm.txt" in dockerfile
+  assert "libatomic" in dockerfile
+  assert "USER 65532:65532" in dockerfile
+  assert "app.response_runtime" in dockerfile
+  assert "vllm/vllm-openai-rocm" not in dockerfile
+  assert "flash-attn" not in dockerfile
   assert "python -m pip check" in dockerfile
-  assert 'ENTRYPOINT ["vllm", "serve"]' in dockerfile
   assert provider.count("AMD_RESPONSE_IMAGE") == 2
   assert "AMD_INFERENCE_IMAGE" not in provider
   assert "AMD_RERANKER_IMAGE" not in provider

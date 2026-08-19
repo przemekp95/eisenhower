@@ -1,20 +1,34 @@
-FROM vllm/vllm-openai-rocm@sha256:5709fafe47123becb2f5e61c32d0b97beff1a629bb40bb753c15464f69a97a18 AS response
+FROM cgr.dev/chainguard/python@sha256:91418fa26adfd56d959d80e5da0d7470b5653e4f00ba698ef5d8212e58e3f7f8 AS dependencies
+
+USER root
+COPY backend-ai/requirements-response-rocm.txt /tmp/requirements-response-rocm.txt
+RUN --mount=type=cache,target=/root/.cache/pip mkdir -p /opt/python \
+    && python -m pip install --target=/opt/python \
+      --requirement /tmp/requirements-response-rocm.txt \
+    && PYTHONPATH=/opt/python python -m pip check
+
+FROM cgr.dev/chainguard/python@sha256:91418fa26adfd56d959d80e5da0d7470b5653e4f00ba698ef5d8212e58e3f7f8 AS response
 
 ARG RELEASE_SHA
 LABEL org.opencontainers.image.revision=$RELEASE_SHA \
-      eisenhower.runtime.role=response-vllm-rocm \
-      org.opencontainers.image.base.digest=sha256:5709fafe47123becb2f5e61c32d0b97beff1a629bb40bb753c15464f69a97a18
+      eisenhower.runtime.role=response-transformers-rocm \
+      org.opencontainers.image.base.digest=sha256:91418fa26adfd56d959d80e5da0d7470b5653e4f00ba698ef5d8212e58e3f7f8
 
-RUN apt-get update \
-    && apt-get upgrade -y \
-    && rm -rf /var/lib/apt/lists/* \
-    && python -m pip uninstall -y PyGObject \
-    && python -m pip install --no-cache-dir --upgrade \
-      cryptography==50.0.0 \
-      h2==4.4.1 \
-      jaraco.context==6.1.0 \
-      setuptools==79.0.1 \
-      wheel==0.46.3 \
-    && python -m pip check
+USER root
+RUN apk add --no-cache libatomic
+COPY --from=dependencies /opt/python /opt/python
+COPY backend-ai/app/__init__.py /app/app/__init__.py
+COPY backend-ai/app/response_runtime.py /app/app/response_runtime.py
 
-ENTRYPOINT ["vllm", "serve"]
+ENV PYTHONPATH=/app:/opt/python \
+    LD_LIBRARY_PATH=/opt/python/torch/lib \
+    HF_HOME=/models/huggingface \
+    HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1 \
+    TOKENIZERS_PARALLELISM=false \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+WORKDIR /app
+USER 65532:65532
+
+ENTRYPOINT ["python", "-m", "app.response_runtime"]

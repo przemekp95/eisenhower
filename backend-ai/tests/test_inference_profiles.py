@@ -63,11 +63,21 @@ def test_amd_generation_and_reranking_share_one_exact_release_image_without_host
   assert "--tokenizer-revision" in services["inference"]["command"]
   assert "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e" in services["reranker"]["command"]
   assert services["inference"]["volumes"] == [
-    "inference_model_cache:/root/.cache/huggingface:ro"
+    "inference_model_cache:/models/huggingface:ro"
   ]
   assert services["reranker"]["volumes"] == [
-    "reranker_model_cache:/root/.cache/huggingface:ro"
+    "reranker_model_cache:/models/huggingface:ro"
   ]
+  assert services["inference"]["group_add"] == ["video", "render"]
+  assert services["reranker"]["group_add"] == ["video", "render"]
+  for service_name in ("inference", "reranker"):
+    service = services[service_name]
+    assert service["read_only"] is True
+    assert service["cap_drop"] == ["ALL"]
+    assert service["security_opt"] == ["no-new-privileges:true"]
+    assert service["tmpfs"] == ["/tmp:rw,noexec,nosuid,size=64m"]
+    assert "ipc" not in service
+    assert "cap_add" not in service
   assert payload["volumes"] == {
     "inference_model_cache": {
       "external": True,
