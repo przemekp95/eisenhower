@@ -56,7 +56,7 @@ run_reconcile() {
     -v "$runtime_dir:/reconcile" \
     -v "$root_dir/n8n:/repo-n8n:ro" \
     -v "$root_dir/n8n/workflows:/workflows:ro" \
-    n8nio/n8n:2.4.6 false
+    n8nio/n8n:2.4.6
 }
 
 run_reconcile
