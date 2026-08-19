@@ -6,12 +6,18 @@ canonical `compose.yaml`, forces `APP_ENV=production` and `AUTH_MODE=oidc`, and
 verifies the running OCI revision labels before recording the active manifest.
 
 The target host must provide a private environment file and an explicit
-`.eisenhower-deployment` ownership marker. Provider runtimes are independent:
-start either `deploy/inference/compose.amd.yaml` or
-`deploy/inference/compose.nvidia.yaml` separately and expose only the three-value
-`INFERENCE_BASE_URL`, `INFERENCE_API_KEY`, `INFERENCE_ALLOWED_HOSTS` contract to
-the application network. The AMD generator and reranker use the same scanned,
-exact-SHA `backend-ai-response-rocm` digest with distinct pinned model commands.
+`.eisenhower-deployment` ownership marker. Passing a third
+`PRIVATE_RAG_ACTIVATION_RECEIPT` enables the private AMD provider profile.
+`verify-private-rag.sh` first binds that receipt to the release SHA, response
+image digest, corpus manifest, candidate collection, explicit cohort, enabled
+generation/response flags and disabled MAG/memory/public-release state. The AMD
+generator and reranker use the same scanned exact-SHA
+`backend-ai-response-rocm` digest with distinct pinned model commands and
+separate required Hugging Face cache volumes mounted read-only. Neither service
+publishes a host port, and the knowledge service waits for both authenticated
+provider health checks before starting. Deployments without the third argument
+keep the provider profile disabled and continue to use only the provider-neutral
+`INFERENCE_BASE_URL`, `INFERENCE_API_KEY`, `INFERENCE_ALLOWED_HOSTS` contract.
 n8n, Prometheus and Grafana are each mandatory private
 services in that canonical graph; their consoles are exposed only at
 `/admin/n8n/`, `/admin/prometheus/` and `/admin/grafana/` through the gateway's

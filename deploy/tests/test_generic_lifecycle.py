@@ -103,6 +103,31 @@ def test_deploy_rejects_removed_optional_profile_argument(tmp_path):
   assert not (tmp_path / "docker.log").exists()
 
 
+def test_private_rag_deploy_rejects_activation_receipt_release_sha_drift_before_docker(tmp_path):
+  host, env_file = _host(tmp_path)
+  candidate = tmp_path / "candidate.json"
+  receipt = tmp_path / "activation.json"
+  _manifest(candidate, "2" * 40, "b")
+  receipt.write_text(json.dumps({
+    "schema_version": "private-rag-activation-v1",
+    "source_git_sha": "3" * 40,
+  }))
+  receipt.chmod(0o600)
+  env = _fake_docker(tmp_path)
+  env["EISENHOWER_DEPLOY_ROOT"] = str(host)
+
+  result = subprocess.run(
+    [DEPLOY, candidate, env_file, receipt],
+    env=env,
+    text=True,
+    capture_output=True,
+  )
+
+  assert result.returncode != 0
+  assert "activation receipt release SHA mismatch" in result.stderr
+  assert not (tmp_path / "docker.log").exists()
+
+
 def test_deploy_maps_the_scanned_response_digest_for_the_private_provider_stack(tmp_path):
   host, env_file = _host(tmp_path)
   candidate = tmp_path / "candidate.json"

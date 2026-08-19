@@ -50,6 +50,16 @@ services:
     mem_limit: ${INFERENCE_MEMORY_LIMIT:?calibrated inference memory limit is required}
     cpus: ${INFERENCE_CPU_LIMIT:?calibrated inference CPU limit is required}
     pids_limit: ${INFERENCE_PID_LIMIT:?calibrated inference PID limit is required}
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:8000/v1/models',headers={'Authorization':'Bearer '+os.environ['VLLM_API_KEY']}); urllib.request.urlopen(r,timeout=5)"
+      interval: 30s
+      timeout: 10s
+      start_period: 600s
+      retries: 5
 
   reranker:
     <<: *amd
@@ -83,6 +93,23 @@ services:
     mem_limit: ${RERANKER_MEMORY_LIMIT:?calibrated reranker memory limit is required}
     cpus: ${RERANKER_CPU_LIMIT:?calibrated reranker CPU limit is required}
     pids_limit: ${RERANKER_PID_LIMIT:?calibrated reranker PID limit is required}
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:8000/v1/models',headers={'Authorization':'Bearer '+os.environ['VLLM_API_KEY']}); urllib.request.urlopen(r,timeout=5)"
+      interval: 30s
+      timeout: 10s
+      start_period: 600s
+      retries: 5
+
+  knowledge-service:
+    depends_on:
+      inference:
+        condition: service_healthy
+      reranker:
+        condition: service_healthy
 
 networks:
   application:

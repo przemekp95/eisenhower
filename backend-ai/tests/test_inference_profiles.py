@@ -78,6 +78,12 @@ def test_amd_generation_and_reranking_share_one_exact_release_image_without_host
       "name": "${RERANKER_MODEL_CACHE_VOLUME:?reranker model cache volume is required}",
     },
   }
+  assert services["knowledge-service"]["depends_on"] == {
+    "inference": {"condition": "service_healthy"},
+    "reranker": {"condition": "service_healthy"},
+  }
+  assert "healthcheck" in services["inference"]
+  assert "healthcheck" in services["reranker"]
 
 
 def test_rocm_response_dockerfile_exposes_an_exact_sha_release_target():
