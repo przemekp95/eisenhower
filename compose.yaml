@@ -63,11 +63,21 @@ services:
       - sh
       - -c
       - >-
-        chown 1001:1001 /audit && chmod 0770 /audit &&
+        chown 65532:65532 /audit && chmod 0770 /audit &&
+        chown 65532:65532 /rag-jobs && chmod 0770 /rag-jobs &&
+        chown 65532:65532 /model-cache && chmod 0770 /model-cache &&
+        chown 65532:65532 /classifier-runtime && chmod 0770 /classifier-runtime &&
+        chown 65532:65532 /knowledge-runtime && chmod 0770 /knowledge-runtime &&
+        chown 65532:65532 /ingest-runtime && chmod 0770 /ingest-runtime &&
         find /audit -maxdepth 1 -type f -name 'audit.sqlite3*'
-        -exec chown 1000:1001 {} + -exec chmod 0600 {} +
+        -exec chown 65532:65532 {} + -exec chmod 0600 {} +
     volumes:
       - audit_data:/audit
+      - rag_jobs:/rag-jobs
+      - model_cache:/model-cache
+      - classifier_runtime:/classifier-runtime
+      - knowledge_runtime:/knowledge-runtime
+      - ingest_runtime:/ingest-runtime
 
   backup-volume-helper:
     <<: *common
@@ -114,6 +124,9 @@ services:
     <<: *common
     image: ${AI_BOUNDARY_IMAGE:?AI_BOUNDARY_IMAGE must be a versioned tag or digest}
     group_add: ["1001"]
+    depends_on:
+      audit-volume-init:
+        condition: service_completed_successfully
     environment:
       - APP_ENV=${APP_ENV:?APP_ENV is required}
       - AUTH_MODE=${AUTH_MODE:?AUTH_MODE is required}
@@ -141,6 +154,9 @@ services:
     <<: *common
     image: ${AI_CLASSIFIER_IMAGE:?AI_CLASSIFIER_IMAGE must be a versioned tag or digest}
     group_add: ["1001"]
+    depends_on:
+      audit-volume-init:
+        condition: service_completed_successfully
     environment:
       - APP_ENV=${APP_ENV:?APP_ENV is required}
       - AUTH_MODE=${AUTH_MODE:?AUTH_MODE is required}
@@ -299,6 +315,14 @@ services:
   rag-worker:
     <<: *common
     image: ${AI_INGEST_IMAGE:?AI_INGEST_IMAGE must be a versioned tag or digest}
+    group_add: ["1001"]
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      audit-volume-init:
+        condition: service_completed_successfully
     command: ["python", "-m", "app.worker_runtime"]
     init: true
     environment:
@@ -560,6 +584,8 @@ services:
         condition: service_started
       identity-service:
         condition: service_started
+      audit-volume-init:
+        condition: service_completed_successfully
     environment:
       - MCP_TRANSPORT=streamable-http
       - MCP_HOST=0.0.0.0
