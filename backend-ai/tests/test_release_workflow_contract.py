@@ -77,3 +77,20 @@ def test_release_builds_each_ai_role_from_the_role_specific_target():
     assert f"target: {target}" in workflow
   assert "target: knowledge-production" not in workflow
   assert "target: api-boundary" not in workflow
+
+
+def test_release_scans_and_publishes_the_exact_rocm_response_image():
+  workflow = ROOT.joinpath(".github/workflows/release.yml").read_text(encoding="utf-8")
+
+  assert "name: backend-ai-response-rocm" in workflow
+  assert "dockerfile: ./backend-ai/Dockerfile.response-rocm" in workflow
+  assert "tag: eisenhower-ai-response-rocm" in workflow
+  assert "target: response" in workflow
+  assert "backend-ai-response-rocm|eisenhower-ai-response-rocm" in workflow
+  assert "test \"$(jq '.images | length' \"$manifest\")\" -eq 8" in workflow
+
+  response_entry = workflow.index("          - name: backend-ai-response-rocm")
+  next_entry = workflow.index("          - name:", response_entry + 12)
+  response_matrix = workflow[response_entry:next_entry]
+  assert "require_torch: false" in response_matrix
+  assert "require_torchvision: false" in response_matrix

@@ -57,7 +57,61 @@ export function workflowFingerprint(workflow) {
     .digest('hex');
 }
 
-export async function loadDesiredWorkflows(workflowDir, { ragCredentialId, ragReady }) {
+export function validateRagReadiness(receipt, expected) {
+  if (!receipt || Array.isArray(receipt) || typeof receipt !== 'object') {
+    throw new Error('RAG readiness receipt must be an object');
+  }
+  if (!expected || Object.values(expected).some((value) => !value)) {
+    throw new Error('RAG readiness expected identity is incomplete');
+  }
+  if (receipt.schema_version !== 'private-rag-live-readiness-v1' || receipt.status !== 'ready') {
+    throw new Error('RAG readiness receipt schema or status is invalid');
+  }
+  if (!Number.isFinite(Date.parse(receipt.checked_at))) {
+    throw new Error('RAG readiness checked_at is invalid');
+  }
+  if (receipt.release_sha !== expected.releaseSha) {
+    throw new Error('RAG readiness release SHA mismatch');
+  }
+  if (receipt.corpus_manifest_sha256 !== expected.manifestSha256) {
+    throw new Error('RAG readiness corpus manifest mismatch');
+  }
+  if (receipt.collection?.name !== expected.collection) {
+    throw new Error('RAG readiness collection mismatch');
+  }
+  if (receipt.response_candidate_id !== expected.responseCandidateId) {
+    throw new Error('RAG readiness response candidate mismatch');
+  }
+  if (
+    receipt.collection.canonical_documents < 1
+    || receipt.collection.projection_points < 1
+    || receipt.collection.reconciled !== true
+  ) {
+    throw new Error('RAG readiness corpus projection is not reconciled');
+  }
+  if (receipt.generator?.healthy !== true || receipt.reranker?.healthy !== true) {
+    throw new Error('RAG readiness response providers are not healthy');
+  }
+  if (
+    receipt.memory?.write !== false
+    || receipt.memory?.retrieval !== false
+    || receipt.memory?.response !== false
+  ) {
+    throw new Error('RAG readiness memory must remain disabled');
+  }
+  if (receipt.mag_mode !== 'disabled' || receipt.public_release !== false) {
+    throw new Error('RAG readiness MAG and public release must remain disabled');
+  }
+  return true;
+}
+
+export async function loadDesiredWorkflows(
+  workflowDir,
+  { ragCredentialId, ragReadiness, readinessExpected },
+) {
+  const ragReady = ragReadiness === undefined
+    ? false
+    : validateRagReadiness(ragReadiness, readinessExpected);
   if (ragReady && !ragCredentialId) {
     throw new Error('RAG Header Auth credential ID is required when RAG workflows are enabled');
   }
@@ -134,9 +188,20 @@ async function main() {
     if (!args[required]) throw new Error(`--${required} is required`);
   }
 
+  const readinessPath = args['rag-readiness-receipt'];
+  const ragReadiness = readinessPath
+    ? JSON.parse(await readFile(readinessPath, 'utf8'))
+    : undefined;
+  const readinessExpected = ragReadiness === undefined ? undefined : {
+    collection: args['rag-collection'],
+    manifestSha256: args['rag-manifest-sha256'],
+    releaseSha: args['release-sha'],
+    responseCandidateId: args['rag-response-candidate-id'],
+  };
   const desired = await loadDesiredWorkflows(args.workflows, {
     ragCredentialId: args['rag-credential-id'],
-    ragReady: args['rag-ready'] === 'true',
+    ragReadiness,
+    readinessExpected,
   });
   const exported = JSON.parse(await readFile(args.current, 'utf8'));
   const current = Array.isArray(exported) ? exported : [exported];

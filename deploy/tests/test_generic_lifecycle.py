@@ -14,7 +14,7 @@ BACKUP = ROOT / "deploy" / "generic" / "backup.sh"
 RESTORE = ROOT / "deploy" / "generic" / "restore.sh"
 IMAGE_NAMES = (
   "backend-ai-boundary", "backend-ai-classifier", "backend-ai-knowledge",
-  "backend-ai-ingest", "backend-node", "mcp", "web",
+  "backend-ai-ingest", "backend-ai-response-rocm", "backend-node", "mcp", "web",
 )
 
 
@@ -51,7 +51,7 @@ set -eu
 printf '%s\\n' \"$*\" >> \"{log}\"
 previous=''
 for arg in \"$@\"; do
-  if [ \"$previous\" = '--env-file' ]; then grep -E '^(RELEASE_SHA|WEB_IMAGE)=' \"$arg\" >> \"{log}\" || true; fi
+  if [ \"$previous\" = '--env-file' ]; then grep -E '^(RELEASE_SHA|WEB_IMAGE|AMD_RESPONSE_IMAGE)=' \"$arg\" >> \"{log}\" || true; fi
   previous=$arg
 done
 case \" $* \" in
@@ -101,6 +101,46 @@ def test_deploy_rejects_removed_optional_profile_argument(tmp_path):
 
   assert result.returncode != 0
   assert not (tmp_path / "docker.log").exists()
+
+
+def test_private_rag_deploy_rejects_activation_receipt_release_sha_drift_before_docker(tmp_path):
+  host, env_file = _host(tmp_path)
+  candidate = tmp_path / "candidate.json"
+  receipt = tmp_path / "activation.json"
+  _manifest(candidate, "2" * 40, "b")
+  receipt.write_text(json.dumps({
+    "schema_version": "private-rag-activation-v1",
+    "source_git_sha": "3" * 40,
+  }))
+  receipt.chmod(0o600)
+  env = _fake_docker(tmp_path)
+  env["EISENHOWER_DEPLOY_ROOT"] = str(host)
+
+  result = subprocess.run(
+    [DEPLOY, candidate, env_file, receipt],
+    env=env,
+    text=True,
+    capture_output=True,
+  )
+
+  assert result.returncode != 0
+  assert "activation receipt release SHA mismatch" in result.stderr
+  assert not (tmp_path / "docker.log").exists()
+
+
+def test_deploy_maps_the_scanned_response_digest_for_the_private_provider_stack(tmp_path):
+  host, env_file = _host(tmp_path)
+  candidate = tmp_path / "candidate.json"
+  _manifest(candidate, "2" * 40, "b")
+  env = _fake_docker(tmp_path)
+  env["EISENHOWER_DEPLOY_ROOT"] = str(host)
+
+  subprocess.run([DEPLOY, candidate, env_file], env=env, text=True, capture_output=True)
+  log = (tmp_path / "docker.log").read_text()
+  assert (
+    "AMD_RESPONSE_IMAGE=registry.example/backend-ai-response-rocm@sha256:"
+    f"{'b' * 64}"
+  ) in log
 
 
 def test_backup_is_checksummed_and_restore_requires_explicit_confirmation(tmp_path):

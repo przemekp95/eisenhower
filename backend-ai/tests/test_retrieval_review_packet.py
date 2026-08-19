@@ -14,6 +14,7 @@ from app.rag.human_review import build_review_template
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 EVALUATION_ROOT = REPOSITORY_ROOT / "backend-ai/evaluation/retrieval-v1"
 V3_VERSION = "retrieval-review-candidate-v3-unapproved"
+V4_VERSION = "retrieval-review-candidate-v4-unapproved"
 
 
 def _generate_candidate(output: Path, version: str) -> None:
@@ -95,7 +96,7 @@ def test_v3_expands_only_train_and_dev_and_preserves_holdout_semantics(tmp_path)
       assert all(case.answerability == "no_answer" for case in slice_cases if {"no-hit", "acl-denial"} & set(case.tags))
 
 
-def test_v3_human_review_template_is_hash_bound_and_fully_pending(tmp_path):
+def test_v3_candidate_remains_reproducible_but_review_binding_is_historical(tmp_path):
   candidate = tmp_path / "candidate-v3.jsonl"
   _generate_candidate(candidate, V3_VERSION)
   review = build_review_template(
@@ -112,4 +113,29 @@ def test_v3_human_review_template_is_hash_bound_and_fully_pending(tmp_path):
   assert review["thresholds_decision"] == "PENDING"
   assert review["reviewer_attestation"] == "PENDING"
   assert candidate.read_bytes() == (EVALUATION_ROOT / "review-candidate-v3.jsonl").read_bytes()
-  assert review == json.loads((EVALUATION_ROOT / "human-review-v3.json").read_bytes())
+  historical = json.loads((EVALUATION_ROOT / "human-review-v3.json").read_bytes())
+  assert historical["candidate_sha256"] == review["candidate_sha256"]
+  assert historical["corpus_manifest_sha256"] != review["corpus_manifest_sha256"]
+  assert historical["corpus_snapshot_sha256"] != review["corpus_snapshot_sha256"]
+
+
+def test_v4_preserves_v3_cases_and_rebinds_current_content_versions(tmp_path):
+  candidate = tmp_path / "candidate-v4.jsonl"
+  _generate_candidate(candidate, V4_VERSION)
+  v4 = load_golden_dataset(candidate)
+  v3 = load_golden_dataset(EVALUATION_ROOT / "review-candidate-v3.jsonl")
+
+  assert [case.case_id for case in v4] == [case.case_id for case in v3]
+  assert {case.dataset_version for case in v4} == {V4_VERSION}
+  assert all(case.corpus_version == "eisenhower-corpus-v1" for case in v4)
+
+  review = build_review_template(
+    candidate,
+    EVALUATION_ROOT / "review-candidate-v1-thresholds.json",
+    REPOSITORY_ROOT / "docs/ai-rebuild/corpus-manifest-v1.json",
+  )
+  assert review["candidate_sha256"] == sha256(candidate.read_bytes()).hexdigest()
+  assert {decision["outcome"] for decision in review["decisions"]} == {"PENDING"}
+  assert review["independent_human_review"] is False
+  assert candidate.read_bytes() == (EVALUATION_ROOT / "review-candidate-v4.jsonl").read_bytes()
+  assert review == json.loads((EVALUATION_ROOT / "human-review-v4.json").read_bytes())

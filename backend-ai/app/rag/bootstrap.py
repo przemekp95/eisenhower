@@ -18,7 +18,12 @@ from .adapters import (
 )
 from .application import RagAnalysisService
 from .canonical import CanonicalIngestionApplication, CanonicalRetriever
-from .hybrid import CanonicalBm25Retriever, HybridRetriever, PrivateVllmReranker
+from .hybrid import (
+  CanonicalBm25Retriever,
+  HybridRetriever,
+  PrivateVllmReranker,
+  RetrievalConfidencePolicy,
+)
 from .llamaindex_engine import LlamaIndexChunkingEngine
 from .qdrant_llamaindex import LlamaIndexQdrantProjection
 from .mongo_document_store import MongoCanonicalDocumentStore
@@ -128,6 +133,7 @@ def build_rag_service(
       reranker=reranker,
       reranker_candidate_limit=20,
       reranker_weight=1.0,
+      confidence_policy=RetrievalConfidencePolicy(),
     )
 
   retriever = with_strategy(dense_retriever)

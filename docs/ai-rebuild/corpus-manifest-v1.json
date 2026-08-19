@@ -1,14 +1,30 @@
 {
   "manifest_version": "eisenhower-corpus-v1",
-  "approved_at": "2026-08-12",
-  "review_by": "2026-11-10",
-  "approval_evidence": "Repository owner granted full-scope local approval in the Codex task; the unchanged 19-file allowlist was refrozen on 2026-08-12 after the reviewed delivery, security and evaluation documents changed.",
+  "approved_at": "2026-08-19",
+  "review_by": "2026-11-17",
+  "approval_evidence": "Repository owner explicitly authorized the checksum-bound 19-file repository corpus for private single-turn RAG retrieval and response in TASK-065 on 2026-08-19; this does not attest independent review of evaluation labels.",
+  "approval_scope": {
+    "tenant_id": "eisenhower-owner",
+    "project_ids": [
+      "eisenhower"
+    ],
+    "response_user_ids": [
+      "f226f9de-1c01-4a36-9eb3-77f3313e3456"
+    ],
+    "retrieval": true,
+    "single_turn_response": true,
+    "mag": false,
+    "memory_write": false,
+    "memory_retrieval": false,
+    "memory_response": false,
+    "public_release": false
+  },
   "use_case": "Retrieve cited project constraints, decisions, procedures, runbooks and active delivery context relevant to task prioritization.",
   "initial_snapshot": {
     "algorithm": "sha256(sorted newline-separated sha256sum records)",
-    "sha256": "2994f809649d3dd155faf09419557de7af70c7a77dae9aa4d3cf67f717ac70a8",
+    "sha256": "35fc904bf027f4074821bbc1d4ef1e16a7b3806c1953085b3ac35db11071f609",
     "document_count": 19,
-    "total_bytes": 142721,
+    "total_bytes": 136496,
     "documents": [
       "README.md",
       "docs/PRODUCTION_ACCEPTANCE.md",
@@ -29,6 +45,103 @@
       "docs/ai-rebuild/recruitment-readiness.md",
       "docs/ai-rebuild/security-review.md",
       "docs/ai-rebuild/testing-evaluation.md"
+    ],
+    "records": [
+      {
+        "path": "README.md",
+        "sha256": "07cff2e4e0607aef37bfb874b7adb11d2149b75be8f1efababe48b1a7116d7b5",
+        "bytes": 21328
+      },
+      {
+        "path": "docs/PRODUCTION_ACCEPTANCE.md",
+        "sha256": "d921e0012de9db2076dab3e6f7da89804381df98250607f21ae245c818eac772",
+        "bytes": 7878
+      },
+      {
+        "path": "docs/ai-rebuild/README.md",
+        "sha256": "0e81333931b8f96941067d1390eababb4825afc382f9783e3d296e724830272a",
+        "bytes": 9975
+      },
+      {
+        "path": "docs/ai-rebuild/adr/0001-fastapi-owns-online-rag.md",
+        "sha256": "71028defe99e48b0d483f3ed32a1a3c8d798ef766d222e31acfc47859c38b6fd",
+        "bytes": 1012
+      },
+      {
+        "path": "docs/ai-rebuild/adr/0002-qdrant-vector-store.md",
+        "sha256": "dd89701af9bacc54a117b124bfc68cd9952efc520bc686aa782e2b3c9dca8812",
+        "bytes": 1750
+      },
+      {
+        "path": "docs/ai-rebuild/adr/0003-vllm-generation-adapter.md",
+        "sha256": "42e221c31321a41e64b86eead4fc0f18a815e528a950affe4f773a8e307d7bc6",
+        "bytes": 2256
+      },
+      {
+        "path": "docs/ai-rebuild/adr/0004-n8n-async-only.md",
+        "sha256": "083a30e7ffa9c8e05ac7c5a8054a00d04b28e559da5192a2c52c66cbda7d8a25",
+        "bytes": 1934
+      },
+      {
+        "path": "docs/ai-rebuild/adr/0005-read-only-mcp.md",
+        "sha256": "af010c012f661419b156aa11eddf582e2ec8c175bebaf0689e8d98db20ed2b43",
+        "bytes": 1361
+      },
+      {
+        "path": "docs/ai-rebuild/adr/0006-light-command-query-split.md",
+        "sha256": "ac7cc8e0fd597df0559dd9213cbe660ed9e1c5326768b7631cb5924741f305f8",
+        "bytes": 1882
+      },
+      {
+        "path": "docs/ai-rebuild/adr/0007-ai-framework-boundary.md",
+        "sha256": "ec56396cebd587133bf917bef91c11c998822e2d31e258f4391209b7dc3188a5",
+        "bytes": 8818
+      },
+      {
+        "path": "docs/ai-rebuild/adr/README.md",
+        "sha256": "5f3ef296599d794415b897922a8c8f811a8c7467cf6a63e9b0693d4d1bc74b2b",
+        "bytes": 1559
+      },
+      {
+        "path": "docs/ai-rebuild/corpus-contract.md",
+        "sha256": "9b1dffedbddbe9ee9218d5e94e695f80bcb18a3bd8a1b0b058e2400e827ef8c1",
+        "bytes": 7801
+      },
+      {
+        "path": "docs/ai-rebuild/delivery-roadmap.md",
+        "sha256": "47003f9c953ddab060caa82e4dee227390e2a01b3133bf998af56202113d6522",
+        "bytes": 18994
+      },
+      {
+        "path": "docs/ai-rebuild/methodology-assessment.md",
+        "sha256": "9ba8e942be6bfbf9b2fb80012181912158cacb253b7ba04392cacd7fb731f81a",
+        "bytes": 6942
+      },
+      {
+        "path": "docs/ai-rebuild/operations.md",
+        "sha256": "4a9251107dd9b857c404dc6c3b5c3ffc21f393d3e77d9e23d9ae86a33ec01f2e",
+        "bytes": 8104
+      },
+      {
+        "path": "docs/ai-rebuild/prompt-engineering.md",
+        "sha256": "d4c2ae861bf2dc4dbf78cdb2792d90c946e8a79cedefed550b2a97151a6b6904",
+        "bytes": 6159
+      },
+      {
+        "path": "docs/ai-rebuild/recruitment-readiness.md",
+        "sha256": "69d5dc1ccc0cd9e0019e66986c1ecd98631ed0fe0af5e87229e6d64c58e7e555",
+        "bytes": 9665
+      },
+      {
+        "path": "docs/ai-rebuild/security-review.md",
+        "sha256": "34e1b080968d10fb7f3ccfc5885c47229f63dbac4f9ff6ed4aa41c370b8d093a",
+        "bytes": 10844
+      },
+      {
+        "path": "docs/ai-rebuild/testing-evaluation.md",
+        "sha256": "b073332986b76d36a8b97c7631eed04ed3d736c8e39ef572ff5c87b06ca489a4",
+        "bytes": 8234
+      }
     ]
   },
   "incremental_sources": [
@@ -47,7 +160,12 @@
     },
     {
       "root": "corpus/approved-documents",
-      "extensions": [".pdf", ".docx", ".pptx", ".html"],
+      "extensions": [
+        ".pdf",
+        ".docx",
+        ".pptx",
+        ".html"
+      ],
       "source_type": "project_context",
       "revision_rule": "per-file SHA-256, reviewed extraction checksum and monotonically increasing source_sequence"
     }
@@ -55,7 +173,11 @@
   "identity_and_acl": {
     "initial_tenant": "eisenhower-owner",
     "identity_source": "verified bearer or OIDC principal; fixed identity only in synthetic tests",
-    "required_subjects": ["tenant", "user", "project"],
+    "required_subjects": [
+      "tenant",
+      "user",
+      "project"
+    ],
     "cross_tenant_access": false,
     "request_payload_may_expand_scope": false
   },
@@ -81,8 +203,18 @@
       "remote_services": false,
       "external_plugins": false
     },
-    "primary_formats": ["pdf", "docx", "pptx", "html"],
-    "fallback_formats": ["pdf", "docx", "pptx", "html"],
+    "primary_formats": [
+      "pdf",
+      "docx",
+      "pptx",
+      "html"
+    ],
+    "fallback_formats": [
+      "pdf",
+      "docx",
+      "pptx",
+      "html"
+    ],
     "fallback_reasons": [
       "PRIMARY_UNSUPPORTED_LAYOUT",
       "PRIMARY_QUALITY_BELOW_APPROVED_THRESHOLD"
@@ -97,14 +229,19 @@
       "unapproved OCR"
     ],
     "ocr_enabled": true,
-    "ocr_languages": ["pl", "en"],
+    "ocr_languages": [
+      "pl",
+      "en"
+    ],
     "ocr_requires_human_approval": true,
     "ocr_approvals": [
       {
         "approval_id": "task018-synthetic-ocr-owner-approval-2026-08-10",
         "approver_id": "eisenhower-repository-owner",
         "content_sha256": "e592a5a9da2abbc47f95ec5868754f84d0c6fa584af3a289ef16763343bc9f79",
-        "languages": ["en"],
+        "languages": [
+          "en"
+        ],
         "policy_version": "eisenhower-corpus-v1"
       }
     ],
@@ -141,6 +278,7 @@
     "historic quadrant 1/2 data not migrated and reviewed",
     "unreviewed OCR"
   ],
-  "deployment_authorized": false,
+  "deployment_authorized": true,
+  "deployment_scope": "private local runtime only; final activation additionally requires an exact-SHA private activation receipt",
   "publication_authorized": false
 }
