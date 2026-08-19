@@ -19,6 +19,7 @@ from app.ops.private_rag_activation import (
 
 NOW = datetime(2026, 8, 19, 12, 0, tzinfo=UTC)
 USER_ID = "f226f9de-1c01-4a36-9eb3-77f3313e3456"
+ALTERNATE_USER_ID = "a35c57d4-00bc-43aa-9d5b-c3bde96e00a5"
 GIT_SHA = "a" * 40
 IMAGE_DIGEST = "registry.example/eisenhower-ai-response-rocm@sha256:" + "b" * 64
 
@@ -120,6 +121,19 @@ def test_receipt_binds_final_sha_manifest_models_cohort_and_disabled_memory(tmp_
   assert receipt.projection_point_count == 118
 
 
+def test_receipt_binds_one_explicit_runtime_owner_uuid_without_a_source_hardcode(tmp_path):
+  receipt = build_private_rag_activation(
+    _inputs(tmp_path, approval_updates={"response_users": [ALTERNATE_USER_ID]}),
+    now=NOW,
+  )
+
+  assert receipt.response_users == (ALTERNATE_USER_ID,)
+  verifier = (Path(__file__).parents[2] / "deploy/generic/verify-private-rag.sh").read_text()
+  assert USER_ID not in verifier
+  assert ".response_users | length == 1" in verifier
+  assert "jq -er '.response_users[0]'" in verifier
+
+
 def test_receipt_rejects_manifest_drift_and_dirty_git(tmp_path):
   inputs = _inputs(tmp_path)
   inputs.corpus_manifest.write_text("drift\n", encoding="utf-8")
@@ -138,7 +152,9 @@ def test_receipt_rejects_manifest_drift_and_dirty_git(tmp_path):
     ({"valid_until": (NOW + timedelta(days=31)).isoformat()}, "thirty days"),
     ({"tenant_id": "other"}, "tenant"),
     ({"project_ids": ["other"]}, "project"),
-    ({"response_users": ["other"]}, "response user"),
+    ({"response_users": ["other"]}, "response_users"),
+    ({"response_users": []}, "response_users"),
+    ({"response_users": [USER_ID, ALTERNATE_USER_ID]}, "response_users"),
     ({"memory": {"write": True, "retrieval": False, "response": False}}, "memory"),
     ({"mag_mode": "canary"}, "mag_mode"),
     ({"public_release_authorized": True}, "public_release_authorized"),

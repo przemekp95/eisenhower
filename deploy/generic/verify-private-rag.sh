@@ -36,7 +36,8 @@ test "$(sha256sum "$manifest_path" | awk '{print $1}')" = "$(jq -er '.corpus_man
 jq -e '
   .tenant_id == "eisenhower-owner"
   and .project_ids == ["eisenhower"]
-  and .response_users == ["f226f9de-1c01-4a36-9eb3-77f3313e3456"]
+  and (.response_users | length == 1)
+  and (.response_users[0] | test("^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$"))
   and .memory == {"write":false,"retrieval":false,"response":false}
   and .mag_mode == "disabled"
   and .public_release_authorized == false
@@ -61,7 +62,7 @@ test "$(env_value MEMORY_WRITE_ENABLED)" = false
 test "$(env_value MEMORY_RETRIEVAL_ENABLED)" = false
 test "$(env_value MEMORY_RESPONSE_ENABLED)" = false
 test "$(env_value RAG_ALLOWED_TENANTS)" = eisenhower-owner
-test "$(env_value RAG_RESPONSE_ALLOWED_USERS)" = f226f9de-1c01-4a36-9eb3-77f3313e3456
+test "$(env_value RAG_RESPONSE_ALLOWED_USERS)" = "$(jq -er '.response_users[0]' "$receipt")"
 test "$(env_value LLAMAINDEX_CANDIDATE_COLLECTION)" = "$(jq -er '.collection' "$receipt")"
 test "$(env_value INFERENCE_MODEL)" = "$(jq -er '.models.generator.name' "$receipt")"
 test "$(env_value INFERENCE_MODEL_REVISION)" = "$(jq -er '.models.generator.revision' "$receipt")"

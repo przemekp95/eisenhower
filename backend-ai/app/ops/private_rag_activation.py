@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 import json
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -14,11 +14,12 @@ from app.artifacts.registry import ArtifactConflictError, write_private_bytes
 
 APPROVED_TENANT = "eisenhower-owner"
 APPROVED_PROJECTS = ("eisenhower",)
-APPROVED_RESPONSE_USERS = ("f226f9de-1c01-4a36-9eb3-77f3313e3456",)
 AUTOMATED_APPROVERS = {"automation", "bot", "ci", "self", "system", "unknown"}
 SHA256_PATTERN = r"^[a-f0-9]{64}$"
 GIT_SHA_PATTERN = r"^[a-f0-9]{40}$"
 IMAGE_DIGEST_PATTERN = r"^.+@sha256:[a-f0-9]{64}$"
+UUID_PATTERN = r"^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$"
+ResponseUserId = Annotated[str, Field(pattern=UUID_PATTERN)]
 
 
 class ActivationBlocked(ValueError):
@@ -81,7 +82,7 @@ class OwnerPrivateRagApproval(_StrictModel):
   answer_report_sha256: str = Field(pattern=SHA256_PATTERN)
   tenant_id: str
   project_ids: tuple[str, ...]
-  response_users: tuple[str, ...]
+  response_users: tuple[ResponseUserId, ...] = Field(min_length=1, max_length=1)
   collection: str = Field(min_length=1, max_length=128)
   canonical_document_count: int = Field(gt=0)
   projection_point_count: int = Field(gt=0)
@@ -109,7 +110,7 @@ class PrivateRagActivationReceipt(_StrictModel):
   answer_report_sha256: str = Field(pattern=SHA256_PATTERN)
   tenant_id: Literal["eisenhower-owner"]
   project_ids: tuple[Literal["eisenhower"], ...]
-  response_users: tuple[Literal["f226f9de-1c01-4a36-9eb3-77f3313e3456"], ...]
+  response_users: tuple[ResponseUserId, ...] = Field(min_length=1, max_length=1)
   collection: str
   canonical_document_count: int
   projection_point_count: int
@@ -184,8 +185,6 @@ def build_private_rag_activation(
     raise ActivationBlocked("owner approval tenant is not allowlisted")
   if approval.project_ids != APPROVED_PROJECTS:
     raise ActivationBlocked("owner approval project scope is not allowlisted")
-  if approval.response_users != APPROVED_RESPONSE_USERS:
-    raise ActivationBlocked("owner approval response user scope is not allowlisted")
   if not approval.collection.endswith("-candidate"):
     raise ActivationBlocked("owner approval collection must remain an isolated candidate")
   if approval.models.generator.image_digest != approval.models.reranker.image_digest:

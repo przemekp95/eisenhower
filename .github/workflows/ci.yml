@@ -522,7 +522,12 @@ jobs:
       - name: Install Playwright system dependencies
         if: ${{ needs.resolve-run-mode.outputs.frontend_e2e == 'true' }}
         working-directory: web
-        run: npx playwright install-deps chromium
+        run: |
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+            grep -q 'archive\.ubuntu\.com' /etc/apt/apt-mirrors.txt
+          fi
+          npx playwright install-deps chromium
 
       - name: Install Playwright browser on cache miss
         if: ${{ needs.resolve-run-mode.outputs.frontend_e2e == 'true' && steps.playwright-cache.outputs.cache-hit != 'true' }}
@@ -644,6 +649,10 @@ jobs:
       - name: Install governed extraction system dependencies
         if: ${{ needs.resolve-run-mode.outputs.backend_ai == 'true' }}
         run: |
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+            grep -q 'archive\.ubuntu\.com' /etc/apt/apt-mirrors.txt
+          fi
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends tesseract-ocr tesseract-ocr-eng
 

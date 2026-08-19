@@ -25,7 +25,8 @@ describe('host-neutral deployment and release boundaries', () => {
     expect(compose).toContain('INFERENCE_BASE_URL=');
     expect(compose).toContain('INFERENCE_API_KEY=');
     expect(compose).toContain('INFERENCE_ALLOWED_HOSTS=');
-    expect(compose).not.toContain('INFERENCE_MODEL=');
+    expect(compose.match(/- INFERENCE_MODEL=/g)).toHaveLength(1);
+    expect(compose).toContain('- INFERENCE_MODEL=${INFERENCE_MODEL:-}');
     expect(gateway).toContain('location = /eisenhower/google-calendar/webhook');
     expect(gateway).toContain('location = /eisenhower/google-calendar/oauth/callback');
     for (const route of ['/admin/n8n/', '/admin/prometheus/', '/admin/grafana/']) {
