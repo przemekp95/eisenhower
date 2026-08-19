@@ -1,5 +1,7 @@
 # Completion log
 
+2026-08-19 — TASK-065 E2E promotion-gate follow-up: Updated browser journeys to the task-first Integrations and saved-task assistance IA, fixed focus restoration across an in-dialog task update, and isolated persisted E2E data across viewport projects. All 24 Playwright/Axe checks, web 244/244 at 100% coverage, build/format and a fresh full `make verify` passed without raising timeouts or weakening gates; exact-SHA promotion and private local deployment remain open.
+
 2026-08-19 — TASK-065 verification checkpoint: Closed stale Node/web expectations and added edge coverage without lowering gates; fresh `make verify` passed Node 276 and web 244 tests at 100% coverage, 21 BDD scenarios/149 steps, API client 34, MCP 50, n8n 18, web integration 2, AI 833 passed/13 skipped at 88.03%, mobile 202, production dependency audits, typecheck and pylint 10/10. Exact-SHA promotion and private local deployment remain open; corpus/generation/MAG/physical/traffic gates remain unclaimed.
 
 2026-08-19 — TASK-065 implementation checkpoint: Delivered task-first web IA, real idempotent bulk import, account/Keycloak controls, explicit Calendar duration/reminders/provider lifecycle, selected event import/manual linking/deletion decisions/immediate watch baseline, and RAG capability routing independent of classifier health. Focused web 113, API client 34, Node 156 and AI capability 3 checks plus builds pass; full verify, exact-SHA promotion and local deployment remain open, and corpus/generation/MAG/physical/traffic gates remain explicitly unclaimed.

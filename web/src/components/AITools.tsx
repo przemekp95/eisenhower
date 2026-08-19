@@ -41,6 +41,8 @@ export default function AITools({
   const capabilityRequestRef = useRef<AbortController | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const { t } = useLanguage();
 
   const refreshCapabilities = () => {
@@ -85,7 +87,7 @@ export default function AITools({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -124,7 +126,7 @@ export default function AITools({
         previouslyFocused.focus();
       }
     };
-  }, [onClose]);
+  }, []);
 
   const classificationAvailable = Boolean(capabilities?.classification);
   const knowledgeAvailable = Boolean(capabilities && hasKnowledgeCapability(capabilities));

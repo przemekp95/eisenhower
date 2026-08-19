@@ -149,6 +149,13 @@ describe('AITools task assistant', () => {
     close.focus();
     fireEvent.keyDown(window, { key: 'Tab' });
     expect(close).toHaveFocus();
+    opener.disabled = true;
+    view.rerender(
+      <LanguageProvider>
+        <AITools taskTitle="urgent roadmap" onClose={jest.fn()} />
+      </LanguageProvider>
+    );
+    opener.disabled = false;
     view.unmount();
     expect(opener).toHaveFocus();
     expect(document.body.style.overflow).toBe('');

@@ -30,7 +30,7 @@ test.beforeEach(async ({ page }) => {
       limit: 5,
     });
 
-    if (body.query === 'Question outside approved knowledge') {
+    if (String(body.query).startsWith('Question outside approved knowledge')) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -47,7 +47,7 @@ test.beforeEach(async ({ page }) => {
       return;
     }
 
-    expect(body.query).toBe('Prepare the incident review');
+    expect(body.query).toEqual(expect.stringMatching(/^Prepare the incident review /));
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -91,22 +91,23 @@ test.beforeEach(async ({ page }) => {
 test('renders a sourced answer with escaped citations on desktop and mobile', async ({ page }) => {
   test.setTimeout(60_000);
 
-  await page.getByPlaceholder('Task title').fill('Prepare the incident review');
+  const title = `Prepare the incident review ${Date.now()}`;
+  await page.getByPlaceholder('Task title').fill(title);
   await page.getByPlaceholder('Description').fill('Existing context');
-  const opener = page.getByRole('button', { name: 'Open task assistance', exact: true });
+  await page.getByRole('button', { name: 'Add task' }).click();
+  const opener = page.getByRole('button', { name: `Task help for ${title}`, exact: true });
   await opener.click();
 
   const assistant = page.getByRole('dialog', { name: 'Task assistance' });
   await expect(assistant.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
-  await expect(assistant.getByRole('tab', { name: 'Task help' })).toHaveAttribute(
-    'aria-selected',
-    'true'
-  );
+  await expect(assistant.getByRole('heading', { name: title, exact: true })).toBeVisible();
   await assistant.getByRole('button', { name: 'Check sources' }).click();
 
   await expect(page.getByText('Answer with sources', { exact: true })).toBeVisible();
   await expect(
-    page.getByText('The approved incident procedure requires an immediate review.')
+    assistant
+      .getByTestId('grounded-result')
+      .getByText('The approved incident procedure requires an immediate review.', { exact: true })
   ).toBeVisible();
   await expect(page.getByText('1 retrieved chunks')).toHaveCount(0);
   await expect(page.getByText('Index minilm-v1')).toHaveCount(0);
@@ -125,9 +126,14 @@ test('renders a sourced answer with escaped citations on desktop and mobile', as
     'Existing context\n\nThe approved incident procedure requires an immediate review.'
   );
   await page.getByRole('button', { name: 'Confirm description update' }).click();
-  await expect(page.getByPlaceholder('Description')).toHaveValue(
-    'Existing context\n\nThe approved incident procedure requires an immediate review.'
-  );
+  const taskCard = page.locator('article').filter({
+    has: page.getByRole('heading', { name: title, exact: true }),
+  });
+  await expect(
+    taskCard.getByText(
+      'Existing context\n\nThe approved incident procedure requires an immediate review.'
+    )
+  ).toBeVisible();
 
   const box = await assistant.boundingBox();
   const viewport = page.viewportSize();
@@ -141,8 +147,10 @@ test('renders a sourced answer with escaped citations on desktop and mobile', as
 });
 
 test('renders an honest no-answer without fabricated citations', async ({ page }) => {
-  await page.getByPlaceholder('Task title').fill('Question outside approved knowledge');
-  await page.getByRole('button', { name: 'Open task assistance', exact: true }).click();
+  const title = `Question outside approved knowledge ${Date.now()}`;
+  await page.getByPlaceholder('Task title').fill(title);
+  await page.getByRole('button', { name: 'Add task' }).click();
+  await page.getByRole('button', { name: `Task help for ${title}`, exact: true }).click();
   const assistant = page.getByRole('dialog', { name: 'Task assistance' });
   await assistant.getByRole('button', { name: 'Check sources' }).click();
 
