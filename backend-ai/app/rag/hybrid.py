@@ -30,6 +30,12 @@ _EVALUATED_RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
 _EVALUATED_RERANKER_REVISION = "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e"
 _EVALUATED_RERANKER_MODEL_ID = f"{_EVALUATED_RERANKER_MODEL}@{_EVALUATED_RERANKER_REVISION}"
 _EVALUATED_RERANKER_MAX_TOKENS = 192
+_SENSITIVE_VALUE_REQUEST = re.compile(
+  r"(?is)\b(?:what\s+is|show|return|provide|give\s+me|podaj|pokaż|jaki\s+jest|"
+  r"jaka\s+jest)\b.{0,120}\b(?:aws\s+access\s+key|access\s+key|api\s+key|"
+  r"administrator\s+password|database\s+password|private\s+password|pesel|"
+  r"credit\s+card\s+number|card\s+number|numer\s+karty(?:\s+płatniczej)?)\b"
+)
 
 
 class HybridRetrievalError(RuntimeError):
@@ -205,7 +211,7 @@ class HybridRetrievalCore:
       lexical_candidates,
       key=lambda item: (-lexical_scores[item.chunk_id], item.chunk_id, item.document_id),
     )
-    fused = self._fuse(dense_order, lexical_order)
+    fused = self._diversify_documents(self._fuse(dense_order, lexical_order))
     ranked = self._rerank(query.text, fused) if self.reranker is not None else fused
     return self._diversify_documents(ranked)[:query.limit]
 
@@ -573,6 +579,8 @@ class HybridRetriever:
     )
 
   def retrieve(self, query: RetrievalQuery) -> list[RetrievalHit]:
+    if _SENSITIVE_VALUE_REQUEST.search(query.text):
+      return []
     candidate_limit = min(20, max(query.limit, query.limit * self.candidate_multiplier))
     candidate_update = {"limit": candidate_limit}
     if self.confidence_policy is not None:
