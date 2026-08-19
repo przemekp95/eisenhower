@@ -20,6 +20,14 @@ export interface CalendarConflictResolutionCommand extends CalendarScope {
   strategy: 'eisenhower' | 'google';
 }
 
+export interface CalendarDeletionResolutionCommand extends CalendarScope {
+  operationId: string;
+  actorId: string;
+  bindingId: string;
+  expectedTaskRevision: number;
+  strategy: 'clear_date' | 'recreate' | 'detach';
+}
+
 export type CalendarInboundCommand =
   | (CalendarScope & { operationId: string; connectionId: string; kind: 'sync_token_gone' })
   | (CalendarScope & {
@@ -87,6 +95,114 @@ async function withReceipt(
 }
 
 export class CalendarApplicationService {
+  async resolveProviderDeletion(command: CalendarDeletionResolutionCommand) {
+    const digest = fingerprint({ ...command, kind: 'provider_deletion_resolution' });
+    const existing = await CalendarMutationReceiptModel.findOne({
+      tenantId: command.tenantId,
+      ownerId: command.ownerId,
+      operationId: command.operationId,
+    }).lean();
+    if (existing) {
+      if (existing.fingerprint !== digest) throw new Error('calendar_operation_reused');
+      return existing.result;
+    }
+
+    const session = await mongoose.startSession();
+    let result: Record<string, unknown> | undefined;
+    try {
+      await session.withTransaction(async () => {
+        const binding = await CalendarBindingModel.findOne({
+          _id: command.bindingId,
+          tenantId: command.tenantId,
+          ownerId: command.ownerId,
+          providerDeletedAt: { $exists: true },
+        }).session(session);
+        if (!binding) throw new Error('calendar_deleted_binding_not_found');
+        const task = await TaskModel.findOne({
+          _id: binding.taskId,
+          tenantId: command.tenantId,
+          ownerId: command.ownerId,
+        }).session(session);
+        if (!task) throw new Error('calendar_conflict_target_unavailable');
+        if ((task.revision ?? 0) !== command.expectedTaskRevision) {
+          throw new Error('calendar_task_revision_mismatch');
+        }
+
+        if (command.strategy === 'clear_date') {
+          task.schedule = undefined;
+          task.revision = (task.revision ?? 0) + 1;
+          await task.save({ session });
+          await binding.deleteOne({ session });
+        } else if (command.strategy === 'detach') {
+          await binding.deleteOne({ session });
+        } else {
+          if (!task.schedule) throw new Error('calendar_recreate_schedule_missing');
+          await CalendarOutboxModel.create(
+            [
+              {
+                eventId: `provider-deletion:${binding.id}:recreate:${task.revision ?? 0}`,
+                tenantId: command.tenantId,
+                ownerId: command.ownerId,
+                aggregateId: task.id,
+                aggregateRevision: task.revision ?? 0,
+                type: 'event_create',
+                payload: {
+                  taskId: task.id,
+                  title: task.title,
+                  lifecycleState: task.lifecycleState,
+                  schedule: task.schedule,
+                },
+                status: 'pending',
+              },
+            ],
+            { session },
+          );
+          binding.providerDeletedAt = undefined;
+          await binding.save({ session });
+        }
+
+        result = {
+          outcome: command.strategy,
+          taskId: task.id,
+          taskRevision: task.revision ?? 0,
+        };
+        await CalendarMutationReceiptModel.create(
+          [
+            {
+              tenantId: command.tenantId,
+              ownerId: command.ownerId,
+              operationId: command.operationId,
+              fingerprint: digest,
+              outcome: command.strategy,
+              result,
+            },
+          ],
+          { session },
+        );
+        await CalendarDomainAuditModel.create(
+          [
+            {
+              eventId: `provider-deletion:${command.bindingId}:${command.operationId}`,
+              tenantId: command.tenantId,
+              ownerId: command.ownerId,
+              actorId: command.actorId,
+              action: 'calendar.provider_deletion.resolve',
+              outcome: command.strategy,
+              resourceId: command.bindingId,
+              beforeRevision: command.expectedTaskRevision,
+              afterRevision: task.revision ?? 0,
+            },
+          ],
+          { session },
+        );
+      });
+      if (!result) throw new Error('calendar_provider_deletion_resolution_incomplete');
+      return result;
+    } finally {
+      await session.endSession();
+    }
+  }
+
   async applyInbound(command: CalendarInboundCommand) {
     return withReceipt(command, async (session) => {
       const scope = { tenantId: command.tenantId, ownerId: command.ownerId };

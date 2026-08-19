@@ -97,8 +97,10 @@ class QuadrantAIService:
     return {
       "classification": model_ready,
       "reasoned_local_analysis": model_ready,
-      "knowledge_retrieval": bool(self.settings.rag_retrieval_enabled and model_ready),
-      "retrieval_augmented_generation": bool(self.settings.rag_generation_enabled and model_ready),
+      "knowledge_retrieval": bool(self.settings.rag_retrieval_enabled),
+      "retrieval_augmented_generation": bool(
+        self.settings.rag_generation_enabled and self.settings.rag_response_enabled
+      ),
       "local_similar_examples": model_ready,
       "langchain_analysis": False,
       "ocr": tesseract_active,

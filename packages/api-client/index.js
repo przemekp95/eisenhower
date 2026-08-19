@@ -9,6 +9,10 @@ const CALENDAR_API_PATHS = Object.freeze({
   status: '/calendar/status',
   syncRequests: '/calendar/sync-requests',
   conflicts: '/calendar/conflicts',
+  deletedBindings: '/calendar/deleted-bindings',
+  events: '/calendar/events',
+  bindings: '/calendar/bindings',
+  imports: '/calendar/imports',
   oauthStart: '/calendar/oauth/start',
   oauthDisconnect: '/calendar/oauth/disconnect',
 });
@@ -702,6 +706,78 @@ function createTaskApi(baseUrl, optionsOrFetch) {
         invalidResponse: 'Calendar API returned an invalid response',
       });
     },
+    async listCalendarDeletedBindings() {
+      const response = await request(buildUrl(baseUrl, CALENDAR_API_PATHS.deletedBindings));
+      return readJson(response, {
+        defaultError: 'Calendar request failed',
+        errorCode: 'calendar_request_failed',
+        validate: (value) => Array.isArray(value) && value.every(isCalendarDeletedBindingDto),
+        invalidResponse: 'Calendar API returned an invalid response',
+      });
+    },
+    async resolveCalendarDeletedBinding(id, strategy, taskRevision, idempotencyKey) {
+      const response = await request(
+        buildUrl(baseUrl, `${CALENDAR_API_PATHS.deletedBindings}/${encodeURIComponent(id)}/resolve`),
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'If-Match': `"${taskRevision}"`,
+            'Idempotency-Key': idempotencyKey,
+          },
+          body: JSON.stringify({ strategy }),
+        }
+      );
+      return readJson(response, {
+        defaultError: 'Calendar request failed',
+        errorCode: 'calendar_request_failed',
+        validate: isCalendarDeletionResolutionDto,
+        invalidResponse: 'Calendar API returned an invalid response',
+      });
+    },
+    async listCalendarEvents(timeMin, timeMax) {
+      const query = new URLSearchParams({ timeMin, timeMax });
+      const response = await request(buildUrl(baseUrl, `${CALENDAR_API_PATHS.events}?${query}`));
+      return readJson(response, {
+        defaultError: 'Calendar request failed', errorCode: 'calendar_request_failed',
+        validate: (value) => isRecord(value) && Array.isArray(value.events) && value.events.every(isCalendarEventCandidateDto) && isOptional(value.nextPageToken, (item) => typeof item === 'string'),
+        invalidResponse: 'Calendar API returned an invalid response',
+      });
+    },
+    async previewCalendarLink(taskId, providerEventId) {
+      const response = await request(buildUrl(baseUrl, `${CALENDAR_API_PATHS.bindings}/preview`), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId, providerEventId }),
+      });
+      return readJson(response, {
+        defaultError: 'Calendar request failed', errorCode: 'calendar_request_failed',
+        validate: isCalendarLinkPreviewDto,
+        invalidResponse: 'Calendar API returned an invalid response',
+      });
+    },
+    async createCalendarLink(input) {
+      const response = await request(buildUrl(baseUrl, CALENDAR_API_PATHS.bindings), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'If-Match': `"${input.taskRevision}"`, 'Idempotency-Key': input.idempotencyKey },
+        body: JSON.stringify({ taskId: input.taskId, providerEventId: input.providerEventId, providerEtag: input.providerEtag, direction: input.direction }),
+      });
+      return readJson(response, {
+        defaultError: 'Calendar request failed', errorCode: 'calendar_request_failed',
+        validate: (value) => isRecord(value) && value.outcome === 'linked' && typeof value.taskId === 'string' && Number.isInteger(value.taskRevision),
+        invalidResponse: 'Calendar API returned an invalid response',
+      });
+    },
+    async importCalendarEvents(providerEventIds, idempotencyKey) {
+      const response = await request(buildUrl(baseUrl, CALENDAR_API_PATHS.imports), {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+        body: JSON.stringify({ providerEventIds }),
+      });
+      return readJson(response, {
+        defaultError: 'Calendar request failed', errorCode: 'calendar_request_failed',
+        validate: isCalendarImportResultDto,
+        invalidResponse: 'Calendar API returned an invalid response',
+      });
+    },
     async getHealth() {
       const response = await request(buildUrl(baseUrl, TASK_API_PATHS.health));
       return readJson(response, {
@@ -1078,6 +1154,59 @@ function isTaskDto(value) {
   );
 }
 
+function isCalendarDeletedBindingDto(value) {
+  return Boolean(
+    isRecord(value) &&
+      typeof value._id === 'string' &&
+      typeof value.taskId === 'string' &&
+      typeof value.taskTitle === 'string' &&
+      Number.isInteger(value.taskRevision) &&
+      typeof value.providerEventId === 'string' &&
+      typeof value.providerDeletedAt === 'string' &&
+      !Number.isNaN(Date.parse(value.providerDeletedAt))
+  );
+}
+
+function isCalendarEventCandidateDto(value) {
+  return Boolean(
+    isRecord(value) &&
+      ['id', 'etag', 'title', 'start', 'end', 'timeZone'].every((field) => typeof value[field] === 'string') &&
+      !Number.isNaN(Date.parse(value.start)) &&
+      !Number.isNaN(Date.parse(value.end))
+  );
+}
+
+function isCalendarLinkPreviewDto(value) {
+  return Boolean(
+    isRecord(value) && isRecord(value.task) && typeof value.task.id === 'string' &&
+      typeof value.task.title === 'string' && Number.isInteger(value.task.revision) &&
+      (value.task.schedule === null || isTaskScheduleDto(value.task.schedule)) &&
+      isCalendarEventCandidateDto(value.event) && isRecord(value.googleToEisenhower) &&
+      typeof value.googleToEisenhower.title === 'string' && isTaskScheduleDto(value.googleToEisenhower.schedule) &&
+      isRecord(value.eisenhowerToGoogle) && typeof value.eisenhowerToGoogle.title === 'string' &&
+      (value.eisenhowerToGoogle.schedule === null || isTaskScheduleDto(value.eisenhowerToGoogle.schedule))
+  );
+}
+
+function isCalendarImportResultDto(value) {
+  return Boolean(
+    isRecord(value) && Array.isArray(value.results) && value.results.every((item) =>
+      isRecord(item) && typeof item.providerEventId === 'string' &&
+      ['imported', 'duplicate', 'failed'].includes(item.status) &&
+      isOptional(item.taskId, (taskId) => typeof taskId === 'string') &&
+      isOptional(item.error, (error) => typeof error === 'string'))
+  );
+}
+
+function isCalendarDeletionResolutionDto(value) {
+  return Boolean(
+    isRecord(value) &&
+      ['clear_date', 'recreate', 'detach'].includes(value.outcome) &&
+      typeof value.taskId === 'string' &&
+      Number.isInteger(value.taskRevision)
+  );
+}
+
 function isCalendarStatusDto(value) {
   if (!isRecord(value) || !['disconnected', 'connected', 'pending'].includes(value.status)) {
     return false;
@@ -1139,12 +1268,16 @@ function isIanaTimezone(value) {
 }
 
 function isTaskScheduleDto(value) {
-  const scheduleFields = new Set(['dueAt', 'timeZone', 'remindAt']);
+  const scheduleFields = new Set(['dueAt', 'timeZone', 'remindAt', 'durationMinutes']);
   return Boolean(
     isRecord(value) &&
     Object.keys(value).every((field) => scheduleFields.has(field)) &&
     isUtcIsoInstant(value.dueAt) &&
     isIanaTimezone(value.timeZone) &&
+    isOptional(
+      value.durationMinutes,
+      (item) => Number.isInteger(item) && item >= 5 && item <= 1440
+    ) &&
     isOptional(
       value.remindAt,
       (item) => isUtcIsoInstant(item) && Date.parse(item) <= Date.parse(value.dueAt)

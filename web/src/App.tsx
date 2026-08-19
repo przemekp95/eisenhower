@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useRef, useState, useSyncExternalStore } from 're
 import LanguageSwitcher from './components/LanguageSwitcher';
 import Matrix from './components/Matrix';
 import CalendarSyncPanel from './components/CalendarSyncPanel';
+import AccountSecurityPanel from './components/AccountSecurityPanel';
 import {
   clearTokens,
   getAccessRejection,
@@ -37,6 +38,7 @@ import type {
 } from './types';
 
 type LoadState = 'loading' | 'ready' | 'offline' | 'error';
+type AppSection = 'tasks' | 'integrations' | 'account';
 type RequestError = Error & { status?: number; code?: string };
 
 function safeMessage(
@@ -154,6 +156,7 @@ function AppContent() {
   const [lastSyncedAt, setLastSyncedAt] = useState(() => new Date());
   const [lifecycleFilter, setLifecycleFilter] = useState<TaskLifecycleFilter>('active');
   const [taskView, setTaskView] = useState<TaskView>('owned');
+  const [activeSection, setActiveSection] = useState<AppSection>('tasks');
 
   const loadTasks = async (
     filter: TaskLifecycleFilter = lifecycleFilter,
@@ -290,16 +293,6 @@ function AppContent() {
               </h1>
               <p className="mt-1 max-w-2xl text-sm text-slate-300">{t('app.instruction')}</p>
             </div>
-            <nav aria-label={t('nav.account')} className="flex flex-wrap items-center gap-2">
-              <LanguageSwitcher />
-              <button
-                type="button"
-                onClick={() => clearTokens()}
-                className="min-h-11 rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/10"
-              >
-                {t('auth.logout')}
-              </button>
-            </nav>
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
@@ -348,42 +341,69 @@ function AppContent() {
           </div>
         </header>
 
-        <nav
-          aria-label={t('taskView.label')}
-          className="mb-3 flex w-fit gap-1 rounded-full border border-white/10 bg-white/5 p-1"
-        >
-          {(['owned', 'delegated'] as TaskView[]).map((view) => (
+        <nav aria-label={t('nav.sections')} className="mb-4 flex flex-wrap gap-2">
+          {(['tasks', 'integrations', 'account'] as AppSection[]).map((section) => (
             <button
-              key={view}
+              key={section}
               type="button"
-              aria-pressed={taskView === view}
-              onClick={() => setTaskView(view)}
-              className={`min-h-11 rounded-full px-4 py-2 text-sm ${
-                taskView === view ? 'bg-white text-slate-950' : 'text-white/70 hover:text-white'
+              aria-pressed={activeSection === section}
+              onClick={() => setActiveSection(section)}
+              className={`min-h-11 rounded-full px-4 py-2 text-sm font-semibold ${
+                activeSection === section
+                  ? 'bg-cyan-200 text-slate-950'
+                  : 'border border-white/10 bg-white/5 text-white/75 hover:bg-white/10'
               }`}
             >
-              {t(`taskView.${view}`)}
+              {t(`nav.${section}`)}
             </button>
           ))}
         </nav>
 
-        <Matrix
-          tasks={tasks}
-          loading={loadState === 'loading'}
-          onAddTask={handleAddTask}
-          onUpdateTask={handleUpdateTask}
-          onDeleteTask={handleDeleteTask}
-          lifecycleFilter={lifecycleFilter}
-          onLifecycleFilterChange={setLifecycleFilter}
-          onLifecycleTask={handleLifecycleTask}
-          onUpdateSchedule={handleUpdateSchedule}
-          taskView={taskView}
-          onUpdateDelegation={handleUpdateDelegation}
-          onDelegationStatus={handleDelegationStatus}
-        />
-        <div className="mt-4">
-          <CalendarSyncPanel />
-        </div>
+        {activeSection === 'tasks' ? (
+          <nav
+            aria-label={t('taskView.label')}
+            className="mb-3 flex w-fit gap-1 rounded-full border border-white/10 bg-white/5 p-1"
+          >
+            {(['owned', 'delegated'] as TaskView[]).map((view) => (
+              <button
+                key={view}
+                type="button"
+                aria-pressed={taskView === view}
+                onClick={() => setTaskView(view)}
+                className={`min-h-11 rounded-full px-4 py-2 text-sm ${
+                  taskView === view ? 'bg-white text-slate-950' : 'text-white/70 hover:text-white'
+                }`}
+              >
+                {t(`taskView.${view}`)}
+              </button>
+            ))}
+          </nav>
+        ) : null}
+
+        {activeSection === 'tasks' ? (
+          <Matrix
+            tasks={tasks}
+            loading={loadState === 'loading'}
+            onAddTask={handleAddTask}
+            onUpdateTask={handleUpdateTask}
+            onDeleteTask={handleDeleteTask}
+            lifecycleFilter={lifecycleFilter}
+            onLifecycleFilterChange={setLifecycleFilter}
+            onLifecycleTask={handleLifecycleTask}
+            onUpdateSchedule={handleUpdateSchedule}
+            taskView={taskView}
+            onUpdateDelegation={handleUpdateDelegation}
+            onDelegationStatus={handleDelegationStatus}
+          />
+        ) : null}
+        {activeSection === 'integrations' ? (
+          <div className="mt-4">
+            <CalendarSyncPanel />
+          </div>
+        ) : null}
+        {activeSection === 'account' ? (
+          <AccountSecurityPanel issuer={runtimeConfig.oidcIssuer} onLogout={() => clearTokens()} />
+        ) : null}
       </div>
     </main>
   );

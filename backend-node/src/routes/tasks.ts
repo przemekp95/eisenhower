@@ -92,7 +92,7 @@ const scheduleValidators = [
     if (!schedule || typeof schedule !== 'object' || Array.isArray(schedule)) {
       throw new Error('schedule must be an object or null');
     }
-    const fields = new Set(['dueAt', 'timeZone', 'remindAt']);
+    const fields = new Set(['dueAt', 'timeZone', 'remindAt', 'durationMinutes']);
     if (Object.keys(schedule).some((field) => !fields.has(field))) {
       throw new Error('Unexpected schedule field');
     }
@@ -106,6 +106,14 @@ const scheduleValidators = [
       new Intl.DateTimeFormat('en-US', { timeZone: schedule.timeZone }).format();
     } catch {
       throw new Error('timeZone must be a valid IANA timezone');
+    }
+    if (
+      schedule.durationMinutes !== undefined &&
+      (!Number.isInteger(schedule.durationMinutes) ||
+        schedule.durationMinutes < 5 ||
+        schedule.durationMinutes > 1440)
+    ) {
+      throw new Error('durationMinutes must be an integer between 5 and 1440');
     }
     if (schedule.remindAt !== undefined) {
       if (
@@ -463,6 +471,7 @@ export function createTasksRouter(repository: TaskRepository = new MongooseTaskR
           : {
               dueAt: new Date(req.body.schedule.dueAt),
               timeZone: req.body.schedule.timeZone,
+              durationMinutes: req.body.schedule.durationMinutes ?? 30,
               ...(req.body.schedule.remindAt
                 ? { remindAt: new Date(req.body.schedule.remindAt) }
                 : {}),

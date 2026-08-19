@@ -67,6 +67,7 @@ export default function TaskScheduleEditor({ task, onSave, readOnly = false }: P
   const [editing, setEditing] = useState(false);
   const [dueAt, setDueAt] = useState('');
   const [remindAt, setRemindAt] = useState('');
+  const [durationMinutes, setDurationMinutes] = useState(task.schedule?.durationMinutes ?? 30);
   const [timeZone, setTimeZone] = useState(
     task.schedule?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC'
   );
@@ -78,6 +79,7 @@ export default function TaskScheduleEditor({ task, onSave, readOnly = false }: P
     setTimeZone(zone);
     setDueAt(task.schedule ? instantToLocalInput(task.schedule.dueAt, zone) : '');
     setRemindAt(task.schedule?.remindAt ? instantToLocalInput(task.schedule.remindAt, zone) : '');
+    setDurationMinutes(task.schedule?.durationMinutes ?? 30);
     setError(null);
     setEditing(true);
   };
@@ -88,6 +90,7 @@ export default function TaskScheduleEditor({ task, onSave, readOnly = false }: P
       const schedule: TaskSchedule = {
         dueAt: localInputToUtc(dueAt, timeZone),
         timeZone,
+        durationMinutes,
         ...(remindAt ? { remindAt: localInputToUtc(remindAt, timeZone) } : {}),
       };
       if (schedule.remindAt && Date.parse(schedule.remindAt) > Date.parse(schedule.dueAt)) {
@@ -183,6 +186,19 @@ export default function TaskScheduleEditor({ task, onSave, readOnly = false }: P
               type="datetime-local"
               value={remindAt}
               onChange={(event) => setRemindAt(event.target.value)}
+              className="rounded-lg border border-white/15 bg-slate-950 px-2 py-1.5 text-white"
+            />
+          </label>
+          <label className="grid gap-1">
+            <span>{t('schedule.duration')}</span>
+            <input
+              type="number"
+              min={5}
+              max={1440}
+              step={5}
+              required
+              value={durationMinutes}
+              onChange={(event) => setDurationMinutes(Number(event.target.value))}
               className="rounded-lg border border-white/15 bg-slate-950 px-2 py-1.5 text-white"
             />
           </label>
