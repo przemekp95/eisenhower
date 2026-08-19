@@ -16,7 +16,13 @@ class _KnowledgeOnlyClassifier:
     raise RuntimeError("classifier is not available in the knowledge-only runtime")
 
   def capabilities(self):
-    return {"classification": False}
+    return {
+      "classification": False,
+      "reasoned_local_analysis": False,
+      "local_similar_examples": False,
+      "ocr": False,
+      "batch_analysis": False,
+    }
 
 
 def create_knowledge_runtime(
@@ -34,6 +40,7 @@ def create_knowledge_runtime(
     rag_service=rag_service,
   )
   allowed_paths = {
+    "/capabilities",
     "/health/live",
     "/metrics",
     "/v2/knowledge/search",

@@ -132,6 +132,15 @@ def test_application_uses_one_three_variable_inference_contract_and_external_pro
     assert not ({"web", "api-service", "ai-service", "mongodb", "qdrant", "n8n"} & set(provider_services))
 
 
+def test_ai_boundary_routes_capabilities_to_the_dedicated_knowledge_runtime():
+  environment = _compose()["services"]["ai-service"]["environment"]
+
+  assert (
+    "KNOWLEDGE_SERVICE_URL=${KNOWLEDGE_SERVICE_URL:-http://knowledge-service:8000}"
+    in environment
+  )
+
+
 def test_amd_provider_roles_use_the_same_release_bound_image():
   services = yaml.safe_load(PROVIDER_STACKS[0].read_text())["services"]
 
