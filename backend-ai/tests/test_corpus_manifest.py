@@ -4,7 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from app.rag.corpus_manifest import CorpusManifest, ManifestViolation, RepositoryCorpusConnector
+from app.rag.corpus_manifest import (
+  CorpusManifest,
+  ManifestViolation,
+  RepositoryCorpusConnector,
+  refresh_manifest_snapshot,
+)
 from app.rag.models import AccessScope
 
 
@@ -86,3 +91,41 @@ def test_connector_loads_allowlisted_incremental_markdown_with_caller_sequence(t
   assert loaded[0].source_type == "task"
   assert loaded[0].source_sequence == 9
   assert loaded[0].content_checksum == sha256(loaded[0].text.encode()).hexdigest()
+
+
+def test_refresh_manifest_snapshot_binds_every_allowlisted_source_without_expanding_scope(tmp_path):
+  (tmp_path / "a.md").write_text("alpha\n", encoding="utf-8")
+  (tmp_path / "b.md").write_text("beta\n", encoding="utf-8")
+  manifest_path = write_manifest(tmp_path, ["b.md", "a.md"], "0" * 64)
+
+  refreshed = refresh_manifest_snapshot(tmp_path, manifest_path)
+
+  snapshot_data = refreshed["initial_snapshot"]
+  assert snapshot_data["documents"] == ["a.md", "b.md"]
+  assert snapshot_data["document_count"] == 2
+  assert snapshot_data["total_bytes"] == 11
+  assert snapshot_data["sha256"] == snapshot(tmp_path, ["a.md", "b.md"])
+  assert snapshot_data["records"] == [
+    {
+      "path": "a.md",
+      "sha256": sha256(b"alpha\n").hexdigest(),
+      "bytes": 6,
+    },
+    {
+      "path": "b.md",
+      "sha256": sha256(b"beta\n").hexdigest(),
+      "bytes": 5,
+    },
+  ]
+
+
+def test_connector_rejects_per_source_record_drift_even_if_aggregate_is_rewritten(tmp_path):
+  (tmp_path / "safe.md").write_text("safe", encoding="utf-8")
+  manifest_path = write_manifest(tmp_path, ["safe.md"], snapshot(tmp_path, ["safe.md"]))
+  refreshed = refresh_manifest_snapshot(tmp_path, manifest_path)
+  refreshed["initial_snapshot"]["records"][0]["sha256"] = "0" * 64
+  manifest_path.write_text(json.dumps(refreshed), encoding="utf-8")
+
+  connector = RepositoryCorpusConnector(tmp_path, CorpusManifest.load(manifest_path))
+  with pytest.raises(ManifestViolation, match="source record"):
+    connector.load_initial(AccessScope(tenant_id="t", user_id="u"))
