@@ -33,6 +33,7 @@ build_release_env() {
   require_digest "$manifest" "$output" backend-ai-classifier AI_CLASSIFIER_IMAGE
   require_digest "$manifest" "$output" backend-ai-knowledge AI_KNOWLEDGE_IMAGE
   require_digest "$manifest" "$output" backend-ai-ingest AI_INGEST_IMAGE
+  require_digest "$manifest" "$output" backend-ai-response-rocm AMD_RESPONSE_IMAGE
   require_digest "$manifest" "$output" backend-node API_IMAGE
   require_digest "$manifest" "$output" mcp MCP_IMAGE
   require_digest "$manifest" "$output" web WEB_IMAGE

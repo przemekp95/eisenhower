@@ -132,6 +132,15 @@ def test_application_uses_one_three_variable_inference_contract_and_external_pro
     assert not ({"web", "api-service", "ai-service", "mongodb", "qdrant", "n8n"} & set(provider_services))
 
 
+def test_amd_provider_roles_use_the_same_release_bound_image():
+  services = yaml.safe_load(PROVIDER_STACKS[0].read_text())["services"]
+
+  assert services["inference"]["image"] == services["reranker"]["image"]
+  assert services["inference"]["image"].startswith("${AMD_RESPONSE_IMAGE:?")
+  assert not services["inference"].get("ports")
+  assert not services["reranker"].get("ports")
+
+
 def test_dev_and_prod_render_the_identical_service_graph():
   assert _graph(_render("development")) == _graph(_render("production"))
 

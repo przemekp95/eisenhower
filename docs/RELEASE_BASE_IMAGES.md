@@ -27,5 +27,6 @@ The backend Node and AI Dockerfiles are also release build inputs. They use the 
 ## Deliberate non-pins and remaining gaps
 
 - First-party release images are published only after the aggregate scan gate. `release-manifest.json` binds the exact master SHA to every registry RepoDigest and the checksums of its Trivy/SBOM evidence; `deploy/generic/deploy.sh` consumes those digests directly.
+- The eighth first-party image, `backend-ai-response-rocm`, is one scanned exact-SHA provider artifact reused by the private AMD generator and reranker with separate pinned commands; building it is not physical model qualification or deployment.
 - Infrastructure images in `compose.yaml` remain explicit environment inputs. Their digest qualification is separate from first-party image publication and must not be inferred from a successful application release.
 - `deploy/inference/compose.nvidia.yaml` and `compose.amd.yaml` remain standalone provider stacks. Their hardware/model qualification and immutable provider image selection are separate physical gates, not application release claims.

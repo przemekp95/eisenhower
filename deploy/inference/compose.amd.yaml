@@ -14,7 +14,7 @@ x-amd: &amd
 services:
   inference:
     <<: *amd
-    image: ${AMD_INFERENCE_IMAGE:?immutable AMD inference image digest is required}
+    image: ${AMD_RESPONSE_IMAGE:?immutable AMD response image digest is required}
     profiles: [inference-amd]
     expose: ["8000"]
     environment:
@@ -47,7 +47,7 @@ services:
 
   reranker:
     <<: *amd
-    image: ${AMD_RERANKER_IMAGE:?immutable AMD reranker image digest is required}
+    image: ${AMD_RESPONSE_IMAGE:?immutable AMD response image digest is required}
     profiles: [inference-amd]
     expose: ["8000"]
     environment:

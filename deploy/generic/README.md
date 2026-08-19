@@ -1,7 +1,7 @@
 # Generic immutable deployment
 
 `deploy.sh` is the only application deployment adapter. It consumes the audited
-`release-manifest.json`, maps the seven published repository digests into the
+`release-manifest.json`, maps the eight published repository digests into the
 canonical `compose.yaml`, forces `APP_ENV=production` and `AUTH_MODE=oidc`, and
 verifies the running OCI revision labels before recording the active manifest.
 
@@ -10,7 +10,9 @@ The target host must provide a private environment file and an explicit
 start either `deploy/inference/compose.amd.yaml` or
 `deploy/inference/compose.nvidia.yaml` separately and expose only the three-value
 `INFERENCE_BASE_URL`, `INFERENCE_API_KEY`, `INFERENCE_ALLOWED_HOSTS` contract to
-the application network. n8n, Prometheus and Grafana are each mandatory private
+the application network. The AMD generator and reranker use the same scanned,
+exact-SHA `backend-ai-response-rocm` digest with distinct pinned model commands.
+n8n, Prometheus and Grafana are each mandatory private
 services in that canonical graph; their consoles are exposed only at
 `/admin/n8n/`, `/admin/prometheus/` and `/admin/grafana/` through the gateway's
 Keycloak-backed `eisenhower-admin` role gate.

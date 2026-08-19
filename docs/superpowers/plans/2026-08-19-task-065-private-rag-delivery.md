@@ -29,12 +29,12 @@
 - Modify: `deploy/inference/compose.amd.yaml`
 - Modify: `backend-ai/Dockerfile.response-rocm`
 - Modify: `.github/workflows/release.yml`
-- Modify: `scripts/release-preflight.mjs`
+- Verify: `.github/scripts/release-preflight.mjs`
 - Modify: `deploy/generic/deploy.sh`
 - Test: `backend-ai/tests/test_inference_profiles.py`
 - Test: `deploy/tests/test_compose_contract.py`
 - Test: `backend-ai/tests/test_release_workflow_contract.py`
-- Test: `scripts/release-preflight.test.mjs`
+- Test: `.github/scripts/release-preflight.test.mjs`
 
 **Interfaces:**
 - Produces release image `backend-ai-response-rocm` with exact `org.opencontainers.image.revision`.
@@ -55,7 +55,7 @@ Add release-workflow assertions for an eighth first-party image, SBOM, all-sever
 
 - [ ] **Step 2: Run focused tests and verify RED**
 
-Run: `backend-ai/venv/bin/python -m pytest -q backend-ai/tests/test_inference_profiles.py backend-ai/tests/test_release_workflow_contract.py deploy/tests/test_compose_contract.py && node --test scripts/release-preflight.test.mjs`
+Run: `backend-ai/venv/bin/python -m pytest -q backend-ai/tests/test_inference_profiles.py backend-ai/tests/test_release_workflow_contract.py deploy/tests/test_compose_contract.py && node --test .github/scripts/release-preflight.test.mjs`
 
 Expected: FAIL because the response image is not part of the release manifest and the AMD profile accepts two independent image variables.
 
@@ -77,7 +77,7 @@ Expected: one private application network, no inference/reranker host ports, exa
 - [ ] **Step 5: Commit**
 
 ```bash
-git add deploy/inference/compose.amd.yaml backend-ai/Dockerfile.response-rocm .github/workflows/release.yml scripts/release-preflight.mjs scripts/release-preflight.test.mjs deploy/generic/deploy.sh backend-ai/tests/test_inference_profiles.py backend-ai/tests/test_release_workflow_contract.py deploy/tests/test_compose_contract.py
+git add deploy/inference/compose.amd.yaml backend-ai/Dockerfile.response-rocm .github/workflows/release.yml deploy/generic/deploy.sh backend-ai/tests/test_inference_profiles.py backend-ai/tests/test_release_workflow_contract.py deploy/tests/test_compose_contract.py
 git commit -m "feat(release): bind private response runtime"
 ```
 
