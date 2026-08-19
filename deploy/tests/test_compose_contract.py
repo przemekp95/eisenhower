@@ -161,10 +161,10 @@ def test_first_party_writers_wait_for_initialized_runtime_volumes():
     assert dependency == {"condition": "service_completed_successfully"}, name
 
 
-def test_runtime_volume_initializer_owns_every_non_root_writable_mount():
+def test_runtime_volume_initializer_owns_writable_mounts_and_exposes_promotion_read_only():
   initializer = _compose()["services"]["audit-volume-init"]
   destinations = {
-    mount.split(":", 1)[1]
+    mount["target"] if isinstance(mount, dict) else mount.split(":", 1)[1]
     for mount in initializer["volumes"]
   }
   command = " ".join(initializer["command"])
@@ -173,12 +173,17 @@ def test_runtime_volume_initializer_owns_every_non_root_writable_mount():
     "/audit",
     "/rag-jobs",
     "/model-cache",
+    "/promotion",
     "/classifier-runtime",
     "/knowledge-runtime",
     "/ingest-runtime",
   }
-  for destination in destinations:
+  for destination in destinations - {"/promotion"}:
     assert f"chown 65532:65532 {destination}" in command
+  assert "chgrp 1001 /promotion" in command
+  assert "chmod 2750 /promotion" in command
+  assert "chgrp 1001 /promotion/current.json" in command
+  assert "chmod 0640 /promotion/current.json" in command
   assert initializer["restart"] == "no"
   assert _compose()["services"]["rag-worker"]["group_add"] == ["1001"]
 

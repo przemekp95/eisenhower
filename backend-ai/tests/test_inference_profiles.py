@@ -17,6 +17,7 @@ def _services(name: str) -> dict:
 
 
 def test_base_compose_is_vendor_neutral_and_remote_endpoint_configurable():
+  compose = yaml.safe_load((ROOT / "compose.yaml").read_text())
   text = (ROOT / "compose.yaml").read_text()
 
   assert "ai-service-gpu:" not in text
@@ -25,7 +26,8 @@ def test_base_compose_is_vendor_neutral_and_remote_endpoint_configurable():
   assert "INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}" in text
   assert "INFERENCE_API_KEY=${INFERENCE_API_KEY:-}" in text
   assert "INFERENCE_ALLOWED_HOSTS=${INFERENCE_ALLOWED_HOSTS:-inference}" in text
-  assert "INFERENCE_MODEL=" not in text
+  knowledge_environment = compose["services"]["knowledge-service"]["environment"]
+  assert "INFERENCE_MODEL=${INFERENCE_MODEL:-}" in knowledge_environment
 
 
 def test_nvidia_and_amd_profiles_are_opt_in_private_and_version_pinned():
@@ -68,8 +70,9 @@ def test_amd_generation_and_reranking_share_one_exact_release_image_without_host
   assert services["reranker"]["volumes"] == [
     "reranker_model_cache:/models/huggingface:ro"
   ]
-  assert services["inference"]["group_add"] == ["video", "render"]
-  assert services["reranker"]["group_add"] == ["video", "render"]
+  expected_gpu_groups = ["${VIDEO_GROUP_ID:-44}", "${RENDER_GROUP_ID:-110}"]
+  assert services["inference"]["group_add"] == expected_gpu_groups
+  assert services["reranker"]["group_add"] == expected_gpu_groups
   for service_name in ("inference", "reranker"):
     service = services[service_name]
     assert service["read_only"] is True

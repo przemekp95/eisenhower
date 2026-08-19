@@ -3,7 +3,7 @@ name: eisenhower-inference-amd
 x-amd: &amd
   restart: unless-stopped
   networks: [application]
-  group_add: [video, render]
+  group_add: ["${VIDEO_GROUP_ID:-44}", "${RENDER_GROUP_ID:-110}"]
   devices:
     - /dev/kfd:/dev/kfd
     - /dev/dri:/dev/dri
