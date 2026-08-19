@@ -26,7 +26,11 @@ from app.rag.golden_runner import (
   RetrievalStrategyComparisonRunner,
   select_train_strategy,
 )
-from app.rag.hybrid import CanonicalBm25Retriever, HybridRetriever
+from app.rag.hybrid import (
+  CanonicalBm25Retriever,
+  HybridRetriever,
+  RetrievalConfidencePolicy,
+)
 from app.rag.llamaindex_engine import LlamaIndexChunkingEngine
 from app.rag.models import AccessScope
 from app.rag.mongo_document_store import MongoCanonicalDocumentStore
@@ -34,12 +38,16 @@ from app.rag.qdrant_llamaindex import LlamaIndexQdrantProjection
 from scripts.verify_qdrant_recovery import verify_candidate_collection_snapshot
 
 
-class PinnedMiniLMEmbedding:
-  version = "minilm-v1"
+RAGOPS_EMBEDDING_MODEL = "BAAI/bge-m3"
+RAGOPS_EMBEDDING_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
+RAGOPS_EMBEDDING_VERSION = "bge-m3-v1"
 
-  def __init__(self, model_name: str, revision: str):
+
+class PinnedMiniLMEmbedding:
+  def __init__(self, model_name: str, revision: str, *, version: str = "minilm-v1"):
     self.model_name = model_name
     self.revision = revision
+    self.version = version
     self.encoder = SentenceTransformer(model_name, revision=revision)
 
   def embed(self, texts: list[str]) -> list[list[float]]:
@@ -180,8 +188,9 @@ def run(
     chunking_version=f"llama-sentence-{chunk_size}-{chunk_overlap}-v1",
   )
   embedding = PinnedMiniLMEmbedding(
-    settings.local_model_name,
-    settings.local_model_revision,
+    RAGOPS_EMBEDDING_MODEL,
+    RAGOPS_EMBEDDING_REVISION,
+    version=RAGOPS_EMBEDDING_VERSION,
   )
   vector_size = len(embedding.embed(["dimension probe"])[0])
   suffix = uuid4().hex
@@ -311,6 +320,7 @@ def run(
         dense_rrf_weight=configuration["dense_rrf_weight"],
         lexical_rrf_weight=configuration["lexical_rrf_weight"],
         candidate_multiplier=configuration["candidate_multiplier"],
+        confidence_policy=RetrievalConfidencePolicy(),
       )
     train_cases = [case for case in cases if case.split == "train"]
     train_reports = {
@@ -376,6 +386,7 @@ def run(
           reranker=reranker,
           reranker_candidate_limit=candidate_limit,
           reranker_weight=reranker_weight,
+          confidence_policy=RetrievalConfidencePolicy(),
         )
         train_reports[name] = RetrievalGoldenRunner(
           candidate_retrievers[name]

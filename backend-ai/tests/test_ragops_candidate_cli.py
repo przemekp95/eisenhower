@@ -3,7 +3,12 @@ import subprocess
 import sys
 
 from scripts.run_ragops_candidate import build_ragops_report
-from scripts.run_retrieval_candidate import selected_candidate_evaluation
+from scripts.run_retrieval_candidate import (
+  RAGOPS_EMBEDDING_MODEL,
+  RAGOPS_EMBEDDING_REVISION,
+  RAGOPS_EMBEDDING_VERSION,
+  selected_candidate_evaluation,
+)
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -82,3 +87,14 @@ def test_ragops_evaluation_uses_selected_hybrid_not_dense_baseline():
   }
 
   assert selected_candidate_evaluation(comparison) == comparison["strategies"]["hybrid"]
+
+
+def test_ragops_uses_the_exact_production_bge_embedding_revision():
+  compose = (REPOSITORY_ROOT / "compose.yaml").read_text(encoding="utf-8")
+
+  assert RAGOPS_EMBEDDING_MODEL == "BAAI/bge-m3"
+  assert RAGOPS_EMBEDDING_REVISION == "5617a9f61b028005a4858fdac845db406aefb181"
+  assert RAGOPS_EMBEDDING_VERSION == "bge-m3-v1"
+  assert f"RAG_EMBEDDING_MODEL_NAME={RAGOPS_EMBEDDING_MODEL}" in compose
+  assert f"RAG_EMBEDDING_MODEL_REVISION={RAGOPS_EMBEDDING_REVISION}" in compose
+  assert f"EMBEDDING_VERSION={RAGOPS_EMBEDDING_VERSION}" in compose
