@@ -14,6 +14,13 @@ class ManifestViolation(ValueError):
   pass
 
 
+class SnapshotRecord(BaseModel):
+  model_config = ConfigDict(extra="forbid")
+  path: str = Field(..., min_length=1)
+  sha256: str = Field(..., pattern=r"^[a-f0-9]{64}$")
+  bytes: int = Field(..., ge=1)
+
+
 class Snapshot(BaseModel):
   model_config = ConfigDict(extra="forbid")
   algorithm: str
@@ -21,6 +28,7 @@ class Snapshot(BaseModel):
   document_count: int = Field(..., ge=1)
   total_bytes: int = Field(..., ge=1)
   documents: list[str]
+  records: list[SnapshotRecord] | None = None
 
 
 class DocumentPolicy(BaseModel):
@@ -70,6 +78,41 @@ def normalize_source_text(text: str) -> str:
   return "\n".join(line.rstrip() for line in text.split("\n")).strip()
 
 
+def refresh_manifest_snapshot(root: Path, manifest_path: Path) -> dict:
+  """Return a manifest rebound to the current bytes of its existing allowlist."""
+  root = root.resolve()
+  manifest = CorpusManifest.load(manifest_path)
+  RepositoryCorpusConnector(root, manifest)
+  records = []
+  snapshot_lines = []
+  for relative in sorted(manifest.initial_snapshot.documents):
+    candidate = root / relative
+    if candidate.is_symlink():
+      raise ManifestViolation("symlink sources are forbidden")
+    resolved = candidate.resolve()
+    if not resolved.is_relative_to(root) or not resolved.is_file():
+      raise ManifestViolation("source escapes the repository root")
+    raw = resolved.read_bytes()
+    if not raw:
+      raise ManifestViolation("empty sources are forbidden")
+    if len(raw) > manifest.document_policy.maximum_document_bytes:
+      raise ManifestViolation("source exceeds the document size limit")
+    digest = sha256(raw).hexdigest()
+    records.append({"path": relative, "sha256": digest, "bytes": len(raw)})
+    snapshot_lines.append(f"{digest}  {relative}\n")
+
+  data = json.loads(manifest_path.read_text(encoding="utf-8"))
+  data["initial_snapshot"] = {
+    **data["initial_snapshot"],
+    "sha256": sha256("".join(snapshot_lines).encode("utf-8")).hexdigest(),
+    "document_count": len(records),
+    "total_bytes": sum(item["bytes"] for item in records),
+    "documents": [item["path"] for item in records],
+    "records": records,
+  }
+  return data
+
+
 class RepositoryCorpusConnector:
   def __init__(self, root: Path, manifest: CorpusManifest):
     self.root = root.resolve()
@@ -88,6 +131,11 @@ class RepositoryCorpusConnector:
     records = []
     total_bytes = 0
     verified = []
+    expected_records = {
+      record.path: record for record in (self.manifest.initial_snapshot.records or [])
+    }
+    if expected_records and set(expected_records) != set(self.manifest.initial_snapshot.documents):
+      raise ManifestViolation("source records must cover the exact document allowlist")
     for relative in sorted(self.manifest.initial_snapshot.documents):
       candidate = self.root / relative
       if candidate.is_symlink():
@@ -101,6 +149,9 @@ class RepositoryCorpusConnector:
         raise ManifestViolation("source exceeds the document size limit")
       total_bytes += size
       digest = sha256(raw).hexdigest()
+      expected = expected_records.get(relative)
+      if expected is not None and (expected.sha256 != digest or expected.bytes != size):
+        raise ManifestViolation("source record does not match current bytes")
       records.append(f"{digest}  {relative}\n")
       verified.append((relative, raw))
     snapshot = sha256("".join(records).encode("utf-8")).hexdigest()

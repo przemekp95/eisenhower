@@ -1,4 +1,9 @@
-import { beginOidcLogin, buildAccountManagementUrl, completeOidcLogin } from './oidcSession';
+import {
+  beginOidcLogin,
+  buildAccountManagementUrl,
+  completeOidcLogin,
+  resetOidcLoginAttempt,
+} from './oidcSession';
 import { clearTokens, getApiToken } from './authSession';
 import { webcrypto } from 'node:crypto';
 import { TextEncoder } from 'node:util';
@@ -10,6 +15,7 @@ describe('OIDC Authorization Code with PKCE', () => {
   });
 
   afterEach(() => {
+    resetOidcLoginAttempt();
     clearTokens();
     sessionStorage.clear();
     jest.restoreAllMocks();
@@ -35,6 +41,80 @@ describe('OIDC Authorization Code with PKCE', () => {
     expect(target.searchParams.get('state')).toBeTruthy();
     expect(sessionStorage.getItem('eisenhower.oidc.verifier')).toBeTruthy();
     expect(getApiToken()).toBeNull();
+  });
+
+  it('shares one in-flight authorization attempt before asynchronous PKCE work finishes', async () => {
+    const assign = jest.fn();
+    const config = {
+      issuer: 'https://identity.example/identity/realms/eisenhower',
+      clientId: 'eisenhower-web',
+      redirectUri: 'https://app.example/',
+      scopes: 'openid',
+    };
+
+    const first = beginOidcLogin(config, assign);
+    const second = beginOidcLogin(config, assign);
+
+    expect(second).toBe(first);
+    await expect(first).resolves.toBe('started');
+    expect(assign).toHaveBeenCalledTimes(1);
+    expect(sessionStorage.getItem('eisenhower.oidc.attempt')).toBe('starting');
+  });
+
+  it('treats a marker from an earlier document as recoverable instead of redirecting again', async () => {
+    sessionStorage.setItem('eisenhower.oidc.attempt', 'starting');
+    const assign = jest.fn();
+
+    await expect(
+      beginOidcLogin(
+        {
+          issuer: 'https://identity.example/identity/realms/eisenhower',
+          clientId: 'eisenhower-web',
+          redirectUri: 'https://app.example/',
+          scopes: 'openid',
+        },
+        assign
+      )
+    ).resolves.toBe('already-started');
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it('allows a deliberate retry after resetting the authorization attempt', async () => {
+    sessionStorage.setItem('eisenhower.oidc.attempt', 'starting');
+    resetOidcLoginAttempt();
+    const assign = jest.fn();
+
+    await expect(
+      beginOidcLogin(
+        {
+          issuer: 'https://identity.example/identity/realms/eisenhower',
+          clientId: 'eisenhower-web',
+          redirectUri: 'https://app.example/',
+          scopes: 'openid',
+        },
+        assign
+      )
+    ).resolves.toBe('started');
+    expect(assign).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the attempt marker when PKCE setup fails so a retry remains possible', async () => {
+    const digest = jest.spyOn(crypto.subtle, 'digest').mockRejectedValueOnce(new Error('crypto'));
+
+    await expect(
+      beginOidcLogin(
+        {
+          issuer: 'https://identity.example/identity/realms/eisenhower',
+          clientId: 'eisenhower-web',
+          redirectUri: 'https://app.example/',
+          scopes: 'openid',
+        },
+        jest.fn()
+      )
+    ).rejects.toThrow('crypto');
+
+    expect(sessionStorage.getItem('eisenhower.oidc.attempt')).toBeNull();
+    digest.mockRestore();
   });
 
   it('builds only an HTTP(S) Keycloak account-management URL from the configured issuer', () => {

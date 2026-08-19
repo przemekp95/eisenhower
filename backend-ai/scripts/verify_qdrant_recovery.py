@@ -119,6 +119,8 @@ def verify_candidate_collection_snapshot(
   manager: QdrantCollectionManager,
   source_collection: str,
   snapshot_output: Path,
+  *,
+  qdrant_url: str,
 ) -> dict:
   """Snapshot and independently restore the exact collection evaluated by a candidate run."""
   restored_collection = f"{source_collection}_restore_{uuid4().hex}"
@@ -130,7 +132,8 @@ def verify_candidate_collection_snapshot(
     source_digest = _digest(source_points)
     artifact = manager.create_snapshot(source_collection)
     response = httpx.get(
-      f"{QDRANT_URL}/collections/{source_collection}/snapshots/{artifact.name}", timeout=30,
+      f"{qdrant_url.rstrip('/')}/collections/{source_collection}/snapshots/{artifact.name}",
+      timeout=30,
     )
     response.raise_for_status()
     snapshot_bytes = response.content

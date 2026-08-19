@@ -1,12 +1,20 @@
 #!/bin/sh
 set -eu
 
-rag_ready="${1:-false}"
-test "$rag_ready" = true || test "$rag_ready" = false || {
-  echo "RAG readiness must be true or false" >&2
-  exit 2
-}
+readiness_receipt="${1:-}"
+rag_ready=false
 rag_credential_id="${N8N_RAG_HEADER_AUTH_CREDENTIAL_ID:-}"
+if test -n "$readiness_receipt"; then
+  test -f "$readiness_receipt" || {
+    echo "RAG readiness receipt is unavailable" >&2
+    exit 2
+  }
+  : "${RELEASE_SHA:?RELEASE_SHA is required for RAG readiness}"
+  : "${RAG_CORPUS_MANIFEST_SHA256:?RAG_CORPUS_MANIFEST_SHA256 is required}"
+  : "${LLAMAINDEX_CANDIDATE_COLLECTION:?LLAMAINDEX_CANDIDATE_COLLECTION is required}"
+  : "${RAG_RESPONSE_CANDIDATE_ID:?RAG_RESPONSE_CANDIDATE_ID is required}"
+  rag_ready=true
+fi
 if test -n "${N8N_USER_FOLDER:-}"; then
   database_path="$N8N_USER_FOLDER/.n8n/database.sqlite"
 else
@@ -56,7 +64,11 @@ node /repo-n8n/scripts/reconcile-runtime.mjs \
   --current /reconcile/current.json \
   --output /reconcile \
   --rag-credential-id "$rag_credential_id" \
-  --rag-ready "$rag_ready"
+  --rag-readiness-receipt "$readiness_receipt" \
+  --release-sha "${RELEASE_SHA:-}" \
+  --rag-manifest-sha256 "${RAG_CORPUS_MANIFEST_SHA256:-}" \
+  --rag-collection "${LLAMAINDEX_CANDIDATE_COLLECTION:-}" \
+  --rag-response-candidate-id "${RAG_RESPONSE_CANDIDATE_ID:-}"
 
 plan_ids() {
   node -e "const p=require('/reconcile/plan.json'); for (const id of p[process.argv[1]]) console.log(id)" "$1"
@@ -83,7 +95,11 @@ node /repo-n8n/scripts/reconcile-runtime.mjs \
   --current /reconcile/verified.json \
   --output /reconcile/verified-plan \
   --rag-credential-id "$rag_credential_id" \
-  --rag-ready "$rag_ready" >/dev/null
+  --rag-readiness-receipt "$readiness_receipt" \
+  --release-sha "${RELEASE_SHA:-}" \
+  --rag-manifest-sha256 "${RAG_CORPUS_MANIFEST_SHA256:-}" \
+  --rag-collection "${LLAMAINDEX_CANDIDATE_COLLECTION:-}" \
+  --rag-response-candidate-id "${RAG_RESPONSE_CANDIDATE_ID:-}" >/dev/null
 node -e '
   const plan = require("/reconcile/verified-plan/plan.json");
   const remaining = Object.values(plan).reduce((count, ids) => count + ids.length, 0);

@@ -42,7 +42,7 @@ def test_rocm_knowledge_image_is_dedicated_and_does_not_include_vllm_or_ingest_t
   assert "pytesseract" not in dockerfile
 
   provider = (ROOT / "deploy" / "inference" / "compose.amd.yaml").read_text(encoding="utf-8")
-  assert "AMD_INFERENCE_IMAGE" in provider
+  assert "AMD_INFERENCE_IMAGE" not in provider
 
 
 def test_rocm_response_image_is_hardened_pinned_and_built_for_both_response_roles():
@@ -54,8 +54,9 @@ def test_rocm_response_image_is_hardened_pinned_and_built_for_both_response_role
   assert "pip uninstall -y PyGObject" in dockerfile
   assert "python -m pip check" in dockerfile
   assert 'ENTRYPOINT ["vllm", "serve"]' in dockerfile
-  assert "AMD_INFERENCE_IMAGE" in provider
-  assert "AMD_RERANKER_IMAGE" in provider
+  assert provider.count("AMD_RESPONSE_IMAGE") == 2
+  assert "AMD_INFERENCE_IMAGE" not in provider
+  assert "AMD_RERANKER_IMAGE" not in provider
   assert "ports:" not in provider
 
 
@@ -117,7 +118,11 @@ def test_amd_vllm_lifecycle_is_private_bounded_and_opt_in():
   assert "HF_HUB_OFFLINE=1" in inference["environment"]
   assert "TRANSFORMERS_OFFLINE=1" in inference["environment"]
   assert "HF_HUB_OFFLINE=1" in compose["services"]["reranker"]["environment"]
-  assert set(compose["services"]) == {"inference", "reranker"}
+  assert set(compose["services"]) == {"inference", "reranker", "knowledge-service"}
+  assert compose["services"]["knowledge-service"]["depends_on"] == {
+    "inference": {"condition": "service_healthy"},
+    "reranker": {"condition": "service_healthy"},
+  }
   assert compose["networks"]["application"]["external"] is True
 
 

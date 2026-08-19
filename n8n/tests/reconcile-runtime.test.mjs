@@ -7,15 +7,54 @@ import test from 'node:test';
 import {
   buildPlan,
   loadDesiredWorkflows,
+  validateRagReadiness,
   workflowFingerprint,
 } from '../scripts/reconcile-runtime.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const workflowDir = path.join(root, 'n8n/workflows');
 
+const readinessExpected = {
+  collection: 'eisenhower-knowledge-v4-candidate',
+  manifestSha256: 'a'.repeat(64),
+  releaseSha: 'b'.repeat(40),
+  responseCandidateId: 'response-task065-v1',
+};
+
+function readiness(overrides = {}) {
+  return {
+    schema_version: 'private-rag-live-readiness-v1',
+    status: 'ready',
+    checked_at: '2026-08-19T12:00:00Z',
+    release_sha: readinessExpected.releaseSha,
+    corpus_manifest_sha256: readinessExpected.manifestSha256,
+    collection: {
+      name: readinessExpected.collection,
+      canonical_documents: 19,
+      projection_points: 150,
+      reconciled: true,
+    },
+    generator: {
+      healthy: true,
+      model: 'Qwen/Qwen3-4B-Instruct-2507',
+      revision: 'cdbee75f17c01a7cc42f958dc650907174af0554',
+    },
+    reranker: {
+      healthy: true,
+      model: 'BAAI/bge-reranker-v2-m3',
+      revision: '953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e',
+    },
+    response_candidate_id: readinessExpected.responseCandidateId,
+    memory: { write: false, retrieval: false, response: false },
+    mag_mode: 'disabled',
+    public_release: false,
+    ...overrides,
+  };
+}
+
 test('allowlist gives stable identities and enables only Calendar by default', async () => {
-  const first = await loadDesiredWorkflows(workflowDir, { ragReady: false });
-  const second = await loadDesiredWorkflows(workflowDir, { ragReady: false });
+  const first = await loadDesiredWorkflows(workflowDir, {});
+  const second = await loadDesiredWorkflows(workflowDir, {});
 
   assert.equal(first.length, 5);
   assert.deepEqual(first.map(({ id }) => id), second.map(({ id }) => id));
@@ -44,14 +83,18 @@ test('allowlist gives stable identities and enables only Calendar by default', a
   );
 });
 
-test('RAG activation remains behind an explicit ready gate', async () => {
+test('RAG activation requires a verified live readiness receipt and credential', async () => {
   await assert.rejects(
-    loadDesiredWorkflows(workflowDir, { ragReady: true }),
+    loadDesiredWorkflows(workflowDir, {
+      ragReadiness: readiness(),
+      readinessExpected,
+    }),
     /RAG Header Auth credential ID is required/,
   );
   const desired = await loadDesiredWorkflows(workflowDir, {
     ragCredentialId: 'runtime-header-auth-id',
-    ragReady: true,
+    ragReadiness: readiness(),
+    readinessExpected,
   });
   assert.deepEqual(
     desired.filter(({ file }) => file.startsWith('rag-') || file.startsWith('async-rag'))
@@ -66,6 +109,27 @@ test('RAG activation remains behind an explicit ready gate', async () => {
   assert.equal(
     ingestion.definition.settings.errorWorkflow,
     '8c1d0c2b-87bf-5c73-816c-c8b47f9ec863',
+  );
+});
+
+test('boolean readiness and identity drift fail closed', async () => {
+  assert.throws(
+    () => validateRagReadiness(true, readinessExpected),
+    /receipt must be an object/,
+  );
+  assert.throws(
+    () => validateRagReadiness(
+      readiness({ release_sha: 'c'.repeat(40) }),
+      readinessExpected,
+    ),
+    /release SHA mismatch/,
+  );
+  assert.throws(
+    () => validateRagReadiness(
+      readiness({ memory: { write: false, retrieval: true, response: false } }),
+      readinessExpected,
+    ),
+    /memory must remain disabled/,
   );
 });
 
@@ -84,10 +148,26 @@ test('runtime rehearsal supports runner UIDs that are absent from the image pass
   assert.doesNotMatch(rehearsal, /:\/home\/node\/\.n8n/);
   assert.match(containerReconcile, /\$N8N_USER_FOLDER\/\.n8n\/database\.sqlite/);
   assert.match(containerReconcile, /database_path=\/home\/node\/\.n8n\/database\.sqlite/);
+  assert.match(containerReconcile, /rag-readiness-receipt/);
+  assert.match(containerReconcile, /RAG_CORPUS_MANIFEST_SHA256/);
+  assert.doesNotMatch(containerReconcile, /--rag-ready(?:\s|$)/m);
+});
+
+test('credential import uses a private temporary file and verifies the encrypted record', async () => {
+  const importer = await readFile(
+    path.join(root, 'n8n/scripts/import-rag-credential.sh'),
+    'utf8',
+  );
+
+  assert.match(importer, /umask 077/);
+  assert.match(importer, /mktemp -d/);
+  assert.match(importer, /n8n import:credentials/);
+  assert.match(importer, /verify-runtime-credential\.cjs/);
+  assert.doesNotMatch(importer, /set -x/);
 });
 
 test('plan detects active drift, removes same-name duplicates, and converges', async () => {
-  const desired = await loadDesiredWorkflows(workflowDir, { ragReady: false });
+  const desired = await loadDesiredWorkflows(workflowDir, {});
   const canonical = desired[0];
   const drifted = structuredClone(canonical.definition);
   drifted.nodes[0].name = 'operator drift';
@@ -106,7 +186,7 @@ test('plan detects active drift, removes same-name duplicates, and converges', a
 });
 
 test('plan is a no-op after definitions and publication state converge', async () => {
-  const desired = await loadDesiredWorkflows(workflowDir, { ragReady: false });
+  const desired = await loadDesiredWorkflows(workflowDir, {});
   const current = desired.map(({ definition, id, desiredActive }) => ({
     ...structuredClone(definition), id, active: desiredActive,
   }));

@@ -86,6 +86,13 @@ jobs:
             target: ingest
             require_torch: true
             require_torchvision: true
+          - name: backend-ai-response-rocm
+            context: ./backend-ai
+            dockerfile: ./backend-ai/Dockerfile.response-rocm
+            tag: eisenhower-ai-response-rocm
+            target: response
+            require_torch: false
+            require_torchvision: false
           - name: backend-node
             context: .
             dockerfile: ./backend-node/Dockerfile
@@ -290,11 +297,12 @@ jobs:
           backend-ai-classifier|eisenhower-ai-classifier
           backend-ai-knowledge|eisenhower-ai-knowledge
           backend-ai-ingest|eisenhower-ai-ingest
+          backend-ai-response-rocm|eisenhower-ai-response-rocm
           backend-node|eisenhower-api
           mcp|eisenhower-mcp
           web|eisenhower-web
           IMAGES
-          test "$(jq '.images | length' "$manifest")" -eq 7
+          test "$(jq '.images | length' "$manifest")" -eq 8
           (cd release-security && sha256sum release-manifest.json > release-manifest.json.sha256)
 
       - name: Upload immutable release manifest and security evidence

@@ -25,6 +25,10 @@ export const translations = {
       'For your safety, the code is kept only until you close this tab or sign out.',
     'auth.rejected':
       'This code is incorrect or has expired. Check it and try again, or contact your administrator.',
+    'auth.oidcRetryTitle': 'Sign-in was not completed',
+    'auth.oidcRetryHelp':
+      'Keycloak did not complete sign-in. You can safely try again. If the problem continues, contact your administrator.',
+    'auth.oidcRetryAction': 'Try signing in again',
     'status.current': 'Your tasks are up to date',
     'status.offline':
       'No connection. Your current view may be out of date. Check your internet connection and try again.',
@@ -337,6 +341,10 @@ export const translations = {
       'Dla bezpieczeństwa kod jest przechowywany tylko do zamknięcia tej karty lub wylogowania.',
     'auth.rejected':
       'Ten kod jest nieprawidłowy lub wygasł. Sprawdź go i spróbuj ponownie albo skontaktuj się z administratorem.',
+    'auth.oidcRetryTitle': 'Logowanie nie zostało ukończone',
+    'auth.oidcRetryHelp':
+      'Keycloak nie ukończył logowania. Możesz bezpiecznie spróbować ponownie. Jeśli problem się powtarza, skontaktuj się z administratorem.',
+    'auth.oidcRetryAction': 'Spróbuj zalogować ponownie',
     'status.current': 'Dane są aktualne',
     'status.offline':
       'Brak połączenia. Widoczne dane mogą być nieaktualne. Sprawdź internet i spróbuj ponownie.',

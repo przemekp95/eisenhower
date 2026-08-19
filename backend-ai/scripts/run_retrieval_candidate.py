@@ -26,7 +26,11 @@ from app.rag.golden_runner import (
   RetrievalStrategyComparisonRunner,
   select_train_strategy,
 )
-from app.rag.hybrid import CanonicalBm25Retriever, HybridRetriever
+from app.rag.hybrid import (
+  CanonicalBm25Retriever,
+  HybridRetriever,
+  RetrievalConfidencePolicy,
+)
 from app.rag.llamaindex_engine import LlamaIndexChunkingEngine
 from app.rag.models import AccessScope
 from app.rag.mongo_document_store import MongoCanonicalDocumentStore
@@ -34,12 +38,16 @@ from app.rag.qdrant_llamaindex import LlamaIndexQdrantProjection
 from scripts.verify_qdrant_recovery import verify_candidate_collection_snapshot
 
 
-class PinnedMiniLMEmbedding:
-  version = "minilm-v1"
+RAGOPS_EMBEDDING_MODEL = "BAAI/bge-m3"
+RAGOPS_EMBEDDING_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
+RAGOPS_EMBEDDING_VERSION = "bge-m3-v1"
 
-  def __init__(self, model_name: str, revision: str):
+
+class PinnedMiniLMEmbedding:
+  def __init__(self, model_name: str, revision: str, *, version: str = "minilm-v1"):
     self.model_name = model_name
     self.revision = revision
+    self.version = version
     self.encoder = SentenceTransformer(model_name, revision=revision)
 
   def embed(self, texts: list[str]) -> list[list[float]]:
@@ -140,6 +148,11 @@ def _dirty_source_sha256(repository_root: Path) -> str:
   return digest.hexdigest()
 
 
+def selected_candidate_evaluation(strategy_comparison: dict) -> dict:
+  """Return the tuned hybrid report rather than the dense comparison baseline."""
+  return strategy_comparison["strategies"]["hybrid"]
+
+
 def run(
   candidate_path: Path,
   snapshot_output: Path | None = None,
@@ -175,8 +188,9 @@ def run(
     chunking_version=f"llama-sentence-{chunk_size}-{chunk_overlap}-v1",
   )
   embedding = PinnedMiniLMEmbedding(
-    settings.local_model_name,
-    settings.local_model_revision,
+    RAGOPS_EMBEDDING_MODEL,
+    RAGOPS_EMBEDDING_REVISION,
+    version=RAGOPS_EMBEDDING_VERSION,
   )
   vector_size = len(embedding.embed(["dimension probe"])[0])
   suffix = uuid4().hex
@@ -243,6 +257,33 @@ def run(
       raise RuntimeError("candidate corpus did not reach the canonical and projection stores")
     if reconciliation != {"projected": 0, "pending": 0, "drifted": 0}:
       raise RuntimeError("candidate corpus projection did not reconcile cleanly")
+    canonical_documents_before = store.collection.count_documents({})
+    projection_points_before = qdrant.count(
+      collection_name=collection_name,
+      exact=True,
+    ).count
+    second_ingestion = ingestion.ingest(documents)
+    canonical_documents_after = store.collection.count_documents({})
+    projection_points_after = qdrant.count(
+      collection_name=collection_name,
+      exact=True,
+    ).count
+    if second_ingestion != {
+      "accepted": 0,
+      "duplicate": len(documents),
+      "stale": 0,
+      "conflict": 0,
+      "projected": 0,
+      "pending": 0,
+      "embedding_version": embedding.version,
+    }:
+      raise RuntimeError("candidate corpus second ingestion was not idempotent")
+    if (
+      canonical_documents_before != len(documents)
+      or canonical_documents_after != canonical_documents_before
+      or projection_points_after != projection_points_before
+    ):
+      raise RuntimeError("candidate corpus counts changed after duplicate ingestion")
 
     dense_retriever = CanonicalRetriever(
       projection,
@@ -279,6 +320,7 @@ def run(
         dense_rrf_weight=configuration["dense_rrf_weight"],
         lexical_rrf_weight=configuration["lexical_rrf_weight"],
         candidate_multiplier=configuration["candidate_multiplier"],
+        confidence_policy=RetrievalConfidencePolicy(),
       )
     train_cases = [case for case in cases if case.split == "train"]
     train_reports = {
@@ -344,6 +386,7 @@ def run(
           reranker=reranker,
           reranker_candidate_limit=candidate_limit,
           reranker_weight=reranker_weight,
+          confidence_policy=RetrievalConfidencePolicy(),
         )
         train_reports[name] = RetrievalGoldenRunner(
           candidate_retrievers[name]
@@ -359,7 +402,13 @@ def run(
       "hybrid": hybrid_retriever,
     }).run(cases, k=5)
     recovery = (
-      verify_candidate_collection_snapshot(qdrant, manager, collection_name, snapshot_output)
+      verify_candidate_collection_snapshot(
+        qdrant,
+        manager,
+        collection_name,
+        snapshot_output,
+        qdrant_url=qdrant_url,
+      )
       if snapshot_output is not None else None
     )
     report = {
@@ -397,7 +446,15 @@ def run(
       },
       "ingestion": ingestion_result,
       "reconciliation": reconciliation,
-      "evaluation": strategy_comparison["strategies"]["dense"],
+      "evaluation": selected_candidate_evaluation(strategy_comparison),
+      "evaluation_strategy": selected_name,
+      "idempotency": {
+        "second_ingestion": second_ingestion,
+        "canonical_documents_before": canonical_documents_before,
+        "canonical_documents_after": canonical_documents_after,
+        "projection_points_before": projection_points_before,
+        "projection_points_after": projection_points_after,
+      },
       "train_selection": {
         "selection_rule": "zero tolerance, then worst-language recall/MRR, global recall/MRR, document diversity",
         "selected": selected_name,

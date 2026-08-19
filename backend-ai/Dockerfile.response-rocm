@@ -1,4 +1,4 @@
-FROM vllm/vllm-openai-rocm@sha256:5709fafe47123becb2f5e61c32d0b97beff1a629bb40bb753c15464f69a97a18
+FROM vllm/vllm-openai-rocm@sha256:5709fafe47123becb2f5e61c32d0b97beff1a629bb40bb753c15464f69a97a18 AS response
 
 ARG RELEASE_SHA
 LABEL org.opencontainers.image.revision=$RELEASE_SHA \

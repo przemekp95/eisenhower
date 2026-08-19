@@ -1,16 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-test "$#" -eq 2 || { echo "Usage: deploy.sh RELEASE_MANIFEST ENV_FILE" >&2; exit 2; }
+test "$#" -eq 2 || test "$#" -eq 3 || {
+  echo "Usage: deploy.sh RELEASE_MANIFEST ENV_FILE [PRIVATE_RAG_ACTIVATION_RECEIPT]" >&2
+  exit 2
+}
 manifest_path=${1:?release manifest path is required}
 source_env=${2:?deployment environment file is required}
+activation_receipt=${3:-}
 deploy_root=${EISENHOWER_DEPLOY_ROOT:-$(pwd)}
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 state_dir="$deploy_root/.deploy"
 marker="$deploy_root/.eisenhower-deployment"
 
 test -f "$marker" || { echo "Deployment ownership marker is missing." >&2; exit 1; }
 test -s "$manifest_path"
 test -s "$source_env"
+if [ -n "$activation_receipt" ]; then
+  "$script_dir/verify-private-rag.sh" "$activation_receipt" "$manifest_path" "$source_env"
+fi
 mkdir -p "$state_dir"
 chmod 0700 "$state_dir"
 
@@ -33,6 +41,7 @@ build_release_env() {
   require_digest "$manifest" "$output" backend-ai-classifier AI_CLASSIFIER_IMAGE
   require_digest "$manifest" "$output" backend-ai-knowledge AI_KNOWLEDGE_IMAGE
   require_digest "$manifest" "$output" backend-ai-ingest AI_INGEST_IMAGE
+  require_digest "$manifest" "$output" backend-ai-response-rocm AMD_RESPONSE_IMAGE
   require_digest "$manifest" "$output" backend-node API_IMAGE
   require_digest "$manifest" "$output" mcp MCP_IMAGE
   require_digest "$manifest" "$output" web WEB_IMAGE
@@ -42,6 +51,9 @@ release_sha=$(jq -er '.release_sha | select(test("^[0-9a-f]{40}$"))' "$manifest_
 build_release_env "$manifest_path" "$generated_env"
 
 compose=(docker compose --project-directory "$deploy_root" --env-file "$generated_env" -f "$deploy_root/compose.yaml")
+if [ -n "$activation_receipt" ]; then
+  compose+=(-f "$deploy_root/deploy/inference/compose.amd.yaml" --profile inference-amd)
+fi
 "${compose[@]}" config --quiet
 "${compose[@]}" pull
 
@@ -75,6 +87,13 @@ for service in web api-service ai-service classifier-service knowledge-service r
   test -n "$container_id"
   test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$container_id")" = "$release_sha"
 done
+if [ -n "$activation_receipt" ]; then
+  for service in inference reranker; do
+    container_id=$("${compose[@]}" ps -q "$service")
+    test -n "$container_id"
+    test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$container_id")" = "$release_sha"
+  done
+fi
 
 cp "$manifest_path" "$state_dir/active-release-manifest.json"
 chmod 0600 "$state_dir/active-release-manifest.json"
