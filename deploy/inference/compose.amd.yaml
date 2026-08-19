@@ -17,6 +17,8 @@ services:
     image: ${AMD_RESPONSE_IMAGE:?immutable AMD response image digest is required}
     profiles: [inference-amd]
     expose: ["8000"]
+    volumes:
+      - inference_model_cache:/root/.cache/huggingface:ro
     environment:
       - VLLM_API_KEY=${INFERENCE_API_KEY:?INFERENCE_API_KEY is required}
       - OMP_NUM_THREADS=${INFERENCE_OMP_THREADS:?measured inference OMP limit is required}
@@ -27,6 +29,10 @@ services:
       - --model
       - ${INFERENCE_MODEL:?INFERENCE_MODEL is provider configuration}
       - --revision
+      - ${INFERENCE_MODEL_REVISION:?INFERENCE_MODEL_REVISION is required}
+      - --tokenizer
+      - ${INFERENCE_MODEL:?INFERENCE_MODEL is provider configuration}
+      - --tokenizer-revision
       - ${INFERENCE_MODEL_REVISION:?INFERENCE_MODEL_REVISION is required}
       - --served-model-name
       - ${INFERENCE_MODEL:?INFERENCE_MODEL is provider configuration}
@@ -50,6 +56,8 @@ services:
     image: ${AMD_RESPONSE_IMAGE:?immutable AMD response image digest is required}
     profiles: [inference-amd]
     expose: ["8000"]
+    volumes:
+      - reranker_model_cache:/root/.cache/huggingface:ro
     environment:
       - VLLM_API_KEY=${RERANKER_API_KEY:?RERANKER_API_KEY is required}
       - OMP_NUM_THREADS=${RERANKER_OMP_THREADS:?measured reranker OMP limit is required}
@@ -80,3 +88,11 @@ networks:
   application:
     external: true
     name: ${INFERENCE_NETWORK_NAME:-eisenhower-private}
+
+volumes:
+  inference_model_cache:
+    external: true
+    name: ${INFERENCE_MODEL_CACHE_VOLUME:?inference model cache volume is required}
+  reranker_model_cache:
+    external: true
+    name: ${RERANKER_MODEL_CACHE_VOLUME:?reranker model cache volume is required}

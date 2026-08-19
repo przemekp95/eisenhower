@@ -47,7 +47,8 @@ def test_nvidia_and_amd_profiles_are_opt_in_private_and_version_pinned():
 
 
 def test_amd_generation_and_reranking_share_one_exact_release_image_without_host_ports():
-  services = _services("amd")
+  payload = yaml.safe_load((ROOT / "deploy/inference/compose.amd.yaml").read_text())
+  services = payload["services"]
 
   assert services["inference"]["image"] == (
     "${AMD_RESPONSE_IMAGE:?immutable AMD response image digest is required}"
@@ -59,7 +60,24 @@ def test_amd_generation_and_reranking_share_one_exact_release_image_without_host
 
   assert services["inference"]["command"][1] == "${INFERENCE_MODEL:?INFERENCE_MODEL is provider configuration}"
   assert services["inference"]["command"][3] == "${INFERENCE_MODEL_REVISION:?INFERENCE_MODEL_REVISION is required}"
+  assert "--tokenizer-revision" in services["inference"]["command"]
   assert "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e" in services["reranker"]["command"]
+  assert services["inference"]["volumes"] == [
+    "inference_model_cache:/root/.cache/huggingface:ro"
+  ]
+  assert services["reranker"]["volumes"] == [
+    "reranker_model_cache:/root/.cache/huggingface:ro"
+  ]
+  assert payload["volumes"] == {
+    "inference_model_cache": {
+      "external": True,
+      "name": "${INFERENCE_MODEL_CACHE_VOLUME:?inference model cache volume is required}",
+    },
+    "reranker_model_cache": {
+      "external": True,
+      "name": "${RERANKER_MODEL_CACHE_VOLUME:?reranker model cache volume is required}",
+    },
+  }
 
 
 def test_rocm_response_dockerfile_exposes_an_exact_sha_release_target():
