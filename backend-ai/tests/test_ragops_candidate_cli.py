@@ -2,6 +2,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+from scripts.run_ragops_candidate import build_ragops_report
+
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPOSITORY_ROOT / "backend-ai/scripts/run_ragops_candidate.py"
@@ -26,3 +28,37 @@ def test_ragops_candidate_requires_explicit_store_endpoints(tmp_path):
   assert completed.returncode == 2
   assert "--mongo-uri" in completed.stderr
   assert "--qdrant-url" in completed.stderr
+
+
+def test_ragops_report_maps_runtime_dataset_version_to_registry_contract():
+  retrieval = {
+    "ingestion": {"accepted": 19, "pending": 0},
+    "reconciliation": {"pending": 0, "drifted": 0, "projected": 0},
+    "evaluation": {
+      "dataset_version": "retrieval-review-candidate-v4-unapproved",
+      "mode": "retrieval_only",
+      "metrics": {"recall_at_k": 0.9},
+      "cases": [{"case_id": "one"}],
+    },
+    "snapshot_restore": {
+      "matches_source": True,
+      "qdrant_checksum": "a" * 64,
+      "independent_download_sha256": "a" * 64,
+      "isolated_restore": True,
+      "source_collection": "candidate",
+      "restored_collection": "candidate_restore",
+      "source_digest_sha256": "b" * 64,
+      "restored_digest_sha256": "b" * 64,
+    },
+    "collection": {"name": "candidate"},
+    "model": {"embedding_version": "minilm-v1"},
+    "runtime": {"qdrant_server_version": "1.12.0", "pymongo_version": "4.0"},
+    "cleanup": {"mongo_database_dropped": True, "qdrant_collection_deleted": True},
+  }
+
+  report = build_ragops_report(retrieval)
+
+  assert report["evaluation"]["dataset"] == (
+    "retrieval-review-candidate-v4-unapproved"
+  )
+  assert report["evaluation"]["metrics"] == {"recall_at_k": 0.9}

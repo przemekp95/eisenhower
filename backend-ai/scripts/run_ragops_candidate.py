@@ -20,6 +20,49 @@ from app.ops.candidates import register_ragops_candidate
 from scripts.run_retrieval_candidate import run as run_retrieval
 
 
+def build_ragops_report(retrieval: dict) -> dict:
+  recovery = retrieval["snapshot_restore"]
+  evaluation = retrieval["evaluation"]
+  return {
+    "canonical_before_vector": True,
+    "ingestion": {
+      "documents": retrieval["ingestion"]["accepted"],
+      "failed": retrieval["ingestion"]["pending"],
+    },
+    "reconciliation": {
+      "missing": retrieval["reconciliation"]["pending"],
+      "stale": retrieval["reconciliation"]["drifted"],
+      "orphan": retrieval["reconciliation"]["projected"],
+    },
+    "evaluation": {
+      **evaluation,
+      "dataset": evaluation["dataset_version"],
+    },
+    "snapshot_restore": {
+      "verified": recovery["matches_source"],
+      "checksum_match": (
+        recovery["qdrant_checksum"] == recovery["independent_download_sha256"]
+      ),
+      "isolated": recovery["isolated_restore"],
+      "source_collection": recovery["source_collection"],
+      "restored_collection": recovery["restored_collection"],
+      "source_digest_sha256": recovery["source_digest_sha256"],
+      "restored_digest_sha256": recovery["restored_digest_sha256"],
+    },
+    "collection": {
+      "name": retrieval["collection"]["name"],
+      "revision": retrieval["model"]["embedding_version"],
+    },
+    "runtime": {
+      "qdrant_version": retrieval["runtime"]["qdrant_server_version"],
+      "mongo_version": retrieval["runtime"]["pymongo_version"],
+    },
+    "alias_promoted": False,
+    "cleanup": {"retrieval": retrieval["cleanup"]},
+    "representative_human_gate": {"passed": False, "reason": "TASK-013 pending"},
+  }
+
+
 def main() -> int:
   parser = argparse.ArgumentParser(description="Run a live-dependency, candidate-only RAGOps pipeline.")
   parser.add_argument("--registry", type=Path, required=True)
@@ -49,42 +92,7 @@ def main() -> int:
     mongo_uri=args.mongo_uri,
     qdrant_url=args.qdrant_url,
   )
-  recovery = retrieval["snapshot_restore"]
-  report = {
-    "canonical_before_vector": True,
-    "ingestion": {
-      "documents": retrieval["ingestion"]["accepted"],
-      "failed": retrieval["ingestion"]["pending"],
-    },
-    "reconciliation": {
-      "missing": retrieval["reconciliation"]["pending"],
-      "stale": retrieval["reconciliation"]["drifted"],
-      "orphan": retrieval["reconciliation"]["projected"],
-    },
-    "evaluation": retrieval["evaluation"],
-    "snapshot_restore": {
-      "verified": recovery["matches_source"],
-      "checksum_match": (
-        recovery["qdrant_checksum"] == recovery["independent_download_sha256"]
-      ),
-      "isolated": recovery["isolated_restore"],
-      "source_collection": recovery["source_collection"],
-      "restored_collection": recovery["restored_collection"],
-      "source_digest_sha256": recovery["source_digest_sha256"],
-      "restored_digest_sha256": recovery["restored_digest_sha256"],
-    },
-    "collection": {
-      "name": retrieval["collection"]["name"],
-      "revision": retrieval["model"]["embedding_version"],
-    },
-    "runtime": {
-      "qdrant_version": retrieval["runtime"]["qdrant_server_version"],
-      "mongo_version": retrieval["runtime"]["pymongo_version"],
-    },
-    "alias_promoted": False,
-    "cleanup": {"retrieval": retrieval["cleanup"]},
-    "representative_human_gate": {"passed": False, "reason": "TASK-013 pending"},
-  }
+  report = build_ragops_report(retrieval)
   manifest = register_ragops_candidate(
     registry=ImmutableArtifactRegistry(args.registry),
     candidate_id=args.candidate_id,
