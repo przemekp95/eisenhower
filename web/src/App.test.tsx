@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import App from './App';
 import { clearApiToken, setApiToken } from './authSession';
 import { runtimeConfig } from './config';
@@ -100,6 +101,7 @@ describe('App', () => {
     runtimeConfig.oidcIssuer = undefined;
     runtimeConfig.oidcClientId = undefined;
     runtimeConfig.oidcRedirectUri = undefined;
+    mockedOidcSession.beginOidcLogin.mockResolvedValue('started');
     mockedOidcSession.completeOidcLogin.mockResolvedValue(false);
     setApiToken('runtime-only-code');
     mockedApi.getTasks.mockResolvedValue([initialTask]);
@@ -213,24 +215,29 @@ describe('App', () => {
     }
   );
 
-  it('starts OIDC Authorization Code with PKCE when the complete config is present', () => {
+  it('starts configured OIDC automatically exactly once under Strict Mode', async () => {
     clearApiToken();
     runtimeConfig.oidcIssuer = 'https://identity.example/realms/eisenhower';
     runtimeConfig.oidcClientId = 'eisenhower-web';
     runtimeConfig.oidcRedirectUri = 'https://app.example/';
-    render(<App />);
+    render(
+      <StrictMode>
+        <App />
+      </StrictMode>
+    );
 
     expect(screen.queryByLabelText('Kod dostępu')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Wejdź do systemu' }));
+    await waitFor(() => expect(mockedOidcSession.beginOidcLogin).toHaveBeenCalledTimes(1));
     expect(mockedOidcSession.beginOidcLogin).toHaveBeenCalledWith({
       issuer: runtimeConfig.oidcIssuer,
       clientId: runtimeConfig.oidcClientId,
       redirectUri: runtimeConfig.oidcRedirectUri,
       scopes: runtimeConfig.oidcScopes,
     });
+    expect(screen.getByRole('main')).toHaveAttribute('aria-busy', 'true');
   });
 
-  it('completes a valid OIDC callback and exposes a safe error for a rejected callback', async () => {
+  it('completes a valid OIDC callback without starting another authorization request', async () => {
     clearApiToken();
     runtimeConfig.oidcIssuer = 'https://identity.example/realms/eisenhower';
     runtimeConfig.oidcClientId = 'eisenhower-web';
@@ -240,15 +247,63 @@ describe('App', () => {
       setApiToken('oidc-token');
       return true;
     });
-    const successful = render(<App />);
+    render(<App />);
     expect(await screen.findByText('Existing task')).toBeInTheDocument();
-    successful.unmount();
+    expect(mockedOidcSession.beginOidcLogin).not.toHaveBeenCalled();
+  });
 
-    act(() => clearApiToken());
+  it('shows localized OIDC recovery after a rejected callback without manual-token copy', async () => {
+    clearApiToken();
+    runtimeConfig.oidcIssuer = 'https://identity.example/realms/eisenhower';
+    runtimeConfig.oidcClientId = 'eisenhower-web';
+    runtimeConfig.oidcRedirectUri = 'https://app.example/';
+    window.history.replaceState({}, document.title, '/?error=access_denied');
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole('button', { name: 'Spróbuj zalogować ponownie' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'English' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Kod dostępu')).not.toBeInTheDocument();
+    expect(screen.queryByText(/kod dostępu|pamięci karty/i)).not.toBeInTheDocument();
+    expect(mockedOidcSession.beginOidcLogin).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'English' }));
+    expect(screen.getByRole('button', { name: 'Try signing in again' })).toBeInTheDocument();
+  });
+
+  it('resets a failed OIDC attempt before one deliberate retry', async () => {
+    clearApiToken();
+    runtimeConfig.oidcIssuer = 'https://identity.example/realms/eisenhower';
+    runtimeConfig.oidcClientId = 'eisenhower-web';
+    runtimeConfig.oidcRedirectUri = 'https://app.example/';
+    window.history.replaceState({}, document.title, '/?error=access_denied');
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Spróbuj zalogować ponownie' }));
+
+    await waitFor(() => expect(mockedOidcSession.beginOidcLogin).toHaveBeenCalledTimes(1));
+    expect(mockedOidcSession.resetOidcLoginAttempt).toHaveBeenCalledTimes(1);
+    expect(mockedOidcSession.resetOidcLoginAttempt.mock.invocationCallOrder[0]).toBeLessThan(
+      mockedOidcSession.beginOidcLogin.mock.invocationCallOrder[0]
+    );
+    expect(screen.getByRole('main')).toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('exposes the same recovery surface when PKCE callback validation fails', async () => {
+    clearApiToken();
+    runtimeConfig.oidcIssuer = 'https://identity.example/realms/eisenhower';
+    runtimeConfig.oidcClientId = 'eisenhower-web';
+    runtimeConfig.oidcRedirectUri = 'https://app.example/';
     window.history.replaceState({}, document.title, '/?code=rejected&state=wrong');
     mockedOidcSession.completeOidcLogin.mockRejectedValueOnce(new Error('invalid state'));
+
     render(<App />);
-    expect(await screen.findByRole('alert')).toHaveTextContent(/nieprawidłowy lub wygasł/i);
+    expect(
+      await screen.findByRole('button', { name: 'Spróbuj zalogować ponownie' })
+    ).toBeInTheDocument();
+    expect(mockedOidcSession.beginOidcLogin).not.toHaveBeenCalled();
   });
 
   it('loads tasks, reports a confirmed fresh state and keeps technical administration hidden', async () => {
