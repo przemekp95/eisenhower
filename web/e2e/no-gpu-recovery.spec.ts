@@ -4,7 +4,8 @@ import { expect, test } from '@playwright/test';
 test('keeps manual task flow available when optional AI capabilities are offline', async ({
   page,
 }) => {
-  test.setTimeout(60_000);
+  // The flow includes Axe plus two persisted manual updates after the fail-closed AI check.
+  test.setTimeout(90_000);
 
   await page.addInitScript(() => {
     localStorage.clear();

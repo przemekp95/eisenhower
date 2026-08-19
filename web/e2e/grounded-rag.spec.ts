@@ -89,7 +89,9 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('renders a sourced answer with escaped citations on desktop and mobile', async ({ page }) => {
-  test.setTimeout(60_000);
+  // This scenario persists two task revisions and runs Axe over the complete dialog.
+  // Narrow shared mobile runners have measured above 60 seconds without a failed assertion.
+  test.setTimeout(90_000);
 
   const title = `Prepare the incident review ${Date.now()}`;
   await page.getByPlaceholder('Task title').fill(title);
@@ -147,6 +149,8 @@ test('renders a sourced answer with escaped citations on desktop and mobile', as
 });
 
 test('renders an honest no-answer without fabricated citations', async ({ page }) => {
+  // The default 30-second budget is below the measured narrow-runner mobile path.
+  test.setTimeout(60_000);
   const title = `Question outside approved knowledge ${Date.now()}`;
   await page.getByPlaceholder('Task title').fill(title);
   await page.getByRole('button', { name: 'Add task' }).click();
