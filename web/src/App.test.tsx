@@ -237,6 +237,37 @@ describe('App', () => {
     expect(screen.getByRole('main')).toHaveAttribute('aria-busy', 'true');
   });
 
+  it('shows the localized recovery surface when authorization startup rejects', async () => {
+    clearApiToken();
+    runtimeConfig.oidcIssuer = 'https://identity.example/realms/eisenhower';
+    runtimeConfig.oidcClientId = 'eisenhower-web';
+    runtimeConfig.oidcRedirectUri = 'https://app.example/';
+    mockedOidcSession.beginOidcLogin.mockRejectedValueOnce(new Error('navigation rejected'));
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole('button', { name: 'Spróbuj zalogować ponownie' })
+    ).toBeInTheDocument();
+    expect(mockedOidcSession.beginOidcLogin).toHaveBeenCalledTimes(1);
+    expect(screen.queryByLabelText('Kod dostępu')).not.toBeInTheDocument();
+  });
+
+  it('offers recovery when a prior document already started authorization', async () => {
+    clearApiToken();
+    runtimeConfig.oidcIssuer = 'https://identity.example/realms/eisenhower';
+    runtimeConfig.oidcClientId = 'eisenhower-web';
+    runtimeConfig.oidcRedirectUri = 'https://app.example/';
+    mockedOidcSession.beginOidcLogin.mockResolvedValueOnce('already-started');
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole('button', { name: 'Spróbuj zalogować ponownie' })
+    ).toBeInTheDocument();
+    expect(mockedOidcSession.beginOidcLogin).toHaveBeenCalledTimes(1);
+  });
+
   it('completes a valid OIDC callback without starting another authorization request', async () => {
     clearApiToken();
     runtimeConfig.oidcIssuer = 'https://identity.example/realms/eisenhower';
@@ -249,6 +280,22 @@ describe('App', () => {
     });
     render(<App />);
     expect(await screen.findByText('Existing task')).toBeInTheDocument();
+    expect(mockedOidcSession.beginOidcLogin).not.toHaveBeenCalled();
+  });
+
+  it('offers recovery when an OIDC callback cannot be completed', async () => {
+    clearApiToken();
+    runtimeConfig.oidcIssuer = 'https://identity.example/realms/eisenhower';
+    runtimeConfig.oidcClientId = 'eisenhower-web';
+    runtimeConfig.oidcRedirectUri = 'https://app.example/';
+    window.history.replaceState({}, document.title, '/?code=missing-state');
+    mockedOidcSession.completeOidcLogin.mockResolvedValueOnce(false);
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole('button', { name: 'Spróbuj zalogować ponownie' })
+    ).toBeInTheDocument();
     expect(mockedOidcSession.beginOidcLogin).not.toHaveBeenCalled();
   });
 

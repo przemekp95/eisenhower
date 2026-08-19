@@ -98,6 +98,25 @@ describe('OIDC Authorization Code with PKCE', () => {
     expect(assign).toHaveBeenCalledTimes(1);
   });
 
+  it('clears the attempt marker when PKCE setup fails so a retry remains possible', async () => {
+    const digest = jest.spyOn(crypto.subtle, 'digest').mockRejectedValueOnce(new Error('crypto'));
+
+    await expect(
+      beginOidcLogin(
+        {
+          issuer: 'https://identity.example/identity/realms/eisenhower',
+          clientId: 'eisenhower-web',
+          redirectUri: 'https://app.example/',
+          scopes: 'openid',
+        },
+        jest.fn()
+      )
+    ).rejects.toThrow('crypto');
+
+    expect(sessionStorage.getItem('eisenhower.oidc.attempt')).toBeNull();
+    digest.mockRestore();
+  });
+
   it('builds only an HTTP(S) Keycloak account-management URL from the configured issuer', () => {
     expect(buildAccountManagementUrl('https://identity.example/identity/realms/eisenhower/')).toBe(
       'https://identity.example/identity/realms/eisenhower/account'
