@@ -28,12 +28,27 @@ def main() -> int:
   parser.add_argument("--git-dirty", action="store_true")
   parser.add_argument("--output", type=Path, required=True)
   parser.add_argument(
+    "--mongo-uri",
+    required=True,
+    help="Explicit isolated candidate MongoDB URI.",
+  )
+  parser.add_argument(
+    "--qdrant-url",
+    required=True,
+    help="Explicit isolated candidate Qdrant base URL.",
+  )
+  parser.add_argument(
     "--golden", type=Path,
     default=PROJECT_ROOT / "evaluation" / "retrieval-v1" / "review-candidate-v1.jsonl",
   )
   args = parser.parse_args()
   snapshot_path = args.output.parent / "qdrant-candidate.snapshot"
-  retrieval = run_retrieval(args.golden, snapshot_output=snapshot_path)
+  retrieval = run_retrieval(
+    args.golden,
+    snapshot_output=snapshot_path,
+    mongo_uri=args.mongo_uri,
+    qdrant_url=args.qdrant_url,
+  )
   recovery = retrieval["snapshot_restore"]
   report = {
     "canonical_before_vector": True,
