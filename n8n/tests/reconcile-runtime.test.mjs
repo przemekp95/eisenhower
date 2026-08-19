@@ -107,6 +107,10 @@ test('RAG activation requires a verified live readiness receipt and credential',
     'runtime-header-auth-id',
   );
   assert.equal(
+    ingestion.definition.nodes[0].credentials.httpHeaderAuth.name,
+    'Eisenhower private RAG internal auth',
+  );
+  assert.equal(
     ingestion.definition.settings.errorWorkflow,
     '8c1d0c2b-87bf-5c73-816c-c8b47f9ec863',
   );

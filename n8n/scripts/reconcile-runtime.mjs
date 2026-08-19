@@ -32,6 +32,7 @@ const ALLOWLIST = [
     group: 'rag',
   },
 ];
+const RAG_HEADER_AUTH_CREDENTIAL_NAME = 'Eisenhower private RAG internal auth';
 
 function canonicalize(value) {
   if (Array.isArray(value)) return value.map(canonicalize);
@@ -124,7 +125,12 @@ export async function loadDesiredWorkflows(
       definition.settings.errorWorkflow = ALLOWLIST.find(
         ({ file: candidate }) => candidate === 'rag-ingestion-error.json',
       ).id;
-      if (ragReady) definition.nodes[0].credentials.httpHeaderAuth.id = ragCredentialId;
+      if (ragReady) {
+        definition.nodes[0].credentials.httpHeaderAuth = {
+          id: ragCredentialId,
+          name: RAG_HEADER_AUTH_CREDENTIAL_NAME,
+        };
+      }
     }
     return {
       definition: { ...definition, active: false, id },
