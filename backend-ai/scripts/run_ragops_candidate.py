@@ -58,6 +58,7 @@ def build_ragops_report(retrieval: dict) -> dict:
       "mongo_version": retrieval["runtime"]["pymongo_version"],
     },
     "alias_promoted": False,
+    "idempotency": retrieval["idempotency"],
     "cleanup": {"retrieval": retrieval["cleanup"]},
     "representative_human_gate": {"passed": False, "reason": "TASK-013 pending"},
   }

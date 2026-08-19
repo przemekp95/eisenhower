@@ -140,6 +140,11 @@ def _dirty_source_sha256(repository_root: Path) -> str:
   return digest.hexdigest()
 
 
+def selected_candidate_evaluation(strategy_comparison: dict) -> dict:
+  """Return the tuned hybrid report rather than the dense comparison baseline."""
+  return strategy_comparison["strategies"]["hybrid"]
+
+
 def run(
   candidate_path: Path,
   snapshot_output: Path | None = None,
@@ -243,6 +248,33 @@ def run(
       raise RuntimeError("candidate corpus did not reach the canonical and projection stores")
     if reconciliation != {"projected": 0, "pending": 0, "drifted": 0}:
       raise RuntimeError("candidate corpus projection did not reconcile cleanly")
+    canonical_documents_before = store.collection.count_documents({})
+    projection_points_before = qdrant.count(
+      collection_name=collection_name,
+      exact=True,
+    ).count
+    second_ingestion = ingestion.ingest(documents)
+    canonical_documents_after = store.collection.count_documents({})
+    projection_points_after = qdrant.count(
+      collection_name=collection_name,
+      exact=True,
+    ).count
+    if second_ingestion != {
+      "accepted": 0,
+      "duplicate": len(documents),
+      "stale": 0,
+      "conflict": 0,
+      "projected": 0,
+      "pending": 0,
+      "embedding_version": embedding.version,
+    }:
+      raise RuntimeError("candidate corpus second ingestion was not idempotent")
+    if (
+      canonical_documents_before != len(documents)
+      or canonical_documents_after != canonical_documents_before
+      or projection_points_after != projection_points_before
+    ):
+      raise RuntimeError("candidate corpus counts changed after duplicate ingestion")
 
     dense_retriever = CanonicalRetriever(
       projection,
@@ -403,7 +435,15 @@ def run(
       },
       "ingestion": ingestion_result,
       "reconciliation": reconciliation,
-      "evaluation": strategy_comparison["strategies"]["dense"],
+      "evaluation": selected_candidate_evaluation(strategy_comparison),
+      "evaluation_strategy": selected_name,
+      "idempotency": {
+        "second_ingestion": second_ingestion,
+        "canonical_documents_before": canonical_documents_before,
+        "canonical_documents_after": canonical_documents_after,
+        "projection_points_before": projection_points_before,
+        "projection_points_after": projection_points_after,
+      },
       "train_selection": {
         "selection_rule": "zero tolerance, then worst-language recall/MRR, global recall/MRR, document diversity",
         "selected": selected_name,
