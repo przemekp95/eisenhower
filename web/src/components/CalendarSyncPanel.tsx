@@ -1,14 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CalendarConflictDto, CalendarStatusDto } from '@eisenhower/api-client';
+import type {
+  CalendarConflictDto,
+  CalendarDeletedBindingDto,
+  CalendarStatusDto,
+} from '@eisenhower/api-client';
 import {
   disconnectCalendar,
+  getCalendarDeletedBindings,
   getCalendarConflicts,
   getCalendarStatus,
   requestCalendarSync,
   resolveCalendarConflict,
+  resolveCalendarDeletedBinding,
   startCalendarConnection,
 } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
+import CalendarEventManager from './CalendarEventManager';
 
 function operationId(prefix: string) {
   return `${prefix}:${crypto.randomUUID()}`;
@@ -43,6 +50,7 @@ export default function CalendarSyncPanel({
   const { t } = useLanguage();
   const [status, setStatus] = useState<CalendarStatusDto | null>(null);
   const [conflicts, setConflicts] = useState<CalendarConflictDto[]>([]);
+  const [deletedBindings, setDeletedBindings] = useState<CalendarDeletedBindingDto[]>([]);
   const [message, setMessage] = useState('');
   const [busyAction, setBusyAction] = useState<'connect' | 'disconnect' | 'sync' | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
@@ -55,10 +63,14 @@ export default function CalendarSyncPanel({
 
   const refresh = useCallback(async () => {
     const nextStatus = await getCalendarStatus();
-    const nextConflicts = nextStatus.status === 'disconnected' ? [] : await getCalendarConflicts();
+    const [nextConflicts, nextDeletedBindings] =
+      nextStatus.status === 'disconnected'
+        ? [[], []]
+        : await Promise.all([getCalendarConflicts(), getCalendarDeletedBindings()]);
     if (mounted.current) {
       setStatus(nextStatus);
       setConflicts(nextConflicts);
+      setDeletedBindings(nextDeletedBindings);
     }
     return nextStatus;
   }, []);
@@ -175,6 +187,28 @@ export default function CalendarSyncPanel({
       conflictKeys.current.delete(key);
       setConflicts((current) => current.filter((item) => item._id !== conflict._id));
       setMessage(t('calendar.conflictResolved'));
+    } catch {
+      setMessage(t('calendar.error'));
+    }
+  };
+
+  const resolveDeletion = async (
+    binding: CalendarDeletedBindingDto,
+    strategy: 'clear_date' | 'recreate' | 'detach'
+  ) => {
+    const key = `deleted:${binding._id}:${strategy}`;
+    const idempotencyKey = conflictKeys.current.get(key) ?? operationId('web-calendar-deletion');
+    conflictKeys.current.set(key, idempotencyKey);
+    try {
+      await resolveCalendarDeletedBinding(
+        binding._id,
+        strategy,
+        binding.taskRevision,
+        idempotencyKey
+      );
+      conflictKeys.current.delete(key);
+      setDeletedBindings((current) => current.filter((item) => item._id !== binding._id));
+      setMessage(t('calendar.deletionResolved'));
     } catch {
       setMessage(t('calendar.error'));
     }
@@ -322,6 +356,30 @@ export default function CalendarSyncPanel({
           ))}
         </div>
       ) : null}
+
+      {deletedBindings.length ? (
+        <div className="mt-4 space-y-3">
+          <h3 className="text-sm font-semibold">{t('calendar.googleDeleted')}</h3>
+          {deletedBindings.map((binding) => (
+            <article key={binding._id} className="border-l-2 border-amber-200/50 pl-3">
+              <p className="break-words font-medium">{binding.taskTitle}</p>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                {(['clear_date', 'recreate', 'detach'] as const).map((strategy) => (
+                  <button
+                    key={strategy}
+                    type="button"
+                    onClick={() => void resolveDeletion(binding, strategy)}
+                    className="min-h-11 rounded-lg border border-white/15 px-3 py-2 text-sm"
+                  >
+                    {t(`calendar.deletion.${strategy}`)}
+                  </button>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : null}
+      {status?.status === 'connected' ? <CalendarEventManager /> : null}
     </section>
   );
 }

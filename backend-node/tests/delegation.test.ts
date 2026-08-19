@@ -366,7 +366,7 @@ describe('task delegation workflow', () => {
     expect(missingStatusRevision.status).toBe(428);
     expect(scheduled.status).toBe(200);
     expect(scheduled.body.schedule).toEqual({
-      dueAt: '2026-08-15T12:00:00.000Z', timeZone: 'Europe/Warsaw',
+      dueAt: '2026-08-15T12:00:00.000Z', timeZone: 'Europe/Warsaw', durationMinutes: 30,
     });
   });
 

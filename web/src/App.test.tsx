@@ -263,6 +263,33 @@ describe('App', () => {
     expect(screen.queryByText(/provider|model|retrain|n8n|outbox/i)).not.toBeInTheDocument();
   });
 
+  it('separates tasks, integrations, and account security into explicit sections', async () => {
+    runtimeConfig.oidcIssuer = 'https://identity.example/realms/eisenhower';
+    mockedOidcSession.buildAccountManagementUrl.mockReturnValue(
+      'https://identity.example/realms/eisenhower/account'
+    );
+    render(<App />);
+    await screen.findByText('Existing task');
+
+    expect(screen.getByRole('button', { name: 'Zadania' })).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.queryByRole('heading', { name: 'Synchronizacja kalendarza' })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Integracje' }));
+    expect(await screen.findByRole('heading', { name: 'Synchronizacja kalendarza' })).toBeVisible();
+    expect(screen.queryByLabelText('Test board')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Konto i bezpieczeństwo' }));
+    expect(screen.getByRole('heading', { name: 'Konto i bezpieczeństwo' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Polski' })).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Zmień lub zresetuj hasło' })).toHaveAttribute(
+      'href',
+      'https://identity.example/realms/eisenhower/account'
+    );
+    expect(screen.getByRole('button', { name: 'Wyloguj' })).toBeVisible();
+  });
+
   it('shows offline state, never claims freshness and retries locally', async () => {
     mockedApi.getTasks.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     render(<App />);
@@ -396,6 +423,7 @@ describe('App', () => {
   it('logs out without persisting the access code', async () => {
     render(<App />);
     await screen.findByText('Existing task');
+    fireEvent.click(screen.getByRole('button', { name: 'Konto i bezpieczeństwo' }));
     fireEvent.click(screen.getByRole('button', { name: 'Wyloguj' }));
     expect(screen.getByLabelText('Kod dostępu')).toBeInTheDocument();
     expect(localStorage.getItem('api-token')).toBeNull();

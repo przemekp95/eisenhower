@@ -192,6 +192,18 @@ describe('per-user Google Calendar OAuth', () => {
     }, 'production')).toMatchObject({ returnOrigins: ['https://app.example'] });
   });
 
+  it('fails closed if the upserted calendar connection is unexpectedly unavailable', async () => {
+    const start = await request(app).post('/calendar/oauth/start')
+      .set('Authorization', bearer).send({ returnPath: '/' });
+    jest.spyOn(CalendarConnectionModel, 'findOneAndUpdate').mockResolvedValueOnce(null);
+
+    const callback = await request(app).get('/calendar/oauth/callback')
+      .query({ state: new URL(start.body.authorizationUrl).searchParams.get('state'), code: 'code' });
+
+    expect(callback.status).toBe(500);
+    expect(callback.body.error).toBe('calendar_connection_create_failed');
+  });
+
   it('appends callback status to an existing return query and revokes with access-token fallback', async () => {
     google.omitRefresh = true;
     const start = await request(app).post('/calendar/oauth/start').set('Authorization', bearer).send({ returnPath: '/settings?tab=calendar' });

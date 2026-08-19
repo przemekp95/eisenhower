@@ -4,7 +4,8 @@ import { expect, test } from '@playwright/test';
 test('keeps manual task flow available when optional AI capabilities are offline', async ({
   page,
 }) => {
-  test.setTimeout(60_000);
+  // The flow includes Axe plus two persisted manual updates after the fail-closed AI check.
+  test.setTimeout(90_000);
 
   await page.addInitScript(() => {
     localStorage.clear();
@@ -26,7 +27,9 @@ test('keeps manual task flow available when optional AI capabilities are offline
 
   const title = `Ręcznie bez GPU ${Date.now()}`;
   await page.getByLabel('Tytuł zadania').fill(title);
-  await page.getByRole('button', { name: 'Otwórz pomoc w porządkowaniu', exact: true }).click();
+  await page.getByRole('button', { name: 'Dodaj zadanie' }).click();
+  const task = page.locator('article').filter({ hasText: title });
+  await task.getByRole('button', { name: `Pomoc przy zadaniu ${title}`, exact: true }).click();
 
   const assistant = page.getByRole('dialog', { name: 'Pomoc w porządkowaniu' });
   await expect(assistant.getByText('Nie udało się sprawdzić dostępności pomocy.')).toBeVisible();
@@ -42,10 +45,10 @@ test('keeps manual task flow available when optional AI capabilities are offline
   expect(accessibility.violations).toEqual([]);
 
   await assistant.getByRole('button', { name: 'Zamknij i wybierz kwadrant ręcznie' }).click();
-  await page.getByText('Pilne', { exact: true }).click();
-  await page.getByText('Ważne', { exact: true }).click();
-  await expect(page.getByLabel('Pilne')).toBeChecked();
-  await expect(page.getByLabel('Ważne')).toBeChecked();
-  await page.getByRole('button', { name: 'Dodaj zadanie' }).click();
-  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  const urgent = task.getByRole('button', { name: `Przełącz pilność zadania ${title}` });
+  await urgent.click();
+  await expect(urgent).toHaveAttribute('aria-pressed', 'true');
+  const important = task.getByRole('button', { name: `Przełącz ważność zadania ${title}` });
+  await important.click();
+  await expect(important).toHaveAttribute('aria-pressed', 'true');
 });

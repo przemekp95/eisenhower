@@ -93,6 +93,7 @@ export interface TaskSchedule {
   dueAt: Date;
   timeZone: string;
   remindAt?: Date;
+  durationMinutes?: number;
 }
 
 export interface StoredTask extends TaskScope, TaskPayload {

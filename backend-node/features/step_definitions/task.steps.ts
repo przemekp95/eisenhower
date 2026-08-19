@@ -326,10 +326,16 @@ Then(
 );
 
 Then(
-  'the returned schedule is due {string} in {string} with reminder {string}',
-  function (this: EisenhowerWorld, dueAt: string, timeZone: string, remindAt: string) {
+  'the returned schedule is due {string} in {string} for {int} minutes with reminder {string}',
+  function (
+    this: EisenhowerWorld,
+    dueAt: string,
+    timeZone: string,
+    durationMinutes: number,
+    remindAt: string
+  ) {
     assert.ok(this.response, 'A task response must exist');
-    assert.deepEqual(this.response.body.schedule, { dueAt, timeZone, remindAt });
+    assert.deepEqual(this.response.body.schedule, { dueAt, timeZone, durationMinutes, remindAt });
   }
 );
 

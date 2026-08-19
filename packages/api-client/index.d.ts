@@ -20,6 +20,7 @@ export interface TaskScheduleDto {
   dueAt: string;
   timeZone: string;
   remindAt?: string;
+  durationMinutes?: number;
 }
 
 export type TaskDelegationStatus =
@@ -70,6 +71,31 @@ export interface CalendarConflictDto {
   providerSnapshot: { title: string; dueAt: string; timeZone: string };
   status: 'open' | 'resolved_local' | 'resolved_provider';
   revision: number;
+}
+
+export interface CalendarDeletedBindingDto {
+  _id: string;
+  taskId: string;
+  taskTitle: string;
+  taskRevision: number;
+  providerEventId: string;
+  providerDeletedAt: string;
+}
+
+export interface CalendarEventCandidateDto {
+  id: string;
+  etag: string;
+  title: string;
+  start: string;
+  end: string;
+  timeZone: string;
+}
+
+export interface CalendarLinkPreviewDto {
+  task: { id: string; title: string; revision: number; schedule: TaskScheduleDto | null };
+  event: CalendarEventCandidateDto;
+  googleToEisenhower: { title: string; schedule: TaskScheduleDto };
+  eisenhowerToGoogle: { title: string; schedule: TaskScheduleDto | null };
 }
 
 export interface QuadrantDefinition {
@@ -499,6 +525,10 @@ export const CALENDAR_API_PATHS: {
   readonly status: '/calendar/status';
   readonly syncRequests: '/calendar/sync-requests';
   readonly conflicts: '/calendar/conflicts';
+  readonly deletedBindings: '/calendar/deleted-bindings';
+  readonly events: '/calendar/events';
+  readonly bindings: '/calendar/bindings';
+  readonly imports: '/calendar/imports';
   readonly oauthStart: '/calendar/oauth/start';
   readonly oauthDisconnect: '/calendar/oauth/disconnect';
 };
@@ -541,6 +571,26 @@ export interface TaskApiClient {
     revision: number,
     idempotencyKey: string
   ): Promise<CalendarConflictDto>;
+  listCalendarDeletedBindings(): Promise<CalendarDeletedBindingDto[]>;
+  resolveCalendarDeletedBinding(
+    id: string,
+    strategy: 'clear_date' | 'recreate' | 'detach',
+    taskRevision: number,
+    idempotencyKey: string
+  ): Promise<{ outcome: 'clear_date' | 'recreate' | 'detach'; taskId: string; taskRevision: number }>;
+  listCalendarEvents(timeMin: string, timeMax: string): Promise<{ events: CalendarEventCandidateDto[]; nextPageToken?: string }>;
+  previewCalendarLink(taskId: string, providerEventId: string): Promise<CalendarLinkPreviewDto>;
+  createCalendarLink(input: {
+    taskId: string;
+    providerEventId: string;
+    providerEtag: string;
+    direction: 'google_to_eisenhower' | 'eisenhower_to_google';
+    taskRevision: number;
+    idempotencyKey: string;
+  }): Promise<{ outcome: 'linked'; taskId: string; taskRevision: number }>;
+  importCalendarEvents(providerEventIds: string[], idempotencyKey: string): Promise<{
+    results: Array<{ providerEventId: string; status: 'imported' | 'duplicate' | 'failed'; taskId?: string; error?: string }>;
+  }>;
   getHealth(): Promise<HealthResponseDto>;
   getReadiness(): Promise<HealthResponseDto>;
 }

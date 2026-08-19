@@ -16,6 +16,9 @@ import apiClient, {
   type TaskScheduleDto,
   type CalendarStatusDto,
   type CalendarConflictDto,
+  type CalendarDeletedBindingDto,
+  type CalendarEventCandidateDto,
+  type CalendarLinkPreviewDto,
   type MemoryConfirmResponseDto,
   type MemoryConsentReceipt,
   type MemoryExportResponseDto,
@@ -77,6 +80,9 @@ export type {
   TaskScheduleDto,
   CalendarStatusDto,
   CalendarConflictDto,
+  CalendarDeletedBindingDto,
+  CalendarEventCandidateDto,
+  CalendarLinkPreviewDto,
 };
 
 export async function getTasks(lifecycle: TaskLifecycleFilter = 'active'): Promise<TaskDto[]> {
@@ -166,6 +172,45 @@ export async function resolveCalendarConflict(
   idempotencyKey: string
 ): Promise<CalendarConflictDto> {
   return getTaskApi().resolveCalendarConflict(id, strategy, revision, idempotencyKey);
+}
+
+export async function getCalendarDeletedBindings(): Promise<CalendarDeletedBindingDto[]> {
+  return getTaskApi().listCalendarDeletedBindings();
+}
+
+export async function resolveCalendarDeletedBinding(
+  id: string,
+  strategy: 'clear_date' | 'recreate' | 'detach',
+  taskRevision: number,
+  idempotencyKey: string
+) {
+  return getTaskApi().resolveCalendarDeletedBinding(id, strategy, taskRevision, idempotencyKey);
+}
+
+export async function getCalendarEvents(timeMin: string, timeMax: string) {
+  return getTaskApi().listCalendarEvents(timeMin, timeMax);
+}
+
+export async function previewCalendarLink(
+  taskId: string,
+  providerEventId: string
+): Promise<CalendarLinkPreviewDto> {
+  return getTaskApi().previewCalendarLink(taskId, providerEventId);
+}
+
+export async function createCalendarLink(input: {
+  taskId: string;
+  providerEventId: string;
+  providerEtag: string;
+  direction: 'google_to_eisenhower' | 'eisenhower_to_google';
+  taskRevision: number;
+  idempotencyKey: string;
+}) {
+  return getTaskApi().createCalendarLink(input);
+}
+
+export async function importCalendarEvents(providerEventIds: string[], idempotencyKey: string) {
+  return getTaskApi().importCalendarEvents(providerEventIds, idempotencyKey);
 }
 
 export async function classifyTask(title: string): Promise<ClassificationResult> {

@@ -424,6 +424,36 @@ test('starts and disconnects Google Calendar through authenticated business endp
   assert.equal(calls[1][1].method, 'POST');
 });
 
+test('lists selected calendar events and sends revision-safe manual link and import commands', async () => {
+  const calls = [];
+  const event = { id: 'event-1', etag: 'etag-1', title: 'Google event', start: '2026-08-20T12:00:00.000Z', end: '2026-08-20T12:30:00.000Z', timeZone: 'Europe/Warsaw' };
+  const api = createTaskApi('https://api.example.com', async (...args) => {
+    calls.push(args);
+    const [url] = args;
+    if (url.includes('/events?')) return jsonResponse({ events: [event] });
+    if (url.endsWith('/bindings/preview')) return jsonResponse({
+      task: { id: 'task-1', title: 'Local', revision: 2, schedule: null },
+      event,
+      googleToEisenhower: { title: event.title, schedule: { dueAt: event.start, timeZone: event.timeZone, durationMinutes: 30 } },
+      eisenhowerToGoogle: { title: 'Local', schedule: null },
+    });
+    if (url.endsWith('/bindings')) return jsonResponse({ outcome: 'linked', taskId: 'task-1', taskRevision: 3 });
+    return jsonResponse({ results: [{ providerEventId: 'event-2', status: 'imported', taskId: 'task-2' }] });
+  });
+
+  await api.listCalendarEvents('2026-08-01T00:00:00.000Z', '2026-09-01T00:00:00.000Z');
+  await api.previewCalendarLink('task-1', 'event-1');
+  await api.createCalendarLink({ taskId: 'task-1', providerEventId: 'event-1', providerEtag: 'etag-1', direction: 'google_to_eisenhower', taskRevision: 2, idempotencyKey: 'link-1' });
+  await api.importCalendarEvents(['event-2'], 'import-1');
+
+  assert.match(calls[0][0], /\/calendar\/events\?/);
+  assert.deepEqual(JSON.parse(calls[1][1].body), { taskId: 'task-1', providerEventId: 'event-1' });
+  assert.equal(calls[2][1].headers['If-Match'], '"2"');
+  assert.equal(calls[2][1].headers['Idempotency-Key'], 'link-1');
+  assert.equal(calls[3][1].headers['Idempotency-Key'], 'import-1');
+  assert.deepEqual(JSON.parse(calls[3][1].body), { providerEventIds: ['event-2'] });
+});
+
 test('filters task lists by lifecycle and sends conflict-safe lifecycle transitions', async () => {
   const calls = [];
   const api = createTaskApi('https://api.example.com', async (...args) => {

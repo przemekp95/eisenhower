@@ -1634,3 +1634,30 @@ def test_capabilities_stay_available_when_startup_raises_generic_error(tmp_path:
   assert stats.status_code == 200
   assert stats.json()["model_ready"] is False
   assert stats.json()["model_error"] == "corrupt artifacts"
+
+
+def test_knowledge_capabilities_are_routed_by_rag_runtime_not_classifier_readiness(tmp_path: Path):
+  settings = Settings(
+    training_data_path=tmp_path / "training.json",
+    model_cache_dir=tmp_path / "runtime",
+    rag_retrieval_enabled=True,
+    rag_generation_enabled=True,
+    rag_response_enabled=True,
+  )
+  store = TrainingStore(settings.training_data_path)
+  service = QuadrantAIService(
+    settings=settings,
+    store=store,
+    local_model=FakeLocalModel(startup_error=RuntimeError("classifier offline")),
+  )
+  client = TestClient(
+    create_app(settings=settings, store=store, ai_service=service, rag_service=FakeRagService()),
+    headers={"Authorization": "Bearer test-api-token"},
+  )
+
+  capabilities = client.get("/capabilities")
+
+  assert capabilities.status_code == 200
+  assert capabilities.json()["classification"] is False
+  assert capabilities.json()["knowledge_retrieval"] is True
+  assert capabilities.json()["retrieval_augmented_generation"] is True

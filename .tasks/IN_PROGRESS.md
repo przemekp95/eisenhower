@@ -1,5 +1,34 @@
 # In Progress
 
+## TASK-065: Align task-first UX, bulk import, Calendar semantics, and governed local AI
+**Priority:** P0 | **Tags:** product, bulk-import, calendar, rag, local-runtime
+
+Deliver the approved task-first product flow across web and mobile, turn batch classification into a reviewable idempotent import, close the explicit Google Calendar lifecycle gaps, and prepare a coherent private local RAG runtime without crossing activation, publication, physical-device, or real-traffic gates.
+
+### Plan
+
+- Put Add task, Scan photo, and Add in bulk above the matrix; keep per-task grounded help scoped to that task, Calendar under Integrations, and language, Keycloak account security, and logout under Account and security.
+- Preserve separate camera/gallery OCR entrypoints, byte-level metadata sanitization, fail-closed image limits/formats, review/correction, idempotency, and honest per-item partial outcomes while leaving physical camera acceptance open.
+- Implement paste-to-classify-to-review-to-deduplicate-to-confirm idempotent bulk import with editable selection/quadrant and per-item results, reusing the MiniLM/PyTorch classifier without presenting it as generation.
+- Make task scheduling drive explicit Google create/update/delete semantics, duration and reminder policy; add selected existing-event linking/import, deletion choices, calendar selection, watch registration, reconciliation, conflicts, ETag/ownership, outbox and replay-safe contracts without implicit whole-calendar import.
+- Keep grounded answers single-turn with sources, preview, and apply-to-description; route capabilities from the actual knowledge runtime, prepare the private allowlisted retrieval/generation topology, and keep user-visible generation and every MAG capability disabled pending separate checksum-bound owner decisions.
+- Use focused red-green-refactor loops for each behavior, then run web/API/n8n/mobile contracts, builds, typechecks, lint, proportional full verification, and an isolated local runtime rehearsal without fabricating physical-device, real-traffic, publication, or production evidence.
+- After the exact candidate passes local verification, promote it through the protected feature-to-dev and dev-to-master flow, require exact-head and post-merge CI, restore final master/dev equality, then deploy that exact SHA to the supported private local runtime while preserving the prior runtime until smoke and rollback checks pass.
+
+### Evidence boundaries
+
+Canonical source, source/CI promotion, release artifact, local deployed release, capability flags, approved corpus size, live model health, actual user traffic, physical camera behavior, public publication and production acceptance are independent evidence classes. Public Mikrus deployment and user-visible generation or MAG activation remain outside this authorization. TASK-065 remains in progress while any required human activation, physical-device, or real-traffic gate is open.
+
+### Progress
+
+The web now exposes Add task, Scan photo and Add in bulk above the matrix; OCR and bulk import are standalone review flows, while sourced help remains bound to a persisted task and can update only that task after an editable preview. Bulk import performs shared-classifier review, editable selection/quadrants, existing/in-batch duplicate detection, durable per-row idempotency keys, retry and honest per-item outcomes. Integrations owns Calendar, and Account and security owns language, Keycloak account/password management and logout.
+
+Calendar scheduling now suppresses provider work before connection, emits create/update/delete only for valid connection/binding states, stores a bounded duration and maps reminders explicitly. The supported Calendar surface adds bounded candidate browsing, previewed direction-selectable unique manual binding, selected-only idempotent import, three explicit Google-deletion decisions, immediate post-OAuth watch registration, and a baseline sync that intentionally discards historical events while retaining syncToken/410/reconciliation/outbox/HMAC/conflict behavior. The current connection still targets its configured calendar ID; a safe Google-owned calendar-list selector is not yet implemented.
+
+Knowledge capabilities are now derived from the authenticated RAG runtime, generator, response flag, allowlists and canary decision rather than classifier readiness. Classifier, OCR and bulk labels state MiniLM embedding + PyTorch/MLP and Tesseract truthfully. The existing local private runtime remains OIDC/allowlisted with retrieval true only in the knowledge role, generation/response and all memory flags false. Its approved canonical collection is empty; the current manifest SHA no longer matches the SHA frozen in the owner packet, so corpus ingest and any generation/MAG activation remain fail-closed pending a fresh checksum-bound decision. The stale browser journeys that blocked the first PR run now follow Integrations and saved-task assistance, persisted test data is isolated across viewport projects, and focus returns to the task card after an in-dialog update. Exact-head CI measured valid narrow-runner mobile flows at 64–76 seconds; the affected scenario budgets are therefore bounded at 60/90 seconds without changing the 20-minute job budget, retries, Axe checks or assertions. All 24 Playwright/Axe checks and fresh full verification are green: Node 276 and web 244 tests at 100% coverage, BDD 21 scenarios/149 steps, API client 34, MCP 50, n8n 18, web integration 2, AI 833 passed/13 skipped at 87.93% coverage, mobile 202, production dependency gates, Node typecheck and pylint 10/10. Exact-SHA promotion, artifact build and final local deployment remain pending.
+
+---
+
 ## TASK-028: Add Grounded RAG and camera parity across web and mobile
 **Priority:** P2 | **Tags:** product, rag, mobile, web, parity
 

@@ -222,6 +222,46 @@ describe('Matrix', () => {
     expect(screen.getByText('Later task')).toBeInTheDocument();
   });
 
+  it('opens scan and bulk import as separate matrix actions and closes each dialog', async () => {
+    renderMatrix();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skanuj zdjęcie' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Skanuj zdjęcie');
+    fireEvent.click(screen.getByRole('button', { name: 'Zamknij' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dodaj zbiorczo' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Dodaj zadania zbiorczo');
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Zamknij' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('applies a task-scoped quadrant suggestion and closes only that assistant', async () => {
+    const onUpdateTask = jest.fn().mockResolvedValue(undefined);
+    renderMatrix({ onUpdateTask });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pomoc przy zadaniu Urgent task' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply assistant quadrant' }));
+    await waitFor(() =>
+      expect(onUpdateTask).toHaveBeenCalledWith('1', {
+        urgent: true,
+        important: false,
+      })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Close AI tools' }));
+    expect(screen.queryByText('AI tools')).not.toBeInTheDocument();
+  });
+
+  it('keeps scan and bulk import visible above the matrix and task help scoped to a saved task', () => {
+    renderMatrix();
+
+    expect(screen.getByRole('button', { name: 'Dodaj zadanie' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Skanuj zdjęcie' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Dodaj zbiorczo' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Pomoc przy zadaniu Urgent task' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Pomoc AI' })).not.toBeInTheDocument();
+  });
+
   it('runs lifecycle filters and default workflow callbacks safely', async () => {
     renderMatrix({
       tasks: [
@@ -690,33 +730,6 @@ describe('Matrix', () => {
     });
   });
 
-  it('opens the assistant for a draft and applies confirmed patches only to the form', async () => {
-    const onAddTask = jest.fn().mockResolvedValue(undefined);
-    const onUpdateTask = jest.fn().mockResolvedValue(undefined);
-    renderMatrix({ tasks: [], onAddTask, onUpdateTask });
-
-    fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
-      target: { value: 'Draft with AI' },
-    });
-    fireEvent.change(screen.getByPlaceholderText(/Opis/i), {
-      target: { value: 'Draft context' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Otwórz pomoc w porządkowaniu' }));
-
-    expect(await screen.findByTestId('assistant-target')).toHaveTextContent(
-      'Draft with AI|Draft context'
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Apply assistant description' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Apply assistant quadrant' }));
-
-    expect(screen.getByPlaceholderText(/Opis/i)).toHaveValue('AI description');
-    const checkboxes = screen.getAllByRole('checkbox');
-    expect(checkboxes[0]).toBeChecked();
-    expect(checkboxes[1]).not.toBeChecked();
-    expect(onAddTask).not.toHaveBeenCalled();
-    expect(onUpdateTask).not.toHaveBeenCalled();
-  });
-
   it('opens the assistant from an owned task and persists only the confirmed patch', async () => {
     const onUpdateTask = jest.fn().mockResolvedValue(undefined);
     renderMatrix({
@@ -733,7 +746,7 @@ describe('Matrix', () => {
       onUpdateTask,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Otwórz pomoc dla zadania Existing task' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pomoc przy zadaniu Existing task' }));
     expect(await screen.findByTestId('assistant-target')).toHaveTextContent(
       'Existing task|Existing description'
     );
@@ -762,9 +775,7 @@ describe('Matrix', () => {
       ],
       onUpdateTask,
     });
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Otwórz pomoc dla zadania Conflicting task' })
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Pomoc przy zadaniu Conflicting task' }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply assistant description' }));
     await screen.findByRole('alert');
     expect(screen.getByRole('alert')).toHaveTextContent('revision conflict');
@@ -791,68 +802,8 @@ describe('Matrix', () => {
     });
 
     expect(
-      screen.queryByRole('button', { name: 'Otwórz pomoc dla zadania Delegated AI task' })
+      screen.queryByRole('button', { name: 'Pomoc przy zadaniu Delegated AI task' })
     ).not.toBeInTheDocument();
-  });
-
-  it('imports scanned tasks through the idempotent matrix pipeline', async () => {
-    const onAddTask = jest.fn().mockResolvedValue(undefined);
-
-    render(
-      <LanguageProvider>
-        <Matrix
-          tasks={[]}
-          loading={false}
-          onAddTask={onAddTask}
-          onUpdateTask={jest.fn()}
-          onDeleteTask={jest.fn()}
-        />
-      </LanguageProvider>
-    );
-
-    fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
-      target: { value: 'dowolne zadanie' },
-    });
-    fireEvent.click(screen.getByText(/Otwórz pomoc w porządkowaniu/i));
-    fireEvent.click(await screen.findByText('Import scanned tasks'));
-
-    await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(2));
-    expect(onAddTask).toHaveBeenNthCalledWith(
-      1,
-      { title: 'Escalate outage', description: '', urgent: true, important: true },
-      expect.stringMatching(/^web-ocr-import-/)
-    );
-    expect(onAddTask).toHaveBeenNthCalledWith(
-      2,
-      { title: 'Plan roadmap', description: '', urgent: false, important: true },
-      expect.stringMatching(/^web-ocr-import-/)
-    );
-  });
-
-  it('continues a scanned import when one task cannot be saved', async () => {
-    const onAddTask = jest
-      .fn()
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error('second write failed'));
-
-    render(
-      <LanguageProvider>
-        <Matrix
-          tasks={[]}
-          loading={false}
-          onAddTask={onAddTask}
-          onUpdateTask={jest.fn()}
-          onDeleteTask={jest.fn()}
-        />
-      </LanguageProvider>
-    );
-    fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
-      target: { value: 'draft' },
-    });
-    fireEvent.click(screen.getByText(/Otwórz pomoc w porządkowaniu/i));
-    fireEvent.click(await screen.findByText('Import scanned tasks'));
-
-    await waitFor(() => expect(onAddTask).toHaveBeenCalledTimes(2));
   });
 
   it('ignores empty AI suggestions', async () => {
@@ -917,60 +868,6 @@ describe('Matrix', () => {
     fireEvent.click(screen.getByText(/Zasugeruj kwadrant/i));
 
     await waitFor(() => expect(screen.getByText('Analiza nie powiodła się')).toBeInTheDocument());
-  });
-
-  it('opens lazy AI tools when a title exists', async () => {
-    render(
-      <LanguageProvider>
-        <Matrix
-          tasks={[]}
-          loading={false}
-          onAddTask={jest.fn()}
-          onUpdateTask={jest.fn()}
-          onDeleteTask={jest.fn()}
-        />
-      </LanguageProvider>
-    );
-
-    fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
-      target: { value: 'critical task' },
-    });
-    fireEvent.click(screen.getByText(/Otwórz pomoc w porządkowaniu/i));
-
-    await screen.findByTestId('assistant-target');
-  });
-
-  it('applies a reviewed quadrant result back into the form and closes the drawer', async () => {
-    render(
-      <LanguageProvider>
-        <Matrix
-          tasks={[]}
-          loading={false}
-          onAddTask={jest.fn()}
-          onUpdateTask={jest.fn()}
-          onDeleteTask={jest.fn()}
-        />
-      </LanguageProvider>
-    );
-
-    fireEvent.change(screen.getByPlaceholderText(/Tytuł zadania/i), {
-      target: { value: 'critical task' },
-    });
-    fireEvent.click(screen.getByText(/Otwórz pomoc w porządkowaniu/i));
-
-    await screen.findByTestId('assistant-target');
-
-    fireEvent.click(screen.getByText(/Apply assistant quadrant/i));
-
-    await waitFor(() => {
-      const checkboxes = screen.getAllByRole('checkbox');
-      expect(checkboxes[0]).toBeChecked();
-      expect(checkboxes[1]).not.toBeChecked();
-    });
-
-    fireEvent.click(screen.getByText(/Close AI tools/i));
-
-    await waitFor(() => expect(screen.queryByText(/AI tools/i)).not.toBeInTheDocument());
   });
 
   it('preserves quadrant 0 from langchain analysis', () => {
