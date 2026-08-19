@@ -359,7 +359,13 @@ def run(
       "hybrid": hybrid_retriever,
     }).run(cases, k=5)
     recovery = (
-      verify_candidate_collection_snapshot(qdrant, manager, collection_name, snapshot_output)
+      verify_candidate_collection_snapshot(
+        qdrant,
+        manager,
+        collection_name,
+        snapshot_output,
+        qdrant_url=qdrant_url,
+      )
       if snapshot_output is not None else None
     )
     report = {
