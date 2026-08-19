@@ -11,6 +11,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_PATH = ROOT / "compose.yaml"
+MCP_DOCKERFILE_PATH = ROOT / "mcp" / "eisenhower_adapter" / "Dockerfile"
 PROVIDER_STACKS = (
   ROOT / "deploy" / "inference" / "compose.amd.yaml",
   ROOT / "deploy" / "inference" / "compose.nvidia.yaml",
@@ -133,3 +134,47 @@ def test_application_uses_one_three_variable_inference_contract_and_external_pro
 
 def test_dev_and_prod_render_the_identical_service_graph():
   assert _graph(_render("development")) == _graph(_render("production"))
+
+
+def test_first_party_writers_wait_for_initialized_runtime_volumes():
+  services = _compose()["services"]
+  runtime_writers = {
+    "ai-service",
+    "api-service",
+    "classifier-service",
+    "knowledge-service",
+    "rag-worker",
+    "mcp-service",
+  }
+
+  for name in runtime_writers:
+    dependency = services[name].get("depends_on", {}).get("audit-volume-init")
+    assert dependency == {"condition": "service_completed_successfully"}, name
+
+
+def test_runtime_volume_initializer_owns_every_non_root_writable_mount():
+  initializer = _compose()["services"]["audit-volume-init"]
+  destinations = {
+    mount.split(":", 1)[1]
+    for mount in initializer["volumes"]
+  }
+  command = " ".join(initializer["command"])
+
+  assert destinations == {
+    "/audit",
+    "/rag-jobs",
+    "/model-cache",
+    "/classifier-runtime",
+    "/knowledge-runtime",
+    "/ingest-runtime",
+  }
+  for destination in destinations:
+    assert f"chown 65532:65532 {destination}" in command
+  assert initializer["restart"] == "no"
+  assert _compose()["services"]["rag-worker"]["group_add"] == ["1001"]
+
+
+def test_mcp_runtime_discovers_installed_console_script():
+  dockerfile = MCP_DOCKERFILE_PATH.read_text()
+
+  assert re.search(r"(?m)^\s*PATH=/opt/python/bin:", dockerfile)

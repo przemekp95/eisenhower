@@ -20,6 +20,7 @@ LABEL org.opencontainers.image.revision=$RELEASE_SHA
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    PATH=/opt/python/bin:${PATH} \
     PYTHONPATH=/opt/python:/app/backend-ai
 
 WORKDIR /app/mcp
