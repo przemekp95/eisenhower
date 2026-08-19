@@ -149,7 +149,7 @@ services:
       - AUDIT_DATABASE_PATH=/app/audit/audit.sqlite3
       - RELEASE_SHA=${RELEASE_SHA:?RELEASE_SHA is required}
       - CLASSIFIER_SERVICE_URL=http://classifier-service:8000
-      - KNOWLEDGE_SERVICE_URL=${KNOWLEDGE_SERVICE_URL:-http://classifier-service:8000}
+      - KNOWLEDGE_SERVICE_URL=${KNOWLEDGE_SERVICE_URL:-http://knowledge-service:8000}
       - AI_ROLE_ALLOWED_HOSTS=classifier-service,knowledge-service
     volumes:
       - audit_data:/app/audit
