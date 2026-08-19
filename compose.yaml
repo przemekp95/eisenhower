@@ -69,6 +69,10 @@ services:
         chown 65532:65532 /classifier-runtime && chmod 0770 /classifier-runtime &&
         chown 65532:65532 /knowledge-runtime && chmod 0770 /knowledge-runtime &&
         chown 65532:65532 /ingest-runtime && chmod 0770 /ingest-runtime &&
+        chgrp 1001 /promotion && chmod 2750 /promotion &&
+        if [ -f /promotion/current.json ]; then
+        chgrp 1001 /promotion/current.json && chmod 0640 /promotion/current.json;
+        fi &&
         find /audit -maxdepth 1 -type f -name 'audit.sqlite3*'
         -exec chown 65532:65532 {} + -exec chmod 0600 {} +
     volumes:
@@ -78,6 +82,9 @@ services:
       - classifier_runtime:/classifier-runtime
       - knowledge_runtime:/knowledge-runtime
       - ingest_runtime:/ingest-runtime
+      - type: bind
+        source: ${AI_PROMOTION_ROOT:-./.runtime/promotion}
+        target: /promotion
 
   backup-volume-helper:
     <<: *common
@@ -286,6 +293,7 @@ services:
       - RERANKER_ALLOWED_HOSTS=${RERANKER_ALLOWED_HOSTS:-reranker}
       - INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://inference:8000/v1}
       - INFERENCE_API_KEY=${INFERENCE_API_KEY:-}
+      - INFERENCE_MODEL=${INFERENCE_MODEL:-}
       - INFERENCE_ALLOWED_HOSTS=${INFERENCE_ALLOWED_HOSTS:-inference}
       - PROMPT_VERSION=${PROMPT_VERSION:-1.2.0}
       - KNOWLEDGE_PROMPT_VERSION=${KNOWLEDGE_PROMPT_VERSION:-1.0.0}
