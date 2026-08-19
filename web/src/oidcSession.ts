@@ -9,6 +9,14 @@ export type OidcRuntimeConfig = {
 
 const STATE_KEY = 'eisenhower.oidc.state';
 const VERIFIER_KEY = 'eisenhower.oidc.verifier';
+const ATTEMPT_KEY = 'eisenhower.oidc.attempt';
+type OidcLoginAttempt = 'started' | 'already-started';
+let pendingAttempt: Promise<OidcLoginAttempt> | null = null;
+
+export function resetOidcLoginAttempt() {
+  pendingAttempt = null;
+  sessionStorage.removeItem(ATTEMPT_KEY);
+}
 
 export function buildAccountManagementUrl(issuer: string | undefined) {
   if (!issuer) return null;
@@ -38,35 +46,50 @@ function randomValue(size: number) {
   return base64Url(bytes);
 }
 
-export async function beginOidcLogin(
+export function beginOidcLogin(
   config: OidcRuntimeConfig,
   /* istanbul ignore next -- jsdom cannot perform a real top-level navigation */
   navigate: (target: string) => void = (target) => window.location.assign(target)
 ) {
-  const verifier = randomValue(48);
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-  const state = randomValue(24);
-  sessionStorage.setItem(STATE_KEY, state);
-  sessionStorage.setItem(VERIFIER_KEY, verifier);
+  if (pendingAttempt) return pendingAttempt;
+  if (sessionStorage.getItem(ATTEMPT_KEY)) {
+    return Promise.resolve('already-started' as const);
+  }
+  sessionStorage.setItem(ATTEMPT_KEY, 'starting');
+  pendingAttempt = (async () => {
+    try {
+      const verifier = randomValue(48);
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+      const state = randomValue(24);
+      sessionStorage.setItem(STATE_KEY, state);
+      sessionStorage.setItem(VERIFIER_KEY, verifier);
 
-  const authorizationUrl = new URL(
-    `${config.issuer.replace(/\/+$/, '')}/protocol/openid-connect/auth`
-  );
-  authorizationUrl.search = new URLSearchParams({
-    client_id: config.clientId,
-    redirect_uri: config.redirectUri,
-    response_type: 'code',
-    scope: config.scopes,
-    state,
-    code_challenge: base64Url(new Uint8Array(digest)),
-    code_challenge_method: 'S256',
-  }).toString();
-  navigate(authorizationUrl.toString());
+      const authorizationUrl = new URL(
+        `${config.issuer.replace(/\/+$/, '')}/protocol/openid-connect/auth`
+      );
+      authorizationUrl.search = new URLSearchParams({
+        client_id: config.clientId,
+        redirect_uri: config.redirectUri,
+        response_type: 'code',
+        scope: config.scopes,
+        state,
+        code_challenge: base64Url(new Uint8Array(digest)),
+        code_challenge_method: 'S256',
+      }).toString();
+      navigate(authorizationUrl.toString());
+      return 'started' as const;
+    } catch (issue) {
+      resetOidcLoginAttempt();
+      throw issue;
+    }
+  })();
+  return pendingAttempt;
 }
 
 export async function completeOidcLogin(url: URL, config: OidcRuntimeConfig) {
   const code = url.searchParams.get('code');
   if (!code) return false;
+  resetOidcLoginAttempt();
 
   const expectedState = sessionStorage.getItem(STATE_KEY);
   const verifier = sessionStorage.getItem(VERIFIER_KEY);
