@@ -151,8 +151,34 @@ approvals:
 - [x] PII, secret, retention, deletion, backup and audit rules are explicit.
 - [x] One connector, exact roots, formats, size/count limits and exclusions are allowlisted.
 - [x] Synthetic fixtures and the transition to a reviewed real sample are separately approved.
-- [x] The final manifest is frozen and its SHA-256 is signed off by the required owners.
-- [x] No decision in this packet is treated as deployment, production traffic or publication approval.
+- [ ] The post-change manifest is regenerated and its SHA-256 is bound by the final-SHA private activation receipt.
+- [x] Corpus approval alone is not treated as deployment, production traffic or publication approval; the bounded private activation addendum below remains a separate decision.
 
 Until every applicable checkbox passes, implementation may use only synthetic fixtures and no real
 content may be written to the canonical store, Qdrant, prompts, logs or evaluation artifacts.
+
+## 2026-08-19 private activation addendum
+
+The repository/runtime owner separately approved a private, single-turn grounded response for tenant
+`eisenhower-owner`, project `eisenhower`, and response user
+`f226f9de-1c01-4a36-9eb3-77f3313e3456`. The approval covers retrieval, the pinned private generator
+and reranker, sourced answer preview, and explicit apply-to-description after confirmation. It does
+not authorize a public release, broader public ingress, chat, MAG, long-term history, or memory read,
+write, retrieval, augmentation, or response.
+
+The earlier `approved_manifest_sha256` records the previous decision point and is intentionally not
+silently rebound. It cannot authorize ingestion after repository changes. Activation requires a new
+manifest generated from only the allowlisted paths above, an isolated canonical/projection candidate,
+green retrieval and answer reports, and a private external receipt produced by
+`backend-ai/scripts/build_private_rag_activation.py` after the exact final Git SHA exists.
+
+The external receipt avoids embedding a commit's SHA inside a tracked corpus document belonging to
+that same commit. It binds the final Git SHA, approval and input checksums, non-zero canonical and
+projection counts, exact model and image revisions, prompt versions, explicit cohort, activation and
+expiry times, stop thresholds, and preserved rollback targets. Its validity may not exceed 30 days.
+Only a minimal commitment containing the final Git SHA and receipt SHA-256 is shareable; the private
+receipt remains mode `0600` in runtime evidence storage.
+
+The unchecked manifest item above is a hard stop. It becomes satisfied only by the observed final-SHA
+receipt and matching runtime inputs; editing this document alone does not authorize ingest or enable
+`RAG_GENERATION_ENABLED` or `RAG_RESPONSE_ENABLED`.
