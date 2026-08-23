@@ -1,6 +1,6 @@
 import { DynamicModule, Module } from '@nestjs/common';
 import { CreateAppOptions } from '../../app-options';
-import { loadConfig } from '../../config';
+import type { AppConfig } from '../../config';
 import { getDatabaseStatus } from '../../db';
 import { AI_HEALTH_CHECKER, DATABASE_STATUS_RESOLVER } from '../../platform/tokens';
 import { HealthController } from './health.controller';
@@ -8,8 +8,7 @@ import { defaultAiHealthChecker, HealthService } from './health.service';
 
 @Module({})
 export class HealthModule {
-  static register(options: CreateAppOptions): DynamicModule {
-    const config = loadConfig();
+  static register(options: CreateAppOptions, config: AppConfig): DynamicModule {
     return {
       module: HealthModule,
       controllers: [HealthController],

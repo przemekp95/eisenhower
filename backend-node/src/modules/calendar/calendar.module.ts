@@ -1,10 +1,11 @@
-import { DynamicModule, Module } from '@nestjs/common';
+import { DynamicModule, Global, Module } from '@nestjs/common';
 import type { CreateAppOptions } from '../../app-options';
 import { CalendarApplicationService } from '../../application/calendar';
 import { CALENDAR_SERVICE } from '../../platform/tokens';
 import { CalendarCommandController } from './calendar-command.controller';
 import { CalendarQueryController } from './calendar-query.controller';
 
+@Global()
 @Module({})
 export class CalendarModule {
   static register(options: CreateAppOptions): DynamicModule {
@@ -14,6 +15,7 @@ export class CalendarModule {
       providers: [
         { provide: CALENDAR_SERVICE, useValue: options.calendarApplicationService ?? new CalendarApplicationService() },
       ],
+      exports: [CALENDAR_SERVICE],
     };
   }
 }

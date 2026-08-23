@@ -1,9 +1,8 @@
 import { DynamicModule, Global, Module } from '@nestjs/common';
 import type { CreateAppOptions } from '../../app-options';
-import { CalendarApplicationService } from '../../application/calendar';
 import { CalendarInternalService } from '../../application/calendarInternal';
 import {
-  CALENDAR_INTERNAL_SERVICE, CALENDAR_SERVICE, INTERNAL_HMAC_SERVICE,
+  CALENDAR_INTERNAL_SERVICE, INTERNAL_HMAC_SERVICE,
 } from '../../platform/tokens';
 import { CalendarInboundController } from './calendar-inbound.controller';
 import { CalendarOperationsController } from './calendar-operations.controller';
@@ -24,7 +23,6 @@ export class CalendarInternalModule {
         : [],
       providers: hmacKey ? [
         { provide: INTERNAL_HMAC_SERVICE, useValue: new InternalHmacService(hmacKey) },
-        { provide: CALENDAR_SERVICE, useValue: options.calendarApplicationService ?? new CalendarApplicationService() },
         { provide: CALENDAR_INTERNAL_SERVICE, useValue: new CalendarInternalService() },
         InternalHmacGuard,
       ] : [],

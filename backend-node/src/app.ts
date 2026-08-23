@@ -10,8 +10,10 @@ import { HttpErrorFilter } from './platform/http/http-error.filter';
 export type { CreateAppOptions } from './app-options';
 export { defaultAiHealthChecker } from './modules/health/health.service';
 
-function validateSynchronousStartup(options: CreateAppOptions) {
-  const config = loadConfig();
+function validateSynchronousStartup(
+  options: CreateAppOptions,
+  config: ReturnType<typeof loadConfig> = loadConfig(),
+) {
   if (config.nodeEnv === 'production' && (
     !process.env.AUDIT_LOG_PATH
     || !process.env.AUDIT_HMAC_KEY
@@ -35,12 +37,20 @@ export function createApp(options: CreateAppOptions = {}): Promise<NestFastifyAp
   return createNestApplication(options, config);
 }
 
+export function createAppFromConfig(
+  options: CreateAppOptions,
+  config: ReturnType<typeof loadConfig>,
+): Promise<NestFastifyApplication> {
+  validateSynchronousStartup(options, config);
+  return createNestApplication(options, config);
+}
+
 async function createNestApplication(
   options: CreateAppOptions,
   config: ReturnType<typeof loadConfig>,
 ) {
   const app = await NestFactory.create<NestFastifyApplication>(
-    AppModule.register(options),
+    AppModule.register(options, config),
     createFastifyAdapter(config.nodeEnv),
     { rawBody: true, logger: false, abortOnError: false },
   );

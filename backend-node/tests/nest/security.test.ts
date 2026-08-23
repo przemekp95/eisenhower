@@ -35,7 +35,7 @@ class SecurityProbeModule {
   static register(options: CreateAppOptions): DynamicModule {
     return {
       module: SecurityProbeModule,
-      imports: [SecurityModule.register(options)],
+      imports: [SecurityModule.register(options, loadConfig())],
       controllers: [SecurityProbeController],
     };
   }

@@ -6,7 +6,7 @@ import rateLimit from '@fastify/rate-limit';
 import { createHash } from 'node:crypto';
 import { CreateAppOptions } from '../../app-options';
 import { AppConfig } from '../../config';
-import { attachRequestContext } from './request-context';
+import { attachRequestContext, requestContextFor } from './request-context';
 
 export const NODE_JSON_BODY_LIMIT = 32 * 1024;
 
@@ -24,16 +24,15 @@ export async function registerFastifyPlatform(
   options: CreateAppOptions,
 ) {
   const fastify = app.getHttpAdapter().getInstance();
-  const requestStartedAt = new WeakMap<object, number>();
+  fastify.decorateRequest('eisenhowerContext', null);
   fastify.addHook('onRequest', async (request, reply) => {
     attachRequestContext(request, reply);
-    requestStartedAt.set(request, Date.now());
   });
   fastify.addHook('onResponse', async (request, reply) => {
     if (config.nodeEnv === 'test' || request.method === 'OPTIONS') return;
     const path = request.url.split('?')[0];
     if (path === '/health' || path === '/health/ready') return;
-    const durationMs = Date.now() - (requestStartedAt.get(request) ?? Date.now());
+    const durationMs = Date.now() - requestContextFor(request).startedAtMs;
     const message = `backend-node ${request.method} ${path} ${reply.statusCode} ${durationMs}ms`;
     if (reply.statusCode >= 500) console.error(message);
     else console.info(message);

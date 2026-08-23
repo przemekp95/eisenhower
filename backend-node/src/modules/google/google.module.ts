@@ -6,7 +6,7 @@ import {
 import {
   GoogleOAuthHttpClient, GoogleOAuthService, loadGoogleOAuthConfig,
 } from '../../application/googleOAuth';
-import { loadConfig } from '../../config';
+import type { AppConfig } from '../../config';
 import { CalendarSyncStateModel } from '../../models/calendar';
 import {
   CALENDAR_CAN_CONNECT, GOOGLE_CALENDAR_SERVICE, GOOGLE_OAUTH_SERVICE,
@@ -17,9 +17,8 @@ import { GoogleProviderController } from './google-provider.controller';
 @Global()
 @Module({})
 export class GoogleModule {
-  static register(options: CreateAppOptions): DynamicModule {
-    const runtime = loadConfig();
-    const oauthConfig = options.googleOAuthConfig ?? loadGoogleOAuthConfig(process.env, runtime.nodeEnv);
+  static register(options: CreateAppOptions, config: AppConfig): DynamicModule {
+    const oauthConfig = options.googleOAuthConfig ?? loadGoogleOAuthConfig(process.env, config.nodeEnv);
     const calendarConfig = options.googleCalendarConfig ?? loadGoogleCalendarConfig(process.env);
     const hmacKey = options.calendarInternalHmacKey ?? process.env.CALENDAR_INTERNAL_HMAC_KEY;
     const calendarService = options.googleCalendarService ?? (

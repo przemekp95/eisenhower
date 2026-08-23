@@ -1,5 +1,5 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { createApp } from './app';
+import { createAppFromConfig } from './app';
 import { loadConfig } from './config';
 import { connectToDatabase, disconnectFromDatabase } from './db';
 
@@ -32,7 +32,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 async function bootstrap() {
   const config = loadConfig();
   await connectToDatabase(config.mongodbUri);
-  app = await createApp();
+  app = await createAppFromConfig({}, config);
   await app.listen({ port: config.port, host: '0.0.0.0' });
   console.log(`backend-node listening on ${config.port}`);
 }
