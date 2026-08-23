@@ -10,6 +10,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
+    "contract:capture": "tsx scripts/capture-contract-baseline.ts",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
     "test:bdd": "tsc -p tsconfig.bdd.json && NODE_ENV=test node --import tsx ./node_modules/@cucumber/cucumber/bin/cucumber.js --config cucumber.mjs",
     "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
