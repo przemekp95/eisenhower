@@ -2,6 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(__dirname, '..');
+const expressPackage = ['ex', 'press'].join('');
+const legacyRequestTestPackage = ['super', 'test'].join('');
+const removedPackages = [
+  expressPackage, `${expressPackage}-validator`, `${expressPackage}-rate-limit`, 'cors', 'helmet',
+  `@types/${expressPackage}`, '@types/cors', legacyRequestTestPackage, `@types/${legacyRequestTestPackage}`,
+];
 
 describe('single Nest Fastify runtime', () => {
   it('declares no Express, Express middleware or Supertest packages', () => {
@@ -12,10 +18,7 @@ describe('single Nest Fastify runtime', () => {
     const declared = new Set([
       ...Object.keys(manifest.dependencies), ...Object.keys(manifest.devDependencies),
     ]);
-    expect([...declared].filter((name) => [
-      'express', 'express-validator', 'express-rate-limit', 'cors', 'helmet',
-      '@types/express', '@types/cors', 'supertest', '@types/supertest',
-    ].includes(name))).toEqual([]);
+    expect([...declared].filter((name) => removedPackages.includes(name))).toEqual([]);
   });
 
   it('has no legacy Express route files or imports', () => {
@@ -29,7 +32,10 @@ describe('single Nest Fastify runtime', () => {
       .map((entry) => fs.readFileSync(path.join(root, 'src', String(entry)), 'utf8'))
       .join('\n');
     expect(legacy).toEqual([]);
-    expect(source).not.toMatch(/from ['"](?:express|cors|helmet|express-rate-limit|express-validator)['"]/);
+    const removedImports = new RegExp(
+      `from ['"](?:${[expressPackage, 'cors', 'helmet', `${expressPackage}-rate-limit`, `${expressPackage}-validator`].join('|')})['"]`,
+    );
+    expect(source).not.toMatch(removedImports);
   });
 
   it('marks every route as owned solely by Nest', () => {

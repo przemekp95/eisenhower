@@ -74,6 +74,6 @@ export function renderReport(result) {
   lines.push('', '## Regresje powyżej 20%', '');
   if (regressions.length) lines.push(...regressions.map((entry) => `- ${entry}`));
   else lines.push('- Nie zaobserwowano medianowej regresji >20% dla throughput, p95, RSS ani cold startu.');
-  lines.push('', 'Wynik wskazuje koszt pełnego kontenera DI/dekoratorów Nest przy zachowaniu kontraktu. Każda wymieniona regresja jest jawna; syntetyczny pomiar nie uzasadnia sam w sobie optymalizacji kosztem bezpieczeństwa lub zgodności.', '');
+  lines.push('', 'Wynik wskazuje koszt pełnego kontenera DI/dekoratorów Nest przy zachowaniu kontraktu. Każda wymieniona regresja jest jawna; syntetyczny pomiar nie uzasadnia sam w sobie optymalizacji kosztem bezpieczeństwa lub zgodności.');
   return `${lines.join('\n')}\n`;
 }

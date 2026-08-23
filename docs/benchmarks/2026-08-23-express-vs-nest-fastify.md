@@ -75,4 +75,3 @@ Metoda: warm-up 5s, pomiar 15s, 5 naprzemiennych powtórzeń, concurrency 1/10/5
 - mongo/cold-start: czas uruchomienia 54.51%
 
 Wynik wskazuje koszt pełnego kontenera DI/dekoratorów Nest przy zachowaniu kontraktu. Każda wymieniona regresja jest jawna; syntetyczny pomiar nie uzasadnia sam w sobie optymalizacji kosztem bezpieczeństwa lub zgodności.
-
