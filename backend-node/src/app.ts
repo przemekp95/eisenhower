@@ -5,7 +5,8 @@ import rateLimit from 'express-rate-limit';
 import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { AuditSink, DurableFileAuditSink } from './audit';
+import { DurableFileAuditSink } from './audit';
+import { CreateAppOptions } from './app-options';
 import { loadConfig } from './config';
 import { getDatabaseStatus } from './db';
 import { createHealthRouter } from './routes/health';
@@ -14,58 +15,23 @@ import { createCalendarInternalRouter } from './routes/calendarInternal';
 import { createCalendarRouter } from './routes/calendar';
 import { CalendarApplicationService } from './application/calendar';
 import { createGoogleOAuthCallbackRouter, createGoogleOAuthUserRouter } from './routes/googleOAuth';
+import { GoogleOAuthHttpClient, GoogleOAuthService, loadGoogleOAuthConfig } from './application/googleOAuth';
 import {
-  GoogleOAuthConfig, GoogleOAuthHttpClient, GoogleOAuthPort, GoogleOAuthService, loadGoogleOAuthConfig,
-} from './application/googleOAuth';
-import {
-  GoogleCalendarConfig, GoogleCalendarHttpAdapter, GoogleCalendarPort, GoogleCalendarService,
-  loadGoogleCalendarConfig,
+  GoogleCalendarHttpAdapter, GoogleCalendarService, loadGoogleCalendarConfig,
 } from './application/googleCalendar';
 import { createGoogleCalendarProviderRouter } from './routes/googleCalendarProvider';
 import { CalendarSyncStateModel } from './models/calendar';
-import { HealthState } from './types';
+import { defaultAiHealthChecker } from './modules/health/health.service';
 import {
   createOidcTokenVerifier,
-  OidcTokenVerifier,
   requireBearerToken,
   requireOidcToken,
   requireTaskScope,
   requireTrustedBrowserOrigin,
 } from './auth';
 
-export interface CreateAppOptions {
-  aiHealthChecker?: () => Promise<HealthState>;
-  databaseStatusResolver?: () => 'connected' | 'disconnected';
-  rateLimitLimit?: number;
-  auditSink?: AuditSink;
-  calendarInternalHmacKey?: string;
-  googleOAuthConfig?: GoogleOAuthConfig;
-  googleOAuthPort?: GoogleOAuthPort;
-  googleCalendarPort?: GoogleCalendarPort;
-  googleCalendarConfig?: GoogleCalendarConfig;
-  oidcTokenVerifier?: OidcTokenVerifier;
-}
-
-const DEFAULT_AI_READINESS_TIMEOUT_MS = 3_000;
-
-export async function defaultAiHealthChecker(
-  url = loadConfig().aiServiceUrl,
-  timeoutMs = DEFAULT_AI_READINESS_TIMEOUT_MS,
-): Promise<HealthState> {
-  try {
-    const readinessUrl = `${url.replace(/\/+$/, '')}/health/ready`;
-    const response = await fetch(readinessUrl, {
-      headers: {
-        Accept: 'application/json',
-      },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-
-    return response.ok ? 'healthy' : 'unhealthy';
-  } catch {
-    return 'unreachable';
-  }
-}
+export type { CreateAppOptions } from './app-options';
+export { defaultAiHealthChecker } from './modules/health/health.service';
 
 export function createApp(options: CreateAppOptions = {}) {
   const config = loadConfig();
