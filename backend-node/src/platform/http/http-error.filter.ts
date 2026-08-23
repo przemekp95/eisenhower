@@ -2,21 +2,36 @@ import {
   ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus,
 } from '@nestjs/common';
 import { FastifyReply } from 'fastify';
+import type { FastifyRequest } from 'fastify';
 import { TaskQueryError } from '../../application/tasks/task-query.errors';
 import { TaskCommandError } from '../../application/tasks/task-errors';
+import {
+  INTERNAL_HMAC_CONTEXT, InternalHmacReplay, InternalHmacRequest,
+} from '../../modules/calendar-internal/internal-hmac.service';
 
 @Catch()
 export class HttpErrorFilter implements ExceptionFilter {
   constructor(private readonly production: boolean) {}
 
-  catch(error: unknown, host: ArgumentsHost) {
+  async catch(error: unknown, host: ArgumentsHost) {
     const response = host.switchToHttp().getResponse<FastifyReply>();
+    const request = host.switchToHttp().getRequest<FastifyRequest & InternalHmacRequest>();
+    const send = async (status: number, body?: unknown, type?: string) => {
+      const context = request[INTERNAL_HMAC_CONTEXT];
+      await context?.service.complete(context, status, body);
+      if (type) response.type(type);
+      response.status(status).send(body);
+    };
+    if (error instanceof InternalHmacReplay) {
+      await send(error.statusCode, error.responseBody);
+      return;
+    }
     if (error instanceof TaskQueryError) {
-      response.status(error.status).send(error.body);
+      await send(error.status, error.body);
       return;
     }
     if (error instanceof TaskCommandError) {
-      response.status(error.status).send(error.body);
+      await send(error.status, error.body);
       return;
     }
     if (
@@ -26,12 +41,11 @@ export class HttpErrorFilter implements ExceptionFilter {
       const statusCode = 'statusCode' in error ? Number(error.statusCode) : 0;
       const code = 'code' in error ? String(error.code) : '';
       if (statusCode === 413 || code === 'FST_ERR_CTP_BODY_TOO_LARGE') {
-        response.status(413).send({ error: 'Request body too large' });
+        await send(413, { error: 'Request body too large' });
         return;
       }
       if (statusCode === 429 || code === 'EISENHOWER_RATE_LIMITED') {
-        response.type('text/html; charset=utf-8').status(429)
-          .send('Too many requests, please try again later.');
+        await send(429, 'Too many requests, please try again later.', 'text/html; charset=utf-8');
         return;
       }
     }
@@ -46,15 +60,15 @@ export class HttpErrorFilter implements ExceptionFilter {
         && typeof body.message === 'string'
         && body.message.startsWith('Cannot ')
       ) {
-        response.status(status).send({ error: 'Route not found' });
+        await send(status, { error: 'Route not found' });
         return;
       }
-      response.status(status).send(body);
+      await send(status, body);
       return;
     }
 
     const message = error instanceof Error ? error.message : 'Internal server error';
-    response.status(HttpStatus.INTERNAL_SERVER_ERROR).send({
+    await send(HttpStatus.INTERNAL_SERVER_ERROR, {
       error: this.production ? 'Internal server error' : message,
     });
   }

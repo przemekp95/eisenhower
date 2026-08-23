@@ -5,6 +5,7 @@ import { SecurityModule } from './modules/security/security.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { CalendarModule } from './modules/calendar/calendar.module';
 import { GoogleModule } from './modules/google/google.module';
+import { CalendarInternalModule } from './modules/calendar-internal/calendar-internal.module';
 import { APP_OPTIONS } from './platform/tokens';
 
 @Module({})
@@ -16,6 +17,7 @@ export class AppModule {
         SecurityModule.register(options),
         HealthModule.register(options),
         TasksModule.register(options),
+        CalendarInternalModule.register(options),
         GoogleModule.register(options),
         CalendarModule.register(options),
       ],
