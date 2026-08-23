@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Headers, Inject, Param, Post, Req, Res,
+  Body, Controller, Headers, HttpCode, Inject, Param, Post, Req, Res,
 } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { CalendarApplicationService } from '../../application/calendar';
@@ -46,6 +46,7 @@ export class CalendarCommandController {
   }
 
   @Post('bindings/preview')
+  @HttpCode(200)
   @RequiredScopes('calendar:read')
   async preview(@Req() request: FastifyRequest, @Body() body: Record<string, unknown>) {
     if (!this.provider) throw calendarError(404, 'Calendar provider is unavailable');
@@ -105,6 +106,7 @@ export class CalendarCommandController {
   }
 
   @Post('imports')
+  @HttpCode(200)
   @RequiredScopes('calendar:write')
   async imports(
     @Req() request: FastifyRequest, @Body() body: Record<string, unknown>,
@@ -131,6 +133,7 @@ export class CalendarCommandController {
   }
 
   @Post('deleted-bindings/:id/resolve')
+  @HttpCode(200)
   @RequiredScopes('calendar:write')
   async resolveDeletion(
     @Req() request: FastifyRequest, @Param('id') id: string,
@@ -163,6 +166,7 @@ export class CalendarCommandController {
   }
 
   @Post('conflicts/:id/resolve')
+  @HttpCode(200)
   @RequiredScopes('calendar:write')
   async resolveConflict(
     @Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply,

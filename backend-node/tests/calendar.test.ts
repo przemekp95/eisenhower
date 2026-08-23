@@ -1,11 +1,9 @@
 import { createHash, createHmac, randomUUID } from 'node:crypto';
-import request from 'supertest';
+import request from './helpers/http-test-client';
 import mongoose from 'mongoose';
-import express from 'express';
 import { createApp } from '../src/app';
 import { CalendarApplicationService } from '../src/application/calendar';
-import { createCalendarRouter } from '../src/routes/calendar';
-import { isCalendarInboundCommand } from '../src/routes/calendarInternal';
+import { isCalendarInboundCommand } from '../src/application/calendarInternal';
 import {
   CalendarBindingModel,
   CalendarConflictModel,
@@ -74,7 +72,6 @@ describe('calendar integration boundary', () => {
   afterAll(stopMongo);
 
   it('gets one owner-scoped task with its strong revision ETag', async () => {
-    expect(createCalendarRouter()).toBeDefined();
     expect(isCalendarInboundCommand('not-an-object')).toBe(false);
     const task = await TaskModel.create({ title: 'Calendar seed' });
     const response = await api(`/tasks/${task.id}`);
@@ -826,35 +823,30 @@ describe('calendar integration boundary', () => {
   });
 
   it('passes non-Error provider and deletion failures to the shared error boundary', async () => {
-    const routerApp = express();
-    routerApp.use(express.json());
-    routerApp.use((req, _res, next) => {
-      req.auth = {
-        tenantId: 'local', userId: 'local-user', roles: [], projectIds: [],
-        scopes: ['calendar:read', 'calendar:write'],
-      };
-      next();
-    });
     const service = {
       resolveProviderDeletion: async () => { throw 'deletion rejection'; },
     } as unknown as CalendarApplicationService;
     const provider = {
       linkExisting: async () => { throw 'provider rejection'; },
     } as never;
-    routerApp.use('/calendar', createCalendarRouter(undefined, service, true, provider));
-    routerApp.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-      res.status(500).json({ error: String(error) });
+    const routerApp = createApp({
+      auditSink: { record: () => undefined },
+      calendarApplicationService: service,
+      googleCalendarService: provider,
+      calendarCanConnect: true,
     });
 
     const linked = await request(routerApp).post('/calendar/bindings')
+      .set('Authorization', 'Bearer test-api-token')
       .set('If-Match', '"0"').set('Idempotency-Key', 'non-error-link')
       .send({ taskId: 'task', providerEventId: 'event', providerEtag: 'etag', direction: 'google_to_eisenhower' });
     const deleted = await request(routerApp).post('/calendar/deleted-bindings/binding/resolve')
+      .set('Authorization', 'Bearer test-api-token')
       .set('If-Match', '"0"').set('Idempotency-Key', 'non-error-delete')
       .send({ strategy: 'detach' });
 
-    expect(linked).toMatchObject({ status: 500, body: { error: 'provider rejection' } });
-    expect(deleted).toMatchObject({ status: 500, body: { error: 'deletion rejection' } });
+    expect(linked).toMatchObject({ status: 500, body: { error: 'Internal server error' } });
+    expect(deleted).toMatchObject({ status: 500, body: { error: 'Internal server error' } });
   });
 
   it('validates public sync preconditions and reports pending calendar status', async () => {

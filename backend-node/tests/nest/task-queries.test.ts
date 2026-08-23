@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { createNestApp } from '../../src/nest-app';
+import { createApp as createNestApp } from '../../src/app';
 import { TaskModel } from '../../src/models/task';
 import { clearMongo, startMongo, stopMongo } from '../helpers/mongo';
 

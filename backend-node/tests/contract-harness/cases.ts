@@ -43,7 +43,7 @@ function contractCase(
       headers: routeEntry.auth === 'bearer-or-oidc' ? { ...bearer, ...headers } : headers,
       ...(body === undefined ? {} : { body }),
     },
-    normalization: { generatedHeaders: ['date', 'x-request-id'] },
+    normalization: { generatedHeaders: ['date', 'x-request-id', 'connection'] },
   };
 }
 

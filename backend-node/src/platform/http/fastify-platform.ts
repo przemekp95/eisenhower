@@ -3,6 +3,7 @@ import { NestFastifyApplication } from '@nestjs/platform-fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
+import { createHash } from 'node:crypto';
 import { CreateAppOptions } from '../../app-options';
 import { AppConfig } from '../../config';
 import { attachRequestContext } from './request-context';
@@ -23,8 +24,19 @@ export async function registerFastifyPlatform(
   options: CreateAppOptions,
 ) {
   const fastify = app.getHttpAdapter().getInstance();
+  const requestStartedAt = new WeakMap<object, number>();
   fastify.addHook('onRequest', async (request, reply) => {
     attachRequestContext(request, reply);
+    requestStartedAt.set(request, Date.now());
+  });
+  fastify.addHook('onResponse', async (request, reply) => {
+    if (config.nodeEnv === 'test' || request.method === 'OPTIONS') return;
+    const path = request.url.split('?')[0];
+    if (path === '/health' || path === '/health/ready') return;
+    const durationMs = Date.now() - (requestStartedAt.get(request) ?? Date.now());
+    const message = `backend-node ${request.method} ${path} ${reply.statusCode} ${durationMs}ms`;
+    if (reply.statusCode >= 500) console.error(message);
+    else console.info(message);
   });
   await fastify.register(helmet);
   await fastify.register(rateLimit, {
@@ -45,6 +57,19 @@ export async function registerFastifyPlatform(
       reply.type('application/json; charset=utf-8');
       return JSON.stringify({ error: 'Request body too large' });
     }
+    const exposed = reply.getHeader('access-control-expose-headers');
+    if (typeof exposed === 'string') {
+      reply.header('Access-Control-Expose-Headers', exposed.replace(/,\s+/g, ','));
+    }
+    if (
+      payload !== undefined && payload !== null
+      && reply.statusCode !== 204 && reply.statusCode !== 304
+      && reply.getHeader('etag') === undefined
+    ) {
+      const entity = Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload));
+      const digest = createHash('sha1').update(entity).digest('base64').slice(0, 27);
+      reply.header('ETag', `W/"${entity.length.toString(16)}-${digest}"`);
+    }
     return payload;
   });
   await fastify.register(cors, {
@@ -53,5 +78,6 @@ export async function registerFastifyPlatform(
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Authorization', 'Content-Type', 'If-Match', 'Idempotency-Key', 'X-Request-ID'],
     exposedHeaders: ['ETag', 'X-Next-Cursor', 'Link', 'X-Request-ID'],
+    strictPreflight: false,
   });
 }

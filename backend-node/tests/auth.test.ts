@@ -1,11 +1,4 @@
-import request from 'supertest';
-import express from 'express';
-import {
-  createOidcTokenVerifier,
-  requireOidcToken,
-  requireScope,
-  requireTaskScope,
-} from '../src/auth';
+import { createOidcTokenVerifier } from '../src/auth';
 
 describe('OIDC bearer verification', () => {
   it('verifies signature, issuer, audience and derives tenant scope from claims', async () => {
@@ -126,61 +119,4 @@ describe('OIDC bearer verification', () => {
     await expect(verify(token)).resolves.toMatchObject({ scopes });
   });
 
-  it('enforces required scopes and fails closed if rejection auditing fails', async () => {
-    const app = express();
-    app.use((req, _res, next) => {
-      req.auth = { tenantId: 't', userId: 'u', roles: [], projectIds: [], scopes: ['tasks:read'] };
-      next();
-    });
-    app.get('/allowed', requireScope('tasks:read'), (_req, res) => res.sendStatus(204));
-    app.get('/denied', requireScope('tasks:write'), (_req, res) => res.sendStatus(204));
-    app.get('/audit-failed', requireScope('tasks:write', () => { throw new Error('audit failed'); }));
-
-    expect((await request(app).get('/allowed')).status).toBe(204);
-    expect((await request(app).get('/denied')).status).toBe(403);
-    expect((await request(app).get('/audit-failed')).status).toBe(503);
-  });
-
-  it('requires task read scope for GET/HEAD and write scope for mutations', async () => {
-    const app = express();
-    app.use((req, _res, next) => {
-      req.auth = {
-        tenantId: 'tenant-a', userId: 'user-a', roles: [], projectIds: [],
-        scopes: req.get('x-scopes')?.split(' ') ?? [],
-      };
-      next();
-    });
-    app.use('/tasks', requireTaskScope());
-    app.all('/tasks/{*path}', (_req, res) => res.sendStatus(204));
-    app.all('/tasks', (_req, res) => res.sendStatus(204));
-
-    expect((await request(app).get('/tasks').set('X-Scopes', 'tasks:read')).status).toBe(204);
-    expect((await request(app).head('/tasks/one').set('X-Scopes', 'tasks:read')).status).toBe(204);
-    expect((await request(app).get('/tasks').set('X-Scopes', 'tasks:write')).status).toBe(403);
-    expect((await request(app).head('/tasks/one').set('X-Scopes', 'tasks:write')).status).toBe(403);
-    expect((await request(app).options('/tasks')).status).toBe(204);
-    expect((await request(app).post('/tasks').set('X-Scopes', 'tasks:write')).status).toBe(204);
-    expect((await request(app).put('/tasks/one').set('X-Scopes', 'tasks:read')).status).toBe(403);
-    expect((await request(app).delete('/tasks/one').set('X-Scopes', 'tasks:read')).status).toBe(403);
-  });
-
-  it('enforces OIDC bearer authentication in Express middleware', async () => {
-    const app = express();
-    app.use(requireOidcToken(async (token) => {
-      if (token === 'valid') {
-        return { tenantId: 'tenant-a', userId: 'user-1', roles: [], projectIds: [] };
-      }
-      throw new Error('invalid token');
-    }));
-    app.get('/protected', (req, res) => res.json(req.auth));
-
-    const missing = await request(app).get('/protected');
-    const rejected = await request(app).get('/protected').set('Authorization', 'Bearer invalid');
-    const accepted = await request(app).get('/protected').set('Authorization', 'Bearer valid');
-
-    expect(missing.status).toBe(401);
-    expect(rejected.status).toBe(401);
-    expect(rejected.headers['www-authenticate']).toBe('Bearer error="invalid_token"');
-    expect(accepted.body).toMatchObject({ tenantId: 'tenant-a', userId: 'user-1' });
-  });
 });

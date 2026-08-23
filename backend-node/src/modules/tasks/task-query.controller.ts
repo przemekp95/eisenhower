@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Req, Res } from '@nestjs/common';
+import { Controller, Get, Inject, Param, Req, Res } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { TaskQueryService } from '../../application/tasks/task-query.service';
 import { requestContextFor } from '../../platform/http/request-context';
@@ -7,7 +7,7 @@ import { parseDelegatedTaskQuery, parseTaskListQuery } from './task-query.dto';
 
 @Controller('tasks')
 export class TaskQueryController {
-  constructor(private readonly queries: TaskQueryService) {}
+  constructor(@Inject(TaskQueryService) private readonly queries: TaskQueryService) {}
 
   @Get('delegated')
   @RequiredScopes('tasks:read')

@@ -8,8 +8,7 @@ import {
   setWorldConstructor,
   World,
 } from '@cucumber/cucumber';
-import type { Express } from 'express';
-import type { Response } from 'supertest';
+import type { Response } from '../../tests/helpers/http-test-client';
 import { createApp } from '../../src/app';
 import { clearMongo, startMongo, stopMongo } from '../../tests/helpers/mongo';
 
@@ -50,7 +49,7 @@ function restoreEnvironment() {
 }
 
 export class EisenhowerWorld extends World {
-  app!: Express;
+  app!: ReturnType<typeof createApp>;
   response?: Response;
   taskId?: string;
   taskRevision?: number;
@@ -73,6 +72,17 @@ Before(function (this: EisenhowerWorld) {
   this.app = createApp({
     aiHealthChecker: async () => 'healthy',
     databaseStatusResolver: () => 'connected',
+    auditSink: { record: () => undefined },
+    oidcTokenVerifier: async (token) => {
+      if (token !== 'test-api-token' && !token.includes(':')) throw new Error('invalid token');
+      const [tenantId, userId] = token === 'test-api-token'
+        ? ['local', 'local-user']
+        : token.split(':');
+      return {
+        tenantId, userId, roles: ['user'], projectIds: [],
+        scopes: ['tasks:read', 'tasks:write'],
+      };
+    },
   });
   this.response = undefined;
   this.taskId = undefined;
@@ -81,7 +91,8 @@ Before(function (this: EisenhowerWorld) {
   this.actorUserId = 'local-user';
 });
 
-After(async () => {
+After(async function (this: EisenhowerWorld) {
+  await (await this.app).close();
   await clearMongo();
 });
 

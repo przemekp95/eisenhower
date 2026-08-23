@@ -1,37 +1,27 @@
-import express from 'express';
-import request from 'supertest';
+import request from './helpers/http-test-client';
 import { createApp } from '../src/app';
 import { TaskModel } from '../src/models/task';
 import { MongooseTaskRepository } from '../src/repositories/mongooseTaskRepository';
-import { createTasksRouter } from '../src/routes/tasks';
 import { clearMongo, startMongo, stopMongo } from './helpers/mongo';
 
 function principalApp() {
-  const app = express();
-  app.use(express.json({ strict: false }));
-  app.use((req, _res, next) => {
-    req.auth = {
-      tenantId: String(req.get('x-test-tenant')),
-      userId: String(req.get('x-test-user')),
-      roles: ['user'],
-      projectIds: [],
-    };
-    next();
+  return createApp({
+    auditSink: { record: () => undefined },
+    oidcTokenVerifier: async (token) => {
+      const [tenantId, userId] = token.split(':');
+      return { tenantId, userId, roles: ['user'], projectIds: [], scopes: ['tasks:read', 'tasks:write'] };
+    },
   });
-  app.use('/tasks', createTasksRouter());
-  return app;
 }
 
 function asPrincipal(app: ReturnType<typeof principalApp>, tenantId: string, userId: string) {
   return {
     get: (path: string) => request(app)
       .get(path)
-      .set('X-Test-Tenant', tenantId)
-      .set('X-Test-User', userId),
+      .set('Authorization', `Bearer ${tenantId}:${userId}`),
     put: (path: string) => request(app)
       .put(path)
-      .set('X-Test-Tenant', tenantId)
-      .set('X-Test-User', userId),
+      .set('Authorization', `Bearer ${tenantId}:${userId}`),
   };
 }
 

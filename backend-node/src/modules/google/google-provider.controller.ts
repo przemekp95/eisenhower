@@ -1,5 +1,5 @@
 import {
-  Body, Controller, HttpException, Inject, Post, Req, UseGuards,
+  Body, Controller, HttpCode, HttpException, Inject, Post, Req, UseGuards,
 } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import { GoogleCalendarService } from '../../application/googleCalendar';
@@ -18,7 +18,7 @@ export class GoogleProviderController {
 
   private async success(request: FastifyRequest & InternalHmacRequest, body: unknown) {
     const context = request[INTERNAL_HMAC_CONTEXT];
-    await context?.service.complete(context, 200, body);
+    try { await context?.service.complete(context, 200, body); } catch { /* best-effort completion log */ }
     return body;
   }
 
@@ -33,6 +33,7 @@ export class GoogleProviderController {
   }
 
   @Post('outbound')
+  @HttpCode(200)
   async outbound(@Req() request: FastifyRequest & InternalHmacRequest, @Body() body: Record<string, unknown>) {
     if (Object.keys(body ?? {}).length !== 1 || typeof body?.eventId !== 'string' || !body.eventId) {
       throw new HttpException({ error: 'eventId is required' }, 400);
@@ -41,6 +42,7 @@ export class GoogleProviderController {
   }
 
   @Post('changes')
+  @HttpCode(200)
   async changes(@Req() request: FastifyRequest & InternalHmacRequest, @Body() body: Record<string, unknown>) {
     if (Object.keys(body ?? {}).some((key) => !['connectionId', 'checkpoint'].includes(key))
       || typeof body?.connectionId !== 'string' || typeof body?.checkpoint !== 'string') {
@@ -50,6 +52,7 @@ export class GoogleProviderController {
   }
 
   @Post('watch')
+  @HttpCode(200)
   async watch(@Req() request: FastifyRequest & InternalHmacRequest, @Body() body: Record<string, unknown>) {
     if (Object.keys(body ?? {}).some((key) => !['connectionId', 'address'].includes(key))
       || typeof body?.connectionId !== 'string' || typeof body?.address !== 'string') {

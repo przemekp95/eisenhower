@@ -18,7 +18,12 @@ export class HttpErrorFilter implements ExceptionFilter {
     const request = host.switchToHttp().getRequest<FastifyRequest & InternalHmacRequest>();
     const send = async (status: number, body?: unknown, type?: string) => {
       const context = request[INTERNAL_HMAC_CONTEXT];
-      await context?.service.complete(context, status, body);
+      try {
+        await context?.service.complete(context, status, body);
+      } catch {
+        // The original response remains authoritative if receipt completion
+        // logging becomes unavailable after the request has been processed.
+      }
       if (type) response.type(type);
       response.status(status).send(body);
     };

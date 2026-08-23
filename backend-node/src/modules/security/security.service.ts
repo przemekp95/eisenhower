@@ -17,11 +17,11 @@ export class SecurityService {
     private readonly config: AppConfig,
     options: CreateAppOptions,
   ) {
-    this.oidcVerifier = config.authMode === 'oidc'
-      ? options.oidcTokenVerifier ?? createOidcTokenVerifier({
+    this.oidcVerifier = options.oidcTokenVerifier ?? (config.authMode === 'oidc'
+      ? createOidcTokenVerifier({
           issuer: config.oidcIssuer!, audience: config.oidcAudience!, jwksUrl: config.oidcJwksUrl!,
         })
-      : null;
+      : null);
   }
 
   async authenticate(authorization: string | undefined): Promise<AuthPrincipal> {

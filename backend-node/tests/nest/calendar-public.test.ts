@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import type { CreateAppOptions } from '../../src/app-options';
 import type { GoogleCalendarService } from '../../src/application/googleCalendar';
-import { createNestApp } from '../../src/nest-app';
+import { createApp as createNestApp } from '../../src/app';
 import { CalendarConflictModel, CalendarConnectionModel } from '../../src/models/calendar';
 import { TaskModel } from '../../src/models/task';
 import { clearMongo, startMongo, stopMongo } from '../helpers/mongo';

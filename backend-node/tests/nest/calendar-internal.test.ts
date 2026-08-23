@@ -1,5 +1,5 @@
 import { createHmac, randomUUID } from 'node:crypto';
-import { createNestApp } from '../../src/nest-app';
+import { createApp as createNestApp } from '../../src/app';
 import { clearMongo, startMongo, stopMongo } from '../helpers/mongo';
 
 describe('Nest Fastify internal Calendar API', () => {

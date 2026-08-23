@@ -1,7 +1,7 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import type { GoogleCalendarPort } from '../../src/application/googleCalendar';
 import type { GoogleOAuthPort, GoogleTokenSet } from '../../src/application/googleOAuth';
-import { createNestApp } from '../../src/nest-app';
+import { createApp as createNestApp } from '../../src/app';
 import { CalendarConnectionModel, GoogleOAuthGrantModel } from '../../src/models/calendar';
 import { clearMongo, startMongo, stopMongo } from '../helpers/mongo';
 

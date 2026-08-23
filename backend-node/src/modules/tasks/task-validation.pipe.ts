@@ -7,6 +7,7 @@ import {
 } from './task-command.dto';
 
 const UTC_ISO_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
+type DtoClass = new (...args: any[]) => object;
 
 function fail(details: string[]): never {
   throw new BadRequestException({ error: 'Validation failed', details });
@@ -90,10 +91,12 @@ export class TaskIdPipe implements PipeTransform<string, string> {
 
 @Injectable()
 export class TaskValidationPipe implements PipeTransform {
+  constructor(private readonly forcedType?: DtoClass) {}
+
   transform(value: unknown, metadata: ArgumentMetadata) {
-    if (metadata.type !== 'body' || !metadata.metatype) return value;
+    if (metadata.type !== 'body' || (!metadata.metatype && !this.forcedType)) return value;
     const body = objectBody(value);
-    const type = metadata.metatype;
+    const type = this.forcedType ?? metadata.metatype! as DtoClass;
     if (type === ScheduleTaskDto) { validateSchedule(body); return value; }
     if (type === DelegationTaskDto) { validateDelegation(body); return value; }
     const unexpectedMessages = new Map<Function, string>([
@@ -114,9 +117,13 @@ export class TaskValidationPipe implements PipeTransform {
       ...(typeof body.description === 'string' ? { description: body.description.trim() } : {}),
     };
     const errors = validateSync(plainToInstance(type, validationBody), {
-      whitelist: true, forbidNonWhitelisted: true, stopAtFirstError: true,
+      whitelist: true, forbidNonWhitelisted: true,
     });
-    if (errors.length) fail(errors.map(() => 'Invalid value'));
+    if (errors.length) fail(errors.flatMap((error) => (
+      Object.keys(error.constraints ?? {})
+        .filter((constraint) => !(error.value === undefined && constraint === 'maxLength'))
+        .map(() => 'Invalid value')
+    )));
     return value;
   }
 }

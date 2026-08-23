@@ -1,10 +1,8 @@
 import assert from 'node:assert/strict';
 import { Given, Then, When } from '@cucumber/cucumber';
 import { QUADRANT_DEFINITIONS } from '@eisenhower/api-client';
-import express from 'express';
-import request, { Test } from 'supertest';
+import request, { Test } from '../../tests/helpers/http-test-client';
 import { TaskModel } from '../../src/models/task';
-import { createTasksRouter } from '../../src/routes/tasks';
 import { EisenhowerWorld } from '../support/world';
 
 type Quadrant = 'Do Now' | 'Delegate' | 'Schedule' | 'Delete';
@@ -20,38 +18,25 @@ function quadrantNamed(value: string) {
 
 function authenticated(world: EisenhowerWorld) {
   const withPrincipal = (testRequest: Test) => testRequest
-    .set('X-Test-Tenant', world.actorTenantId)
-    .set('X-Test-User', world.actorUserId);
+    .set('Authorization', `Bearer ${world.actorTenantId}:${world.actorUserId}`);
   return {
     get: (path: string) => withPrincipal(
-      request(world.app).get(path).set('Authorization', 'Bearer test-api-token'),
+      request(world.app).get(path),
     ),
     post: (path: string) => withPrincipal(
-      request(world.app).post(path).set('Authorization', 'Bearer test-api-token'),
+      request(world.app).post(path),
     ),
     put: (path: string) => withPrincipal(
-      request(world.app).put(path).set('Authorization', 'Bearer test-api-token'),
+      request(world.app).put(path),
     ),
     delete: (path: string) => withPrincipal(
-      request(world.app).delete(path).set('Authorization', 'Bearer test-api-token'),
+      request(world.app).delete(path),
     ),
   };
 }
 
 function useInjectedPrincipalRouter(world: EisenhowerWorld) {
-  const app = express();
-  app.use(express.json());
-  app.use((req, _res, next) => {
-    req.auth = {
-      tenantId: String(req.get('x-test-tenant')),
-      userId: String(req.get('x-test-user')),
-      roles: ['user'],
-      projectIds: [],
-    };
-    next();
-  });
-  app.use('/tasks', createTasksRouter());
-  world.app = app;
+  void world;
 }
 
 Given(

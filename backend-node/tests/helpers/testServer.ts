@@ -1,5 +1,5 @@
-import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import mongoose from 'mongoose';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { createApp, type CreateAppOptions } from '../../src/app';
@@ -18,60 +18,19 @@ export interface StartTestServerOptions {
   appOptions?: CreateAppOptions;
 }
 
-function waitForListen(server: Server, port: number, host: string) {
-  return new Promise<AddressInfo>((resolve, reject) => {
-    const handleError = (error: Error) => {
-      server.off('listening', handleListening);
-      reject(error);
-    };
-
-    const handleListening = () => {
-      server.off('error', handleError);
-      const address = server.address();
-
-      if (!address || typeof address === 'string') {
-        reject(new Error('Failed to resolve test server address.'));
-        return;
-      }
-
-      resolve(address);
-    };
-
-    server.once('error', handleError);
-    server.once('listening', handleListening);
-    server.listen(port, host);
-  });
-}
-
-function closeServer(server: Server) {
-  if (!server.listening) {
-    return Promise.resolve();
-  }
-  return new Promise<void>((resolve, reject) => {
-    server.close((error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      resolve();
-    });
-  });
-}
-
 export async function startTestServer(options: StartTestServerOptions = {}): Promise<RunningTestServer> {
   const host = options.host ?? '127.0.0.1';
   const port = options.port ?? 0;
   const databaseName = options.databaseName ?? 'eisenhower-test';
   let mongo: MongoMemoryReplSet | null = null;
-  let server: Server | null = null;
+  let app: NestFastifyApplication | null = null;
   let closed = false;
 
   const cleanup = async () => {
     const errors: unknown[] = [];
-    if (server) {
+    if (app) {
       try {
-        await closeServer(server);
+        await app.close();
       } catch (error) {
         errors.push(error);
       }
@@ -99,12 +58,16 @@ export async function startTestServer(options: StartTestServerOptions = {}): Pro
       replSet: { count: 1 },
     });
     await connectToDatabase(mongo.getUri(databaseName));
-    const app = createApp({
+    app = await createApp({
       aiHealthChecker: async () => 'healthy',
       ...options.appOptions,
     });
-    server = createServer(app);
-    address = await waitForListen(server, port, host);
+    await app.listen(port, host);
+    const resolved = app.getHttpServer().address();
+    if (!resolved || typeof resolved === 'string') {
+      throw new Error('Failed to resolve test server address.');
+    }
+    address = resolved as AddressInfo;
   } catch (error) {
     try {
       await cleanup();

@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Delete, Headers, Param, Post, Put, Req, Res, UsePipes,
+  Body, Controller, Delete, Headers, Inject, Param, Post, Put, Req, Res, UseGuards,
 } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { TaskCommandService } from '../../application/tasks/task-command.service';
@@ -14,6 +14,7 @@ import {
   ScheduleTaskDto, UpdateTaskDto,
 } from './task-command.dto';
 import { TaskIdPipe, TaskValidationPipe } from './task-validation.pipe';
+import { TaskInvalidIdAggregationGuard } from './task-invalid-id.guard';
 
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 
@@ -39,16 +40,16 @@ function idempotencyKey(value: string | undefined) {
 }
 
 @Controller('tasks')
-@UsePipes(TaskValidationPipe)
+@UseGuards(new TaskInvalidIdAggregationGuard())
 export class TaskCommandController {
-  constructor(private readonly commands: TaskCommandService) {}
+  constructor(@Inject(TaskCommandService) private readonly commands: TaskCommandService) {}
 
   @Post()
   @RequiredScopes('tasks:write')
   async create(
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
-    @Body() body: CreateTaskDto,
+    @Body(new TaskValidationPipe(CreateTaskDto)) body: CreateTaskDto,
     @Headers('idempotency-key') key?: string,
   ) {
     const result = await this.commands.create(
@@ -64,9 +65,9 @@ export class TaskCommandController {
   async update(
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
-    @Param('id', TaskIdPipe) id: string,
+    @Param('id', new TaskIdPipe()) id: string,
     @Headers('if-match') ifMatch: string | undefined,
-    @Body() body: UpdateTaskDto,
+    @Body(new TaskValidationPipe(UpdateTaskDto)) body: UpdateTaskDto,
   ) {
     const task = await this.commands.update(
       requestContextFor(request).principal!, id, revision(ifMatch), body,
@@ -79,8 +80,8 @@ export class TaskCommandController {
   @RequiredScopes('tasks:write')
   async lifecycle(
     @Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply,
-    @Param('id', TaskIdPipe) id: string, @Headers('if-match') ifMatch: string | undefined,
-    @Body() body: LifecycleTaskDto,
+    @Param('id', new TaskIdPipe()) id: string, @Headers('if-match') ifMatch: string | undefined,
+    @Body(new TaskValidationPipe(LifecycleTaskDto)) body: LifecycleTaskDto,
   ) {
     const task = await this.commands.transitionLifecycle(
       requestContextFor(request).principal!, id, revision(ifMatch), body.action as TaskLifecycleAction,
@@ -93,8 +94,8 @@ export class TaskCommandController {
   @RequiredScopes('tasks:write')
   async schedule(
     @Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply,
-    @Param('id', TaskIdPipe) id: string, @Headers('if-match') ifMatch: string | undefined,
-    @Body() body: ScheduleTaskDto,
+    @Param('id', new TaskIdPipe()) id: string, @Headers('if-match') ifMatch: string | undefined,
+    @Body(new TaskValidationPipe(ScheduleTaskDto)) body: ScheduleTaskDto,
   ) {
     const raw = body.schedule as null | {
       dueAt: string; timeZone: string; remindAt?: string; durationMinutes?: number;
@@ -115,8 +116,8 @@ export class TaskCommandController {
   @RequiredScopes('tasks:write')
   async delegation(
     @Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply,
-    @Param('id', TaskIdPipe) id: string, @Headers('if-match') ifMatch: string | undefined,
-    @Body() body: DelegationTaskDto,
+    @Param('id', new TaskIdPipe()) id: string, @Headers('if-match') ifMatch: string | undefined,
+    @Body(new TaskValidationPipe(DelegationTaskDto)) body: DelegationTaskDto,
   ) {
     const task = await this.commands.updateDelegation(
       requestContextFor(request).principal!, id, revision(ifMatch),
@@ -130,8 +131,8 @@ export class TaskCommandController {
   @RequiredScopes('tasks:write')
   async delegationStatus(
     @Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply,
-    @Param('id', TaskIdPipe) id: string, @Headers('if-match') ifMatch: string | undefined,
-    @Body() body: DelegationStatusTaskDto,
+    @Param('id', new TaskIdPipe()) id: string, @Headers('if-match') ifMatch: string | undefined,
+    @Body(new TaskValidationPipe(DelegationStatusTaskDto)) body: DelegationStatusTaskDto,
   ) {
     const task = await this.commands.transitionDelegation(
       requestContextFor(request).principal!, id, revision(ifMatch),
@@ -145,7 +146,7 @@ export class TaskCommandController {
   @RequiredScopes('tasks:write')
   async delete(
     @Req() request: FastifyRequest, @Res() reply: FastifyReply,
-    @Param('id', TaskIdPipe) id: string, @Headers('if-match') ifMatch: string | undefined,
+    @Param('id', new TaskIdPipe()) id: string, @Headers('if-match') ifMatch: string | undefined,
   ) {
     await this.commands.delete(requestContextFor(request).principal!, id, revision(ifMatch));
     return reply.status(204).send();

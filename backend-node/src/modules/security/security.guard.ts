@@ -1,5 +1,5 @@
 import {
-  CanActivate, ExecutionContext, HttpException, HttpStatus, Injectable,
+  CanActivate, ExecutionContext, HttpException, HttpStatus, Inject, Injectable,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { FastifyReply, FastifyRequest } from 'fastify';
@@ -14,9 +14,9 @@ import { SecurityService } from './security.service';
 @Injectable()
 export class SecurityGuard implements CanActivate {
   constructor(
-    private readonly reflector: Reflector,
-    private readonly security: SecurityService,
-    private readonly audit: AuditService,
+    @Inject(Reflector) private readonly reflector: Reflector,
+    @Inject(SecurityService) private readonly security: SecurityService,
+    @Inject(AuditService) private readonly audit: AuditService,
   ) {}
 
   async canActivate(execution: ExecutionContext) {

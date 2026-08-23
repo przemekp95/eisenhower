@@ -1,4 +1,4 @@
-import { createNestApp } from '../../src/nest-app';
+import { createApp as createNestApp } from '../../src/app';
 
 describe('Nest Fastify health transport', () => {
   const applications: Array<{ close(): Promise<void> }> = [];

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { CONTRACT_CASES } from './cases';
 import { normalizeResponse } from './normalizers';
-import { extractExpressRoutes } from './route-inventory';
 import { ContractFixture, ContractResponse, RouteManifestEntry } from './types';
 
 const repositoryRoot = path.resolve(__dirname, '../..');
@@ -12,13 +12,13 @@ function readJson<T>(filePath: string): T {
   return JSON.parse(fs.readFileSync(filePath, 'utf8')) as T;
 }
 
-describe('Express migration baseline', () => {
-  it('inventories every Express route exactly once', () => {
+describe('immutable Express migration baseline', () => {
+  it('keeps the machine-readable manifest aligned with every contract case', () => {
     const manifest = readJson<RouteManifestEntry[]>(routeManifestPath);
     const declared = manifest.map(({ method, path: routePath }) => `${method} ${routePath}`).sort();
 
     expect(new Set(declared).size).toBe(declared.length);
-    expect(declared).toEqual(extractExpressRoutes(repositoryRoot));
+    expect(declared).toEqual(CONTRACT_CASES.map(({ route }) => `${route.method} ${route.path}`).sort());
   });
 
   it('labels the fixture with the exact Express oracle and every route case', () => {

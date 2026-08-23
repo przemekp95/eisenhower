@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import request from 'supertest';
+import request from '../helpers/http-test-client';
 import { AuditEvent } from '../../src/audit';
 import { createApp } from '../../src/app';
 import { GoogleCalendarPort } from '../../src/application/googleCalendar';
@@ -35,7 +35,7 @@ const calendarPort: GoogleCalendarPort = {
   }),
 };
 
-function dispatch(app: ReturnType<typeof createApp>, input: ContractRequest) {
+function dispatch(app: Awaited<ReturnType<typeof createApp>>, input: ContractRequest) {
   switch (input.method) {
     case 'GET': return request(app).get(input.path);
     case 'HEAD': return request(app).head(input.path);
@@ -46,35 +46,41 @@ function dispatch(app: ReturnType<typeof createApp>, input: ContractRequest) {
   }
 }
 
-export async function createExpressTarget(): Promise<ContractTarget> {
+export async function createNestTarget(): Promise<ContractTarget> {
   const originalNodeEnv = process.env.NODE_ENV;
   const originalToken = process.env.EISENHOWER_API_TOKEN;
   process.env.NODE_ENV = 'test';
   process.env.EISENHOWER_API_TOKEN = 'test-api-token';
   await startMongo();
   let auditEvents: AuditEvent[] = [];
+  const createTargetApp = () => createApp({
+    aiHealthChecker: async () => 'healthy',
+    databaseStatusResolver: () => 'connected',
+    auditSink: { record: (event) => { auditEvents.push(event); } },
+    calendarInternalHmacKey: HMAC_KEY,
+    googleOAuthConfig: {
+      clientId: 'client-id', clientSecret: 'client-secret',
+      callbackUrl: 'https://tasks.example.com/calendar/oauth/callback',
+      encryptionKeys: { v1: Buffer.alloc(32, 7) }, currentKeyVersion: 'v1',
+      returnOrigins: ['https://tasks.example.com'],
+    },
+    googleOAuthPort: oauthPort,
+    googleCalendarConfig: { watchCallbackUrls: ['https://hooks.example.com/calendar'] },
+    googleCalendarPort: calendarPort,
+  });
 
   return {
     request: async (input): Promise<ContractResponse> => {
-      const app = createApp({
-        aiHealthChecker: async () => 'healthy',
-        databaseStatusResolver: () => 'connected',
-        auditSink: { record: (event) => { auditEvents.push(event); } },
-        calendarInternalHmacKey: HMAC_KEY,
-        googleOAuthConfig: {
-          clientId: 'client-id', clientSecret: 'client-secret',
-          callbackUrl: 'https://tasks.example.com/calendar/oauth/callback',
-          encryptionKeys: { v1: Buffer.alloc(32, 7) }, currentKeyVersion: 'v1',
-          returnOrigins: ['https://tasks.example.com'],
-        },
-        googleOAuthPort: oauthPort,
-        googleCalendarConfig: { watchCallbackUrls: ['https://hooks.example.com/calendar'] },
-        googleCalendarPort: calendarPort,
-      });
-      let pending = dispatch(app, input);
-      for (const [name, value] of Object.entries(input.headers ?? {})) pending = pending.set(name, value);
-      if (input.body !== undefined) pending = pending.send(input.body as string | object);
-      const response = await pending;
+      const app = await createTargetApp();
+      let response;
+      try {
+        let pending = dispatch(app, input);
+        for (const [name, value] of Object.entries(input.headers ?? {})) pending = pending.set(name, value);
+        if (input.body !== undefined) pending = pending.send(input.body as string | object);
+        response = await pending;
+      } finally {
+        await app.close();
+      }
       const collectionCounts: Record<string, number> = {};
       for (const [name, collection] of Object.entries(mongoose.connection.collections)) {
         const count = await collection.countDocuments({});

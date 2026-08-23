@@ -6,7 +6,6 @@ import { TASK_REPOSITORY } from '../../platform/tokens';
 import { TaskQueryController } from './task-query.controller';
 import { TaskCommandController } from './task-command.controller';
 import { TaskCommandService } from '../../application/tasks/task-command.service';
-import { TaskIdPipe, TaskValidationPipe } from './task-validation.pipe';
 
 @Module({})
 export class TasksModule {
@@ -29,8 +28,6 @@ export class TasksModule {
           useFactory: (repository) => new TaskCommandService(repository),
           inject: [TASK_REPOSITORY],
         },
-        TaskValidationPipe,
-        TaskIdPipe,
       ],
       exports: [TaskQueryService],
     };
