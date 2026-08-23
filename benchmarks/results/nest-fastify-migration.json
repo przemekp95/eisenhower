@@ -1,6 +1,6 @@
 {
   "schema_version": "http-migration-benchmark-v1",
-  "generated_at": "2026-08-23T14:56:02.152Z",
+  "generated_at": "2026-08-23T16:29:33.849Z",
   "baseline": {
     "sha": "5db1983da7f4e583a133f42d6b4a95ac8b3ab9c9",
     "package": {
@@ -47,7 +47,7 @@
     }
   },
   "candidate": {
-    "sha": "5d74809cd334ebc4b7c7fba20dea42713f825260",
+    "sha": "089b11f8e09aacf03926d9d0d592e8084d887d47",
     "package": {
       "name": "backend-node",
       "version": "1.0.0",
@@ -123,11 +123,12 @@
     "warmup_seconds": 5,
     "measurement_seconds": 15,
     "cold_starts": 10,
-    "alternating_order": true,
     "cold_start_paths": [
       "/health",
       "/health/ready"
-    ]
+    ],
+    "alternating_order": true,
+    "forced_gc_diagnostics": true
   },
   "samples": [
     {
@@ -137,12 +138,19 @@
       "repetition": 1,
       "order": 0,
       "implementation": "express",
-      "count": 12290,
-      "throughput_rps": 819.3282068513648,
-      "p50_ms": 1.2027779999989434,
-      "p95_ms": 1.3629029999974591,
-      "p99_ms": 1.5808759999999893,
-      "rss_bytes": 131526656
+      "count": 12492,
+      "throughput_rps": 832.7790177995349,
+      "p50_ms": 1.179506999997102,
+      "p95_ms": 1.357852000001003,
+      "p99_ms": 1.5675049999990733,
+      "rss_bytes": 132042752,
+      "memory_usage": {
+        "rss_bytes": 126730240,
+        "heap_total_bytes": 64888832,
+        "heap_used_bytes": 41213984,
+        "external_bytes": 21490623,
+        "array_buffers_bytes": 18787885
+      }
     },
     {
       "storage": "memory",
@@ -151,12 +159,19 @@
       "repetition": 1,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 12352,
-      "throughput_rps": 823.4360190367871,
-      "p50_ms": 1.1907089999949676,
-      "p95_ms": 1.3749830000015208,
-      "p99_ms": 1.6375330000009853,
-      "rss_bytes": 273227776
+      "count": 12550,
+      "throughput_rps": 836.6273389906921,
+      "p50_ms": 1.1723589999965043,
+      "p95_ms": 1.3276330000007874,
+      "p99_ms": 1.5998140000010608,
+      "rss_bytes": 273711104,
+      "memory_usage": {
+        "rss_bytes": 268718080,
+        "heap_total_bytes": 214990848,
+        "heap_used_bytes": 128039560,
+        "external_bytes": 21671122,
+        "array_buffers_bytes": 18786309
+      }
     },
     {
       "storage": "memory",
@@ -165,12 +180,19 @@
       "repetition": 2,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 12529,
-      "throughput_rps": 835.2110816987575,
-      "p50_ms": 1.1691389999978128,
-      "p95_ms": 1.3697019999963231,
-      "p99_ms": 1.592625000004773,
-      "rss_bytes": 303771648
+      "count": 12567,
+      "throughput_rps": 837.7553834381428,
+      "p50_ms": 1.1754779999973834,
+      "p95_ms": 1.340832000001683,
+      "p99_ms": 1.5077060000039637,
+      "rss_bytes": 304857088,
+      "memory_usage": {
+        "rss_bytes": 299913216,
+        "heap_total_bytes": 245137408,
+        "heap_used_bytes": 120285656,
+        "external_bytes": 21867770,
+        "array_buffers_bytes": 18982917
+      }
     },
     {
       "storage": "memory",
@@ -179,12 +201,19 @@
       "repetition": 2,
       "order": 1,
       "implementation": "express",
-      "count": 12471,
-      "throughput_rps": 831.3544124036779,
-      "p50_ms": 1.1811989999987418,
-      "p95_ms": 1.3271939999976894,
-      "p99_ms": 1.5188080000079935,
-      "rss_bytes": 132091904
+      "count": 12256,
+      "throughput_rps": 817.0224255014756,
+      "p50_ms": 1.2073870000021998,
+      "p95_ms": 1.398920999999973,
+      "p99_ms": 1.6813099999999395,
+      "rss_bytes": 132960256,
+      "memory_usage": {
+        "rss_bytes": 128139264,
+        "heap_total_bytes": 36315136,
+        "heap_used_bytes": 31388592,
+        "external_bytes": 21687271,
+        "array_buffers_bytes": 18984493
+      }
     },
     {
       "storage": "memory",
@@ -193,12 +222,19 @@
       "repetition": 3,
       "order": 0,
       "implementation": "express",
-      "count": 12454,
-      "throughput_rps": 830.2143268006913,
-      "p50_ms": 1.1843789999984438,
-      "p95_ms": 1.353703000000678,
-      "p99_ms": 1.5539260000077775,
-      "rss_bytes": 132603904
+      "count": 12243,
+      "throughput_rps": 816.1695717292612,
+      "p50_ms": 1.210757000008016,
+      "p95_ms": 1.4110490000020945,
+      "p99_ms": 1.6789600000047358,
+      "rss_bytes": 133152768,
+      "memory_usage": {
+        "rss_bytes": 128139264,
+        "heap_total_bytes": 36839424,
+        "heap_used_bytes": 31494184,
+        "external_bytes": 21883879,
+        "array_buffers_bytes": 19181101
+      }
     },
     {
       "storage": "memory",
@@ -207,12 +243,19 @@
       "repetition": 3,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 12503,
-      "throughput_rps": 833.4811471894837,
-      "p50_ms": 1.1848979999922449,
-      "p95_ms": 1.3204739999928279,
-      "p99_ms": 1.4993279999907827,
-      "rss_bytes": 333066240
+      "count": 12411,
+      "throughput_rps": 827.3887878338987,
+      "p50_ms": 1.1990870000008726,
+      "p95_ms": 1.3539319999981672,
+      "p99_ms": 1.5912939999980154,
+      "rss_bytes": 334471168,
+      "memory_usage": {
+        "rss_bytes": 329461760,
+        "heap_total_bytes": 274235392,
+        "heap_used_bytes": 159040464,
+        "external_bytes": 22064378,
+        "array_buffers_bytes": 19179525
+      }
     },
     {
       "storage": "memory",
@@ -221,12 +264,19 @@
       "repetition": 4,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 12518,
-      "throughput_rps": 834.4693840502435,
-      "p50_ms": 1.1773490000050515,
-      "p95_ms": 1.3090550000051735,
-      "p99_ms": 1.5077869999950053,
-      "rss_bytes": 337731584
+      "count": 12263,
+      "throughput_rps": 817.4977095081449,
+      "p50_ms": 1.2045669999934034,
+      "p95_ms": 1.3885910000099102,
+      "p99_ms": 1.7834860000002664,
+      "rss_bytes": 336908288,
+      "memory_usage": {
+        "rss_bytes": 332083200,
+        "heap_total_bytes": 183533568,
+        "heap_used_bytes": 82549368,
+        "external_bytes": 21535571,
+        "array_buffers_bytes": 18655237
+      }
     },
     {
       "storage": "memory",
@@ -235,12 +285,19 @@
       "repetition": 4,
       "order": 1,
       "implementation": "express",
-      "count": 12429,
-      "throughput_rps": 828.5586923168684,
-      "p50_ms": 1.196289000014076,
-      "p95_ms": 1.325144000002183,
-      "p99_ms": 1.431190000002971,
-      "rss_bytes": 110084096
+      "count": 12240,
+      "throughput_rps": 815.9797208911866,
+      "p50_ms": 1.2145569999993313,
+      "p95_ms": 1.3679410000040662,
+      "p99_ms": 1.6099229999963427,
+      "rss_bytes": 133771264,
+      "memory_usage": {
+        "rss_bytes": 128663552,
+        "heap_total_bytes": 36839424,
+        "heap_used_bytes": 29197576,
+        "external_bytes": 21553567,
+        "array_buffers_bytes": 18850789
+      }
     },
     {
       "storage": "memory",
@@ -249,12 +306,19 @@
       "repetition": 5,
       "order": 0,
       "implementation": "express",
-      "count": 12398,
-      "throughput_rps": 826.4883571593182,
-      "p50_ms": 1.1882690000056755,
-      "p95_ms": 1.3686719999823254,
-      "p99_ms": 1.5904850000224542,
-      "rss_bytes": 110419968
+      "count": 12277,
+      "throughput_rps": 818.4425411085047,
+      "p50_ms": 1.2098770000156946,
+      "p95_ms": 1.3755909999890719,
+      "p99_ms": 1.6175619999994524,
+      "rss_bytes": 133783552,
+      "memory_usage": {
+        "rss_bytes": 128663552,
+        "heap_total_bytes": 36839424,
+        "heap_used_bytes": 30528576,
+        "external_bytes": 21750175,
+        "array_buffers_bytes": 19047397
+      }
     },
     {
       "storage": "memory",
@@ -263,12 +327,19 @@
       "repetition": 5,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 12356,
-      "throughput_rps": 823.6725086329067,
-      "p50_ms": 1.192739000020083,
-      "p95_ms": 1.3720130000147037,
-      "p99_ms": 1.6309630000032485,
-      "rss_bytes": 336666624
+      "count": 12302,
+      "throughput_rps": 820.1160386169623,
+      "p50_ms": 1.2076470000029076,
+      "p95_ms": 1.3598219999985304,
+      "p99_ms": 1.651071000000229,
+      "rss_bytes": 336478208,
+      "memory_usage": {
+        "rss_bytes": 331575296,
+        "heap_total_bytes": 78675968,
+        "heap_used_bytes": 46456264,
+        "external_bytes": 21535572,
+        "array_buffers_bytes": 18655238
+      }
     },
     {
       "storage": "memory",
@@ -277,12 +348,19 @@
       "repetition": 1,
       "order": 0,
       "implementation": "express",
-      "count": 101258,
-      "throughput_rps": 6750.411235495127,
-      "p50_ms": 1.4716189999890048,
-      "p95_ms": 2.0031399999861605,
-      "p99_ms": 6.187785000016447,
-      "rss_bytes": 122875904
+      "count": 104032,
+      "throughput_rps": 6935.347755968174,
+      "p50_ms": 1.4882269999943674,
+      "p95_ms": 1.9960589999973308,
+      "p99_ms": 3.416628999984823,
+      "rss_bytes": 136769536,
+      "memory_usage": {
+        "rss_bytes": 131563520,
+        "heap_total_bytes": 49946624,
+        "heap_used_bytes": 33735040,
+        "external_bytes": 21881248,
+        "array_buffers_bytes": 19178470
+      }
     },
     {
       "storage": "memory",
@@ -291,12 +369,19 @@
       "repetition": 1,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 99293,
-      "throughput_rps": 6619.398581795112,
-      "p50_ms": 1.4697790000063833,
-      "p95_ms": 2.1700150000106078,
-      "p99_ms": 6.321300999989035,
-      "rss_bytes": 337637376
+      "count": 101436,
+      "throughput_rps": 6762.228378250279,
+      "p50_ms": 1.474886999989394,
+      "p95_ms": 2.210220999986632,
+      "p99_ms": 3.626101000001654,
+      "rss_bytes": 353226752,
+      "memory_usage": {
+        "rss_bytes": 348377088,
+        "heap_total_bytes": 194281472,
+        "heap_used_bytes": 77459976,
+        "external_bytes": 21732180,
+        "array_buffers_bytes": 18851846
+      }
     },
     {
       "storage": "memory",
@@ -305,12 +390,19 @@
       "repetition": 2,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 102105,
-      "throughput_rps": 6806.410754954357,
-      "p50_ms": 1.455260000017006,
-      "p95_ms": 2.0342189999937546,
-      "p99_ms": 6.381238000001758,
-      "rss_bytes": 337833984
+      "count": 105256,
+      "throughput_rps": 7016.55161903392,
+      "p50_ms": 1.4667579999950249,
+      "p95_ms": 2.037848000007216,
+      "p99_ms": 3.5170649999927264,
+      "rss_bytes": 353353728,
+      "memory_usage": {
+        "rss_bytes": 348401664,
+        "heap_total_bytes": 229670912,
+        "heap_used_bytes": 114008040,
+        "external_bytes": 21928788,
+        "array_buffers_bytes": 19048454
+      }
     },
     {
       "storage": "memory",
@@ -319,12 +411,19 @@
       "repetition": 2,
       "order": 1,
       "implementation": "express",
-      "count": 100908,
-      "throughput_rps": 6726.350145838121,
-      "p50_ms": 1.4592190000112168,
-      "p95_ms": 2.0956670000159647,
-      "p99_ms": 6.318870999995852,
-      "rss_bytes": 124325888
+      "count": 103301,
+      "throughput_rps": 6886.436570153971,
+      "p50_ms": 1.484617000009166,
+      "p95_ms": 2.0809860000154004,
+      "p99_ms": 3.489635999983875,
+      "rss_bytes": 136990720,
+      "memory_usage": {
+        "rss_bytes": 132087808,
+        "heap_total_bytes": 49684480,
+        "heap_used_bytes": 31311056,
+        "external_bytes": 21617789,
+        "array_buffers_bytes": 18916326
+      }
     },
     {
       "storage": "memory",
@@ -333,12 +432,19 @@
       "repetition": 3,
       "order": 0,
       "implementation": "express",
-      "count": 101162,
-      "throughput_rps": 6743.3684865433,
-      "p50_ms": 1.4604590000235476,
-      "p95_ms": 2.0831379999872297,
-      "p99_ms": 6.3272500000020955,
-      "rss_bytes": 135340032
+      "count": 103855,
+      "throughput_rps": 6923.519652188808,
+      "p50_ms": 1.4918370000086725,
+      "p95_ms": 2.0488079999922775,
+      "p99_ms": 3.4193279999890365,
+      "rss_bytes": 139005952,
+      "memory_usage": {
+        "rss_bytes": 133722112,
+        "heap_total_bytes": 65937408,
+        "heap_used_bytes": 34810840,
+        "external_bytes": 22599521,
+        "array_buffers_bytes": 19899366
+      }
     },
     {
       "storage": "memory",
@@ -347,12 +453,19 @@
       "repetition": 3,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 100645,
-      "throughput_rps": 6709.461603602487,
-      "p50_ms": 1.460679000010714,
-      "p95_ms": 2.084387000009883,
-      "p99_ms": 6.445635999989463,
-      "rss_bytes": 337465344
+      "count": 103762,
+      "throughput_rps": 6917.293715877647,
+      "p50_ms": 1.4768670000485145,
+      "p95_ms": 2.0891560000018217,
+      "p99_ms": 3.6300610000034794,
+      "rss_bytes": 354521088,
+      "memory_usage": {
+        "rss_bytes": 349675520,
+        "heap_total_bytes": 203980800,
+        "heap_used_bytes": 100784384,
+        "external_bytes": 21798029,
+        "array_buffers_bytes": 18917695
+      }
     },
     {
       "storage": "memory",
@@ -361,12 +474,19 @@
       "repetition": 4,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 102862,
-      "throughput_rps": 6857.229733379177,
-      "p50_ms": 1.4523190000327304,
-      "p95_ms": 2.0129799999995157,
-      "p99_ms": 6.337329000001773,
-      "rss_bytes": 337903616
+      "count": 104451,
+      "throughput_rps": 6963.171001266846,
+      "p50_ms": 1.4836570000043139,
+      "p95_ms": 2.038737000024412,
+      "p99_ms": 3.5327439999673516,
+      "rss_bytes": 354525184,
+      "memory_usage": {
+        "rss_bytes": 349675520,
+        "heap_total_bytes": 185368576,
+        "heap_used_bytes": 84208600,
+        "external_bytes": 21535572,
+        "array_buffers_bytes": 18655238
+      }
     },
     {
       "storage": "memory",
@@ -375,12 +495,19 @@
       "repetition": 4,
       "order": 1,
       "implementation": "express",
-      "count": 98701,
-      "throughput_rps": 6579.24342260461,
-      "p50_ms": 1.4746589999995194,
-      "p95_ms": 2.1675539999851026,
-      "p99_ms": 6.498572999960743,
-      "rss_bytes": 137957376
+      "count": 104404,
+      "throughput_rps": 6959.544716903567,
+      "p50_ms": 1.4785680000204593,
+      "p95_ms": 2.0377669999725185,
+      "p99_ms": 3.489415999967605,
+      "rss_bytes": 141258752,
+      "memory_usage": {
+        "rss_bytes": 135294976,
+        "heap_total_bytes": 67248128,
+        "heap_used_bytes": 31776096,
+        "external_bytes": 22467073,
+        "array_buffers_bytes": 19768294
+      }
     },
     {
       "storage": "memory",
@@ -389,12 +516,19 @@
       "repetition": 5,
       "order": 0,
       "implementation": "express",
-      "count": 103029,
-      "throughput_rps": 6868.101482974719,
-      "p50_ms": 1.4510889999801293,
-      "p95_ms": 1.9706110000261106,
-      "p99_ms": 6.245851999963634,
-      "rss_bytes": 164241408
+      "count": 103607,
+      "throughput_rps": 6906.331001379375,
+      "p50_ms": 1.46054900001036,
+      "p95_ms": 2.146112999995239,
+      "p99_ms": 3.5437740000197664,
+      "rss_bytes": 165412864,
+      "memory_usage": {
+        "rss_bytes": 159412224,
+        "heap_total_bytes": 101064704,
+        "heap_used_bytes": 32024560,
+        "external_bytes": 22794753,
+        "array_buffers_bytes": 20095974
+      }
     },
     {
       "storage": "memory",
@@ -403,12 +537,19 @@
       "repetition": 5,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 103038,
-      "throughput_rps": 6868.401015851894,
-      "p50_ms": 1.4535200000391342,
-      "p95_ms": 1.9834399999817833,
-      "p99_ms": 6.351988999987952,
-      "rss_bytes": 339632128
+      "count": 103996,
+      "throughput_rps": 6932.395467515921,
+      "p50_ms": 1.4918670000042766,
+      "p95_ms": 2.0221079999464564,
+      "p99_ms": 3.4771269999910146,
+      "rss_bytes": 354525184,
+      "memory_usage": {
+        "rss_bytes": 349392896,
+        "heap_total_bytes": 220495872,
+        "heap_used_bytes": 109346240,
+        "external_bytes": 21863565,
+        "array_buffers_bytes": 18983231
+      }
     },
     {
       "storage": "memory",
@@ -417,12 +558,19 @@
       "repetition": 1,
       "order": 0,
       "implementation": "express",
-      "count": 288159,
-      "throughput_rps": 19207.48827421569,
-      "p50_ms": 1.9308929999824613,
-      "p95_ms": 7.656022999959532,
-      "p99_ms": 10.741716000018641,
-      "rss_bytes": 224133120
+      "count": 310599,
+      "throughput_rps": 20704.838658699828,
+      "p50_ms": 1.9590800000005402,
+      "p95_ms": 5.228413999953773,
+      "p99_ms": 7.131465999991633,
+      "rss_bytes": 227385344,
+      "memory_usage": {
+        "rss_bytes": 221016064,
+        "heap_total_bytes": 170795008,
+        "heap_used_bytes": 49147272,
+        "external_bytes": 22991361,
+        "array_buffers_bytes": 20292582
+      }
     },
     {
       "storage": "memory",
@@ -431,12 +579,19 @@
       "repetition": 1,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 304251,
-      "throughput_rps": 20280.852956070445,
-      "p50_ms": 1.8736149999895133,
-      "p95_ms": 7.682552000042051,
-      "p99_ms": 10.298431000031997,
-      "rss_bytes": 368082944
+      "count": 316209,
+      "throughput_rps": 21078.497339792073,
+      "p50_ms": 1.9374109999625944,
+      "p95_ms": 5.151007000007667,
+      "p99_ms": 6.939363999990746,
+      "rss_bytes": 382967808,
+      "memory_usage": {
+        "rss_bytes": 377200640,
+        "heap_total_bytes": 206602240,
+        "heap_used_bytes": 80567864,
+        "external_bytes": 21535572,
+        "array_buffers_bytes": 18655238
+      }
     },
     {
       "storage": "memory",
@@ -445,12 +600,19 @@
       "repetition": 2,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 295554,
-      "throughput_rps": 19701.944792333365,
-      "p50_ms": 1.9003740000189282,
-      "p95_ms": 7.790467999991961,
-      "p99_ms": 10.404347000003327,
-      "rss_bytes": 368082944
+      "count": 300196,
+      "throughput_rps": 20010.334256857936,
+      "p50_ms": 2.0395170000265352,
+      "p95_ms": 5.149520000035409,
+      "p99_ms": 7.159617000026628,
+      "rss_bytes": 382971904,
+      "memory_usage": {
+        "rss_bytes": 377110528,
+        "heap_total_bytes": 195330048,
+        "heap_used_bytes": 94714952,
+        "external_bytes": 21666644,
+        "array_buffers_bytes": 18786310
+      }
     },
     {
       "storage": "memory",
@@ -459,12 +621,19 @@
       "repetition": 2,
       "order": 1,
       "implementation": "express",
-      "count": 298325,
-      "throughput_rps": 19886.757273349045,
-      "p50_ms": 1.8842639999929816,
-      "p95_ms": 7.717310999985784,
-      "p99_ms": 10.524232999945525,
-      "rss_bytes": 227856384
+      "count": 314444,
+      "throughput_rps": 20959.72750947522,
+      "p50_ms": 1.9298500000149943,
+      "p95_ms": 5.1280299999634735,
+      "p99_ms": 7.280701999960002,
+      "rss_bytes": 230277120,
+      "memory_usage": {
+        "rss_bytes": 224423936,
+        "heap_total_bytes": 171319296,
+        "heap_used_bytes": 44399104,
+        "external_bytes": 22532609,
+        "array_buffers_bytes": 19833830
+      }
     },
     {
       "storage": "memory",
@@ -473,12 +642,19 @@
       "repetition": 3,
       "order": 0,
       "implementation": "express",
-      "count": 297844,
-      "throughput_rps": 19852.93294628399,
-      "p50_ms": 1.9011429999954998,
-      "p95_ms": 7.665991999965627,
-      "p99_ms": 10.556111999962013,
-      "rss_bytes": 228397056
+      "count": 323026,
+      "throughput_rps": 21533.364881968922,
+      "p50_ms": 1.8864409999805503,
+      "p95_ms": 5.091130000015255,
+      "p99_ms": 7.024499999999534,
+      "rss_bytes": 230424576,
+      "memory_usage": {
+        "rss_bytes": 224686080,
+        "heap_total_bytes": 169484288,
+        "heap_used_bytes": 43796760,
+        "external_bytes": 22139393,
+        "array_buffers_bytes": 19440614
+      }
     },
     {
       "storage": "memory",
@@ -487,12 +663,19 @@
       "repetition": 3,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 273281,
-      "throughput_rps": 18215.064283863685,
-      "p50_ms": 2.0097500000265427,
-      "p95_ms": 8.17378400004236,
-      "p99_ms": 11.173509999993257,
-      "rss_bytes": 368267264
+      "count": 326382,
+      "throughput_rps": 21756.34468191922,
+      "p50_ms": 1.9004399999976158,
+      "p95_ms": 5.113329000014346,
+      "p99_ms": 6.8338849999709055,
+      "rss_bytes": 383041536,
+      "memory_usage": {
+        "rss_bytes": 377896960,
+        "heap_total_bytes": 240418816,
+        "heap_used_bytes": 106210792,
+        "external_bytes": 21994324,
+        "array_buffers_bytes": 19113990
+      }
     },
     {
       "storage": "memory",
@@ -501,12 +684,19 @@
       "repetition": 4,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 288101,
-      "throughput_rps": 19205.099312270275,
-      "p50_ms": 1.9897099999943748,
-      "p95_ms": 7.924832999997307,
-      "p99_ms": 10.536171999992803,
-      "rss_bytes": 371654656
+      "count": 326939,
+      "throughput_rps": 21794.03663174282,
+      "p50_ms": 1.8953299999702722,
+      "p95_ms": 4.995553000015207,
+      "p99_ms": 6.676869000017177,
+      "rss_bytes": 383041536,
+      "memory_usage": {
+        "rss_bytes": 377896960,
+        "heap_total_bytes": 197427200,
+        "heap_used_bytes": 51047208,
+        "external_bytes": 21601108,
+        "array_buffers_bytes": 18720774
+      }
     },
     {
       "storage": "memory",
@@ -515,12 +705,19 @@
       "repetition": 4,
       "order": 1,
       "implementation": "express",
-      "count": 294227,
-      "throughput_rps": 19613.53543952221,
-      "p50_ms": 1.882664000033401,
-      "p95_ms": 7.833715999964625,
-      "p99_ms": 10.7834440000006,
-      "rss_bytes": 228458496
+      "count": 317538,
+      "throughput_rps": 21165.513984819558,
+      "p50_ms": 2.0009269999573007,
+      "p95_ms": 5.138657000032254,
+      "p99_ms": 6.860802999988664,
+      "rss_bytes": 230465536,
+      "memory_usage": {
+        "rss_bytes": 224686080,
+        "heap_total_bytes": 168960000,
+        "heap_used_bytes": 56371080,
+        "external_bytes": 21746177,
+        "array_buffers_bytes": 19047398
+      }
     },
     {
       "storage": "memory",
@@ -529,12 +726,19 @@
       "repetition": 5,
       "order": 0,
       "implementation": "express",
-      "count": 284356,
-      "throughput_rps": 18955.48205407925,
-      "p50_ms": 1.9535909999976866,
-      "p95_ms": 7.760199000011198,
-      "p99_ms": 10.855500000005122,
-      "rss_bytes": 229117952
+      "count": 299176,
+      "throughput_rps": 19942.816099926917,
+      "p50_ms": 2.059545000025537,
+      "p95_ms": 5.226744999992661,
+      "p99_ms": 7.422404000011738,
+      "rss_bytes": 231178240,
+      "memory_usage": {
+        "rss_bytes": 224948224,
+        "heap_total_bytes": 172105728,
+        "heap_used_bytes": 51753640,
+        "external_bytes": 22860289,
+        "array_buffers_bytes": 20161510
+      }
     },
     {
       "storage": "memory",
@@ -543,12 +747,19 @@
       "repetition": 5,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 297012,
-      "throughput_rps": 19798.10860683959,
-      "p50_ms": 1.894603000022471,
-      "p95_ms": 7.646211999992374,
-      "p99_ms": 10.403897000011057,
-      "rss_bytes": 371691520
+      "count": 322332,
+      "throughput_rps": 21485.392955244475,
+      "p50_ms": 1.9440579999936745,
+      "p95_ms": 5.01011999999173,
+      "p99_ms": 6.7729050000198185,
+      "rss_bytes": 383012864,
+      "memory_usage": {
+        "rss_bytes": 378564608,
+        "heap_total_bytes": 237535232,
+        "heap_used_bytes": 106866936,
+        "external_bytes": 21928788,
+        "array_buffers_bytes": 19048454
+      }
     },
     {
       "storage": "memory",
@@ -557,12 +768,19 @@
       "repetition": 1,
       "order": 0,
       "implementation": "express",
-      "count": 9449,
-      "throughput_rps": 629.9032296280851,
-      "p50_ms": 1.5394959999830462,
-      "p95_ms": 1.9682710000197403,
-      "p99_ms": 2.4971929999883287,
-      "rss_bytes": 141578240
+      "count": 9350,
+      "throughput_rps": 623.3175904502796,
+      "p50_ms": 1.5798289999947883,
+      "p95_ms": 1.9080989999929443,
+      "p99_ms": 2.3393550000037067,
+      "rss_bytes": 145219584,
+      "memory_usage": {
+        "rss_bytes": 140828672,
+        "heap_total_bytes": 71442432,
+        "heap_used_bytes": 35848352,
+        "external_bytes": 21561402,
+        "array_buffers_bytes": 18858664
+      }
     },
     {
       "storage": "memory",
@@ -571,12 +789,19 @@
       "repetition": 1,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 9386,
-      "throughput_rps": 625.6991481352318,
-      "p50_ms": 1.5355860000126995,
-      "p95_ms": 2.10954600002151,
-      "p99_ms": 2.4949730000225827,
-      "rss_bytes": 292556800
+      "count": 9428,
+      "throughput_rps": 628.496733412657,
+      "p50_ms": 1.571278999967035,
+      "p95_ms": 1.859409999975469,
+      "p99_ms": 2.277627000003122,
+      "rss_bytes": 291852288,
+      "memory_usage": {
+        "rss_bytes": 287485952,
+        "heap_total_bytes": 216825856,
+        "heap_used_bytes": 110269456,
+        "external_bytes": 21988105,
+        "array_buffers_bytes": 19103292
+      }
     },
     {
       "storage": "memory",
@@ -585,12 +810,19 @@
       "repetition": 2,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 9912,
-      "throughput_rps": 660.77351641772,
-      "p50_ms": 1.49153799994383,
-      "p95_ms": 1.754179000039585,
-      "p99_ms": 2.1455550000537187,
-      "rss_bytes": 304828416
+      "count": 9830,
+      "throughput_rps": 655.3147056633244,
+      "p50_ms": 1.5212709999177605,
+      "p95_ms": 1.7470629999879748,
+      "p99_ms": 1.9646369999973103,
+      "rss_bytes": 313602048,
+      "memory_usage": {
+        "rss_bytes": 309116928,
+        "heap_total_bytes": 245399552,
+        "heap_used_bytes": 151716296,
+        "external_bytes": 22275315,
+        "array_buffers_bytes": 19390462
+      }
     },
     {
       "storage": "memory",
@@ -599,12 +831,19 @@
       "repetition": 2,
       "order": 1,
       "implementation": "express",
-      "count": 9841,
-      "throughput_rps": 656.0275934007932,
-      "p50_ms": 1.5050180000253022,
-      "p95_ms": 1.7776769999181852,
-      "p99_ms": 2.103776999982074,
-      "rss_bytes": 151859200
+      "count": 9709,
+      "throughput_rps": 647.2003640959266,
+      "p50_ms": 1.5149619999574497,
+      "p95_ms": 1.879458999959752,
+      "p99_ms": 2.2414580000331625,
+      "rss_bytes": 145494016,
+      "memory_usage": {
+        "rss_bytes": 140582912,
+        "heap_total_bytes": 72491008,
+        "heap_used_bytes": 37155184,
+        "external_bytes": 21626475,
+        "array_buffers_bytes": 18923697
+      }
     },
     {
       "storage": "memory",
@@ -613,12 +852,19 @@
       "repetition": 3,
       "order": 0,
       "implementation": "express",
-      "count": 9811,
-      "throughput_rps": 654.0505948558139,
-      "p50_ms": 1.48954799992498,
-      "p95_ms": 1.8907340000150725,
-      "p99_ms": 2.2278129999758676,
-      "rss_bytes": 151896064
+      "count": 9614,
+      "throughput_rps": 640.8853511016094,
+      "p50_ms": 1.5426399999996647,
+      "p95_ms": 1.8572099999291822,
+      "p99_ms": 2.325863999896683,
+      "rss_bytes": 146837504,
+      "memory_usage": {
+        "rss_bytes": 142417920,
+        "heap_total_bytes": 73015296,
+        "heap_used_bytes": 35955536,
+        "external_bytes": 21625530,
+        "array_buffers_bytes": 18922752
+      }
     },
     {
       "storage": "memory",
@@ -627,12 +873,19 @@
       "repetition": 3,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 9644,
-      "throughput_rps": 642.8936488370399,
-      "p50_ms": 1.5123570000287145,
-      "p95_ms": 1.939672000007704,
-      "p99_ms": 2.2950300000375137,
-      "rss_bytes": 304578560
+      "count": 9692,
+      "throughput_rps": 646.0585402990258,
+      "p50_ms": 1.523780000046827,
+      "p95_ms": 1.8636399999959394,
+      "p99_ms": 2.262957000057213,
+      "rss_bytes": 312983552,
+      "memory_usage": {
+        "rss_bytes": 308867072,
+        "heap_total_bytes": 182747136,
+        "heap_used_bytes": 68288408,
+        "external_bytes": 22052524,
+        "array_buffers_bytes": 19172190
+      }
     },
     {
       "storage": "memory",
@@ -641,12 +894,19 @@
       "repetition": 4,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 9873,
-      "throughput_rps": 658.1662574394599,
-      "p50_ms": 1.492617999901995,
-      "p95_ms": 1.7767479999456555,
-      "p99_ms": 2.3943969999672845,
-      "rss_bytes": 304578560
+      "count": 9855,
+      "throughput_rps": 656.9454610885646,
+      "p50_ms": 1.5000720000825822,
+      "p95_ms": 1.8185209999792278,
+      "p99_ms": 2.175128999981098,
+      "rss_bytes": 312442880,
+      "memory_usage": {
+        "rss_bytes": 308609024,
+        "heap_total_bytes": 182222848,
+        "heap_used_bytes": 71636096,
+        "external_bytes": 22053430,
+        "array_buffers_bytes": 19173096
+      }
     },
     {
       "storage": "memory",
@@ -655,12 +915,19 @@
       "repetition": 4,
       "order": 1,
       "implementation": "express",
-      "count": 9697,
-      "throughput_rps": 646.4417005710341,
-      "p50_ms": 1.5177670000120997,
-      "p95_ms": 1.8741249999729916,
-      "p99_ms": 2.1872040000744164,
-      "rss_bytes": 148623360
+      "count": 9718,
+      "throughput_rps": 647.8150896158605,
+      "p50_ms": 1.5159310000017285,
+      "p95_ms": 1.8611090000486001,
+      "p99_ms": 2.3384429999860004,
+      "rss_bytes": 147075072,
+      "memory_usage": {
+        "rss_bytes": 142417920,
+        "heap_total_bytes": 72753152,
+        "heap_used_bytes": 32876080,
+        "external_bytes": 21554204,
+        "array_buffers_bytes": 18852741
+      }
     },
     {
       "storage": "memory",
@@ -669,12 +936,19 @@
       "repetition": 5,
       "order": 0,
       "implementation": "express",
-      "count": 9686,
-      "throughput_rps": 645.6715018932975,
-      "p50_ms": 1.5184570000274107,
-      "p95_ms": 1.8825849998975173,
-      "p99_ms": 2.2140619999263436,
-      "rss_bytes": 148717568
+      "count": 9643,
+      "throughput_rps": 642.8560271851321,
+      "p50_ms": 1.5337899998994544,
+      "p95_ms": 1.8958379999967292,
+      "p99_ms": 2.162879000068642,
+      "rss_bytes": 146628608,
+      "memory_usage": {
+        "rss_bytes": 142307328,
+        "heap_total_bytes": 72491008,
+        "heap_used_bytes": 40159192,
+        "external_bytes": 21698018,
+        "array_buffers_bytes": 18997863
+      }
     },
     {
       "storage": "memory",
@@ -683,12 +957,19 @@
       "repetition": 5,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 9559,
-      "throughput_rps": 637.2390628299081,
-      "p50_ms": 1.520827000029385,
-      "p95_ms": 1.95174200006295,
-      "p99_ms": 2.425705000059679,
-      "rss_bytes": 304713728
+      "count": 9719,
+      "throughput_rps": 647.8883223719521,
+      "p50_ms": 1.516490999958478,
+      "p95_ms": 1.8494489999720827,
+      "p99_ms": 2.2611659999238327,
+      "rss_bytes": 312520704,
+      "memory_usage": {
+        "rss_bytes": 308674560,
+        "heap_total_bytes": 181698560,
+        "heap_used_bytes": 62063672,
+        "external_bytes": 21899596,
+        "array_buffers_bytes": 19019262
+      }
     },
     {
       "storage": "memory",
@@ -697,12 +978,19 @@
       "repetition": 1,
       "order": 0,
       "implementation": "express",
-      "count": 65781,
-      "throughput_rps": 4384.856281036741,
-      "p50_ms": 2.330589000019245,
-      "p95_ms": 3.4418290000176057,
-      "p99_ms": 7.245305999997072,
-      "rss_bytes": 314957824
+      "count": 65504,
+      "throughput_rps": 4366.705051017792,
+      "p50_ms": 2.377892000018619,
+      "p95_ms": 3.5228249999927357,
+      "p99_ms": 5.238948000012897,
+      "rss_bytes": 314720256,
+      "memory_usage": {
+        "rss_bytes": 310341632,
+        "heap_total_bytes": 200679424,
+        "heap_used_bytes": 99424776,
+        "external_bytes": 29481990,
+        "array_buffers_bytes": 26783211
+      }
     },
     {
       "storage": "memory",
@@ -711,12 +999,19 @@
       "repetition": 1,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 64588,
-      "throughput_rps": 4305.309766811728,
-      "p50_ms": 2.3640379999997094,
-      "p95_ms": 3.601873999927193,
-      "p99_ms": 7.720590000040829,
-      "rss_bytes": 366673920
+      "count": 66848,
+      "throughput_rps": 4456.371331163437,
+      "p50_ms": 2.357592000043951,
+      "p95_ms": 3.327960000024177,
+      "p99_ms": 5.2898259999929,
+      "rss_bytes": 360947712,
+      "memory_usage": {
+        "rss_bytes": 356098048,
+        "heap_total_bytes": 271876096,
+        "heap_used_bytes": 172310008,
+        "external_bytes": 35896852,
+        "array_buffers_bytes": 33016518
+      }
     },
     {
       "storage": "memory",
@@ -725,12 +1020,19 @@
       "repetition": 2,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 64747,
-      "throughput_rps": 4315.961823433033,
-      "p50_ms": 2.373016000026837,
-      "p95_ms": 3.4367599999532104,
-      "p99_ms": 7.689390999963507,
-      "rss_bytes": 368283648
+      "count": 64762,
+      "throughput_rps": 4316.8676066029575,
+      "p50_ms": 2.4089200000744313,
+      "p95_ms": 3.560183000052348,
+      "p99_ms": 5.490468999953009,
+      "rss_bytes": 361000960,
+      "memory_usage": {
+        "rss_bytes": 356716544,
+        "heap_total_bytes": 262963200,
+        "heap_used_bytes": 139563816,
+        "external_bytes": 34539898,
+        "array_buffers_bytes": 31659564
+      }
     },
     {
       "storage": "memory",
@@ -739,12 +1041,19 @@
       "repetition": 2,
       "order": 1,
       "implementation": "express",
-      "count": 64312,
-      "throughput_rps": 4287.124993379608,
-      "p50_ms": 2.3512480000499636,
-      "p95_ms": 3.7111100000329316,
-      "p99_ms": 7.120850999956019,
-      "rss_bytes": 314568704
+      "count": 63692,
+      "throughput_rps": 4245.736557363972,
+      "p50_ms": 2.4493490000022575,
+      "p95_ms": 3.583191999932751,
+      "p99_ms": 5.242787000024691,
+      "rss_bytes": 314945536,
+      "memory_usage": {
+        "rss_bytes": 310341632,
+        "heap_total_bytes": 218767360,
+        "heap_used_bytes": 117227696,
+        "external_bytes": 32957907,
+        "array_buffers_bytes": 30259128
+      }
     },
     {
       "storage": "memory",
@@ -753,12 +1062,19 @@
       "repetition": 3,
       "order": 0,
       "implementation": "express",
-      "count": 63877,
-      "throughput_rps": 4257.9669201599445,
-      "p50_ms": 2.3755370000144467,
-      "p95_ms": 3.643351999926381,
-      "p99_ms": 7.685961000039242,
-      "rss_bytes": 314568704
+      "count": 64403,
+      "throughput_rps": 4292.956348552199,
+      "p50_ms": 2.416689999983646,
+      "p95_ms": 3.542503000004217,
+      "p99_ms": 5.176748999976553,
+      "rss_bytes": 316628992,
+      "memory_usage": {
+        "rss_bytes": 312176640,
+        "heap_total_bytes": 192815104,
+        "heap_used_bytes": 83772584,
+        "external_bytes": 25561987,
+        "array_buffers_bytes": 22863208
+      }
     },
     {
       "storage": "memory",
@@ -767,12 +1083,19 @@
       "repetition": 3,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 64022,
-      "throughput_rps": 4267.571304719175,
-      "p50_ms": 2.3606069999514148,
-      "p95_ms": 3.7990970000391826,
-      "p99_ms": 7.696300000068732,
-      "rss_bytes": 368295936
+      "count": 66381,
+      "throughput_rps": 4425.057978418741,
+      "p50_ms": 2.346722000045702,
+      "p95_ms": 3.429236000054516,
+      "p99_ms": 5.224276999942958,
+      "rss_bytes": 366911488,
+      "memory_usage": {
+        "rss_bytes": 362127360,
+        "heap_total_bytes": 266108928,
+        "heap_used_bytes": 133673952,
+        "external_bytes": 34916686,
+        "array_buffers_bytes": 32036352
+      }
     },
     {
       "storage": "memory",
@@ -781,12 +1104,19 @@
       "repetition": 4,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 64293,
-      "throughput_rps": 4285.62486285783,
-      "p50_ms": 2.3537569999461994,
-      "p95_ms": 3.762798000010662,
-      "p99_ms": 7.67935099999886,
-      "rss_bytes": 368295936
+      "count": 65773,
+      "throughput_rps": 4384.371945827959,
+      "p50_ms": 2.369120999937877,
+      "p95_ms": 3.529493000009097,
+      "p99_ms": 5.444799000048079,
+      "rss_bytes": 366915584,
+      "memory_usage": {
+        "rss_bytes": 362381312,
+        "heap_total_bytes": 254574592,
+        "heap_used_bytes": 156151640,
+        "external_bytes": 33669604,
+        "array_buffers_bytes": 30789270
+      }
     },
     {
       "storage": "memory",
@@ -795,12 +1125,19 @@
       "repetition": 4,
       "order": 1,
       "implementation": "express",
-      "count": 64148,
-      "throughput_rps": 4276.148867924468,
-      "p50_ms": 2.3455279999179766,
-      "p95_ms": 3.678821000037715,
-      "p99_ms": 7.3644319999730214,
-      "rss_bytes": 315822080
+      "count": 66354,
+      "throughput_rps": 4421.880671386503,
+      "p50_ms": 2.3769109999993816,
+      "p95_ms": 3.4240160000044852,
+      "p99_ms": 5.121659999946132,
+      "rss_bytes": 317079552,
+      "memory_usage": {
+        "rss_bytes": 312438784,
+        "heap_total_bytes": 204349440,
+        "heap_used_bytes": 29075904,
+        "external_bytes": 21487938,
+        "array_buffers_bytes": 18789159
+      }
     },
     {
       "storage": "memory",
@@ -809,12 +1146,19 @@
       "repetition": 5,
       "order": 0,
       "implementation": "express",
-      "count": 67179,
-      "throughput_rps": 4477.917836981987,
-      "p50_ms": 2.292959999991581,
-      "p95_ms": 3.3345429999753833,
-      "p99_ms": 6.912137000006624,
-      "rss_bytes": 315826176
+      "count": 64630,
+      "throughput_rps": 4307.821915999572,
+      "p50_ms": 2.4055500000249594,
+      "p95_ms": 3.5483519999543205,
+      "p99_ms": 5.119249999988824,
+      "rss_bytes": 317095936,
+      "memory_usage": {
+        "rss_bytes": 312438784,
+        "heap_total_bytes": 201203712,
+        "heap_used_bytes": 117593880,
+        "external_bytes": 29647329,
+        "array_buffers_bytes": 26948550
+      }
     },
     {
       "storage": "memory",
@@ -823,12 +1167,19 @@
       "repetition": 5,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 63964,
-      "throughput_rps": 4263.830697652735,
-      "p50_ms": 2.3642580000450835,
-      "p95_ms": 3.8357949999626726,
-      "p99_ms": 7.753948000026867,
-      "rss_bytes": 368295936
+      "count": 64049,
+      "throughput_rps": 4269.327878315662,
+      "p50_ms": 2.4195390000240877,
+      "p95_ms": 3.59084099996835,
+      "p99_ms": 5.447808000026271,
+      "rss_bytes": 366850048,
+      "memory_usage": {
+        "rss_bytes": 362917888,
+        "heap_total_bytes": 245137408,
+        "heap_used_bytes": 160217840,
+        "external_bytes": 32188511,
+        "array_buffers_bytes": 29308177
+      }
     },
     {
       "storage": "memory",
@@ -837,12 +1188,19 @@
       "repetition": 1,
       "order": 0,
       "implementation": "express",
-      "count": 120472,
-      "throughput_rps": 8029.050194475302,
-      "p50_ms": 5.640792999998666,
-      "p95_ms": 11.067211999907158,
-      "p99_ms": 13.778287000022829,
-      "rss_bytes": 331018240
+      "count": 120381,
+      "throughput_rps": 8023.793262145233,
+      "p50_ms": 5.776897000032477,
+      "p95_ms": 10.069863000069745,
+      "p99_ms": 12.855199999990873,
+      "rss_bytes": 341241856,
+      "memory_usage": {
+        "rss_bytes": 335704064,
+        "heap_total_bytes": 228204544,
+        "heap_used_bytes": 141606216,
+        "external_bytes": 36137766,
+        "array_buffers_bytes": 33438987
+      }
     },
     {
       "storage": "memory",
@@ -851,12 +1209,19 @@
       "repetition": 1,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 125195,
-      "throughput_rps": 8342.053237149315,
-      "p50_ms": 5.253935999935493,
-      "p95_ms": 11.285833999980241,
-      "p99_ms": 14.391904999967664,
-      "rss_bytes": 379863040
+      "count": 124013,
+      "throughput_rps": 8263.11350684776,
+      "p50_ms": 5.540845000068657,
+      "p95_ms": 10.015033999923617,
+      "p99_ms": 12.877448000013828,
+      "rss_bytes": 377561088,
+      "memory_usage": {
+        "rss_bytes": 373288960,
+        "heap_total_bytes": 267681792,
+        "heap_used_bytes": 133092488,
+        "external_bytes": 35510610,
+        "array_buffers_bytes": 32630276
+      }
     },
     {
       "storage": "memory",
@@ -865,12 +1230,19 @@
       "repetition": 2,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 118678,
-      "throughput_rps": 7910.156877292783,
-      "p50_ms": 5.5822140000527725,
-      "p95_ms": 11.747128000017256,
-      "p99_ms": 14.659456000081263,
-      "rss_bytes": 385114112
+      "count": 107466,
+      "throughput_rps": 7161.661269008838,
+      "p50_ms": 6.33803700003773,
+      "p95_ms": 11.836384000023827,
+      "p99_ms": 15.173302000039257,
+      "rss_bytes": 380555264,
+      "memory_usage": {
+        "rss_bytes": 376086528,
+        "heap_total_bytes": 248807424,
+        "heap_used_bytes": 136311816,
+        "external_bytes": 33582312,
+        "array_buffers_bytes": 30701978
+      }
     },
     {
       "storage": "memory",
@@ -879,12 +1251,19 @@
       "repetition": 2,
       "order": 1,
       "implementation": "express",
-      "count": 121155,
-      "throughput_rps": 8073.135081842523,
-      "p50_ms": 5.450349000049755,
-      "p95_ms": 11.727689000079408,
-      "p99_ms": 15.136930000036955,
-      "rss_bytes": 330489856
+      "count": 113233,
+      "throughput_rps": 7547.178706941285,
+      "p50_ms": 6.1110549999866635,
+      "p95_ms": 11.0903779999353,
+      "p99_ms": 14.1110059999628,
+      "rss_bytes": 351477760,
+      "memory_usage": {
+        "rss_bytes": 346099712,
+        "heap_total_bytes": 202252288,
+        "heap_used_bytes": 85427984,
+        "external_bytes": 23100370,
+        "array_buffers_bytes": 20401591
+      }
     },
     {
       "storage": "memory",
@@ -893,12 +1272,19 @@
       "repetition": 3,
       "order": 0,
       "implementation": "express",
-      "count": 116835,
-      "throughput_rps": 7787.044004602903,
-      "p50_ms": 5.619803000008687,
-      "p95_ms": 12.00018899992574,
-      "p99_ms": 14.798451000009663,
-      "rss_bytes": 331173888
+      "count": 129610,
+      "throughput_rps": 8635.657227264166,
+      "p50_ms": 5.462906999979168,
+      "p95_ms": 8.944528999971226,
+      "p99_ms": 10.743438999983482,
+      "rss_bytes": 354435072,
+      "memory_usage": {
+        "rss_bytes": 349540352,
+        "heap_total_bytes": 233185280,
+        "heap_used_bytes": 102758048,
+        "external_bytes": 37359897,
+        "array_buffers_bytes": 34661118
+      }
     },
     {
       "storage": "memory",
@@ -907,12 +1293,19 @@
       "repetition": 3,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 111591,
-      "throughput_rps": 7437.302424872948,
-      "p50_ms": 5.987399999983609,
-      "p95_ms": 12.228352000005543,
-      "p99_ms": 15.435637999908067,
-      "rss_bytes": 385028096
+      "count": 118580,
+      "throughput_rps": 7903.397498333351,
+      "p50_ms": 5.82111400004942,
+      "p95_ms": 10.453329000039957,
+      "p99_ms": 13.362980000092648,
+      "rss_bytes": 384167936,
+      "memory_usage": {
+        "rss_bytes": 379801600,
+        "heap_total_bytes": 226263040,
+        "heap_used_bytes": 117185176,
+        "external_bytes": 29727780,
+        "array_buffers_bytes": 26847446
+      }
     },
     {
       "storage": "memory",
@@ -921,12 +1314,19 @@
       "repetition": 4,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 105294,
-      "throughput_rps": 7018.014638446931,
-      "p50_ms": 6.2420109999366105,
-      "p95_ms": 13.098760999972,
-      "p99_ms": 16.596317999996245,
-      "rss_bytes": 386899968
+      "count": 114020,
+      "throughput_rps": 7598.4589497829475,
+      "p50_ms": 6.127633000025526,
+      "p95_ms": 10.654991999967024,
+      "p99_ms": 13.619561000028625,
+      "rss_bytes": 385175552,
+      "memory_usage": {
+        "rss_bytes": 380755968,
+        "heap_total_bytes": 265846784,
+        "heap_used_bytes": 147674720,
+        "external_bytes": 36452892,
+        "array_buffers_bytes": 33572558
+      }
     },
     {
       "storage": "memory",
@@ -935,12 +1335,19 @@
       "repetition": 4,
       "order": 1,
       "implementation": "express",
-      "count": 110412,
-      "throughput_rps": 7358.864014356185,
-      "p50_ms": 5.873363999999128,
-      "p95_ms": 12.78229200001806,
-      "p99_ms": 16.264900000067428,
-      "rss_bytes": 331902976
+      "count": 107565,
+      "throughput_rps": 7169.07395802428,
+      "p50_ms": 6.357805999927223,
+      "p95_ms": 12.034404000034556,
+      "p99_ms": 14.932136000017636,
+      "rss_bytes": 355418112,
+      "memory_usage": {
+        "rss_bytes": 350588928,
+        "heap_total_bytes": 250224640,
+        "heap_used_bytes": 150829696,
+        "external_bytes": 41359905,
+        "array_buffers_bytes": 38661126
+      }
     },
     {
       "storage": "memory",
@@ -949,12 +1356,19 @@
       "repetition": 5,
       "order": 0,
       "implementation": "express",
-      "count": 115013,
-      "throughput_rps": 7665.44607069551,
-      "p50_ms": 5.6513709999853745,
-      "p95_ms": 12.566288999980316,
-      "p99_ms": 15.884663000004366,
-      "rss_bytes": 334102528
+      "count": 111018,
+      "throughput_rps": 7399.390904172743,
+      "p50_ms": 6.240148999961093,
+      "p95_ms": 11.354607000015676,
+      "p99_ms": 14.302277000038885,
+      "rss_bytes": 355528704,
+      "memory_usage": {
+        "rss_bytes": 350588928,
+        "heap_total_bytes": 215621632,
+        "heap_used_bytes": 94742960,
+        "external_bytes": 33315120,
+        "array_buffers_bytes": 30616341
+      }
     },
     {
       "storage": "memory",
@@ -963,12 +1377,19 @@
       "repetition": 5,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 115473,
-      "throughput_rps": 7693.835522539469,
-      "p50_ms": 5.768057999899611,
-      "p95_ms": 11.53459599998314,
-      "p99_ms": 14.4005350000225,
-      "rss_bytes": 388354048
+      "count": 124624,
+      "throughput_rps": 8306.130705286329,
+      "p50_ms": 5.617620000033639,
+      "p95_ms": 9.609885000041686,
+      "p99_ms": 11.953156000003219,
+      "rss_bytes": 385847296,
+      "memory_usage": {
+        "rss_bytes": 381796352,
+        "heap_total_bytes": 264798208,
+        "heap_used_bytes": 151694008,
+        "external_bytes": 35941209,
+        "array_buffers_bytes": 33060875
+      }
     },
     {
       "storage": "memory",
@@ -977,12 +1398,19 @@
       "repetition": 1,
       "order": 0,
       "implementation": "express",
-      "count": 1333,
-      "throughput_rps": 88.85776180976184,
-      "p50_ms": 10.269510000012815,
-      "p95_ms": 20.25828900001943,
-      "p99_ms": 23.835804000031203,
-      "rss_bytes": 144576512
+      "count": 1308,
+      "throughput_rps": 87.17757346461362,
+      "p50_ms": 11.571707999915816,
+      "p95_ms": 15.941829999908805,
+      "p99_ms": 19.82039899996016,
+      "rss_bytes": 159412224,
+      "memory_usage": {
+        "rss_bytes": 155201536,
+        "heap_total_bytes": 72753152,
+        "heap_used_bytes": 47963088,
+        "external_bytes": 21578124,
+        "array_buffers_bytes": 18875386
+      }
     },
     {
       "storage": "memory",
@@ -991,12 +1419,19 @@
       "repetition": 1,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 1318,
-      "throughput_rps": 87.79919104506016,
-      "p50_ms": 10.850969000020996,
-      "p95_ms": 16.57765799993649,
-      "p99_ms": 22.393663999973796,
-      "rss_bytes": 199241728
+      "count": 1297,
+      "throughput_rps": 86.38943734900947,
+      "p50_ms": 11.200031000073068,
+      "p95_ms": 16.421152999973856,
+      "p99_ms": 20.50278499990236,
+      "rss_bytes": 219693056,
+      "memory_usage": {
+        "rss_bytes": 214781952,
+        "heap_total_bytes": 181436416,
+        "heap_used_bytes": 43310160,
+        "external_bytes": 22136908,
+        "array_buffers_bytes": 19252095
+      }
     },
     {
       "storage": "memory",
@@ -1005,12 +1440,19 @@
       "repetition": 2,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 850,
-      "throughput_rps": 56.66344867008778,
-      "p50_ms": 16.555568999960087,
-      "p95_ms": 28.300777000025846,
-      "p99_ms": 32.25256900000386,
-      "rss_bytes": 209256448
+      "count": 851,
+      "throughput_rps": 56.669050867263195,
+      "p50_ms": 17.812375999987125,
+      "p95_ms": 20.785144999972545,
+      "p99_ms": 24.4130919999443,
+      "rss_bytes": 249683968,
+      "memory_usage": {
+        "rss_bytes": 244060160,
+        "heap_total_bytes": 183795712,
+        "heap_used_bytes": 48175152,
+        "external_bytes": 21701566,
+        "array_buffers_bytes": 18819263
+      }
     },
     {
       "storage": "memory",
@@ -1019,12 +1461,19 @@
       "repetition": 2,
       "order": 1,
       "implementation": "express",
-      "count": 875,
-      "throughput_rps": 58.30493905734536,
-      "p50_ms": 17.280002999934368,
-      "p95_ms": 25.423347999923863,
-      "p99_ms": 29.7461159999948,
-      "rss_bytes": 146575360
+      "count": 839,
+      "throughput_rps": 55.89093122378098,
+      "p50_ms": 17.44603799993638,
+      "p95_ms": 24.278866000007838,
+      "p99_ms": 31.059724999940954,
+      "rss_bytes": 159883264,
+      "memory_usage": {
+        "rss_bytes": 155987968,
+        "heap_total_bytes": 47325184,
+        "heap_used_bytes": 34393736,
+        "external_bytes": 23391065,
+        "array_buffers_bytes": 20688287
+      }
     },
     {
       "storage": "memory",
@@ -1033,12 +1482,19 @@
       "repetition": 3,
       "order": 0,
       "implementation": "express",
-      "count": 712,
-      "throughput_rps": 47.426508150742926,
-      "p50_ms": 20.79588000010699,
-      "p95_ms": 26.60229600011371,
-      "p99_ms": 37.50079399999231,
-      "rss_bytes": 147570688
+      "count": 693,
+      "throughput_rps": 46.1479305546647,
+      "p50_ms": 21.437812000047415,
+      "p95_ms": 25.519072000170127,
+      "p99_ms": 36.36224500008393,
+      "rss_bytes": 160002048,
+      "memory_usage": {
+        "rss_bytes": 155987968,
+        "heap_total_bytes": 46276608,
+        "heap_used_bytes": 32252488,
+        "external_bytes": 22405638,
+        "array_buffers_bytes": 19702860
+      }
     },
     {
       "storage": "memory",
@@ -1047,12 +1503,19 @@
       "repetition": 3,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 682,
-      "throughput_rps": 45.42674867141231,
-      "p50_ms": 21.06666100001894,
-      "p95_ms": 34.799539000028744,
-      "p99_ms": 38.55555699998513,
-      "rss_bytes": 210345984
+      "count": 687,
+      "throughput_rps": 45.791630511053235,
+      "p50_ms": 20.84495100006461,
+      "p95_ms": 31.164799999911338,
+      "p99_ms": 37.909459999995306,
+      "rss_bytes": 248786944,
+      "memory_usage": {
+        "rss_bytes": 243187712,
+        "heap_total_bytes": 182484992,
+        "heap_used_bytes": 47806936,
+        "external_bytes": 21767900,
+        "array_buffers_bytes": 18886190
+      }
     },
     {
       "storage": "memory",
@@ -1061,12 +1524,19 @@
       "repetition": 4,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 608,
-      "throughput_rps": 40.502415088432414,
-      "p50_ms": 24.147161999950185,
-      "p95_ms": 30.900405999971554,
-      "p99_ms": 39.36202900018543,
-      "rss_bytes": 210219008
+      "count": 584,
+      "throughput_rps": 38.8996736972341,
+      "p50_ms": 24.940769999986514,
+      "p95_ms": 31.93147199996747,
+      "p99_ms": 41.77435799990781,
+      "rss_bytes": 249188352,
+      "memory_usage": {
+        "rss_bytes": 244125696,
+        "heap_total_bytes": 182484992,
+        "heap_used_bytes": 80315456,
+        "external_bytes": 23351787,
+        "array_buffers_bytes": 20470077
+      }
     },
     {
       "storage": "memory",
@@ -1075,12 +1545,19 @@
       "repetition": 4,
       "order": 1,
       "implementation": "express",
-      "count": 604,
-      "throughput_rps": 40.25734444249502,
-      "p50_ms": 24.103853999869898,
-      "p95_ms": 30.221130000194535,
-      "p99_ms": 41.44555599987507,
-      "rss_bytes": 148979712
+      "count": 607,
+      "throughput_rps": 40.38515669374984,
+      "p50_ms": 24.438526999903843,
+      "p95_ms": 29.345980999991298,
+      "p99_ms": 37.52588100009598,
+      "rss_bytes": 160124928,
+      "memory_usage": {
+        "rss_bytes": 156250112,
+        "heap_total_bytes": 46276608,
+        "heap_used_bytes": 34427952,
+        "external_bytes": 23979700,
+        "array_buffers_bytes": 21276922
+      }
     },
     {
       "storage": "memory",
@@ -1089,12 +1566,19 @@
       "repetition": 5,
       "order": 0,
       "implementation": "express",
-      "count": 524,
-      "throughput_rps": 34.89632958648643,
-      "p50_ms": 27.724317000014707,
-      "p95_ms": 37.09893799992278,
-      "p99_ms": 46.11307099997066,
-      "rss_bytes": 149000192
+      "count": 541,
+      "throughput_rps": 36.02447085331816,
+      "p50_ms": 27.160994000034407,
+      "p95_ms": 33.252795999869704,
+      "p99_ms": 42.27249899995513,
+      "rss_bytes": 161030144,
+      "memory_usage": {
+        "rss_bytes": 157249536,
+        "heap_total_bytes": 54140928,
+        "heap_used_bytes": 36360928,
+        "external_bytes": 21567655,
+        "array_buffers_bytes": 18864877
+      }
     },
     {
       "storage": "memory",
@@ -1103,12 +1587,19 @@
       "repetition": 5,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 545,
-      "throughput_rps": 36.265751283792476,
-      "p50_ms": 27.080989999929443,
-      "p95_ms": 31.81416399986483,
-      "p99_ms": 40.10066200001165,
-      "rss_bytes": 210767872
+      "count": 541,
+      "throughput_rps": 36.03828521727741,
+      "p50_ms": 27.2884990000166,
+      "p95_ms": 31.337180000031367,
+      "p99_ms": 37.9742640000768,
+      "rss_bytes": 248352768,
+      "memory_usage": {
+        "rss_bytes": 243527680,
+        "heap_total_bytes": 181960704,
+        "heap_used_bytes": 45268984,
+        "external_bytes": 22791772,
+        "array_buffers_bytes": 19911438
+      }
     },
     {
       "storage": "memory",
@@ -1117,12 +1608,19 @@
       "repetition": 1,
       "order": 0,
       "implementation": "express",
-      "count": 3370,
-      "throughput_rps": 224.17930696594493,
-      "p50_ms": 44.328143999911845,
-      "p95_ms": 56.3434230000712,
-      "p99_ms": 63.96279400005005,
-      "rss_bytes": 180940800
+      "count": 3409,
+      "throughput_rps": 226.5654285099835,
+      "p50_ms": 43.68879700009711,
+      "p95_ms": 55.27334100008011,
+      "p99_ms": 63.19785999995656,
+      "rss_bytes": 189595648,
+      "memory_usage": {
+        "rss_bytes": 185126912,
+        "heap_total_bytes": 104472576,
+        "heap_used_bytes": 43056120,
+        "external_bytes": 22954890,
+        "array_buffers_bytes": 20256111
+      }
     },
     {
       "storage": "memory",
@@ -1131,12 +1629,19 @@
       "repetition": 1,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 3334,
-      "throughput_rps": 221.74321599440162,
-      "p50_ms": 44.656941999914125,
-      "p95_ms": 55.88034799997695,
-      "p99_ms": 60.680990000022575,
-      "rss_bytes": 291876864
+      "count": 3285,
+      "throughput_rps": 218.64599004429954,
+      "p50_ms": 45.07886800006963,
+      "p95_ms": 57.826232000021264,
+      "p99_ms": 65.89361599995755,
+      "rss_bytes": 289693696,
+      "memory_usage": {
+        "rss_bytes": 283754496,
+        "heap_total_bytes": 218136576,
+        "heap_used_bytes": 129295912,
+        "external_bytes": 30259388,
+        "array_buffers_bytes": 27379054
+      }
     },
     {
       "storage": "memory",
@@ -1145,26 +1650,40 @@
       "repetition": 2,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 2647,
-      "throughput_rps": 175.84898838457846,
-      "p50_ms": 56.51498600002378,
-      "p95_ms": 66.06105100014247,
-      "p99_ms": 75.99143299995922,
-      "rss_bytes": 341798912
-    },
-    {
-      "storage": "memory",
-      "scenario": "task-create",
-      "concurrency": 10,
-      "repetition": 2,
-      "order": 1,
-      "implementation": "express",
       "count": 2620,
-      "throughput_rps": 173.99954501031672,
-      "p50_ms": 57.54997900011949,
-      "p95_ms": 65.026847000001,
-      "p99_ms": 72.69837799994275,
-      "rss_bytes": 187809792
+      "throughput_rps": 173.9294233235561,
+      "p50_ms": 56.702120000030845,
+      "p95_ms": 68.25569500005804,
+      "p99_ms": 78.78226400003769,
+      "rss_bytes": 312156160,
+      "memory_usage": {
+        "rss_bytes": 308498432,
+        "heap_total_bytes": 184844288,
+        "heap_used_bytes": 57362376,
+        "external_bytes": 23729327,
+        "array_buffers_bytes": 20848993
+      }
+    },
+    {
+      "storage": "memory",
+      "scenario": "task-create",
+      "concurrency": 10,
+      "repetition": 2,
+      "order": 1,
+      "implementation": "express",
+      "count": 2625,
+      "throughput_rps": 174.3865762911394,
+      "p50_ms": 57.04933600011282,
+      "p95_ms": 65.83209599996917,
+      "p99_ms": 77.42998900008388,
+      "rss_bytes": 244305920,
+      "memory_usage": {
+        "rss_bytes": 239390720,
+        "heap_total_bytes": 172892160,
+        "heap_used_bytes": 54232352,
+        "external_bytes": 23172346,
+        "array_buffers_bytes": 20473567
+      }
     },
     {
       "storage": "memory",
@@ -1173,12 +1692,19 @@
       "repetition": 3,
       "order": 0,
       "implementation": "express",
-      "count": 2473,
-      "throughput_rps": 164.19008690083652,
-      "p50_ms": 60.82062499993481,
-      "p95_ms": 69.28975699981675,
-      "p99_ms": 77.96076300018467,
-      "rss_bytes": 221921280
+      "count": 2506,
+      "throughput_rps": 166.63096691290488,
+      "p50_ms": 59.98192499997094,
+      "p95_ms": 67.68424200010486,
+      "p99_ms": 76.31126599991694,
+      "rss_bytes": 243585024,
+      "memory_usage": {
+        "rss_bytes": 238657536,
+        "heap_total_bytes": 173416448,
+        "heap_used_bytes": 73426544,
+        "external_bytes": 24324728,
+        "array_buffers_bytes": 21625949
+      }
     },
     {
       "storage": "memory",
@@ -1187,12 +1713,19 @@
       "repetition": 3,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 2485,
-      "throughput_rps": 165.43504005242085,
-      "p50_ms": 60.28645399981178,
-      "p95_ms": 67.94195500016212,
-      "p99_ms": 77.32581499987282,
-      "rss_bytes": 347906048
+      "count": 2450,
+      "throughput_rps": 163.21405869718765,
+      "p50_ms": 61.14324399991892,
+      "p95_ms": 72.19527400005609,
+      "p99_ms": 83.79894700017758,
+      "rss_bytes": 312639488,
+      "memory_usage": {
+        "rss_bytes": 308768768,
+        "heap_total_bytes": 206602240,
+        "heap_used_bytes": 102021008,
+        "external_bytes": 27594216,
+        "array_buffers_bytes": 24713882
+      }
     },
     {
       "storage": "memory",
@@ -1201,12 +1734,19 @@
       "repetition": 4,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 2303,
-      "throughput_rps": 153.27729611759756,
-      "p50_ms": 64.79455400002189,
-      "p95_ms": 72.67811800003983,
-      "p99_ms": 85.21989700011909,
-      "rss_bytes": 348274688
+      "count": 2337,
+      "throughput_rps": 155.55521610305573,
+      "p50_ms": 64.21106699993834,
+      "p95_ms": 71.33509199996479,
+      "p99_ms": 79.03062900016084,
+      "rss_bytes": 322818048,
+      "memory_usage": {
+        "rss_bytes": 317992960,
+        "heap_total_bytes": 246710272,
+        "heap_used_bytes": 140874272,
+        "external_bytes": 33683970,
+        "array_buffers_bytes": 30803636
+      }
     },
     {
       "storage": "memory",
@@ -1215,12 +1755,19 @@
       "repetition": 4,
       "order": 1,
       "implementation": "express",
-      "count": 2323,
-      "throughput_rps": 154.1699729290097,
-      "p50_ms": 64.69561800011434,
-      "p95_ms": 71.33225500001572,
-      "p99_ms": 81.05354400002398,
-      "rss_bytes": 231624704
+      "count": 2319,
+      "throughput_rps": 153.97414183944335,
+      "p50_ms": 65.16931200004183,
+      "p95_ms": 74.3399189999327,
+      "p99_ms": 86.81652999995276,
+      "rss_bytes": 245202944,
+      "memory_usage": {
+        "rss_bytes": 240492544,
+        "heap_total_bytes": 174202880,
+        "heap_used_bytes": 85646480,
+        "external_bytes": 24030385,
+        "array_buffers_bytes": 21331606
+      }
     },
     {
       "storage": "memory",
@@ -1229,12 +1776,19 @@
       "repetition": 5,
       "order": 0,
       "implementation": "express",
-      "count": 2198,
-      "throughput_rps": 146.09833028848638,
-      "p50_ms": 67.96916299988516,
-      "p95_ms": 78.01512100012042,
-      "p99_ms": 95.30559400003403,
-      "rss_bytes": 240906240
+      "count": 2195,
+      "throughput_rps": 145.92715333232405,
+      "p50_ms": 68.28348499978893,
+      "p95_ms": 75.5635740000289,
+      "p99_ms": 87.92129000020213,
+      "rss_bytes": 250793984,
+      "memory_usage": {
+        "rss_bytes": 245735424,
+        "heap_total_bytes": 180494336,
+        "heap_used_bytes": 73913008,
+        "external_bytes": 26669073,
+        "array_buffers_bytes": 23970294
+      }
     },
     {
       "storage": "memory",
@@ -1243,12 +1797,19 @@
       "repetition": 5,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 2188,
-      "throughput_rps": 145.2007396293402,
-      "p50_ms": 68.43444700003602,
-      "p95_ms": 75.18975899997167,
-      "p99_ms": 87.84445500001311,
-      "rss_bytes": 357171200
+      "count": 2196,
+      "throughput_rps": 145.98898142458611,
+      "p50_ms": 68.18795699998736,
+      "p95_ms": 77.62439199979417,
+      "p99_ms": 88.67754199984483,
+      "rss_bytes": 327127040,
+      "memory_usage": {
+        "rss_bytes": 321396736,
+        "heap_total_bytes": 203980800,
+        "heap_used_bytes": 113092312,
+        "external_bytes": 27240723,
+        "array_buffers_bytes": 24360389
+      }
     },
     {
       "storage": "memory",
@@ -1257,12 +1818,19 @@
       "repetition": 1,
       "order": 0,
       "implementation": "express",
-      "count": 7819,
-      "throughput_rps": 519.9186343867664,
-      "p50_ms": 89.31104299984872,
-      "p95_ms": 140.88128299987875,
-      "p99_ms": 159.51058800006285,
-      "rss_bytes": 305922048
+      "count": 7888,
+      "throughput_rps": 523.1798204742331,
+      "p50_ms": 88.95467999996617,
+      "p95_ms": 139.79960100003518,
+      "p99_ms": 151.80529800010845,
+      "rss_bytes": 278519808,
+      "memory_usage": {
+        "rss_bytes": 273260544,
+        "heap_total_bytes": 201728000,
+        "heap_used_bytes": 104685600,
+        "external_bytes": 31879532,
+        "array_buffers_bytes": 29180753
+      }
     },
     {
       "storage": "memory",
@@ -1271,12 +1839,19 @@
       "repetition": 1,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 7782,
-      "throughput_rps": 514.7981560281733,
-      "p50_ms": 88.98742499994114,
-      "p95_ms": 146.86721100006253,
-      "p99_ms": 167.10490200016648,
-      "rss_bytes": 394842112
+      "count": 7643,
+      "throughput_rps": 507.6901822006274,
+      "p50_ms": 91.51369100017473,
+      "p95_ms": 147.59283899981529,
+      "p99_ms": 160.54028399987146,
+      "rss_bytes": 360058880,
+      "memory_usage": {
+        "rss_bytes": 353722368,
+        "heap_total_bytes": 214990848,
+        "heap_used_bytes": 118203208,
+        "external_bytes": 28020157,
+        "array_buffers_bytes": 25139823
+      }
     },
     {
       "storage": "memory",
@@ -1285,12 +1860,19 @@
       "repetition": 2,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 5985,
-      "throughput_rps": 396.57605605254133,
-      "p50_ms": 112.34036500006914,
-      "p95_ms": 187.1593770000618,
-      "p99_ms": 203.78319300012663,
-      "rss_bytes": 396976128
+      "count": 6048,
+      "throughput_rps": 400.7878798677144,
+      "p50_ms": 113.32500800001435,
+      "p95_ms": 184.19377900008112,
+      "p99_ms": 207.1955659999512,
+      "rss_bytes": 360722432,
+      "memory_usage": {
+        "rss_bytes": 354971648,
+        "heap_total_bytes": 229146624,
+        "heap_used_bytes": 125329488,
+        "external_bytes": 29832587,
+        "array_buffers_bytes": 26952253
+      }
     },
     {
       "storage": "memory",
@@ -1299,12 +1881,19 @@
       "repetition": 2,
       "order": 1,
       "implementation": "express",
-      "count": 5854,
-      "throughput_rps": 388.38704555112326,
-      "p50_ms": 114.15667099994607,
-      "p95_ms": 191.13390600006096,
-      "p99_ms": 208.50946700014174,
-      "rss_bytes": 310255616
+      "count": 5989,
+      "throughput_rps": 395.8240183262646,
+      "p50_ms": 113.28170699998736,
+      "p95_ms": 186.71037800004706,
+      "p99_ms": 200.92976700002328,
+      "rss_bytes": 283369472,
+      "memory_usage": {
+        "rss_bytes": 277979136,
+        "heap_total_bytes": 179970048,
+        "heap_used_bytes": 65302872,
+        "external_bytes": 25348146,
+        "array_buffers_bytes": 22649367
+      }
     },
     {
       "storage": "memory",
@@ -1313,12 +1902,19 @@
       "repetition": 3,
       "order": 0,
       "implementation": "express",
-      "count": 5040,
-      "throughput_rps": 333.2529455376575,
-      "p50_ms": 147.00820600008592,
-      "p95_ms": 210.19894799985923,
-      "p99_ms": 226.932860000059,
-      "rss_bytes": 310272000
+      "count": 5074,
+      "throughput_rps": 336.3882720438709,
+      "p50_ms": 147.07902000006288,
+      "p95_ms": 206.6933049999643,
+      "p99_ms": 222.701464000158,
+      "rss_bytes": 283385856,
+      "memory_usage": {
+        "rss_bytes": 277979136,
+        "heap_total_bytes": 174202880,
+        "heap_used_bytes": 83027552,
+        "external_bytes": 23638094,
+        "array_buffers_bytes": 20939315
+      }
     },
     {
       "storage": "memory",
@@ -1327,12 +1923,19 @@
       "repetition": 3,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 5237,
-      "throughput_rps": 346.9916308261637,
-      "p50_ms": 136.55712400004268,
-      "p95_ms": 204.13094999990426,
-      "p99_ms": 225.7169719999656,
-      "rss_bytes": 397283328
+      "count": 5022,
+      "throughput_rps": 333.0751265357247,
+      "p50_ms": 146.69350099982694,
+      "p95_ms": 210.02018800005317,
+      "p99_ms": 228.66927600000054,
+      "rss_bytes": 360861696,
+      "memory_usage": {
+        "rss_bytes": 355364864,
+        "heap_total_bytes": 269254656,
+        "heap_used_bytes": 141855120,
+        "external_bytes": 34548798,
+        "array_buffers_bytes": 31668464
+      }
     },
     {
       "storage": "memory",
@@ -1341,12 +1944,19 @@
       "repetition": 4,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 4584,
-      "throughput_rps": 303.27723758741126,
-      "p50_ms": 160.1383050000295,
-      "p95_ms": 226.25614199996926,
-      "p99_ms": 245.9419109998271,
-      "rss_bytes": 397307904
+      "count": 4527,
+      "throughput_rps": 299.56093891162607,
+      "p50_ms": 161.82876699999906,
+      "p95_ms": 229.40450499998406,
+      "p99_ms": 244.9896870001685,
+      "rss_bytes": 366309376,
+      "memory_usage": {
+        "rss_bytes": 361394176,
+        "heap_total_bytes": 248283136,
+        "heap_used_bytes": 144045112,
+        "external_bytes": 31931587,
+        "array_buffers_bytes": 29051253
+      }
     },
     {
       "storage": "memory",
@@ -1355,12 +1965,19 @@
       "repetition": 4,
       "order": 1,
       "implementation": "express",
-      "count": 4739,
-      "throughput_rps": 313.7577268179025,
-      "p50_ms": 158.93084700009786,
-      "p95_ms": 215.75187100004405,
-      "p99_ms": 231.14001000020653,
-      "rss_bytes": 310296576
+      "count": 4486,
+      "throughput_rps": 297.2708996353237,
+      "p50_ms": 166.38344799983315,
+      "p95_ms": 227.9030929999426,
+      "p99_ms": 244.0652940000873,
+      "rss_bytes": 279601152,
+      "memory_usage": {
+        "rss_bytes": 274427904,
+        "heap_total_bytes": 174989312,
+        "heap_used_bytes": 57594968,
+        "external_bytes": 23902395,
+        "array_buffers_bytes": 21203616
+      }
     },
     {
       "storage": "memory",
@@ -1369,12 +1986,19 @@
       "repetition": 5,
       "order": 0,
       "implementation": "express",
-      "count": 4175,
-      "throughput_rps": 276.67218006263414,
-      "p50_ms": 179.80888399994,
-      "p95_ms": 247.73704799986444,
-      "p99_ms": 280.0082340000663,
-      "rss_bytes": 308342784
+      "count": 4030,
+      "throughput_rps": 266.4570071855279,
+      "p50_ms": 183.8898909999989,
+      "p95_ms": 263.7889720001258,
+      "p99_ms": 283.664613999892,
+      "rss_bytes": 281772032,
+      "memory_usage": {
+        "rss_bytes": 277311488,
+        "heap_total_bytes": 180494336,
+        "heap_used_bytes": 41014248,
+        "external_bytes": 23213206,
+        "array_buffers_bytes": 20514427
+      }
     },
     {
       "storage": "memory",
@@ -1383,12 +2007,19 @@
       "repetition": 5,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 4330,
-      "throughput_rps": 286.70436707923085,
-      "p50_ms": 171.86908200010657,
-      "p95_ms": 245.09016099991277,
-      "p99_ms": 259.5911310000811,
-      "rss_bytes": 397369344
+      "count": 4241,
+      "throughput_rps": 280.47053679450136,
+      "p50_ms": 173.117188999895,
+      "p95_ms": 254.06672200001776,
+      "p99_ms": 273.75728200003505,
+      "rss_bytes": 365522944,
+      "memory_usage": {
+        "rss_bytes": 360820736,
+        "heap_total_bytes": 252215296,
+        "heap_used_bytes": 159125536,
+        "external_bytes": 32756056,
+        "array_buffers_bytes": 29875722
+      }
     },
     {
       "storage": "mongo",
@@ -1396,55 +2027,83 @@
       "concurrency": 1,
       "repetition": 1,
       "order": 0,
-      "implementation": "express",
-      "count": 11819,
-      "throughput_rps": 787.9008210786961,
-      "p50_ms": 1.2402770000044256,
-      "p95_ms": 1.5334859997965395,
-      "p99_ms": 1.7710580001585186,
-      "rss_bytes": 131170304
-    },
-    {
-      "storage": "mongo",
-      "scenario": "liveness",
-      "concurrency": 1,
-      "repetition": 1,
-      "order": 1,
-      "implementation": "nest-fastify",
-      "count": 11806,
-      "throughput_rps": 787.0292943707444,
-      "p50_ms": 1.240825999993831,
-      "p95_ms": 1.5043269998859614,
-      "p99_ms": 1.8810940000694245,
-      "rss_bytes": 315162624
-    },
-    {
-      "storage": "mongo",
-      "scenario": "liveness",
-      "concurrency": 1,
-      "repetition": 2,
-      "order": 0,
-      "implementation": "nest-fastify",
-      "count": 12229,
-      "throughput_rps": 815.2660894582713,
-      "p50_ms": 1.2135369998868555,
-      "p95_ms": 1.3550229999236763,
-      "p99_ms": 1.5220570000819862,
-      "rss_bytes": 332546048
-    },
-    {
-      "storage": "mongo",
-      "scenario": "liveness",
-      "concurrency": 1,
-      "repetition": 2,
-      "order": 1,
       "implementation": "express",
       "count": 11918,
-      "throughput_rps": 794.5042169783972,
-      "p50_ms": 1.2398259998299181,
-      "p95_ms": 1.4837870001792908,
-      "p99_ms": 1.7247689999639988,
-      "rss_bytes": 131903488
+      "throughput_rps": 794.4887241156206,
+      "p50_ms": 1.236547000007704,
+      "p95_ms": 1.4702589998487383,
+      "p99_ms": 1.7982380001340061,
+      "rss_bytes": 131452928,
+      "memory_usage": {
+        "rss_bytes": 127156224,
+        "heap_total_bytes": 35266560,
+        "heap_used_bytes": 29985472,
+        "external_bytes": 21487993,
+        "array_buffers_bytes": 18785255
+      }
+    },
+    {
+      "storage": "mongo",
+      "scenario": "liveness",
+      "concurrency": 1,
+      "repetition": 1,
+      "order": 1,
+      "implementation": "nest-fastify",
+      "count": 12004,
+      "throughput_rps": 800.2402740488858,
+      "p50_ms": 1.225817000027746,
+      "p95_ms": 1.4635789999738336,
+      "p99_ms": 1.7149509999435395,
+      "rss_bytes": 256565248,
+      "memory_usage": {
+        "rss_bytes": 252215296,
+        "heap_total_bytes": 184057856,
+        "heap_used_bytes": 72399920,
+        "external_bytes": 21603038,
+        "array_buffers_bytes": 18720775
+      }
+    },
+    {
+      "storage": "mongo",
+      "scenario": "liveness",
+      "concurrency": 1,
+      "repetition": 2,
+      "order": 0,
+      "implementation": "nest-fastify",
+      "count": 12219,
+      "throughput_rps": 814.5393118254186,
+      "p50_ms": 1.2136980001814663,
+      "p95_ms": 1.347992999944836,
+      "p99_ms": 1.5946049999911338,
+      "rss_bytes": 269053952,
+      "memory_usage": {
+        "rss_bytes": 264536064,
+        "heap_total_bytes": 210010112,
+        "heap_used_bytes": 103567248,
+        "external_bytes": 21799686,
+        "array_buffers_bytes": 18917383
+      }
+    },
+    {
+      "storage": "mongo",
+      "scenario": "liveness",
+      "concurrency": 1,
+      "repetition": 2,
+      "order": 1,
+      "implementation": "express",
+      "count": 12108,
+      "throughput_rps": 807.1399929081825,
+      "p50_ms": 1.2199180000461638,
+      "p95_ms": 1.4370699999853969,
+      "p99_ms": 1.6385840000584722,
+      "rss_bytes": 131391488,
+      "memory_usage": {
+        "rss_bytes": 127328256,
+        "heap_total_bytes": 36839424,
+        "heap_used_bytes": 32067792,
+        "external_bytes": 21684641,
+        "array_buffers_bytes": 18981863
+      }
     },
     {
       "storage": "mongo",
@@ -1453,12 +2112,19 @@
       "repetition": 3,
       "order": 0,
       "implementation": "express",
-      "count": 12077,
-      "throughput_rps": 805.0658924268074,
-      "p50_ms": 1.216067000059411,
-      "p95_ms": 1.4351290001068264,
-      "p99_ms": 1.787696999963373,
-      "rss_bytes": 132542464
+      "count": 12248,
+      "throughput_rps": 816.5146951334305,
+      "p50_ms": 1.2084480000194162,
+      "p95_ms": 1.3724229999352247,
+      "p99_ms": 1.602214999962598,
+      "rss_bytes": 131489792,
+      "memory_usage": {
+        "rss_bytes": 127590400,
+        "heap_total_bytes": 37101568,
+        "heap_used_bytes": 32018280,
+        "external_bytes": 21881249,
+        "array_buffers_bytes": 19178471
+      }
     },
     {
       "storage": "mongo",
@@ -1467,12 +2133,19 @@
       "repetition": 3,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 12105,
-      "throughput_rps": 806.9745665287883,
-      "p50_ms": 1.2154270000755787,
-      "p95_ms": 1.451668999856338,
-      "p99_ms": 1.6896410000044852,
-      "rss_bytes": 331063296
+      "count": 12157,
+      "throughput_rps": 810.4544704615195,
+      "p50_ms": 1.2152680000290275,
+      "p95_ms": 1.405710999853909,
+      "p99_ms": 1.7249610000289977,
+      "rss_bytes": 270692352,
+      "memory_usage": {
+        "rss_bytes": 266395648,
+        "heap_total_bytes": 181698560,
+        "heap_used_bytes": 63408448,
+        "external_bytes": 21535573,
+        "array_buffers_bytes": 18655239
+      }
     },
     {
       "storage": "mongo",
@@ -1481,12 +2154,19 @@
       "repetition": 4,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 11873,
-      "throughput_rps": 791.467059786329,
-      "p50_ms": 1.2308569999877363,
-      "p95_ms": 1.5218670000322163,
-      "p99_ms": 1.7546180000063032,
-      "rss_bytes": 331063296
+      "count": 12204,
+      "throughput_rps": 813.5501088768543,
+      "p50_ms": 1.2127079998608679,
+      "p95_ms": 1.4173610000871122,
+      "p99_ms": 1.6280330000445247,
+      "rss_bytes": 270716928,
+      "memory_usage": {
+        "rss_bytes": 266657792,
+        "heap_total_bytes": 182484992,
+        "heap_used_bytes": 64593944,
+        "external_bytes": 21535573,
+        "array_buffers_bytes": 18655239
+      }
     },
     {
       "storage": "mongo",
@@ -1495,12 +2175,19 @@
       "repetition": 4,
       "order": 1,
       "implementation": "express",
-      "count": 11993,
-      "throughput_rps": 799.5267023786806,
-      "p50_ms": 1.224807000020519,
-      "p95_ms": 1.4915479999035597,
-      "p99_ms": 1.7106199997942895,
-      "rss_bytes": 132562944
+      "count": 12141,
+      "throughput_rps": 809.3366011029581,
+      "p50_ms": 1.2191469999961555,
+      "p95_ms": 1.3942519999109209,
+      "p99_ms": 1.6283340000081807,
+      "rss_bytes": 111583232,
+      "memory_usage": {
+        "rss_bytes": 107020288,
+        "heap_total_bytes": 36052992,
+        "heap_used_bytes": 31486576,
+        "external_bytes": 21553569,
+        "array_buffers_bytes": 18850791
+      }
     },
     {
       "storage": "mongo",
@@ -1509,12 +2196,19 @@
       "repetition": 5,
       "order": 0,
       "implementation": "express",
-      "count": 12154,
-      "throughput_rps": 810.2072725860847,
-      "p50_ms": 1.2126370000187308,
-      "p95_ms": 1.441429000115022,
-      "p99_ms": 1.6441919999197125,
-      "rss_bytes": 132706304
+      "count": 12212,
+      "throughput_rps": 814.122785992724,
+      "p50_ms": 1.2110780000220984,
+      "p95_ms": 1.3714819999877363,
+      "p99_ms": 1.6492029998917133,
+      "rss_bytes": 112132096,
+      "memory_usage": {
+        "rss_bytes": 107806720,
+        "heap_total_bytes": 40771584,
+        "heap_used_bytes": 31758032,
+        "external_bytes": 21750177,
+        "array_buffers_bytes": 19047399
+      }
     },
     {
       "storage": "mongo",
@@ -1523,12 +2217,19 @@
       "repetition": 5,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 12125,
-      "throughput_rps": 808.2854783066201,
-      "p50_ms": 1.220026999944821,
-      "p95_ms": 1.381931999931112,
-      "p99_ms": 1.7381889999378473,
-      "rss_bytes": 331063296
+      "count": 12133,
+      "throughput_rps": 808.8124389739609,
+      "p50_ms": 1.2193480001296848,
+      "p95_ms": 1.4310100001748651,
+      "p99_ms": 1.6658619998488575,
+      "rss_bytes": 270716928,
+      "memory_usage": {
+        "rss_bytes": 266657792,
+        "heap_total_bytes": 179601408,
+        "heap_used_bytes": 84642664,
+        "external_bytes": 21601109,
+        "array_buffers_bytes": 18720775
+      }
     },
     {
       "storage": "mongo",
@@ -1537,12 +2238,19 @@
       "repetition": 1,
       "order": 0,
       "implementation": "express",
-      "count": 94385,
-      "throughput_rps": 6291.734939845659,
-      "p50_ms": 1.561835000058636,
-      "p95_ms": 2.239661999978125,
-      "p99_ms": 6.743323000147939,
-      "rss_bytes": 122998784
+      "count": 97671,
+      "throughput_rps": 6510.919766277612,
+      "p50_ms": 1.5430069998838007,
+      "p95_ms": 2.129975999938324,
+      "p99_ms": 6.483035000041127,
+      "rss_bytes": 138182656,
+      "memory_usage": {
+        "rss_bytes": 133136384,
+        "heap_total_bytes": 66461696,
+        "heap_used_bytes": 32458304,
+        "external_bytes": 21488033,
+        "array_buffers_bytes": 18785255
+      }
     },
     {
       "storage": "mongo",
@@ -1551,12 +2259,19 @@
       "repetition": 1,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 96177,
-      "throughput_rps": 6411.403046101471,
-      "p50_ms": 1.550634999992326,
-      "p95_ms": 2.2181220001075417,
-      "p99_ms": 6.46096200007014,
-      "rss_bytes": 355209216
+      "count": 96771,
+      "throughput_rps": 6451.105492841806,
+      "p50_ms": 1.542866999981925,
+      "p95_ms": 2.188103999942541,
+      "p99_ms": 6.307010999880731,
+      "rss_bytes": 316690432,
+      "memory_usage": {
+        "rss_bytes": 311992320,
+        "heap_total_bytes": 255623168,
+        "heap_used_bytes": 171432416,
+        "external_bytes": 22125397,
+        "array_buffers_bytes": 19245063
+      }
     },
     {
       "storage": "mongo",
@@ -1565,12 +2280,19 @@
       "repetition": 2,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 95826,
-      "throughput_rps": 6387.802634416207,
-      "p50_ms": 1.539826000109315,
-      "p95_ms": 2.2126919999718666,
-      "p99_ms": 6.530030000023544,
-      "rss_bytes": 365699072
+      "count": 98016,
+      "throughput_rps": 6533.941921884518,
+      "p50_ms": 1.5324659999459982,
+      "p95_ms": 2.0858379998244345,
+      "p99_ms": 6.1816760001238436,
+      "rss_bytes": 337883136,
+      "memory_usage": {
+        "rss_bytes": 333410304,
+        "heap_total_bytes": 190873600,
+        "heap_used_bytes": 72937088,
+        "external_bytes": 21601109,
+        "array_buffers_bytes": 18720775
+      }
     },
     {
       "storage": "mongo",
@@ -1579,12 +2301,19 @@
       "repetition": 2,
       "order": 1,
       "implementation": "express",
-      "count": 95955,
-      "throughput_rps": 6396.782334128855,
-      "p50_ms": 1.5419359998777509,
-      "p95_ms": 2.193482000147924,
-      "p99_ms": 6.2133109997957945,
-      "rss_bytes": 137728000
+      "count": 98974,
+      "throughput_rps": 6598.138084790942,
+      "p50_ms": 1.5318670000415295,
+      "p95_ms": 2.030209999997169,
+      "p99_ms": 6.289651999948546,
+      "rss_bytes": 139915264,
+      "memory_usage": {
+        "rss_bytes": 134709248,
+        "heap_total_bytes": 68820992,
+        "heap_used_bytes": 44234864,
+        "external_bytes": 23126433,
+        "array_buffers_bytes": 20423655
+      }
     },
     {
       "storage": "mongo",
@@ -1593,12 +2322,19 @@
       "repetition": 3,
       "order": 0,
       "implementation": "express",
-      "count": 94591,
-      "throughput_rps": 6305.67640120783,
-      "p50_ms": 1.5617450000718236,
-      "p95_ms": 2.2825400000438094,
-      "p99_ms": 6.5619699999224395,
-      "rss_bytes": 139481088
+      "count": 98615,
+      "throughput_rps": 6573.8544736136655,
+      "p50_ms": 1.5406659999862313,
+      "p95_ms": 2.0507089998573065,
+      "p99_ms": 6.374498999910429,
+      "rss_bytes": 165294080,
+      "memory_usage": {
+        "rss_bytes": 160739328,
+        "heap_total_bytes": 100016128,
+        "heap_used_bytes": 48907120,
+        "external_bytes": 21550946,
+        "array_buffers_bytes": 18850791
+      }
     },
     {
       "storage": "mongo",
@@ -1607,12 +2343,19 @@
       "repetition": 3,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 94405,
-      "throughput_rps": 6293.224738384908,
-      "p50_ms": 1.5447060000151396,
-      "p95_ms": 2.3127679999452084,
-      "p99_ms": 6.731214000144973,
-      "rss_bytes": 365699072
+      "count": 98519,
+      "throughput_rps": 6567.5796910589,
+      "p50_ms": 1.529407000169158,
+      "p95_ms": 2.111585999839008,
+      "p99_ms": 6.400138000026345,
+      "rss_bytes": 337858560,
+      "memory_usage": {
+        "rss_bytes": 333361152,
+        "heap_total_bytes": 219185152,
+        "heap_used_bytes": 96957856,
+        "external_bytes": 21928789,
+        "array_buffers_bytes": 19048455
+      }
     },
     {
       "storage": "mongo",
@@ -1621,12 +2364,19 @@
       "repetition": 4,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 95952,
-      "throughput_rps": 6396.641530455603,
-      "p50_ms": 1.5301769999787211,
-      "p95_ms": 2.25630999985151,
-      "p99_ms": 6.424683999968693,
-      "rss_bytes": 365699072
+      "count": 97860,
+      "throughput_rps": 6523.660670485434,
+      "p50_ms": 1.5227369999047369,
+      "p95_ms": 2.164405000163242,
+      "p99_ms": 6.226764000020921,
+      "rss_bytes": 337858560,
+      "memory_usage": {
+        "rss_bytes": 333443072,
+        "heap_total_bytes": 200048640,
+        "heap_used_bytes": 85689384,
+        "external_bytes": 21797717,
+        "array_buffers_bytes": 18917383
+      }
     },
     {
       "storage": "mongo",
@@ -1635,12 +2385,19 @@
       "repetition": 4,
       "order": 1,
       "implementation": "express",
-      "count": 97905,
-      "throughput_rps": 6526.809979324493,
-      "p50_ms": 1.5285660000517964,
-      "p95_ms": 2.1167059999424964,
-      "p99_ms": 6.166924000019208,
-      "rss_bytes": 165371904
+      "count": 94792,
+      "throughput_rps": 6319.292388165746,
+      "p50_ms": 1.5414559999480844,
+      "p95_ms": 2.2474519999232143,
+      "p99_ms": 6.723485999973491,
+      "rss_bytes": 166285312,
+      "memory_usage": {
+        "rss_bytes": 161525760,
+        "heap_total_bytes": 101588992,
+        "heap_used_bytes": 43042000,
+        "external_bytes": 23058274,
+        "array_buffers_bytes": 20358119
+      }
     },
     {
       "storage": "mongo",
@@ -1649,12 +2406,19 @@
       "repetition": 5,
       "order": 0,
       "implementation": "express",
-      "count": 98162,
-      "throughput_rps": 6543.853155206741,
-      "p50_ms": 1.551166000077501,
-      "p95_ms": 2.064098000060767,
-      "p99_ms": 6.342066999990493,
-      "rss_bytes": 165883904
+      "count": 98400,
+      "throughput_rps": 6559.285447622867,
+      "p50_ms": 1.5288469998631626,
+      "p95_ms": 2.0755869999993593,
+      "p99_ms": 6.320210000034422,
+      "rss_bytes": 166821888,
+      "memory_usage": {
+        "rss_bytes": 162312192,
+        "heap_total_bytes": 101064704,
+        "heap_used_bytes": 40136376,
+        "external_bytes": 22794754,
+        "array_buffers_bytes": 20095975
+      }
     },
     {
       "storage": "mongo",
@@ -1663,12 +2427,19 @@
       "repetition": 5,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 96169,
-      "throughput_rps": 6411.090719838139,
-      "p50_ms": 1.5370459998957813,
-      "p95_ms": 2.255921000149101,
-      "p99_ms": 6.5229110000655055,
-      "rss_bytes": 366223360
+      "count": 97609,
+      "throughput_rps": 6506.593640236411,
+      "p50_ms": 1.5260159999597818,
+      "p95_ms": 2.1222169999964535,
+      "p99_ms": 6.225454000057653,
+      "rss_bytes": 337633280,
+      "memory_usage": {
+        "rss_bytes": 333119488,
+        "heap_total_bytes": 261390336,
+        "heap_used_bytes": 156178368,
+        "external_bytes": 22190933,
+        "array_buffers_bytes": 19310599
+      }
     },
     {
       "storage": "mongo",
@@ -1677,12 +2448,19 @@
       "repetition": 1,
       "order": 0,
       "implementation": "express",
-      "count": 251492,
-      "throughput_rps": 16764.250614109398,
-      "p50_ms": 2.3476279999595135,
-      "p95_ms": 8.593328000046313,
-      "p99_ms": 11.4926460001152,
-      "rss_bytes": 176525312
+      "count": 257273,
+      "throughput_rps": 17149.743719846727,
+      "p50_ms": 2.2818609999958426,
+      "p95_ms": 8.025220999959856,
+      "p99_ms": 10.499285000143573,
+      "rss_bytes": 227639296,
+      "memory_usage": {
+        "rss_bytes": 222085120,
+        "heap_total_bytes": 169484288,
+        "heap_used_bytes": 75018064,
+        "external_bytes": 22860290,
+        "array_buffers_bytes": 20161511
+      }
     },
     {
       "storage": "mongo",
@@ -1691,12 +2469,19 @@
       "repetition": 1,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 239006,
-      "throughput_rps": 15932.206098610579,
-      "p50_ms": 2.374367000069469,
-      "p95_ms": 8.593508000019938,
-      "p99_ms": 11.963238999946043,
-      "rss_bytes": 374407168
+      "count": 266260,
+      "throughput_rps": 17748.860341484582,
+      "p50_ms": 2.2307319999672472,
+      "p95_ms": 8.005900999996811,
+      "p99_ms": 10.328089999966323,
+      "rss_bytes": 365621248,
+      "memory_usage": {
+        "rss_bytes": 360689664,
+        "heap_total_bytes": 204767232,
+        "heap_used_bytes": 114951664,
+        "external_bytes": 21863998,
+        "array_buffers_bytes": 18983664
+      }
     },
     {
       "storage": "mongo",
@@ -1705,12 +2490,19 @@
       "repetition": 2,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 230230,
-      "throughput_rps": 15346.352816228364,
-      "p50_ms": 2.391705999849364,
-      "p95_ms": 8.837479999987409,
-      "p99_ms": 12.39734400017187,
-      "rss_bytes": 389373952
+      "count": 272876,
+      "throughput_rps": 18189.214952852642,
+      "p50_ms": 2.1968330000527203,
+      "p95_ms": 7.869046000065282,
+      "p99_ms": 9.910425000125542,
+      "rss_bytes": 366764032,
+      "memory_usage": {
+        "rss_bytes": 362242048,
+        "heap_total_bytes": 268468224,
+        "heap_used_bytes": 147891048,
+        "external_bytes": 22190933,
+        "array_buffers_bytes": 19310599
+      }
     },
     {
       "storage": "mongo",
@@ -1719,12 +2511,19 @@
       "repetition": 2,
       "order": 1,
       "implementation": "express",
-      "count": 264846,
-      "throughput_rps": 17654.472221082873,
-      "p50_ms": 2.21708199987188,
-      "p95_ms": 8.247059999965131,
-      "p99_ms": 10.94138600002043,
-      "rss_bytes": 225251328
+      "count": 267943,
+      "throughput_rps": 17860.851505379138,
+      "p50_ms": 2.209052999969572,
+      "p95_ms": 8.108437000075355,
+      "p99_ms": 10.000042000086978,
+      "rss_bytes": 227766272,
+      "memory_usage": {
+        "rss_bytes": 222347264,
+        "heap_total_bytes": 170532864,
+        "heap_used_bytes": 71932624,
+        "external_bytes": 21746178,
+        "array_buffers_bytes": 19047399
+      }
     },
     {
       "storage": "mongo",
@@ -1733,12 +2532,19 @@
       "repetition": 3,
       "order": 0,
       "implementation": "express",
-      "count": 255967,
-      "throughput_rps": 17062.764710487434,
-      "p50_ms": 2.2719699998851866,
-      "p95_ms": 8.485621999949217,
-      "p99_ms": 11.245335000101477,
-      "rss_bytes": 226181120
+      "count": 261772,
+      "throughput_rps": 17449.89852455597,
+      "p50_ms": 2.2530520001892,
+      "p95_ms": 8.138826000038534,
+      "p99_ms": 10.32331099989824,
+      "rss_bytes": 227762176,
+      "memory_usage": {
+        "rss_bytes": 222347264,
+        "heap_total_bytes": 169222144,
+        "heap_used_bytes": 81956056,
+        "external_bytes": 22270466,
+        "array_buffers_bytes": 19571687
+      }
     },
     {
       "storage": "mongo",
@@ -1747,12 +2553,19 @@
       "repetition": 3,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 254681,
-      "throughput_rps": 16976.932420342288,
-      "p50_ms": 2.2475720001384616,
-      "p95_ms": 8.399594000075012,
-      "p99_ms": 11.271093999966979,
-      "rss_bytes": 395689984
+      "count": 264278,
+      "throughput_rps": 17612.355233791484,
+      "p50_ms": 2.2269230000674725,
+      "p95_ms": 7.928824000060558,
+      "p99_ms": 10.068118999945,
+      "rss_bytes": 367329280,
+      "memory_usage": {
+        "rss_bytes": 362672128,
+        "heap_total_bytes": 218136576,
+        "heap_used_bytes": 70802376,
+        "external_bytes": 21667390,
+        "array_buffers_bytes": 18787056
+      }
     },
     {
       "storage": "mongo",
@@ -1761,12 +2574,19 @@
       "repetition": 4,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 234171,
-      "throughput_rps": 15609.417008800823,
-      "p50_ms": 2.4099059998989105,
-      "p95_ms": 8.9344389999751,
-      "p99_ms": 12.35353900003247,
-      "rss_bytes": 395943936
+      "count": 266337,
+      "throughput_rps": 17753.581904167477,
+      "p50_ms": 2.217672999948263,
+      "p95_ms": 7.924303999869153,
+      "p99_ms": 10.13772700005211,
+      "rss_bytes": 367349760,
+      "memory_usage": {
+        "rss_bytes": 362741760,
+        "heap_total_bytes": 248807424,
+        "heap_used_bytes": 160731480,
+        "external_bytes": 22125397,
+        "array_buffers_bytes": 19245063
+      }
     },
     {
       "storage": "mongo",
@@ -1775,12 +2595,19 @@
       "repetition": 4,
       "order": 1,
       "implementation": "express",
-      "count": 244592,
-      "throughput_rps": 16303.784844863083,
-      "p50_ms": 2.3198689999990165,
-      "p95_ms": 8.750245000002906,
-      "p99_ms": 12.19120500003919,
-      "rss_bytes": 227590144
+      "count": 265322,
+      "throughput_rps": 17686.241128379304,
+      "p50_ms": 2.2312220002058893,
+      "p95_ms": 8.016310999868438,
+      "p99_ms": 10.05689000012353,
+      "rss_bytes": 233074688,
+      "memory_usage": {
+        "rss_bytes": 227590144,
+        "heap_total_bytes": 101064704,
+        "heap_used_bytes": 47960152,
+        "external_bytes": 22598146,
+        "array_buffers_bytes": 19899367
+      }
     },
     {
       "storage": "mongo",
@@ -1789,12 +2616,19 @@
       "repetition": 5,
       "order": 0,
       "implementation": "express",
-      "count": 237726,
-      "throughput_rps": 15846.77947346819,
-      "p50_ms": 2.418895000126213,
-      "p95_ms": 8.701086999848485,
-      "p99_ms": 12.087198999943212,
-      "rss_bytes": 227659776
+      "count": 264534,
+      "throughput_rps": 17632.047122521715,
+      "p50_ms": 2.301350000081584,
+      "p95_ms": 8.13194700004533,
+      "p99_ms": 10.234923999989405,
+      "rss_bytes": 238542848,
+      "memory_usage": {
+        "rss_bytes": 233095168,
+        "heap_total_bytes": 169222144,
+        "heap_used_bytes": 61113296,
+        "external_bytes": 21418498,
+        "array_buffers_bytes": 18719719
+      }
     },
     {
       "storage": "mongo",
@@ -1803,12 +2637,19 @@
       "repetition": 5,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 256086,
-      "throughput_rps": 17067.571215443608,
-      "p50_ms": 2.2539009999018162,
-      "p95_ms": 8.421135999960825,
-      "p99_ms": 11.308824999956414,
-      "rss_bytes": 395993088
+      "count": 248498,
+      "throughput_rps": 16558.183255669985,
+      "p50_ms": 2.2966899999883026,
+      "p95_ms": 8.158666000002995,
+      "p99_ms": 10.795153999933973,
+      "rss_bytes": 367321088,
+      "memory_usage": {
+        "rss_bytes": 362905600,
+        "heap_total_bytes": 203194368,
+        "heap_used_bytes": 42196520,
+        "external_bytes": 21601109,
+        "array_buffers_bytes": 18720775
+      }
     },
     {
       "storage": "mongo",
@@ -1817,12 +2658,19 @@
       "repetition": 1,
       "order": 0,
       "implementation": "express",
-      "count": 9113,
-      "throughput_rps": 607.487415992001,
-      "p50_ms": 1.6177140001673251,
-      "p95_ms": 1.950611999956891,
-      "p99_ms": 2.428404999896884,
-      "rss_bytes": 143568896
+      "count": 8997,
+      "throughput_rps": 599.7388779321149,
+      "p50_ms": 1.6321529999841005,
+      "p95_ms": 2.0190399999264628,
+      "p99_ms": 2.4208760000765324,
+      "rss_bytes": 144920576,
+      "memory_usage": {
+        "rss_bytes": 140513280,
+        "heap_total_bytes": 50733056,
+        "heap_used_bytes": 31822224,
+        "external_bytes": 21555905,
+        "array_buffers_bytes": 18853167
+      }
     },
     {
       "storage": "mongo",
@@ -1831,12 +2679,19 @@
       "repetition": 1,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 9012,
-      "throughput_rps": 600.7377968851677,
-      "p50_ms": 1.6143429998774081,
-      "p95_ms": 2.100166000192985,
-      "p99_ms": 2.588579999981448,
-      "rss_bytes": 270073856
+      "count": 9248,
+      "throughput_rps": 616.4838649007605,
+      "p50_ms": 1.5920949999708682,
+      "p95_ms": 1.9267430000472814,
+      "p99_ms": 2.4004059999715537,
+      "rss_bytes": 298921984,
+      "memory_usage": {
+        "rss_bytes": 294391808,
+        "heap_total_bytes": 234127360,
+        "heap_used_bytes": 102304336,
+        "external_bytes": 21753068,
+        "array_buffers_bytes": 18868255
+      }
     },
     {
       "storage": "mongo",
@@ -1845,12 +2700,19 @@
       "repetition": 2,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 9399,
-      "throughput_rps": 626.5406393678153,
-      "p50_ms": 1.561885999981314,
-      "p95_ms": 1.9439819999970496,
-      "p99_ms": 2.3082099999301136,
-      "rss_bytes": 271544320
+      "count": 9415,
+      "throughput_rps": 627.6424541873945,
+      "p50_ms": 1.561915999976918,
+      "p95_ms": 1.9096340001560748,
+      "p99_ms": 2.4491150001995265,
+      "rss_bytes": 325816320,
+      "memory_usage": {
+        "rss_bytes": 320663552,
+        "heap_total_bytes": 261128192,
+        "heap_used_bytes": 137805368,
+        "external_bytes": 22105592,
+        "array_buffers_bytes": 19220739
+      }
     },
     {
       "storage": "mongo",
@@ -1859,12 +2721,19 @@
       "repetition": 2,
       "order": 1,
       "implementation": "express",
-      "count": 9250,
-      "throughput_rps": 616.6263388519133,
-      "p50_ms": 1.5936540002003312,
-      "p95_ms": 1.9522410000208765,
-      "p99_ms": 2.352688000071794,
-      "rss_bytes": 145362944
+      "count": 9423,
+      "throughput_rps": 628.169359364375,
+      "p50_ms": 1.5659059998579323,
+      "p95_ms": 1.894914000062272,
+      "p99_ms": 2.2642620000988245,
+      "rss_bytes": 150233088,
+      "memory_usage": {
+        "rss_bytes": 145592320,
+        "heap_total_bytes": 52830208,
+        "heap_used_bytes": 35535448,
+        "external_bytes": 21767954,
+        "array_buffers_bytes": 19065176
+      }
     },
     {
       "storage": "mongo",
@@ -1873,12 +2742,19 @@
       "repetition": 3,
       "order": 0,
       "implementation": "express",
-      "count": 9249,
-      "throughput_rps": 616.5463142296835,
-      "p50_ms": 1.5774550000205636,
-      "p95_ms": 2.03108899993822,
-      "p99_ms": 2.390315999975428,
-      "rss_bytes": 144818176
+      "count": 9411,
+      "throughput_rps": 627.374811319569,
+      "p50_ms": 1.5671549998223782,
+      "p95_ms": 1.9062930000945926,
+      "p99_ms": 2.2272220000158995,
+      "rss_bytes": 150233088,
+      "memory_usage": {
+        "rss_bytes": 145592320,
+        "heap_total_bytes": 53616640,
+        "heap_used_bytes": 38790168,
+        "external_bytes": 21830986,
+        "array_buffers_bytes": 19128208
+      }
     },
     {
       "storage": "mongo",
@@ -1887,12 +2763,19 @@
       "repetition": 3,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 9422,
-      "throughput_rps": 628.1052517525042,
-      "p50_ms": 1.5582260000519454,
-      "p95_ms": 1.940322000067681,
-      "p99_ms": 2.3071389999240637,
-      "rss_bytes": 290177024
+      "count": 9341,
+      "throughput_rps": 622.691450774249,
+      "p50_ms": 1.5678749999497086,
+      "p95_ms": 1.9837710000574589,
+      "p99_ms": 2.4590639998205006,
+      "rss_bytes": 350699520,
+      "memory_usage": {
+        "rss_bytes": 345579520,
+        "heap_total_bytes": 239108096,
+        "heap_used_bytes": 55428088,
+        "external_bytes": 22113282,
+        "array_buffers_bytes": 19230979
+      }
     },
     {
       "storage": "mongo",
@@ -1901,12 +2784,19 @@
       "repetition": 4,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 9396,
-      "throughput_rps": 626.3419605650606,
-      "p50_ms": 1.5607150001451373,
-      "p95_ms": 1.9374319999478757,
-      "p99_ms": 2.6397569999098778,
-      "rss_bytes": 317136896
+      "count": 9549,
+      "throughput_rps": 636.5746975562396,
+      "p50_ms": 1.5497959998901933,
+      "p95_ms": 1.847804999910295,
+      "p99_ms": 2.24344199988991,
+      "rss_bytes": 350240768,
+      "memory_usage": {
+        "rss_bytes": 345288704,
+        "heap_total_bytes": 183795712,
+        "heap_used_bytes": 65006336,
+        "external_bytes": 22134145,
+        "array_buffers_bytes": 19253811
+      }
     },
     {
       "storage": "mongo",
@@ -1915,12 +2805,19 @@
       "repetition": 4,
       "order": 1,
       "implementation": "express",
-      "count": 9242,
-      "throughput_rps": 616.0711240730144,
-      "p50_ms": 1.5724150000605732,
-      "p95_ms": 2.0583579998929054,
-      "p99_ms": 2.4468950000591576,
-      "rss_bytes": 147185664
+      "count": 9266,
+      "throughput_rps": 617.7191623203943,
+      "p50_ms": 1.5717450000811368,
+      "p95_ms": 2.044577999971807,
+      "p99_ms": 2.4894729999359697,
+      "rss_bytes": 149782528,
+      "memory_usage": {
+        "rss_bytes": 145100800,
+        "heap_total_bytes": 55451648,
+        "heap_used_bytes": 33452248,
+        "external_bytes": 23201545,
+        "array_buffers_bytes": 20500082
+      }
     },
     {
       "storage": "mongo",
@@ -1929,12 +2826,19 @@
       "repetition": 5,
       "order": 0,
       "implementation": "express",
-      "count": 9269,
-      "throughput_rps": 617.9072614367259,
-      "p50_ms": 1.58011500001885,
-      "p95_ms": 1.9933400000445545,
-      "p99_ms": 2.333367999875918,
-      "rss_bytes": 147185664
+      "count": 9446,
+      "throughput_rps": 629.6899263719154,
+      "p50_ms": 1.5564360001590103,
+      "p95_ms": 1.9247930001001805,
+      "p99_ms": 2.3675579999107867,
+      "rss_bytes": 149782528,
+      "memory_usage": {
+        "rss_bytes": 145100800,
+        "heap_total_bytes": 52043776,
+        "heap_used_bytes": 37464096,
+        "external_bytes": 21768148,
+        "array_buffers_bytes": 19067993
+      }
     },
     {
       "storage": "mongo",
@@ -1943,12 +2847,19 @@
       "repetition": 5,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 9184,
-      "throughput_rps": 612.2602932819126,
-      "p50_ms": 1.5908439999911934,
-      "p95_ms": 2.044658000115305,
-      "p99_ms": 2.521292000077665,
-      "rss_bytes": 162111488
+      "count": 9406,
+      "throughput_rps": 627.0094091288279,
+      "p50_ms": 1.5672650001943111,
+      "p95_ms": 1.8901740000583231,
+      "p99_ms": 2.4876439999789,
+      "rss_bytes": 350302208,
+      "memory_usage": {
+        "rss_bytes": 345288704,
+        "heap_total_bytes": 183271424,
+        "heap_used_bytes": 54815304,
+        "external_bytes": 21899759,
+        "array_buffers_bytes": 19019425
+      }
     },
     {
       "storage": "mongo",
@@ -1957,12 +2868,19 @@
       "repetition": 1,
       "order": 0,
       "implementation": "express",
-      "count": 60651,
-      "throughput_rps": 4043.1437627989603,
-      "p50_ms": 2.4724729997105896,
-      "p95_ms": 3.9725819998420775,
-      "p99_ms": 8.118685999885201,
-      "rss_bytes": 317161472
+      "count": 63001,
+      "throughput_rps": 4199.740879607495,
+      "p50_ms": 2.465993999969214,
+      "p95_ms": 3.6488729999400675,
+      "p99_ms": 7.344494000077248,
+      "rss_bytes": 318697472,
+      "memory_usage": {
+        "rss_bytes": 313892864,
+        "heap_total_bytes": 180232192,
+        "heap_used_bytes": 56907904,
+        "external_bytes": 22166378,
+        "array_buffers_bytes": 19467599
+      }
     },
     {
       "storage": "mongo",
@@ -1971,12 +2889,19 @@
       "repetition": 1,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 62290,
-      "throughput_rps": 4152.535978884859,
-      "p50_ms": 2.401625999715179,
-      "p95_ms": 3.878533999901265,
-      "p99_ms": 8.191124000120908,
-      "rss_bytes": 362254336
+      "count": 63235,
+      "throughput_rps": 4215.2378873295065,
+      "p50_ms": 2.4193359999917448,
+      "p95_ms": 3.823187000118196,
+      "p99_ms": 7.3799719996750355,
+      "rss_bytes": 380444672,
+      "memory_usage": {
+        "rss_bytes": 375152640,
+        "heap_total_bytes": 200835072,
+        "heap_used_bytes": 101435024,
+        "external_bytes": 25346527,
+        "array_buffers_bytes": 22466193
+      }
     },
     {
       "storage": "mongo",
@@ -1985,12 +2910,19 @@
       "repetition": 2,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 61800,
-      "throughput_rps": 4118.759302565644,
-      "p50_ms": 2.4516549999825656,
-      "p95_ms": 3.6570820002816617,
-      "p99_ms": 7.9845210001803935,
-      "rss_bytes": 362561536
+      "count": 61676,
+      "throughput_rps": 4111.325959311561,
+      "p50_ms": 2.4845929997973144,
+      "p95_ms": 3.7489999998360872,
+      "p99_ms": 7.507917999755591,
+      "rss_bytes": 382943232,
+      "memory_usage": {
+        "rss_bytes": 377950208,
+        "heap_total_bytes": 268468224,
+        "heap_used_bytes": 138124192,
+        "external_bytes": 35971363,
+        "array_buffers_bytes": 33091029
+      }
     },
     {
       "storage": "mongo",
@@ -1999,12 +2931,19 @@
       "repetition": 2,
       "order": 1,
       "implementation": "express",
-      "count": 61488,
-      "throughput_rps": 4098.984600272134,
-      "p50_ms": 2.5135319996625185,
-      "p95_ms": 3.7364590000361204,
-      "p99_ms": 7.922572999726981,
-      "rss_bytes": 317845504
+      "count": 61829,
+      "throughput_rps": 4121.676065457572,
+      "p50_ms": 2.479263999965042,
+      "p95_ms": 3.768998000305146,
+      "p99_ms": 7.122411000076681,
+      "rss_bytes": 318222336,
+      "memory_usage": {
+        "rss_bytes": 313294848,
+        "heap_total_bytes": 226631680,
+        "heap_used_bytes": 121693920,
+        "external_bytes": 33970306,
+        "array_buffers_bytes": 31271527
+      }
     },
     {
       "storage": "mongo",
@@ -2013,12 +2952,19 @@
       "repetition": 3,
       "order": 0,
       "implementation": "express",
-      "count": 60912,
-      "throughput_rps": 4060.2914149351595,
-      "p50_ms": 2.493843000382185,
-      "p95_ms": 3.753899000119418,
-      "p99_ms": 7.58517500013113,
-      "rss_bytes": 317911040
+      "count": 61476,
+      "throughput_rps": 4097.998304644257,
+      "p50_ms": 2.50576200010255,
+      "p95_ms": 3.755919000133872,
+      "p99_ms": 7.613744999747723,
+      "rss_bytes": 319217664,
+      "memory_usage": {
+        "rss_bytes": 314343424,
+        "heap_total_bytes": 183640064,
+        "heap_used_bytes": 41956968,
+        "external_bytes": 23789119,
+        "array_buffers_bytes": 21090340
+      }
     },
     {
       "storage": "mongo",
@@ -2027,12 +2973,19 @@
       "repetition": 3,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 60977,
-      "throughput_rps": 4064.7317427149105,
-      "p50_ms": 2.4565540002658963,
-      "p95_ms": 3.9820209997706115,
-      "p99_ms": 8.041889000218362,
-      "rss_bytes": 362627072
+      "count": 61880,
+      "throughput_rps": 4124.824387201498,
+      "p50_ms": 2.4936029999516904,
+      "p95_ms": 3.738958999980241,
+      "p99_ms": 7.51682800007984,
+      "rss_bytes": 383164416,
+      "memory_usage": {
+        "rss_bytes": 378212352,
+        "heap_total_bytes": 247758848,
+        "heap_used_bytes": 153518696,
+        "external_bytes": 33195438,
+        "array_buffers_bytes": 30315104
+      }
     },
     {
       "storage": "mongo",
@@ -2041,12 +2994,19 @@
       "repetition": 4,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 61294,
-      "throughput_rps": 4085.693292727127,
-      "p50_ms": 2.4671140001155436,
-      "p95_ms": 3.8223660001531243,
-      "p99_ms": 8.382587000261992,
-      "rss_bytes": 363479040
+      "count": 60101,
+      "throughput_rps": 4006.3733492028946,
+      "p50_ms": 2.4824029998853803,
+      "p95_ms": 3.9891699999570847,
+      "p99_ms": 7.889394999947399,
+      "rss_bytes": 383410176,
+      "memory_usage": {
+        "rss_bytes": 378474496,
+        "heap_total_bytes": 215515136,
+        "heap_used_bytes": 116945408,
+        "external_bytes": 28539091,
+        "array_buffers_bytes": 25658757
+      }
     },
     {
       "storage": "mongo",
@@ -2055,12 +3015,19 @@
       "repetition": 4,
       "order": 1,
       "implementation": "express",
-      "count": 60234,
-      "throughput_rps": 4015.36453768508,
-      "p50_ms": 2.522092000115663,
-      "p95_ms": 3.9415420000441372,
-      "p99_ms": 7.921482999809086,
-      "rss_bytes": 317931520
+      "count": 62520,
+      "throughput_rps": 4167.639227476783,
+      "p50_ms": 2.4757840000092983,
+      "p95_ms": 3.5748950000852346,
+      "p99_ms": 7.228487000335008,
+      "rss_bytes": 319270912,
+      "memory_usage": {
+        "rss_bytes": 314343424,
+        "heap_total_bytes": 190193664,
+        "heap_used_bytes": 65786680,
+        "external_bytes": 22325869,
+        "array_buffers_bytes": 19627090
+      }
     },
     {
       "storage": "mongo",
@@ -2069,12 +3036,19 @@
       "repetition": 5,
       "order": 0,
       "implementation": "express",
-      "count": 59648,
-      "throughput_rps": 3976.1964090051088,
-      "p50_ms": 2.535740999970585,
-      "p95_ms": 3.9596510003320873,
-      "p99_ms": 8.213033000007272,
-      "rss_bytes": 317947904
+      "count": 61760,
+      "throughput_rps": 4116.761563181089,
+      "p50_ms": 2.479073999915272,
+      "p95_ms": 3.8900840003043413,
+      "p99_ms": 7.3878520000725985,
+      "rss_bytes": 321867776,
+      "memory_usage": {
+        "rss_bytes": 316702720,
+        "heap_total_bytes": 215097344,
+        "heap_used_bytes": 109232848,
+        "external_bytes": 32006410,
+        "array_buffers_bytes": 29307631
+      }
     },
     {
       "storage": "mongo",
@@ -2083,12 +3057,19 @@
       "repetition": 5,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 62481,
-      "throughput_rps": 4165.259731546267,
-      "p50_ms": 2.448173999786377,
-      "p95_ms": 3.7044009999372065,
-      "p99_ms": 7.687370999716222,
-      "rss_bytes": 364105728
+      "count": 62044,
+      "throughput_rps": 4135.871637434632,
+      "p50_ms": 2.4560040002688766,
+      "p95_ms": 3.922202999703586,
+      "p99_ms": 7.591423999983817,
+      "rss_bytes": 383410176,
+      "memory_usage": {
+        "rss_bytes": 378474496,
+        "heap_total_bytes": 255623168,
+        "heap_used_bytes": 129237560,
+        "external_bytes": 34018637,
+        "array_buffers_bytes": 31138303
+      }
     },
     {
       "storage": "mongo",
@@ -2097,12 +3078,19 @@
       "repetition": 1,
       "order": 0,
       "implementation": "express",
-      "count": 104191,
-      "throughput_rps": 6941.77724763432,
-      "p50_ms": 6.324148999992758,
-      "p95_ms": 13.246506999712437,
-      "p99_ms": 17.09956100024283,
-      "rss_bytes": 333905920
+      "count": 109614,
+      "throughput_rps": 7302.481983937371,
+      "p50_ms": 6.167185000143945,
+      "p95_ms": 11.716080999933183,
+      "p99_ms": 14.755174999590963,
+      "rss_bytes": 335052800,
+      "memory_usage": {
+        "rss_bytes": 330457088,
+        "heap_total_bytes": 203038720,
+        "heap_used_bytes": 103480680,
+        "external_bytes": 30719837,
+        "array_buffers_bytes": 28021058
+      }
     },
     {
       "storage": "mongo",
@@ -2111,12 +3099,19 @@
       "repetition": 1,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 108286,
-      "throughput_rps": 7215.773698310028,
-      "p50_ms": 6.007509999908507,
-      "p95_ms": 12.842271000146866,
-      "p99_ms": 16.46120399981737,
-      "rss_bytes": 377823232
+      "count": 109137,
+      "throughput_rps": 7274.186068092982,
+      "p50_ms": 6.131315999664366,
+      "p95_ms": 11.92067400040105,
+      "p99_ms": 15.306164999958128,
+      "rss_bytes": 394584064,
+      "memory_usage": {
+        "rss_bytes": 389423104,
+        "heap_total_bytes": 242515968,
+        "heap_used_bytes": 156090248,
+        "external_bytes": 33488089,
+        "array_buffers_bytes": 30607755
+      }
     },
     {
       "storage": "mongo",
@@ -2125,12 +3120,19 @@
       "repetition": 2,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 115043,
-      "throughput_rps": 7663.371589699652,
-      "p50_ms": 5.830546000041068,
-      "p95_ms": 11.825695999898016,
-      "p99_ms": 14.721004999708384,
-      "rss_bytes": 379834368
+      "count": 112183,
+      "throughput_rps": 7475.008065510007,
+      "p50_ms": 5.961062000133097,
+      "p95_ms": 11.711051000282168,
+      "p99_ms": 14.615158999804407,
+      "rss_bytes": 397762560,
+      "memory_usage": {
+        "rss_bytes": 392728576,
+        "heap_total_bytes": 266371072,
+        "heap_used_bytes": 136012544,
+        "external_bytes": 36186629,
+        "array_buffers_bytes": 33306295
+      }
     },
     {
       "storage": "mongo",
@@ -2139,12 +3141,19 @@
       "repetition": 2,
       "order": 1,
       "implementation": "express",
-      "count": 103125,
-      "throughput_rps": 6873.269211379163,
-      "p50_ms": 6.427544999867678,
-      "p95_ms": 13.358612000010908,
-      "p99_ms": 16.74615400005132,
-      "rss_bytes": 336674816
+      "count": 99792,
+      "throughput_rps": 6651.271282893741,
+      "p50_ms": 6.713905999902636,
+      "p95_ms": 13.197409000247717,
+      "p99_ms": 16.3849279996939,
+      "rss_bytes": 335601664,
+      "memory_usage": {
+        "rss_bytes": 330981376,
+        "heap_total_bytes": 217456640,
+        "heap_used_bytes": 93917440,
+        "external_bytes": 33201660,
+        "array_buffers_bytes": 30502881
+      }
     },
     {
       "storage": "mongo",
@@ -2153,12 +3162,19 @@
       "repetition": 3,
       "order": 0,
       "implementation": "express",
-      "count": 100104,
-      "throughput_rps": 6672.033808562995,
-      "p50_ms": 6.5936390003189445,
-      "p95_ms": 13.696550999768078,
-      "p99_ms": 17.452597999945283,
-      "rss_bytes": 336908288
+      "count": 104948,
+      "throughput_rps": 6994.632068299146,
+      "p50_ms": 6.38372700009495,
+      "p95_ms": 12.461294999811798,
+      "p99_ms": 15.384332000277936,
+      "rss_bytes": 335622144,
+      "memory_usage": {
+        "rss_bytes": 330981376,
+        "heap_total_bytes": 247341056,
+        "heap_used_bytes": 162762888,
+        "external_bytes": 40339148,
+        "array_buffers_bytes": 37640369
+      }
     },
     {
       "storage": "mongo",
@@ -2167,12 +3183,19 @@
       "repetition": 3,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 118898,
-      "throughput_rps": 7923.9646164410815,
-      "p50_ms": 5.612623000051826,
-      "p95_ms": 11.406130000017583,
-      "p99_ms": 13.8651840002276,
-      "rss_bytes": 386265088
+      "count": 113672,
+      "throughput_rps": 7574.040720627292,
+      "p50_ms": 5.838694999925792,
+      "p95_ms": 11.71364099998027,
+      "p99_ms": 14.692666999995708,
+      "rss_bytes": 403714048,
+      "memory_usage": {
+        "rss_bytes": 399052800,
+        "heap_total_bytes": 216039424,
+        "heap_used_bytes": 59508712,
+        "external_bytes": 25032981,
+        "array_buffers_bytes": 22152647
+      }
     },
     {
       "storage": "mongo",
@@ -2181,12 +3204,19 @@
       "repetition": 4,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 102967,
-      "throughput_rps": 6862.635627182013,
-      "p50_ms": 6.361226999666542,
-      "p95_ms": 13.373881000094116,
-      "p99_ms": 17.047263000160456,
-      "rss_bytes": 389910528
+      "count": 110402,
+      "throughput_rps": 7357.799100019207,
+      "p50_ms": 6.052247999701649,
+      "p95_ms": 11.76809799997136,
+      "p99_ms": 14.887430000118911,
+      "rss_bytes": 403931136,
+      "memory_usage": {
+        "rss_bytes": 399048704,
+        "heap_total_bytes": 227311616,
+        "heap_used_bytes": 97919800,
+        "external_bytes": 25027653,
+        "array_buffers_bytes": 22147319
+      }
     },
     {
       "storage": "mongo",
@@ -2195,12 +3225,19 @@
       "repetition": 4,
       "order": 1,
       "implementation": "express",
-      "count": 108217,
-      "throughput_rps": 7212.217304466879,
-      "p50_ms": 6.130344999954104,
-      "p95_ms": 12.717153999954462,
-      "p99_ms": 16.2992090000771,
-      "rss_bytes": 336822272
+      "count": 99523,
+      "throughput_rps": 6633.072737994018,
+      "p50_ms": 6.767563999630511,
+      "p95_ms": 13.173170000314713,
+      "p99_ms": 16.664837000425905,
+      "rss_bytes": 347664384,
+      "memory_usage": {
+        "rss_bytes": 342515712,
+        "heap_total_bytes": 230563840,
+        "heap_used_bytes": 137837472,
+        "external_bytes": 36437112,
+        "array_buffers_bytes": 33738333
+      }
     },
     {
       "storage": "mongo",
@@ -2209,12 +3246,19 @@
       "repetition": 5,
       "order": 0,
       "implementation": "express",
-      "count": 106533,
-      "throughput_rps": 7098.494388118027,
-      "p50_ms": 6.263289999682456,
-      "p95_ms": 12.633816999848932,
-      "p99_ms": 15.56965500023216,
-      "rss_bytes": 336330752
+      "count": 105802,
+      "throughput_rps": 7051.25680889384,
+      "p50_ms": 6.585080000106245,
+      "p95_ms": 11.570555000100285,
+      "p99_ms": 14.441114999819547,
+      "rss_bytes": 347729920,
+      "memory_usage": {
+        "rss_bytes": 342515712,
+        "heap_total_bytes": 189145088,
+        "heap_used_bytes": 72603416,
+        "external_bytes": 26096692,
+        "array_buffers_bytes": 23397913
+      }
     },
     {
       "storage": "mongo",
@@ -2223,12 +3267,19 @@
       "repetition": 5,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 109267,
-      "throughput_rps": 7282.165011219716,
-      "p50_ms": 6.027177999727428,
-      "p95_ms": 12.607388000003994,
-      "p99_ms": 15.526916000060737,
-      "rss_bytes": 390184960
+      "count": 104645,
+      "throughput_rps": 6972.811652053296,
+      "p50_ms": 6.343257000204176,
+      "p95_ms": 12.768290000036359,
+      "p99_ms": 15.835161999799311,
+      "rss_bytes": 404455424,
+      "memory_usage": {
+        "rss_bytes": 399790080,
+        "heap_total_bytes": 286294016,
+        "heap_used_bytes": 156505224,
+        "external_bytes": 38948666,
+        "array_buffers_bytes": 36068332
+      }
     },
     {
       "storage": "mongo",
@@ -2237,12 +3288,19 @@
       "repetition": 1,
       "order": 0,
       "implementation": "express",
-      "count": 1203,
-      "throughput_rps": 80.19375213684685,
-      "p50_ms": 11.767548000440001,
-      "p95_ms": 21.566254999954253,
-      "p99_ms": 24.34227699972689,
-      "rss_bytes": 145416192
+      "count": 1173,
+      "throughput_rps": 78.12616600222438,
+      "p50_ms": 12.699961999896914,
+      "p95_ms": 16.753010000102222,
+      "p99_ms": 20.173328999895602,
+      "rss_bytes": 148041728,
+      "memory_usage": {
+        "rss_bytes": 143044608,
+        "heap_total_bytes": 68296704,
+        "heap_used_bytes": 45369288,
+        "external_bytes": 21656814,
+        "array_buffers_bytes": 18954076
+      }
     },
     {
       "storage": "mongo",
@@ -2251,12 +3309,19 @@
       "repetition": 1,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 1175,
-      "throughput_rps": 78.25512662055051,
-      "p50_ms": 12.809580999892205,
-      "p95_ms": 17.213686000090092,
-      "p99_ms": 20.70871500018984,
-      "rss_bytes": 198610944
+      "count": 1177,
+      "throughput_rps": 78.43933802479067,
+      "p50_ms": 12.75355099979788,
+      "p95_ms": 18.1555300001055,
+      "p99_ms": 20.31999500002712,
+      "rss_bytes": 192577536,
+      "memory_usage": {
+        "rss_bytes": 187756544,
+        "heap_total_bytes": 114327552,
+        "heap_used_bytes": 60569176,
+        "external_bytes": 23371028,
+        "array_buffers_bytes": 20486215
+      }
     },
     {
       "storage": "mongo",
@@ -2265,12 +3330,19 @@
       "repetition": 2,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 828,
-      "throughput_rps": 55.14772991906874,
-      "p50_ms": 17.795617000199854,
-      "p95_ms": 24.43816399993375,
-      "p99_ms": 29.83346400037408,
-      "rss_bytes": 251740160
+      "count": 818,
+      "throughput_rps": 54.47605188825296,
+      "p50_ms": 18.03071500035003,
+      "p95_ms": 22.121939999982715,
+      "p99_ms": 30.387579000089318,
+      "rss_bytes": 246337536,
+      "memory_usage": {
+        "rss_bytes": 241205248,
+        "heap_total_bytes": 179601408,
+        "heap_used_bytes": 82714704,
+        "external_bytes": 23728587,
+        "array_buffers_bytes": 20846284
+      }
     },
     {
       "storage": "mongo",
@@ -2279,12 +3351,19 @@
       "repetition": 2,
       "order": 1,
       "implementation": "express",
-      "count": 837,
-      "throughput_rps": 55.75265145862067,
-      "p50_ms": 17.95576100004837,
-      "p95_ms": 23.24632599996403,
-      "p99_ms": 29.945371000096202,
-      "rss_bytes": 147369984
+      "count": 791,
+      "throughput_rps": 52.68981480955554,
+      "p50_ms": 17.900149999652058,
+      "p95_ms": 28.549494000151753,
+      "p99_ms": 31.788340999744833,
+      "rss_bytes": 149618688,
+      "memory_usage": {
+        "rss_bytes": 144093184,
+        "heap_total_bytes": 44179456,
+        "heap_used_bytes": 34324936,
+        "external_bytes": 22218455,
+        "array_buffers_bytes": 19515677
+      }
     },
     {
       "storage": "mongo",
@@ -2293,12 +3372,19 @@
       "repetition": 3,
       "order": 0,
       "implementation": "express",
-      "count": 663,
-      "throughput_rps": 44.15686028416108,
-      "p50_ms": 22.133343999739736,
-      "p95_ms": 29.012513000052422,
-      "p99_ms": 35.86788300005719,
-      "rss_bytes": 148508672
+      "count": 667,
+      "throughput_rps": 44.44880375920693,
+      "p50_ms": 21.893109999597073,
+      "p95_ms": 28.549664999824017,
+      "p99_ms": 32.7518469998613,
+      "rss_bytes": 150458368,
+      "memory_usage": {
+        "rss_bytes": 145403904,
+        "heap_total_bytes": 44179456,
+        "heap_used_bytes": 33678080,
+        "external_bytes": 24180683,
+        "array_buffers_bytes": 21477905
+      }
     },
     {
       "storage": "mongo",
@@ -2307,12 +3393,19 @@
       "repetition": 3,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 656,
-      "throughput_rps": 43.724649582945354,
-      "p50_ms": 22.012618000153452,
-      "p95_ms": 32.513160000089556,
-      "p99_ms": 37.900251999963075,
-      "rss_bytes": 252026880
+      "count": 669,
+      "throughput_rps": 44.570277597259974,
+      "p50_ms": 22.012254999950528,
+      "p95_ms": 26.636072000022978,
+      "p99_ms": 33.62973600020632,
+      "rss_bytes": 246681600,
+      "memory_usage": {
+        "rss_bytes": 242397184,
+        "heap_total_bytes": 178028544,
+        "heap_used_bytes": 87036544,
+        "external_bytes": 23816298,
+        "array_buffers_bytes": 20934588
+      }
     },
     {
       "storage": "mongo",
@@ -2321,12 +3414,19 @@
       "repetition": 4,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 574,
-      "throughput_rps": 38.26632508359137,
-      "p50_ms": 25.074760999996215,
-      "p95_ms": 37.28186299977824,
-      "p99_ms": 41.80640499992296,
-      "rss_bytes": 251613184
+      "count": 587,
+      "throughput_rps": 39.09630230622853,
+      "p50_ms": 24.92509299982339,
+      "p95_ms": 32.023682000115514,
+      "p99_ms": 40.084578999783844,
+      "rss_bytes": 246779904,
+      "memory_usage": {
+        "rss_bytes": 242311168,
+        "heap_total_bytes": 178814976,
+        "heap_used_bytes": 69951552,
+        "external_bytes": 23682412,
+        "array_buffers_bytes": 20802078
+      }
     },
     {
       "storage": "mongo",
@@ -2335,12 +3435,19 @@
       "repetition": 4,
       "order": 1,
       "implementation": "express",
-      "count": 572,
-      "throughput_rps": 38.08430686938126,
-      "p50_ms": 25.213415999896824,
-      "p95_ms": 36.50600999966264,
-      "p99_ms": 43.68235799996182,
-      "rss_bytes": 150810624
+      "count": 581,
+      "throughput_rps": 38.726118657427854,
+      "p50_ms": 25.039278999902308,
+      "p95_ms": 31.695264999754727,
+      "p99_ms": 39.09627400012687,
+      "rss_bytes": 150740992,
+      "memory_usage": {
+        "rss_bytes": 145403904,
+        "heap_total_bytes": 39985152,
+        "heap_used_bytes": 33964704,
+        "external_bytes": 26144941,
+        "array_buffers_bytes": 23442163
+      }
     },
     {
       "storage": "mongo",
@@ -2349,26 +3456,40 @@
       "repetition": 5,
       "order": 0,
       "implementation": "express",
+      "count": 528,
+      "throughput_rps": 35.18039361952266,
+      "p50_ms": 27.71790499985218,
+      "p95_ms": 34.625510999932885,
+      "p99_ms": 44.96854700008407,
+      "rss_bytes": 150765568,
+      "memory_usage": {
+        "rss_bytes": 145403904,
+        "heap_total_bytes": 43917312,
+        "heap_used_bytes": 32615856,
+        "external_bytes": 22671429,
+        "array_buffers_bytes": 19968651
+      }
+    },
+    {
+      "storage": "mongo",
+      "scenario": "task-create",
+      "concurrency": 1,
+      "repetition": 5,
+      "order": 1,
+      "implementation": "nest-fastify",
       "count": 517,
-      "throughput_rps": 34.45081182199637,
-      "p50_ms": 28.1996320001781,
-      "p95_ms": 35.541834000032395,
-      "p99_ms": 45.43284700019285,
-      "rss_bytes": 150921216
-    },
-    {
-      "storage": "mongo",
-      "scenario": "task-create",
-      "concurrency": 1,
-      "repetition": 5,
-      "order": 1,
-      "implementation": "nest-fastify",
-      "count": 505,
-      "throughput_rps": 33.65816708192763,
-      "p50_ms": 28.221150999888778,
-      "p95_ms": 40.880477000027895,
-      "p99_ms": 47.02103100018576,
-      "rss_bytes": 251265024
+      "throughput_rps": 34.41170467507663,
+      "p50_ms": 28.225367000326514,
+      "p95_ms": 34.9643399999477,
+      "p99_ms": 42.94299899972975,
+      "rss_bytes": 246988800,
+      "memory_usage": {
+        "rss_bytes": 242561024,
+        "heap_total_bytes": 179863552,
+        "heap_used_bytes": 85209560,
+        "external_bytes": 23165505,
+        "array_buffers_bytes": 20285171
+      }
     },
     {
       "storage": "mongo",
@@ -2377,12 +3498,19 @@
       "repetition": 1,
       "order": 0,
       "implementation": "express",
-      "count": 3283,
-      "throughput_rps": 218.19909592977322,
-      "p50_ms": 45.31715100025758,
-      "p95_ms": 55.41887699998915,
-      "p99_ms": 60.91042400011793,
-      "rss_bytes": 239063040
+      "count": 3277,
+      "throughput_rps": 218.43784616655944,
+      "p50_ms": 45.51078899996355,
+      "p95_ms": 56.04205800034106,
+      "p99_ms": 61.388689999934286,
+      "rss_bytes": 234131456,
+      "memory_usage": {
+        "rss_bytes": 228671488,
+        "heap_total_bytes": 170270720,
+        "heap_used_bytes": 65469872,
+        "external_bytes": 23952963,
+        "array_buffers_bytes": 21254184
+      }
     },
     {
       "storage": "mongo",
@@ -2391,12 +3519,19 @@
       "repetition": 1,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 3272,
-      "throughput_rps": 217.66833819946683,
-      "p50_ms": 45.52014399971813,
-      "p95_ms": 55.895550000015646,
-      "p99_ms": 59.9255779995583,
-      "rss_bytes": 323297280
+      "count": 3282,
+      "throughput_rps": 218.22894148837642,
+      "p50_ms": 45.11382299987599,
+      "p95_ms": 57.806016999762505,
+      "p99_ms": 67.16256800014526,
+      "rss_bytes": 310358016,
+      "memory_usage": {
+        "rss_bytes": 304861184,
+        "heap_total_bytes": 194281472,
+        "heap_used_bytes": 45962480,
+        "external_bytes": 22678581,
+        "array_buffers_bytes": 19798247
+      }
     },
     {
       "storage": "mongo",
@@ -2405,12 +3540,19 @@
       "repetition": 2,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 2501,
-      "throughput_rps": 166.2279716418373,
-      "p50_ms": 59.402916999999434,
-      "p95_ms": 68.65767300035805,
-      "p99_ms": 82.607582999859,
-      "rss_bytes": 340590592
+      "count": 2472,
+      "throughput_rps": 164.4174832294794,
+      "p50_ms": 60.40647500008345,
+      "p95_ms": 67.26407500030473,
+      "p99_ms": 76.54471799964085,
+      "rss_bytes": 312725504,
+      "memory_usage": {
+        "rss_bytes": 308170752,
+        "heap_total_bytes": 223903744,
+        "heap_used_bytes": 121077544,
+        "external_bytes": 31173285,
+        "array_buffers_bytes": 28292951
+      }
     },
     {
       "storage": "mongo",
@@ -2419,12 +3561,19 @@
       "repetition": 2,
       "order": 1,
       "implementation": "express",
-      "count": 2510,
-      "throughput_rps": 167.26734402437086,
-      "p50_ms": 59.905749999918044,
-      "p95_ms": 66.30231499997899,
-      "p99_ms": 72.50658799987286,
-      "rss_bytes": 249344000
+      "count": 2492,
+      "throughput_rps": 165.61229675471145,
+      "p50_ms": 60.32342900009826,
+      "p95_ms": 66.77745100017637,
+      "p99_ms": 77.29852200020105,
+      "rss_bytes": 237670400,
+      "memory_usage": {
+        "rss_bytes": 231817216,
+        "heap_total_bytes": 173154304,
+        "heap_used_bytes": 47652240,
+        "external_bytes": 22973976,
+        "array_buffers_bytes": 20275197
+      }
     },
     {
       "storage": "mongo",
@@ -2433,12 +3582,19 @@
       "repetition": 3,
       "order": 0,
       "implementation": "express",
-      "count": 2347,
-      "throughput_rps": 156.08109558219363,
-      "p50_ms": 63.97253599995747,
-      "p95_ms": 69.47765300003812,
-      "p99_ms": 80.10890099965036,
-      "rss_bytes": 257667072
+      "count": 2357,
+      "throughput_rps": 156.43739275503748,
+      "p50_ms": 63.963690999895334,
+      "p95_ms": 72.0939050000161,
+      "p99_ms": 82.51643799990416,
+      "rss_bytes": 239222784,
+      "memory_usage": {
+        "rss_bytes": 232865792,
+        "heap_total_bytes": 173940736,
+        "heap_used_bytes": 64134216,
+        "external_bytes": 23748427,
+        "array_buffers_bytes": 21049648
+      }
     },
     {
       "storage": "mongo",
@@ -2447,12 +3603,19 @@
       "repetition": 3,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 2372,
-      "throughput_rps": 157.57817282421948,
-      "p50_ms": 63.20265300013125,
-      "p95_ms": 71.13915499998257,
-      "p99_ms": 82.91964199999347,
-      "rss_bytes": 339963904
+      "count": 2357,
+      "throughput_rps": 156.80521456444927,
+      "p50_ms": 63.40877000009641,
+      "p95_ms": 73.47922600014135,
+      "p99_ms": 83.56772099994123,
+      "rss_bytes": 317353984,
+      "memory_usage": {
+        "rss_bytes": 312061952,
+        "heap_total_bytes": 213942272,
+        "heap_used_bytes": 93204560,
+        "external_bytes": 29332908,
+        "array_buffers_bytes": 26452574
+      }
     },
     {
       "storage": "mongo",
@@ -2461,12 +3624,19 @@
       "repetition": 4,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 2230,
-      "throughput_rps": 148.00407615756208,
-      "p50_ms": 66.99096000008285,
-      "p95_ms": 78.35718199983239,
-      "p99_ms": 90.0255630002357,
-      "rss_bytes": 354091008
+      "count": 1844,
+      "throughput_rps": 122.45304924078691,
+      "p50_ms": 66.34050700021908,
+      "p95_ms": 79.19050600007176,
+      "p99_ms": 819.7083489997312,
+      "rss_bytes": 330981376,
+      "memory_usage": {
+        "rss_bytes": 326479872,
+        "heap_total_bytes": 209747968,
+        "heap_used_bytes": 75503040,
+        "external_bytes": 23823740,
+        "array_buffers_bytes": 20943406
+      }
     },
     {
       "storage": "mongo",
@@ -2475,12 +3645,19 @@
       "repetition": 4,
       "order": 1,
       "implementation": "express",
-      "count": 2247,
-      "throughput_rps": 149.79274755444212,
-      "p50_ms": 66.60574300028384,
-      "p95_ms": 74.42792999977246,
-      "p99_ms": 85.25808000005782,
-      "rss_bytes": 257183744
+      "count": 2226,
+      "throughput_rps": 148.22552894741253,
+      "p50_ms": 67.19153800001368,
+      "p95_ms": 76.98275300022215,
+      "p99_ms": 86.85942699993029,
+      "rss_bytes": 240209920,
+      "memory_usage": {
+        "rss_bytes": 233652224,
+        "heap_total_bytes": 173416448,
+        "heap_used_bytes": 32757584,
+        "external_bytes": 22216884,
+        "array_buffers_bytes": 19518105
+      }
     },
     {
       "storage": "mongo",
@@ -2489,12 +3666,19 @@
       "repetition": 5,
       "order": 0,
       "implementation": "express",
-      "count": 2148,
-      "throughput_rps": 142.5889632685519,
-      "p50_ms": 70.08283199975267,
-      "p95_ms": 76.6256220000796,
-      "p99_ms": 89.20614199992269,
-      "rss_bytes": 262119424
+      "count": 2140,
+      "throughput_rps": 142.2912485668538,
+      "p50_ms": 70.06178699992597,
+      "p95_ms": 77.66514999978244,
+      "p99_ms": 88.44926999974996,
+      "rss_bytes": 240795648,
+      "memory_usage": {
+        "rss_bytes": 234962944,
+        "heap_total_bytes": 173940736,
+        "heap_used_bytes": 30967648,
+        "external_bytes": 21625030,
+        "array_buffers_bytes": 18926251
+      }
     },
     {
       "storage": "mongo",
@@ -2503,12 +3687,19 @@
       "repetition": 5,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 2145,
-      "throughput_rps": 142.31511840728305,
-      "p50_ms": 69.94536700006574,
-      "p95_ms": 76.67188100004569,
-      "p99_ms": 91.30550700007007,
-      "rss_bytes": 359559168
+      "count": 2152,
+      "throughput_rps": 143.03752011108372,
+      "p50_ms": 69.8393349996768,
+      "p95_ms": 79.08843000000343,
+      "p99_ms": 88.13216200005263,
+      "rss_bytes": 329076736,
+      "memory_usage": {
+        "rss_bytes": 324374528,
+        "heap_total_bytes": 210010112,
+        "heap_used_bytes": 92270704,
+        "external_bytes": 28684716,
+        "array_buffers_bytes": 25804382
+      }
     },
     {
       "storage": "mongo",
@@ -2517,12 +3708,19 @@
       "repetition": 1,
       "order": 0,
       "implementation": "express",
-      "count": 7618,
-      "throughput_rps": 504.9693119546655,
-      "p50_ms": 87.97173399990425,
-      "p95_ms": 158.31096700020134,
-      "p99_ms": 172.3659129999578,
-      "rss_bytes": 315260928
+      "count": 7576,
+      "throughput_rps": 502.1545564629916,
+      "p50_ms": 89.2512640003115,
+      "p95_ms": 156.3929530000314,
+      "p99_ms": 165.92293899971992,
+      "rss_bytes": 262320128,
+      "memory_usage": {
+        "rss_bytes": 256720896,
+        "heap_total_bytes": 180494336,
+        "heap_used_bytes": 66569464,
+        "external_bytes": 23437514,
+        "array_buffers_bytes": 20738735
+      }
     },
     {
       "storage": "mongo",
@@ -2531,12 +3729,19 @@
       "repetition": 1,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 7348,
-      "throughput_rps": 487.93212016264175,
-      "p50_ms": 91.26425800006837,
-      "p95_ms": 163.15193600021303,
-      "p99_ms": 176.87783499993384,
-      "rss_bytes": 378044416
+      "count": 7580,
+      "throughput_rps": 501.602657083875,
+      "p50_ms": 87.91323000006378,
+      "p95_ms": 159.37864899961278,
+      "p99_ms": 168.17513000033796,
+      "rss_bytes": 376094720,
+      "memory_usage": {
+        "rss_bytes": 370032640,
+        "heap_total_bytes": 233340928,
+        "heap_used_bytes": 146294976,
+        "external_bytes": 31845450,
+        "array_buffers_bytes": 28965116
+      }
     },
     {
       "storage": "mongo",
@@ -2545,12 +3750,19 @@
       "repetition": 2,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 5906,
-      "throughput_rps": 391.6655530885294,
-      "p50_ms": 107.49362900014967,
-      "p95_ms": 199.06193700013682,
-      "p99_ms": 213.70445300033316,
-      "rss_bytes": 380006400
+      "count": 6038,
+      "throughput_rps": 399.8044301076046,
+      "p50_ms": 106.92745300009847,
+      "p95_ms": 195.76522100018337,
+      "p99_ms": 211.79049800010398,
+      "rss_bytes": 377589760,
+      "memory_usage": {
+        "rss_bytes": 371867648,
+        "heap_total_bytes": 269778944,
+        "heap_used_bytes": 145543520,
+        "external_bytes": 36417186,
+        "array_buffers_bytes": 33536852
+      }
     },
     {
       "storage": "mongo",
@@ -2559,12 +3771,19 @@
       "repetition": 2,
       "order": 1,
       "implementation": "express",
-      "count": 5821,
-      "throughput_rps": 386.287026549098,
-      "p50_ms": 111.66911299992353,
-      "p95_ms": 195.93700599996373,
-      "p99_ms": 205.4858809998259,
-      "rss_bytes": 319778816
+      "count": 5922,
+      "throughput_rps": 393.2912546468493,
+      "p50_ms": 109.01913900021464,
+      "p95_ms": 191.12089500017464,
+      "p99_ms": 206.0143710002303,
+      "rss_bytes": 263995392,
+      "memory_usage": {
+        "rss_bytes": 259170304,
+        "heap_total_bytes": 181280768,
+        "heap_used_bytes": 74770984,
+        "external_bytes": 23082586,
+        "array_buffers_bytes": 20383807
+      }
     },
     {
       "storage": "mongo",
@@ -2573,12 +3792,19 @@
       "repetition": 3,
       "order": 0,
       "implementation": "express",
-      "count": 5026,
-      "throughput_rps": 332.2695755925773,
-      "p50_ms": 133.09234099974856,
-      "p95_ms": 217.01526599982753,
-      "p99_ms": 228.08360800007358,
-      "rss_bytes": 319791104
+      "count": 5300,
+      "throughput_rps": 351.34690143264777,
+      "p50_ms": 129.4576520002447,
+      "p95_ms": 208.48108500009403,
+      "p99_ms": 223.5613350002095,
+      "rss_bytes": 265396224,
+      "memory_usage": {
+        "rss_bytes": 260481024,
+        "heap_total_bytes": 179970048,
+        "heap_used_bytes": 76606592,
+        "external_bytes": 25288001,
+        "array_buffers_bytes": 22589222
+      }
     },
     {
       "storage": "mongo",
@@ -2587,12 +3813,19 @@
       "repetition": 3,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 5045,
-      "throughput_rps": 334.5265899005334,
-      "p50_ms": 128.59741799999028,
-      "p95_ms": 224.74267499987036,
-      "p99_ms": 243.82916500000283,
-      "rss_bytes": 380051456
+      "count": 5082,
+      "throughput_rps": 336.35089156855116,
+      "p50_ms": 132.6356899999082,
+      "p95_ms": 220.14485599985346,
+      "p99_ms": 254.70581199973822,
+      "rss_bytes": 383705088,
+      "memory_usage": {
+        "rss_bytes": 377913344,
+        "heap_total_bytes": 271613952,
+        "heap_used_bytes": 157769552,
+        "external_bytes": 37103454,
+        "array_buffers_bytes": 34223120
+      }
     },
     {
       "storage": "mongo",
@@ -2601,12 +3834,19 @@
       "repetition": 4,
       "order": 0,
       "implementation": "nest-fastify",
-      "count": 4466,
-      "throughput_rps": 295.4616728539414,
-      "p50_ms": 164.797927999869,
-      "p95_ms": 238.01238900003955,
-      "p99_ms": 256.9538239999674,
-      "rss_bytes": 377638912
+      "count": 4611,
+      "throughput_rps": 305.50968123105383,
+      "p50_ms": 162.2853190000169,
+      "p95_ms": 222.09613699978217,
+      "p99_ms": 238.84922900004312,
+      "rss_bytes": 382619648,
+      "memory_usage": {
+        "rss_bytes": 377163776,
+        "heap_total_bytes": 270565376,
+        "heap_used_bytes": 164359760,
+        "external_bytes": 37201222,
+        "array_buffers_bytes": 34320888
+      }
     },
     {
       "storage": "mongo",
@@ -2615,12 +3855,19 @@
       "repetition": 4,
       "order": 1,
       "implementation": "express",
-      "count": 4615,
-      "throughput_rps": 305.646272226448,
-      "p50_ms": 164.42798000015318,
-      "p95_ms": 220.26939099980518,
-      "p99_ms": 239.95096100028604,
-      "rss_bytes": 317952000
+      "count": 4746,
+      "throughput_rps": 314.58405317179796,
+      "p50_ms": 160.2641509999521,
+      "p95_ms": 218.74006599979475,
+      "p99_ms": 231.93814300000668,
+      "rss_bytes": 265404416,
+      "memory_usage": {
+        "rss_bytes": 260481024,
+        "heap_total_bytes": 181805056,
+        "heap_used_bytes": 77542784,
+        "external_bytes": 26397858,
+        "array_buffers_bytes": 23699079
+      }
     },
     {
       "storage": "mongo",
@@ -2629,12 +3876,19 @@
       "repetition": 5,
       "order": 0,
       "implementation": "express",
-      "count": 4171,
-      "throughput_rps": 275.6267411376292,
-      "p50_ms": 175.03947800025344,
-      "p95_ms": 257.4729249998927,
-      "p99_ms": 273.82506199972704,
-      "rss_bytes": 334639104
+      "count": 4327,
+      "throughput_rps": 284.97715803361456,
+      "p50_ms": 168.0778060001321,
+      "p95_ms": 245.77055699983612,
+      "p99_ms": 269.2790220002644,
+      "rss_bytes": 265412608,
+      "memory_usage": {
+        "rss_bytes": 260481024,
+        "heap_total_bytes": 182591488,
+        "heap_used_bytes": 98538408,
+        "external_bytes": 26721222,
+        "array_buffers_bytes": 24022443
+      }
     },
     {
       "storage": "mongo",
@@ -2643,12 +3897,19 @@
       "repetition": 5,
       "order": 1,
       "implementation": "nest-fastify",
-      "count": 4072,
-      "throughput_rps": 268.8954036133293,
-      "p50_ms": 181.39125500014052,
-      "p95_ms": 254.0203760000877,
-      "p99_ms": 274.8198870001361,
-      "rss_bytes": 378261504
+      "count": 4197,
+      "throughput_rps": 278.13890790010817,
+      "p50_ms": 179.06969999987632,
+      "p95_ms": 251.81995499972254,
+      "p99_ms": 270.053783999756,
+      "rss_bytes": 382644224,
+      "memory_usage": {
+        "rss_bytes": 377589760,
+        "heap_total_bytes": 261652480,
+        "heap_used_bytes": 164541112,
+        "external_bytes": 35798050,
+        "array_buffers_bytes": 32917716
+      }
     }
   ],
   "cold_start_samples": [
@@ -2656,408 +3917,916 @@
       "storage": "memory",
       "implementation": "express",
       "repetition": 1,
-      "duration_ms": 500.1150609999995,
-      "server_ready_duration_ms": 479.17814199999975,
-      "liveness_duration_ms": 500.1150609999995,
-      "readiness_duration_ms": 502.3915879999995,
-      "rss_bytes": 108273664
+      "duration_ms": 524.9541219999082,
+      "server_ready_duration_ms": 518.1025389998686,
+      "liveness_duration_ms": 524.9541219999082,
+      "readiness_duration_ms": 526.6048349998891,
+      "rss_bytes": 109703168,
+      "memory_usage": {
+        "rss_bytes": 105435136,
+        "heap_total_bytes": 61743104,
+        "heap_used_bytes": 28814912,
+        "external_bytes": 21231511,
+        "array_buffers_bytes": 18528773
+      }
     },
     {
       "storage": "memory",
       "implementation": "express",
       "repetition": 2,
-      "duration_ms": 221.32895400000052,
-      "server_ready_duration_ms": 214.51692300000013,
-      "liveness_duration_ms": 221.32895400000052,
-      "readiness_duration_ms": 222.75965200000064,
-      "rss_bytes": 108675072
+      "duration_ms": 263.6826890001539,
+      "server_ready_duration_ms": 257.42999499989673,
+      "liveness_duration_ms": 263.6826890001539,
+      "readiness_duration_ms": 264.7785910000093,
+      "rss_bytes": 109666304,
+      "memory_usage": {
+        "rss_bytes": 105451520,
+        "heap_total_bytes": 61743104,
+        "heap_used_bytes": 29345584,
+        "external_bytes": 21234647,
+        "array_buffers_bytes": 18531909
+      }
     },
     {
       "storage": "memory",
       "implementation": "express",
       "repetition": 3,
-      "duration_ms": 211.6736860000001,
-      "server_ready_duration_ms": 205.83633800000007,
-      "liveness_duration_ms": 211.6736860000001,
-      "readiness_duration_ms": 213.16473099999985,
-      "rss_bytes": 108679168
+      "duration_ms": 251.06929500005208,
+      "server_ready_duration_ms": 244.7401129999198,
+      "liveness_duration_ms": 251.06929500005208,
+      "readiness_duration_ms": 252.25956399994902,
+      "rss_bytes": 108498944,
+      "memory_usage": {
+        "rss_bytes": 106016768,
+        "heap_total_bytes": 60956672,
+        "heap_used_bytes": 32494104,
+        "external_bytes": 21235601,
+        "array_buffers_bytes": 18532863
+      }
     },
     {
       "storage": "memory",
       "implementation": "express",
       "repetition": 4,
-      "duration_ms": 219.02154900000005,
-      "server_ready_duration_ms": 212.74139699999978,
-      "liveness_duration_ms": 219.02154900000005,
-      "readiness_duration_ms": 220.84947199999988,
-      "rss_bytes": 108982272
+      "duration_ms": 255.97127599990927,
+      "server_ready_duration_ms": 249.8770960001275,
+      "liveness_duration_ms": 255.97127599990927,
+      "readiness_duration_ms": 256.98666099994443,
+      "rss_bytes": 108920832,
+      "memory_usage": {
+        "rss_bytes": 105365504,
+        "heap_total_bytes": 62005248,
+        "heap_used_bytes": 28435616,
+        "external_bytes": 21232521,
+        "array_buffers_bytes": 18529783
+      }
     },
     {
       "storage": "memory",
       "implementation": "express",
       "repetition": 5,
-      "duration_ms": 239.3657489999996,
-      "server_ready_duration_ms": 229.65022300000055,
-      "liveness_duration_ms": 239.3657489999996,
-      "readiness_duration_ms": 242.66782899999998,
-      "rss_bytes": 108929024
+      "duration_ms": 255.38230599998496,
+      "server_ready_duration_ms": 247.93618299998343,
+      "liveness_duration_ms": 255.38230599998496,
+      "readiness_duration_ms": 256.5296859999653,
+      "rss_bytes": 109535232,
+      "memory_usage": {
+        "rss_bytes": 105504768,
+        "heap_total_bytes": 61743104,
+        "heap_used_bytes": 29446264,
+        "external_bytes": 21234647,
+        "array_buffers_bytes": 18531909
+      }
     },
     {
       "storage": "memory",
       "implementation": "express",
       "repetition": 6,
-      "duration_ms": 226.96624100000008,
-      "server_ready_duration_ms": 220.69046799999978,
-      "liveness_duration_ms": 226.96624100000008,
-      "readiness_duration_ms": 228.57365200000004,
-      "rss_bytes": 108879872
+      "duration_ms": 243.6501809998881,
+      "server_ready_duration_ms": 237.3863269998692,
+      "liveness_duration_ms": 243.6501809998881,
+      "readiness_duration_ms": 244.72201399994083,
+      "rss_bytes": 109309952,
+      "memory_usage": {
+        "rss_bytes": 106336256,
+        "heap_total_bytes": 61743104,
+        "heap_used_bytes": 29490976,
+        "external_bytes": 21234647,
+        "array_buffers_bytes": 18531909
+      }
     },
     {
       "storage": "memory",
       "implementation": "express",
       "repetition": 7,
-      "duration_ms": 220.1023899999991,
-      "server_ready_duration_ms": 214.24643299999934,
-      "liveness_duration_ms": 220.1023899999991,
-      "readiness_duration_ms": 221.5120190000007,
-      "rss_bytes": 108941312
+      "duration_ms": 262.6997219999321,
+      "server_ready_duration_ms": 255.5199609999545,
+      "liveness_duration_ms": 262.6997219999321,
+      "readiness_duration_ms": 264.4348619999364,
+      "rss_bytes": 109531136,
+      "memory_usage": {
+        "rss_bytes": 105271296,
+        "heap_total_bytes": 61480960,
+        "heap_used_bytes": 28992472,
+        "external_bytes": 21233799,
+        "array_buffers_bytes": 18531061
+      }
     },
     {
       "storage": "memory",
       "implementation": "express",
       "repetition": 8,
-      "duration_ms": 211.42066499999964,
-      "server_ready_duration_ms": 205.61861599999975,
-      "liveness_duration_ms": 211.42066499999964,
-      "readiness_duration_ms": 212.71084899999914,
-      "rss_bytes": 109252608
+      "duration_ms": 256.1534990000073,
+      "server_ready_duration_ms": 249.94337400002405,
+      "liveness_duration_ms": 256.1534990000073,
+      "readiness_duration_ms": 257.3933669999242,
+      "rss_bytes": 109043712,
+      "memory_usage": {
+        "rss_bytes": 106139648,
+        "heap_total_bytes": 60956672,
+        "heap_used_bytes": 30199352,
+        "external_bytes": 21235343,
+        "array_buffers_bytes": 18532605
+      }
     },
     {
       "storage": "memory",
       "implementation": "express",
       "repetition": 9,
-      "duration_ms": 205.74466199999915,
-      "server_ready_duration_ms": 200.32999799999925,
-      "liveness_duration_ms": 205.74466199999915,
-      "readiness_duration_ms": 206.9088589999992,
-      "rss_bytes": 109400064
+      "duration_ms": 265.63517100014724,
+      "server_ready_duration_ms": 259.7474040000234,
+      "liveness_duration_ms": 265.63517100014724,
+      "readiness_duration_ms": 266.82637999998406,
+      "rss_bytes": 109555712,
+      "memory_usage": {
+        "rss_bytes": 105676800,
+        "heap_total_bytes": 61743104,
+        "heap_used_bytes": 29453088,
+        "external_bytes": 21234647,
+        "array_buffers_bytes": 18531909
+      }
     },
     {
       "storage": "memory",
       "implementation": "express",
       "repetition": 10,
-      "duration_ms": 213.07177500000034,
-      "server_ready_duration_ms": 206.7600050000001,
-      "liveness_duration_ms": 213.07177500000034,
-      "readiness_duration_ms": 214.3136799999993,
-      "rss_bytes": 109289472
+      "duration_ms": 249.02217599982396,
+      "server_ready_duration_ms": 243.35089100012556,
+      "liveness_duration_ms": 249.02217599982396,
+      "readiness_duration_ms": 250.0409909998998,
+      "rss_bytes": 109109248,
+      "memory_usage": {
+        "rss_bytes": 105181184,
+        "heap_total_bytes": 62267392,
+        "heap_used_bytes": 31217448,
+        "external_bytes": 21235601,
+        "array_buffers_bytes": 18532863
+      }
     },
     {
       "storage": "memory",
       "implementation": "nest-fastify",
       "repetition": 1,
-      "duration_ms": 658.0185239999992,
-      "server_ready_duration_ms": 651.0666860000001,
-      "liveness_duration_ms": 658.0185239999992,
-      "readiness_duration_ms": 659.043506,
-      "rss_bytes": 130084864
+      "duration_ms": 637.5955779999495,
+      "server_ready_duration_ms": 631.2358079999685,
+      "liveness_duration_ms": 637.5955779999495,
+      "readiness_duration_ms": 638.6064929999411,
+      "rss_bytes": 129163264,
+      "memory_usage": {
+        "rss_bytes": 125083648,
+        "heap_total_bytes": 69763072,
+        "heap_used_bytes": 44268088,
+        "external_bytes": 21419046,
+        "array_buffers_bytes": 18534233
+      }
     },
     {
       "storage": "memory",
       "implementation": "nest-fastify",
       "repetition": 2,
-      "duration_ms": 336.7713899999999,
-      "server_ready_duration_ms": 329.83601199999976,
-      "liveness_duration_ms": 336.7713899999999,
-      "readiness_duration_ms": 337.94826699999976,
-      "rss_bytes": 127705088
+      "duration_ms": 404.40824600006454,
+      "server_ready_duration_ms": 396.2196390000172,
+      "liveness_duration_ms": 404.40824600006454,
+      "readiness_duration_ms": 405.68329200008884,
+      "rss_bytes": 131203072,
+      "memory_usage": {
+        "rss_bytes": 127107072,
+        "heap_total_bytes": 70025216,
+        "heap_used_bytes": 44076048,
+        "external_bytes": 21418474,
+        "array_buffers_bytes": 18533661
+      }
     },
     {
       "storage": "memory",
       "implementation": "nest-fastify",
       "repetition": 3,
-      "duration_ms": 329.51012400000036,
-      "server_ready_duration_ms": 322.9750519999998,
-      "liveness_duration_ms": 329.51012400000036,
-      "readiness_duration_ms": 330.71730000000025,
-      "rss_bytes": 127926272
+      "duration_ms": 436.7086690000724,
+      "server_ready_duration_ms": 422.5489290000405,
+      "liveness_duration_ms": 436.7086690000724,
+      "readiness_duration_ms": 439.11382599989884,
+      "rss_bytes": 129454080,
+      "memory_usage": {
+        "rss_bytes": 125497344,
+        "heap_total_bytes": 70025216,
+        "heap_used_bytes": 44078736,
+        "external_bytes": 21418474,
+        "array_buffers_bytes": 18533661
+      }
     },
     {
       "storage": "memory",
       "implementation": "nest-fastify",
       "repetition": 4,
-      "duration_ms": 332.5470640000003,
-      "server_ready_duration_ms": 325.635945,
-      "liveness_duration_ms": 332.5470640000003,
-      "readiness_duration_ms": 333.8791450000008,
-      "rss_bytes": 127848448
+      "duration_ms": 515.2913230000995,
+      "server_ready_duration_ms": 506.54398600012064,
+      "liveness_duration_ms": 515.2913230000995,
+      "readiness_duration_ms": 516.5996580000501,
+      "rss_bytes": 130023424,
+      "memory_usage": {
+        "rss_bytes": 125579264,
+        "heap_total_bytes": 70287360,
+        "heap_used_bytes": 44074280,
+        "external_bytes": 21418474,
+        "array_buffers_bytes": 18533661
+      }
     },
     {
       "storage": "memory",
       "implementation": "nest-fastify",
       "repetition": 5,
-      "duration_ms": 336.8550070000001,
-      "server_ready_duration_ms": 329.66306799999984,
-      "liveness_duration_ms": 336.8550070000001,
-      "readiness_duration_ms": 337.99069599999893,
-      "rss_bytes": 127918080
+      "duration_ms": 421.5443329999689,
+      "server_ready_duration_ms": 414.4041800000705,
+      "liveness_duration_ms": 421.5443329999689,
+      "readiness_duration_ms": 422.8264790000394,
+      "rss_bytes": 131354624,
+      "memory_usage": {
+        "rss_bytes": 127868928,
+        "heap_total_bytes": 70025216,
+        "heap_used_bytes": 44079384,
+        "external_bytes": 21418474,
+        "array_buffers_bytes": 18533661
+      }
     },
     {
       "storage": "memory",
       "implementation": "nest-fastify",
       "repetition": 6,
-      "duration_ms": 355.81611800000064,
-      "server_ready_duration_ms": 347.8919160000005,
-      "liveness_duration_ms": 355.81611800000064,
-      "readiness_duration_ms": 357.2056380000013,
-      "rss_bytes": 130826240
+      "duration_ms": 434.780065999832,
+      "server_ready_duration_ms": 427.5518549999688,
+      "liveness_duration_ms": 434.780065999832,
+      "readiness_duration_ms": 435.88499699998647,
+      "rss_bytes": 131444736,
+      "memory_usage": {
+        "rss_bytes": 127594496,
+        "heap_total_bytes": 70025216,
+        "heap_used_bytes": 44075936,
+        "external_bytes": 21418474,
+        "array_buffers_bytes": 18533661
+      }
     },
     {
       "storage": "memory",
       "implementation": "nest-fastify",
       "repetition": 7,
-      "duration_ms": 359.46787699999913,
-      "server_ready_duration_ms": 352.96886300000006,
-      "liveness_duration_ms": 359.46787699999913,
-      "readiness_duration_ms": 360.71977100000004,
-      "rss_bytes": 127217664
+      "duration_ms": 398.00167600018904,
+      "server_ready_duration_ms": 390.2102560000494,
+      "liveness_duration_ms": 398.00167600018904,
+      "readiness_duration_ms": 399.39096800005063,
+      "rss_bytes": 129998848,
+      "memory_usage": {
+        "rss_bytes": 125915136,
+        "heap_total_bytes": 70025216,
+        "heap_used_bytes": 44070240,
+        "external_bytes": 21418474,
+        "array_buffers_bytes": 18533661
+      }
     },
     {
       "storage": "memory",
       "implementation": "nest-fastify",
       "repetition": 8,
-      "duration_ms": 349.55266699999993,
-      "server_ready_duration_ms": 342.60889900000075,
-      "liveness_duration_ms": 349.55266699999993,
-      "readiness_duration_ms": 351.3043629999993,
-      "rss_bytes": 127864832
+      "duration_ms": 402.3072379999794,
+      "server_ready_duration_ms": 395.6192990001291,
+      "liveness_duration_ms": 402.3072379999794,
+      "readiness_duration_ms": 403.507055999944,
+      "rss_bytes": 129458176,
+      "memory_usage": {
+        "rss_bytes": 124870656,
+        "heap_total_bytes": 70025216,
+        "heap_used_bytes": 44074584,
+        "external_bytes": 21418474,
+        "array_buffers_bytes": 18533661
+      }
     },
     {
       "storage": "memory",
       "implementation": "nest-fastify",
       "repetition": 9,
-      "duration_ms": 334.0028820000007,
-      "server_ready_duration_ms": 327.5357070000009,
-      "liveness_duration_ms": 334.0028820000007,
-      "readiness_duration_ms": 335.3219939999999,
-      "rss_bytes": 128270336
+      "duration_ms": 502.1508770000655,
+      "server_ready_duration_ms": 495.3044129998889,
+      "liveness_duration_ms": 502.1508770000655,
+      "readiness_duration_ms": 503.4465220000129,
+      "rss_bytes": 130076672,
+      "memory_usage": {
+        "rss_bytes": 126115840,
+        "heap_total_bytes": 70025216,
+        "heap_used_bytes": 43934944,
+        "external_bytes": 21418145,
+        "array_buffers_bytes": 18533332
+      }
     },
     {
       "storage": "memory",
       "implementation": "nest-fastify",
       "repetition": 10,
-      "duration_ms": 361.25406100000146,
-      "server_ready_duration_ms": 351.5305850000004,
-      "liveness_duration_ms": 361.25406100000146,
-      "readiness_duration_ms": 363.24865900000077,
-      "rss_bytes": 127983616
+      "duration_ms": 384.25072100013494,
+      "server_ready_duration_ms": 377.63297999999486,
+      "liveness_duration_ms": 384.25072100013494,
+      "readiness_duration_ms": 385.3553930001799,
+      "rss_bytes": 130142208,
+      "memory_usage": {
+        "rss_bytes": 126386176,
+        "heap_total_bytes": 70287360,
+        "heap_used_bytes": 44071096,
+        "external_bytes": 21418474,
+        "array_buffers_bytes": 18533661
+      }
     },
     {
       "storage": "mongo",
       "implementation": "express",
       "repetition": 1,
-      "duration_ms": 571.4489239999984,
-      "server_ready_duration_ms": 564.7977750000009,
-      "liveness_duration_ms": 571.4489239999984,
-      "readiness_duration_ms": 572.6082019999994,
-      "rss_bytes": 110546944
+      "duration_ms": 550.1926259999163,
+      "server_ready_duration_ms": 544.1377689996734,
+      "liveness_duration_ms": 550.1926259999163,
+      "readiness_duration_ms": 551.6513749998994,
+      "rss_bytes": 110968832,
+      "memory_usage": {
+        "rss_bytes": 105426944,
+        "heap_total_bytes": 61480960,
+        "heap_used_bytes": 30352728,
+        "external_bytes": 21248802,
+        "array_buffers_bytes": 18546064
+      }
     },
     {
       "storage": "mongo",
       "implementation": "express",
       "repetition": 2,
-      "duration_ms": 241.5586719999992,
-      "server_ready_duration_ms": 235.6718860000001,
-      "liveness_duration_ms": 241.5586719999992,
-      "readiness_duration_ms": 243.14713400000073,
-      "rss_bytes": 110284800
+      "duration_ms": 254.27647900022566,
+      "server_ready_duration_ms": 248.55290000000969,
+      "liveness_duration_ms": 254.27647900022566,
+      "readiness_duration_ms": 255.32006200030446,
+      "rss_bytes": 112418816,
+      "memory_usage": {
+        "rss_bytes": 109146112,
+        "heap_total_bytes": 62005248,
+        "heap_used_bytes": 28307288,
+        "external_bytes": 21238480,
+        "array_buffers_bytes": 18535742
+      }
     },
     {
       "storage": "mongo",
       "implementation": "express",
       "repetition": 3,
-      "duration_ms": 230.43313599999965,
-      "server_ready_duration_ms": 224.14267500000096,
-      "liveness_duration_ms": 230.43313599999965,
-      "readiness_duration_ms": 231.74676799999907,
-      "rss_bytes": 110358528
+      "duration_ms": 243.65021200012416,
+      "server_ready_duration_ms": 237.3392739999108,
+      "liveness_duration_ms": 243.65021200012416,
+      "readiness_duration_ms": 245.3262930000201,
+      "rss_bytes": 111341568,
+      "memory_usage": {
+        "rss_bytes": 108449792,
+        "heap_total_bytes": 61743104,
+        "heap_used_bytes": 30455288,
+        "external_bytes": 21248127,
+        "array_buffers_bytes": 18545389
+      }
     },
     {
       "storage": "mongo",
       "implementation": "express",
       "repetition": 4,
-      "duration_ms": 272.7742180000005,
-      "server_ready_duration_ms": 267.27341799999886,
-      "liveness_duration_ms": 272.7742180000005,
-      "readiness_duration_ms": 273.909047000001,
-      "rss_bytes": 110804992
+      "duration_ms": 245.6058440003544,
+      "server_ready_duration_ms": 239.82309699989855,
+      "liveness_duration_ms": 245.6058440003544,
+      "readiness_duration_ms": 246.61887800041586,
+      "rss_bytes": 111521792,
+      "memory_usage": {
+        "rss_bytes": 108068864,
+        "heap_total_bytes": 62005248,
+        "heap_used_bytes": 28993064,
+        "external_bytes": 21243342,
+        "array_buffers_bytes": 18540604
+      }
     },
     {
       "storage": "mongo",
       "implementation": "express",
       "repetition": 5,
-      "duration_ms": 226.14450299999953,
-      "server_ready_duration_ms": 220.61105399999906,
-      "liveness_duration_ms": 226.14450299999953,
-      "readiness_duration_ms": 227.44710499999928,
-      "rss_bytes": 109887488
+      "duration_ms": 247.11153099965304,
+      "server_ready_duration_ms": 241.40000200038776,
+      "liveness_duration_ms": 247.11153099965304,
+      "readiness_duration_ms": 248.11227599997073,
+      "rss_bytes": 110743552,
+      "memory_usage": {
+        "rss_bytes": 106885120,
+        "heap_total_bytes": 61743104,
+        "heap_used_bytes": 29934128,
+        "external_bytes": 21247203,
+        "array_buffers_bytes": 18544465
+      }
     },
     {
       "storage": "mongo",
       "implementation": "express",
       "repetition": 6,
-      "duration_ms": 225.767296,
-      "server_ready_duration_ms": 219.65502800000104,
-      "liveness_duration_ms": 225.767296,
-      "readiness_duration_ms": 227.10454700000082,
-      "rss_bytes": 110313472
+      "duration_ms": 242.10586699983105,
+      "server_ready_duration_ms": 236.5026140003465,
+      "liveness_duration_ms": 242.10586699983105,
+      "readiness_duration_ms": 243.08708300022408,
+      "rss_bytes": 111718400,
+      "memory_usage": {
+        "rss_bytes": 107409408,
+        "heap_total_bytes": 61743104,
+        "heap_used_bytes": 29953304,
+        "external_bytes": 21247203,
+        "array_buffers_bytes": 18544465
+      }
     },
     {
       "storage": "mongo",
       "implementation": "express",
       "repetition": 7,
-      "duration_ms": 252.66928899999948,
-      "server_ready_duration_ms": 246.34827799999948,
-      "liveness_duration_ms": 252.66928899999948,
-      "readiness_duration_ms": 254.17537400000037,
-      "rss_bytes": 110202880
+      "duration_ms": 241.44021000014618,
+      "server_ready_duration_ms": 235.3682329999283,
+      "liveness_duration_ms": 241.44021000014618,
+      "readiness_duration_ms": 242.39344700006768,
+      "rss_bytes": 111611904,
+      "memory_usage": {
+        "rss_bytes": 108089344,
+        "heap_total_bytes": 62005248,
+        "heap_used_bytes": 29959632,
+        "external_bytes": 21247203,
+        "array_buffers_bytes": 18544465
+      }
     },
     {
       "storage": "mongo",
       "implementation": "express",
       "repetition": 8,
-      "duration_ms": 248.25878899999952,
-      "server_ready_duration_ms": 241.25764399999935,
-      "liveness_duration_ms": 248.25878899999952,
-      "readiness_duration_ms": 249.88530999999966,
-      "rss_bytes": 111026176
+      "duration_ms": 269.03495100000873,
+      "server_ready_duration_ms": 263.20565599994734,
+      "liveness_duration_ms": 269.03495100000873,
+      "readiness_duration_ms": 270.35444499971345,
+      "rss_bytes": 110948352,
+      "memory_usage": {
+        "rss_bytes": 107311104,
+        "heap_total_bytes": 61480960,
+        "heap_used_bytes": 30112216,
+        "external_bytes": 21247366,
+        "array_buffers_bytes": 18544628
+      }
     },
     {
       "storage": "mongo",
       "implementation": "express",
       "repetition": 9,
-      "duration_ms": 257.75994399999945,
-      "server_ready_duration_ms": 251.2371409999996,
-      "liveness_duration_ms": 257.75994399999945,
-      "readiness_duration_ms": 259.4862409999987,
-      "rss_bytes": 110252032
+      "duration_ms": 267.2857119999826,
+      "server_ready_duration_ms": 261.7233380000107,
+      "liveness_duration_ms": 267.2857119999826,
+      "readiness_duration_ms": 268.25291799986735,
+      "rss_bytes": 111595520,
+      "memory_usage": {
+        "rss_bytes": 108548096,
+        "heap_total_bytes": 61743104,
+        "heap_used_bytes": 30518160,
+        "external_bytes": 21248127,
+        "array_buffers_bytes": 18545389
+      }
     },
     {
       "storage": "mongo",
       "implementation": "express",
       "repetition": 10,
-      "duration_ms": 340.85837399999946,
-      "server_ready_duration_ms": 327.6918229999992,
-      "liveness_duration_ms": 340.85837399999946,
-      "readiness_duration_ms": 343.3105250000008,
-      "rss_bytes": 110657536
+      "duration_ms": 266.3486659997143,
+      "server_ready_duration_ms": 260.5069909999147,
+      "liveness_duration_ms": 266.3486659997143,
+      "readiness_duration_ms": 267.49234599992633,
+      "rss_bytes": 110923776,
+      "memory_usage": {
+        "rss_bytes": 107220992,
+        "heap_total_bytes": 61480960,
+        "heap_used_bytes": 30792792,
+        "external_bytes": 21248888,
+        "array_buffers_bytes": 18546150
+      }
     },
     {
       "storage": "mongo",
       "implementation": "nest-fastify",
       "repetition": 1,
-      "duration_ms": 645.324402000002,
-      "server_ready_duration_ms": 639.0159509999994,
-      "liveness_duration_ms": 645.324402000002,
-      "readiness_duration_ms": 646.6200250000002,
-      "rss_bytes": 129372160
+      "duration_ms": 692.3832319998182,
+      "server_ready_duration_ms": 685.8284920002334,
+      "liveness_duration_ms": 692.3832319998182,
+      "readiness_duration_ms": 693.3954670000821,
+      "rss_bytes": 130301952,
+      "memory_usage": {
+        "rss_bytes": 126296064,
+        "heap_total_bytes": 70811648,
+        "heap_used_bytes": 44893048,
+        "external_bytes": 21433455,
+        "array_buffers_bytes": 18548642
+      }
     },
     {
       "storage": "mongo",
       "implementation": "nest-fastify",
       "repetition": 2,
-      "duration_ms": 384.919883999999,
-      "server_ready_duration_ms": 377.6182800000024,
-      "liveness_duration_ms": 384.919883999999,
-      "readiness_duration_ms": 386.782895999997,
-      "rss_bytes": 128180224
+      "duration_ms": 376.2306359997019,
+      "server_ready_duration_ms": 369.7149649998173,
+      "liveness_duration_ms": 376.2306359997019,
+      "readiness_duration_ms": 377.3896849998273,
+      "rss_bytes": 130613248,
+      "memory_usage": {
+        "rss_bytes": 127672320,
+        "heap_total_bytes": 70549504,
+        "heap_used_bytes": 44683816,
+        "external_bytes": 21432019,
+        "array_buffers_bytes": 18547206
+      }
     },
     {
       "storage": "mongo",
       "implementation": "nest-fastify",
       "repetition": 3,
-      "duration_ms": 337.4134699999995,
-      "server_ready_duration_ms": 331.3810400000002,
-      "liveness_duration_ms": 337.4134699999995,
-      "readiness_duration_ms": 340.02875499999936,
-      "rss_bytes": 128339968
+      "duration_ms": 390.3869889997877,
+      "server_ready_duration_ms": 384.0374520001933,
+      "liveness_duration_ms": 390.3869889997877,
+      "readiness_duration_ms": 391.63992499979213,
+      "rss_bytes": 130850816,
+      "memory_usage": {
+        "rss_bytes": 126197760,
+        "heap_total_bytes": 71073792,
+        "heap_used_bytes": 44603696,
+        "external_bytes": 21432019,
+        "array_buffers_bytes": 18547206
+      }
     },
     {
       "storage": "mongo",
       "implementation": "nest-fastify",
       "repetition": 4,
-      "duration_ms": 329.5103479999998,
-      "server_ready_duration_ms": 323.3355120000015,
-      "liveness_duration_ms": 329.5103479999998,
-      "readiness_duration_ms": 330.56517899999744,
-      "rss_bytes": 128544768
+      "duration_ms": 376.40821000002325,
+      "server_ready_duration_ms": 367.3815069999546,
+      "liveness_duration_ms": 376.40821000002325,
+      "readiness_duration_ms": 377.49255200009793,
+      "rss_bytes": 130355200,
+      "memory_usage": {
+        "rss_bytes": 127733760,
+        "heap_total_bytes": 70549504,
+        "heap_used_bytes": 44654208,
+        "external_bytes": 21432019,
+        "array_buffers_bytes": 18547206
+      }
     },
     {
       "storage": "mongo",
       "implementation": "nest-fastify",
       "repetition": 5,
-      "duration_ms": 348.85822499999995,
-      "server_ready_duration_ms": 342.0764310000013,
-      "liveness_duration_ms": 348.85822499999995,
-      "readiness_duration_ms": 350.78125499999805,
-      "rss_bytes": 128061440
+      "duration_ms": 379.75192200019956,
+      "server_ready_duration_ms": 372.7504079998471,
+      "liveness_duration_ms": 379.75192200019956,
+      "readiness_duration_ms": 380.8762529999949,
+      "rss_bytes": 130846720,
+      "memory_usage": {
+        "rss_bytes": 128270336,
+        "heap_total_bytes": 70287360,
+        "heap_used_bytes": 44679312,
+        "external_bytes": 21432019,
+        "array_buffers_bytes": 18547206
+      }
     },
     {
       "storage": "mongo",
       "implementation": "nest-fastify",
       "repetition": 6,
-      "duration_ms": 373.28048800000033,
-      "server_ready_duration_ms": 366.64824900000167,
-      "liveness_duration_ms": 373.28048800000033,
-      "readiness_duration_ms": 374.3510490000008,
-      "rss_bytes": 130490368
+      "duration_ms": 400.7280759997666,
+      "server_ready_duration_ms": 394.1749260001816,
+      "liveness_duration_ms": 400.7280759997666,
+      "readiness_duration_ms": 401.8363769999705,
+      "rss_bytes": 131186688,
+      "memory_usage": {
+        "rss_bytes": 126963712,
+        "heap_total_bytes": 70549504,
+        "heap_used_bytes": 44612440,
+        "external_bytes": 21432019,
+        "array_buffers_bytes": 18547206
+      }
     },
     {
       "storage": "mongo",
       "implementation": "nest-fastify",
       "repetition": 7,
-      "duration_ms": 348.9848610000008,
-      "server_ready_duration_ms": 342.11061999999947,
-      "liveness_duration_ms": 348.9848610000008,
-      "readiness_duration_ms": 350.3088530000023,
-      "rss_bytes": 128327680
+      "duration_ms": 372.4873080002144,
+      "server_ready_duration_ms": 365.6741970004514,
+      "liveness_duration_ms": 372.4873080002144,
+      "readiness_duration_ms": 373.7875720001757,
+      "rss_bytes": 129921024,
+      "memory_usage": {
+        "rss_bytes": 127074304,
+        "heap_total_bytes": 70549504,
+        "heap_used_bytes": 44657576,
+        "external_bytes": 21432019,
+        "array_buffers_bytes": 18547206
+      }
     },
     {
       "storage": "mongo",
       "implementation": "nest-fastify",
       "repetition": 8,
-      "duration_ms": 340.2559089999995,
-      "server_ready_duration_ms": 334.2892949999987,
-      "liveness_duration_ms": 340.2559089999995,
-      "readiness_duration_ms": 341.3387589999984,
-      "rss_bytes": 128671744
+      "duration_ms": 374.0759620000608,
+      "server_ready_duration_ms": 367.6962060001679,
+      "liveness_duration_ms": 374.0759620000608,
+      "readiness_duration_ms": 375.2418510001153,
+      "rss_bytes": 131031040,
+      "memory_usage": {
+        "rss_bytes": 128159744,
+        "heap_total_bytes": 70287360,
+        "heap_used_bytes": 44665192,
+        "external_bytes": 21432019,
+        "array_buffers_bytes": 18547206
+      }
     },
     {
       "storage": "mongo",
       "implementation": "nest-fastify",
       "repetition": 9,
-      "duration_ms": 407.37446999999884,
-      "server_ready_duration_ms": 400.24575900000127,
-      "liveness_duration_ms": 407.37446999999884,
-      "readiness_duration_ms": 409.52781200000027,
-      "rss_bytes": 128520192
+      "duration_ms": 372.152828999795,
+      "server_ready_duration_ms": 365.51361300004646,
+      "liveness_duration_ms": 372.152828999795,
+      "readiness_duration_ms": 373.2181019997224,
+      "rss_bytes": 130166784,
+      "memory_usage": {
+        "rss_bytes": 125952000,
+        "heap_total_bytes": 70287360,
+        "heap_used_bytes": 44671040,
+        "external_bytes": 21432019,
+        "array_buffers_bytes": 18547206
+      }
     },
     {
       "storage": "mongo",
       "implementation": "nest-fastify",
       "repetition": 10,
-      "duration_ms": 333.2749729999996,
-      "server_ready_duration_ms": 327.1510449999987,
-      "liveness_duration_ms": 333.2749729999996,
-      "readiness_duration_ms": 334.382701999999,
-      "rss_bytes": 128712704
+      "duration_ms": 373.24168099975213,
+      "server_ready_duration_ms": 366.5688350000419,
+      "liveness_duration_ms": 373.24168099975213,
+      "readiness_duration_ms": 374.65166099974886,
+      "rss_bytes": 130113536,
+      "memory_usage": {
+        "rss_bytes": 126820352,
+        "heap_total_bytes": 70549504,
+        "heap_used_bytes": 44678520,
+        "external_bytes": 21432019,
+        "array_buffers_bytes": 18547206
+      }
+    }
+  ],
+  "memory_diagnostics": [
+    {
+      "storage": "memory",
+      "scenario": "liveness",
+      "implementation": "express",
+      "before_gc": {
+        "rss_bytes": 225210368,
+        "heap_total_bytes": 172105728,
+        "heap_used_bytes": 52219632,
+        "external_bytes": 22861589,
+        "array_buffers_bytes": 20162810
+      },
+      "after_gc": {
+        "rss_bytes": 225210368,
+        "heap_total_bytes": 31334400,
+        "heap_used_bytes": 24331464,
+        "external_bytes": 21287424,
+        "array_buffers_bytes": 18588645
+      }
+    },
+    {
+      "storage": "memory",
+      "scenario": "liveness",
+      "implementation": "nest-fastify",
+      "before_gc": {
+        "rss_bytes": 378564608,
+        "heap_total_bytes": 237535232,
+        "heap_used_bytes": 106883440,
+        "external_bytes": 21928836,
+        "array_buffers_bytes": 19048502
+      },
+      "after_gc": {
+        "rss_bytes": 378564608,
+        "heap_total_bytes": 173309952,
+        "heap_used_bytes": 32429736,
+        "external_bytes": 21535571,
+        "array_buffers_bytes": 18655237
+      }
+    },
+    {
+      "storage": "memory",
+      "scenario": "task-list",
+      "implementation": "express",
+      "before_gc": {
+        "rss_bytes": 350588928,
+        "heap_total_bytes": 215621632,
+        "heap_used_bytes": 95321640,
+        "external_bytes": 33316420,
+        "array_buffers_bytes": 30617641
+      },
+      "after_gc": {
+        "rss_bytes": 350588928,
+        "heap_total_bytes": 33693696,
+        "heap_used_bytes": 25714880,
+        "external_bytes": 21680800,
+        "array_buffers_bytes": 18982021
+      }
+    },
+    {
+      "storage": "memory",
+      "scenario": "task-list",
+      "implementation": "nest-fastify",
+      "before_gc": {
+        "rss_bytes": 381796352,
+        "heap_total_bytes": 264798208,
+        "heap_used_bytes": 151709680,
+        "external_bytes": 35941257,
+        "array_buffers_bytes": 33060923
+      },
+      "after_gc": {
+        "rss_bytes": 380981248,
+        "heap_total_bytes": 175144960,
+        "heap_used_bytes": 33898800,
+        "external_bytes": 21863411,
+        "array_buffers_bytes": 18983077
+      }
+    },
+    {
+      "storage": "memory",
+      "scenario": "task-create",
+      "implementation": "express",
+      "before_gc": {
+        "rss_bytes": 277311488,
+        "heap_total_bytes": 180494336,
+        "heap_used_bytes": 41531216,
+        "external_bytes": 23214506,
+        "array_buffers_bytes": 20515727
+      },
+      "after_gc": {
+        "rss_bytes": 275357696,
+        "heap_total_bytes": 36315136,
+        "heap_used_bytes": 27193528,
+        "external_bytes": 21418657,
+        "array_buffers_bytes": 18719878
+      }
+    },
+    {
+      "storage": "memory",
+      "scenario": "task-create",
+      "implementation": "nest-fastify",
+      "before_gc": {
+        "rss_bytes": 360820736,
+        "heap_total_bytes": 252215296,
+        "heap_used_bytes": 159137152,
+        "external_bytes": 32756105,
+        "array_buffers_bytes": 29875771
+      },
+      "after_gc": {
+        "rss_bytes": 360820736,
+        "heap_total_bytes": 178028544,
+        "heap_used_bytes": 34835728,
+        "external_bytes": 21666804,
+        "array_buffers_bytes": 18786470
+      }
+    },
+    {
+      "storage": "mongo",
+      "scenario": "liveness",
+      "implementation": "express",
+      "before_gc": {
+        "rss_bytes": 233357312,
+        "heap_total_bytes": 169222144,
+        "heap_used_bytes": 61645280,
+        "external_bytes": 21421527,
+        "array_buffers_bytes": 18722748
+      },
+      "after_gc": {
+        "rss_bytes": 233357312,
+        "heap_total_bytes": 31072256,
+        "heap_used_bytes": 24492680,
+        "external_bytes": 21287425,
+        "array_buffers_bytes": 18588646
+      }
+    },
+    {
+      "storage": "mongo",
+      "scenario": "liveness",
+      "implementation": "nest-fastify",
+      "before_gc": {
+        "rss_bytes": 362905600,
+        "heap_total_bytes": 203194368,
+        "heap_used_bytes": 42212320,
+        "external_bytes": 21601158,
+        "array_buffers_bytes": 18720824
+      },
+      "after_gc": {
+        "rss_bytes": 362905600,
+        "heap_total_bytes": 173834240,
+        "heap_used_bytes": 32596872,
+        "external_bytes": 21601108,
+        "array_buffers_bytes": 18720774
+      }
+    },
+    {
+      "storage": "mongo",
+      "scenario": "task-list",
+      "implementation": "express",
+      "before_gc": {
+        "rss_bytes": 342515712,
+        "heap_total_bytes": 189145088,
+        "heap_used_bytes": 73238608,
+        "external_bytes": 26099721,
+        "array_buffers_bytes": 23400942
+      },
+      "after_gc": {
+        "rss_bytes": 342515712,
+        "heap_total_bytes": 34480128,
+        "heap_used_bytes": 25957264,
+        "external_bytes": 21746337,
+        "array_buffers_bytes": 19047558
+      }
+    },
+    {
+      "storage": "mongo",
+      "scenario": "task-list",
+      "implementation": "nest-fastify",
+      "before_gc": {
+        "rss_bytes": 399790080,
+        "heap_total_bytes": 286294016,
+        "heap_used_bytes": 156520936,
+        "external_bytes": 38948715,
+        "array_buffers_bytes": 36068381
+      },
+      "after_gc": {
+        "rss_bytes": 399790080,
+        "heap_total_bytes": 176455680,
+        "heap_used_bytes": 34172120,
+        "external_bytes": 22060020,
+        "array_buffers_bytes": 19179686
+      }
+    },
+    {
+      "storage": "mongo",
+      "scenario": "task-create",
+      "implementation": "express",
+      "before_gc": {
+        "rss_bytes": 260481024,
+        "heap_total_bytes": 64888832,
+        "heap_used_bytes": 29957904,
+        "external_bytes": 21486429,
+        "array_buffers_bytes": 18787650
+      },
+      "after_gc": {
+        "rss_bytes": 260481024,
+        "heap_total_bytes": 35790848,
+        "heap_used_bytes": 27400144,
+        "external_bytes": 21418657,
+        "array_buffers_bytes": 18719878
+      }
+    },
+    {
+      "storage": "mongo",
+      "scenario": "task-create",
+      "implementation": "nest-fastify",
+      "before_gc": {
+        "rss_bytes": 377589760,
+        "heap_total_bytes": 261652480,
+        "heap_used_bytes": 164552776,
+        "external_bytes": 35798099,
+        "array_buffers_bytes": 32917765
+      },
+      "after_gc": {
+        "rss_bytes": 377589760,
+        "heap_total_bytes": 178028544,
+        "heap_used_bytes": 35043080,
+        "external_bytes": 21666804,
+        "array_buffers_bytes": 18786470
+      }
     }
   ],
   "limitations": [
     "Synthetic single-host benchmark; not production traffic evidence.",
     "Ephemeral Mongo processes do not reproduce production storage or network latency.",
     "Task-create uses unique idempotency keys and controlled payloads."
-  ],
-  "cold_start_generated_at": "2026-08-23T15:20:58.207Z",
-  "cold_start_candidate_sha": "0c27d31fc6011c0e43bd205cb79b15d1f3a2b1ce"
+  ]
 }

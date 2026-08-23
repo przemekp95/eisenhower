@@ -11,6 +11,8 @@ node benchmarks/http-migration/runner.mjs \
 
 The benchmark is synthetic and deliberately does not claim production behavior. `memory` is an isolated standalone MongoMemoryServer; `mongo` is an isolated one-node MongoMemoryReplSet with transaction support.
 
+To regenerate only the Markdown interpretation from existing raw JSON, use `--report-only true`. Load regressions are evaluated as the median of paired Express/Nest repetition deltas, not as a ratio of independently aggregated medians.
+
 Cold start records process-to-server-ready, liveness response and readiness response separately. To refresh only the 40 cold-start samples without repeating the load matrix:
 
 ```bash

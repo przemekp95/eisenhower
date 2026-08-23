@@ -63,6 +63,7 @@ def test_benchmark_report_is_explicitly_synthetic_and_reports_regressions():
   assert "p50" in report and "p95" in report and "p99" in report
   assert "throughput" in report.lower() and "RSS" in report
   assert "wymuszonym GC" in report and "heap po GC" in report
+  assert "mediana delt sparowanych powtórzeń" in report
   assert "cold start" in report.lower()
   assert "liveness" in report.lower() and "readiness" in report.lower()
   assert "regres" in report.lower()

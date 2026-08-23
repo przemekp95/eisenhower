@@ -179,13 +179,20 @@ async function main() {
   const storageValues = String(args.storage ?? 'memory,mongo').split(',');
   const implementations = ['express', 'nest-fastify'];
   const candidateSha = command('git', ['rev-parse', 'HEAD'], { capture: true });
-  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'eisenhower-http-benchmark-'));
   const candidateRoot = path.join(root, 'backend-node');
   const outputPath = path.resolve(root, args.output ?? 'benchmarks/results/nest-fastify-migration.json');
   const reportPath = path.resolve(
     root,
     args.report ?? 'docs/benchmarks/2026-08-23-express-vs-nest-fastify.md',
   );
+  if (args['report-only'] === 'true') {
+    const existing = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+    fs.mkdirSync(path.dirname(reportPath), { recursive: true });
+    fs.writeFileSync(reportPath, renderReport(existing));
+    process.stdout.write(`Report refreshed from ${outputPath}\n`);
+    return;
+  }
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'eisenhower-http-benchmark-'));
   const samples = [];
   const coldSamples = [];
   const memoryDiagnostics = [];

@@ -6,6 +6,19 @@ function median(values) {
 
 const fixed = (value) => Number(value).toFixed(2);
 
+function medianPairedDelta(samples, field) {
+  const repetitions = [...new Set(samples.map((sample) => sample.repetition))];
+  return median(repetitions.map((repetition) => {
+    const express = samples.find((sample) => (
+      sample.repetition === repetition && sample.implementation === 'express'
+    ));
+    const nest = samples.find((sample) => (
+      sample.repetition === repetition && sample.implementation === 'nest-fastify'
+    ));
+    return (nest[field] / express[field] - 1) * 100;
+  }));
+}
+
 export function renderReport(result) {
   const lines = [
     '# Express baseline vs NestJS/Fastify',
@@ -16,7 +29,7 @@ export function renderReport(result) {
     '',
     'To jest syntetyczny benchmark transportu na jednej maszynie i nie jest dowodem produkcyjnym ani pomiarem realnego ruchu. Tryb `memory` używa izolowanego MongoMemoryServer, a `mongo` jednoelementowego MongoMemoryReplSet; oba kontrolują dane, lecz nie odtwarzają sieci, dysku i obciążenia produkcyjnego.',
     '',
-    `Metoda: warm-up ${result.method.warmup_seconds}s, pomiar ${result.method.measurement_seconds}s, ${result.method.repetitions} naprzemiennych powtórzeń, concurrency ${result.method.concurrency.join('/')}, ${result.method.cold_starts} cold startów.`,
+    `Metoda: warm-up ${result.method.warmup_seconds}s, pomiar ${result.method.measurement_seconds}s, ${result.method.repetitions} naprzemiennych powtórzeń, concurrency ${result.method.concurrency.join('/')}, ${result.method.cold_starts} cold startów. Progi regresji load są liczone jako mediana delt sparowanych powtórzeń Express/Nest, co ogranicza błąd wynikający z narastania danych i kolejności pomiaru.`,
     ...(result.cold_start_generated_at ? [
       `Cold start liveness/readiness odświeżono: ${result.cold_start_generated_at}; candidate: \`${result.cold_start_candidate_sha}\`.`,
     ] : []),
@@ -29,13 +42,13 @@ export function renderReport(result) {
     for (const scenario of result.method.scenarios) {
       for (const concurrency of result.method.concurrency) {
         const rows = {};
+        const comparisonSamples = result.samples.filter((sample) => (
+          sample.storage === storage
+          && sample.scenario === scenario
+          && sample.concurrency === concurrency
+        ));
         for (const implementation of result.method.implementations) {
-          const samples = result.samples.filter((sample) => (
-            sample.storage === storage
-            && sample.scenario === scenario
-            && sample.concurrency === concurrency
-            && sample.implementation === implementation
-          ));
+          const samples = comparisonSamples.filter((sample) => sample.implementation === implementation);
           rows[implementation] = {
             throughput: median(samples.map((sample) => sample.throughput_rps)),
             p50: median(samples.map((sample) => sample.p50_ms)),
@@ -46,11 +59,9 @@ export function renderReport(result) {
           const row = rows[implementation];
           lines.push(`| ${storage} | ${scenario} | ${concurrency} | ${implementation} | ${fixed(row.throughput)} | ${fixed(row.p50)} | ${fixed(row.p95)} | ${fixed(row.p99)} | ${fixed(row.rss)} |`);
         }
-        const express = rows.express;
-        const nest = rows['nest-fastify'];
-        const throughputDelta = (nest.throughput / express.throughput - 1) * 100;
-        const p95Delta = (nest.p95 / express.p95 - 1) * 100;
-        const rssDelta = (nest.rss / express.rss - 1) * 100;
+        const throughputDelta = medianPairedDelta(comparisonSamples, 'throughput_rps');
+        const p95Delta = medianPairedDelta(comparisonSamples, 'p95_ms');
+        const rssDelta = medianPairedDelta(comparisonSamples, 'rss_bytes');
         if (throughputDelta < -20 || p95Delta > 20 || rssDelta > 20) {
           regressions.push(`${storage}/${scenario}/c${concurrency}: throughput ${fixed(throughputDelta)}%, p95 ${fixed(p95Delta)}%, RSS ${fixed(rssDelta)}%`);
         }
@@ -71,7 +82,7 @@ export function renderReport(result) {
       lines.push(`| ${diagnostic.storage} | ${diagnostic.scenario} | ${diagnostic.implementation} | ${fixed(diagnostic.before_gc.heap_used_bytes / 1024 / 1024)} | ${fixed(diagnostic.after_gc.heap_used_bytes / 1024 / 1024)} | ${fixed(diagnostic.after_gc.rss_bytes / 1024 / 1024)} |`);
     }
   }
-  lines.push('', '## Cold start', '', '| Storage | Implementacja | server ready median ms | liveness median ms | readiness median ms |', '| --- | --- | ---: | ---: | ---: |');
+  lines.push('', '## Cold start', '', '| Storage | Implementacja | server ready median ms | liveness median ms | readiness median ms | RSS median MiB |', '| --- | --- | ---: | ---: | ---: | ---: |');
   for (const storage of result.method.storage) {
     const coldStartRows = {};
     for (const implementation of result.method.implementations) {
@@ -81,9 +92,10 @@ export function renderReport(result) {
         serverReady: median(samples.map((sample) => sample.server_ready_duration_ms)),
         liveness: median(samples.map((sample) => sample.liveness_duration_ms)),
         readiness: median(samples.map((sample) => sample.readiness_duration_ms)),
+        rss: median(samples.map((sample) => sample.rss_bytes)) / 1024 / 1024,
       };
       const row = coldStartRows[implementation];
-      lines.push(`| ${storage} | ${implementation} | ${fixed(row.serverReady)} | ${fixed(row.liveness)} | ${fixed(row.readiness)} |`);
+      lines.push(`| ${storage} | ${implementation} | ${fixed(row.serverReady)} | ${fixed(row.liveness)} | ${fixed(row.readiness)} | ${fixed(row.rss)} |`);
     }
     for (const [label, field] of [['server-ready', 'serverReady'], ['liveness', 'liveness'], ['readiness', 'readiness']]) {
       const coldStartDelta = (
