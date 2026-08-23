@@ -37,11 +37,19 @@ export class HttpErrorFilter implements ExceptionFilter {
     }
     if (error instanceof HttpException) {
       const status = error.getStatus();
-      if (status === HttpStatus.NOT_FOUND) {
+      const body = error.getResponse();
+      if (
+        status === HttpStatus.NOT_FOUND
+        && typeof body === 'object'
+        && body !== null
+        && 'message' in body
+        && typeof body.message === 'string'
+        && body.message.startsWith('Cannot ')
+      ) {
         response.status(status).send({ error: 'Route not found' });
         return;
       }
-      response.status(status).send(error.getResponse());
+      response.status(status).send(body);
       return;
     }
 

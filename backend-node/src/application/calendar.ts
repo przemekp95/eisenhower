@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
 import {
   CalendarBindingModel,
+  CalendarConnectionModel,
   CalendarConflictModel,
   CalendarDomainAuditModel,
   CalendarMutationReceiptModel,
@@ -95,6 +96,57 @@ async function withReceipt(
 }
 
 export class CalendarApplicationService {
+  async activeConnection(scope: CalendarScope) {
+    return CalendarConnectionModel.findOne({ ...scope, status: 'active' });
+  }
+
+  async status(scope: CalendarScope, canConnect: boolean) {
+    const connection = await CalendarConnectionModel.findOne({ ...scope, status: 'active' }).lean();
+    if (!connection) return { status: 'disconnected', connection: null, canConnect };
+    const [syncState, openConflicts, pendingOutbox, failedSyncCount] = await Promise.all([
+      CalendarSyncStateModel.findOne({ ...scope, connectionId: connection._id }).lean(),
+      CalendarConflictModel.countDocuments({ ...scope, connectionId: connection._id, status: 'open' }),
+      CalendarOutboxModel.countDocuments({ ...scope, status: { $in: ['pending', 'leased'] } }),
+      CalendarOutboxModel.countDocuments({ ...scope, status: 'dead_letter' }),
+    ]);
+    return {
+      status: syncState?.fullResyncRequired ? 'pending' : 'connected',
+      canConnect,
+      connection: { id: connection._id, provider: connection.provider, calendarId: connection.calendarId },
+      syncState: syncState ? {
+        fullResyncRequired: syncState.fullResyncRequired,
+        lastRequestedAt: syncState.lastRequestedAt,
+        lastCompletedAt: syncState.lastCompletedAt,
+      } : null,
+      openConflicts, pendingOutbox, failedSyncCount, syncProblem: failedSyncCount > 0,
+    };
+  }
+
+  listConflicts(scope: CalendarScope) {
+    return CalendarConflictModel.find({ ...scope, status: 'open' }).sort({ createdAt: 1 }).lean();
+  }
+
+  async listDeletedBindings(scope: CalendarScope) {
+    const bindings = await CalendarBindingModel.find({
+      ...scope, providerDeletedAt: { $exists: true },
+    }).sort({ providerDeletedAt: 1 }).lean();
+    const tasks = await TaskModel.find({
+      ...scope, _id: { $in: bindings.map((binding) => binding.taskId) },
+    }).lean();
+    const byId = new Map(tasks.map((task) => [String(task._id), task]));
+    return bindings.flatMap((binding) => {
+      const task = byId.get(String(binding.taskId));
+      return task ? [{
+        _id: binding._id,
+        taskId: binding.taskId,
+        taskTitle: task.title,
+        taskRevision: task.revision ?? 0,
+        providerEventId: binding.providerEventId,
+        providerDeletedAt: binding.providerDeletedAt,
+      }] : [];
+    });
+  }
+
   async resolveProviderDeletion(command: CalendarDeletionResolutionCommand) {
     const digest = fingerprint({ ...command, kind: 'provider_deletion_resolution' });
     const existing = await CalendarMutationReceiptModel.findOne({

@@ -1,14 +1,6 @@
 import { Request, Router } from 'express';
 import { CalendarApplicationService } from '../application/calendar';
-import {
-  CalendarBindingModel,
-  CalendarConflictModel,
-  CalendarConnectionModel,
-  CalendarOutboxModel,
-  CalendarSyncStateModel,
-} from '../models/calendar';
 import { requireScope, SecurityRejectionHandler } from '../auth';
-import { TaskModel } from '../models/task';
 import { GoogleCalendarService } from '../application/googleCalendar';
 
 function scope(request: Request) {
@@ -30,25 +22,7 @@ export function createCalendarRouter(
 
   router.get('/status', requireScope('calendar:read', onReject), async (req, res, next) => {
     try {
-      const connection = await CalendarConnectionModel.findOne({ ...scope(req), status: 'active' }).lean();
-      if (!connection) return res.json({ status: 'disconnected', connection: null, canConnect });
-      const [syncState, openConflicts, pendingOutbox, failedSyncCount] = await Promise.all([
-        CalendarSyncStateModel.findOne({ ...scope(req), connectionId: connection._id }).lean(),
-        CalendarConflictModel.countDocuments({ ...scope(req), connectionId: connection._id, status: 'open' }),
-        CalendarOutboxModel.countDocuments({ ...scope(req), status: { $in: ['pending', 'leased'] } }),
-        CalendarOutboxModel.countDocuments({ ...scope(req), status: 'dead_letter' }),
-      ]);
-      return res.json({
-        status: syncState?.fullResyncRequired ? 'pending' : 'connected',
-        canConnect,
-        connection: { id: connection._id, provider: connection.provider, calendarId: connection.calendarId },
-        syncState: syncState ? {
-          fullResyncRequired: syncState.fullResyncRequired,
-          lastRequestedAt: syncState.lastRequestedAt,
-          lastCompletedAt: syncState.lastCompletedAt,
-        } : null,
-        openConflicts, pendingOutbox, failedSyncCount, syncProblem: failedSyncCount > 0,
-      });
+      return res.json(await service.status(scope(req), canConnect));
     } catch (error) { return next(error); }
   });
 
@@ -56,7 +30,7 @@ export function createCalendarRouter(
     try {
       const operationId = req.get('idempotency-key');
       if (!operationId) return res.status(428).json({ error: 'Idempotency-Key is required' });
-      const connection = await CalendarConnectionModel.findOne({ ...scope(req), status: 'active' });
+      const connection = await service.activeConnection(scope(req));
       if (!connection) return res.status(409).json({ error: 'Calendar is disconnected' });
       return res.status(202).json(await service.requestSync(scope(req), connection.id, operationId));
     } catch (error) {
@@ -78,7 +52,7 @@ export function createCalendarRouter(
       return res.status(400).json({ error: 'A valid event window of at most 180 days is required' });
     }
     try {
-      const connection = await CalendarConnectionModel.findOne({ ...scope(req), status: 'active' });
+      const connection = await service.activeConnection(scope(req));
       if (!connection) return res.status(409).json({ error: 'Calendar is disconnected' });
       return res.json(await provider.candidateEvents(connection.id, { timeMin, timeMax, ...(pageToken ? { pageToken } : {}) }));
     } catch (error) {
@@ -162,38 +136,13 @@ export function createCalendarRouter(
 
   router.get('/conflicts', requireScope('calendar:read', onReject), async (req, res, next) => {
     try {
-      return res.json(await CalendarConflictModel.find({ ...scope(req), status: 'open' }).sort({ createdAt: 1 }).lean());
+      return res.json(await service.listConflicts(scope(req)));
     } catch (error) { return next(error); }
   });
 
   router.get('/deleted-bindings', requireScope('calendar:read', onReject), async (req, res, next) => {
     try {
-      const bindings = await CalendarBindingModel.find({
-          ...scope(req),
-          providerDeletedAt: { $exists: true },
-        })
-          .sort({ providerDeletedAt: 1 })
-          .lean();
-      const tasks = await TaskModel.find({
-        ...scope(req),
-        _id: { $in: bindings.map((binding) => binding.taskId) },
-      }).lean();
-      const byId = new Map(tasks.map((task) => [String(task._id), task]));
-      return res.json(
-        bindings.flatMap((binding) => {
-          const task = byId.get(String(binding.taskId));
-          return task
-            ? [{
-                _id: binding._id,
-                taskId: binding.taskId,
-                taskTitle: task.title,
-                taskRevision: task.revision ?? 0,
-                providerEventId: binding.providerEventId,
-                providerDeletedAt: binding.providerDeletedAt,
-              }]
-            : [];
-        }),
-      );
+      return res.json(await service.listDeletedBindings(scope(req)));
     } catch (error) {
       return next(error);
     }
