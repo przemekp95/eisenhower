@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import re
 import sqlite3
-from typing import Callable
+from typing import Callable, Protocol
 
 
 GENESIS_HASH = "0" * 64
@@ -100,6 +100,12 @@ class AuditEvent:
   def model_copy(self, **updates) -> AuditEvent:
     """Small immutable-copy helper used by callers without accepting open metadata."""
     return replace(self, **updates)
+
+
+class AuditSink(Protocol):
+  """Framework-independent sink required by the HTTP composition boundary."""
+
+  def record(self, event: AuditEvent) -> None: ...
 
 
 @dataclass(frozen=True)

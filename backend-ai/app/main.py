@@ -10,37 +10,47 @@ from uuid import uuid4
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .auth import AuthError, OIDCVerifier, ServiceTokenVerifier, StaticTokenVerifier, TokenVerifier
-from .audit import AuditAction, AuditEvent, AuditOutcome, SqliteAuditSink
-from .config import Settings, load_settings
+from .auth import AuthError, TokenVerifier
+from .audit import AuditAction, AuditEvent, AuditOutcome
+from .config import Settings
 from .device import get_device
 from .defaults import QUADRANT_NAMES
-from .document_extraction.models import OCRRequest
 from .local_model import ModelNotReadyError
-from .generation.models import KnownStatement
-from .jobs import JobConflictError, QueueCapacityExceeded, SqliteJobQueue
+from .jobs import JobConflictError, QueueCapacityExceeded
 from .metrics import MetricsRegistry
-from .ops.response_canary import ResponseCanaryRouter
 from .rag.errors import RerankerUnavailable
 from .rag.models import (
   AccessScope,
   AnalyzeResult,
-  Citation,
   KnowledgeAnswerResponse,
   RetrievalSummary,
 )
 from .service import OCRImageRejectedError, ProviderDisabledError, QuadrantAIService
 from .security_controls import SlidingWindowRateLimiter
-from .runtime_limits import configure_torch_threads
 from .store import TrainingStore
-from .webhooks import WebhookReplayVerifier, parse_webhook_envelope
+from .webhooks import parse_webhook_envelope
+from .http.composition import build_dependencies
+from .http.schemas import (
+  MAX_BATCH_TASKS,
+  MAX_TASK_LENGTH,
+  AnalyzeRequest,
+  BatchRequest,
+  ClassifyRequest,
+  InternalExtractionJobRequest,
+  InternalJobRequest,
+  KnowledgeAnswerApiRequest,
+  KnowledgeSearchRequest,
+  KnowledgeSearchResponse,
+  OCRAcceptedTask,
+  OCRFeedbackRequest,
+  ProviderStateRequest,
+  RagAnalyzeRequest,
+  StrictRequest,
+)
 
 request_logger = logging.getLogger("uvicorn.error")
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
-MAX_TASK_LENGTH = 500
-MAX_BATCH_TASKS = 100
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_WEBHOOK_BYTES = 8 * 1024 * 1024
 WEBHOOK_JOB_TYPES = {
@@ -68,106 +78,6 @@ SENSITIVE_ACTIONS = {
 }
 
 
-class StrictRequest(BaseModel):
-  model_config = ConfigDict(extra="forbid")
-
-
-class RagAnalyzeRequest(StrictRequest):
-  task: str = Field(..., min_length=1, max_length=MAX_TASK_LENGTH)
-  language: Literal["en", "pl"] = "en"
-  known_state: list[KnownStatement] | None = Field(default=None, max_length=40)
-  previous_output_statements: list[KnownStatement] | None = Field(default=None, max_length=40)
-  freshness_requirement: Literal["snapshot_sufficient", "current_world_required"] = (
-    "snapshot_sufficient"
-  )
-
-  @model_validator(mode="after")
-  def statement_ids_are_globally_unique(self):
-    statements = (self.known_state or []) + (self.previous_output_statements or [])
-    identifiers = [item.statement_id for item in statements]
-    if len(identifiers) != len(set(identifiers)):
-      raise ValueError("known and previous-output statement ids must be globally unique")
-    return self
-
-
-class ClassifyRequest(StrictRequest):
-  title: str = Field(..., min_length=1, max_length=MAX_TASK_LENGTH)
-  use_rag: bool = True
-
-
-class AnalyzeRequest(StrictRequest):
-  task: str = Field(..., min_length=1, max_length=MAX_TASK_LENGTH)
-  language: Literal["en", "pl"] = "en"
-
-
-class KnowledgeSearchRequest(StrictRequest):
-  query: str = Field(..., min_length=1, max_length=2000)
-  project_id: str | None = Field(default=None, max_length=128)
-  limit: int = Field(default=5, ge=1, le=20)
-
-
-class KnowledgeSearchResponse(StrictRequest):
-  query: str
-  answer: str | None = None
-  citations: list[Citation] = Field(default_factory=list)
-  retrieval: RetrievalSummary = Field(default_factory=RetrievalSummary)
-  no_answer_reason: str | None = None
-
-
-class KnowledgeAnswerApiRequest(StrictRequest):
-  query: str = Field(..., min_length=1, max_length=2000)
-  language: Literal["en", "pl"] = "en"
-  project_id: str | None = Field(default=None, max_length=128)
-  limit: int = Field(default=5, ge=1, le=20)
-
-
-class InternalJobRequest(StrictRequest):
-  event_id: str = Field(..., min_length=1, max_length=128)
-  tenant_id: str = Field(..., min_length=1, max_length=128)
-  project_id: str | None = Field(default=None, max_length=128)
-  source_version: str = Field(..., min_length=1, max_length=128)
-  source_sequence: int = Field(..., ge=0, le=9_223_372_036_854_775_807)
-  content_checksum: str = Field(..., pattern=r"^sha256:[a-f0-9]{64}$")
-  embedding_version: str = Field(..., min_length=1, max_length=128)
-  chunking_version: str = Field(..., min_length=1, max_length=128)
-  documents: list[dict] | None = Field(default=None, max_length=500)
-  document_ids: list[str] | None = Field(default=None, max_length=5000)
-  dataset_version: str | None = Field(default=None, max_length=128)
-
-
-class InternalExtractionJobRequest(StrictRequest):
-  event_id: str = Field(..., min_length=1, max_length=128)
-  tenant_id: str = Field(..., min_length=1, max_length=128)
-  source: str = Field(..., min_length=1, max_length=4096)
-  scope: AccessScope
-  source_sequence: int = Field(..., ge=0, le=9_223_372_036_854_775_807)
-  ocr: OCRRequest | None = None
-
-  @model_validator(mode="after")
-  def scope_must_match_envelope_tenant(self):
-    if self.tenant_id != self.scope.tenant_id:
-      raise ValueError("envelope tenant does not match access scope")
-    return self
-
-
-class BatchRequest(StrictRequest):
-  tasks: list[str] = Field(default_factory=list, max_length=MAX_BATCH_TASKS)
-
-
-class ProviderStateRequest(StrictRequest):
-  enabled: bool
-
-
-class OCRAcceptedTask(StrictRequest):
-  task: str = Field(..., min_length=1, max_length=MAX_TASK_LENGTH)
-  quadrant: int = Field(..., ge=0, le=3)
-
-
-class OCRFeedbackRequest(StrictRequest):
-  tasks: list[OCRAcceptedTask] = Field(default_factory=list, max_length=MAX_BATCH_TASKS)
-  retrain: bool = True
-
-
 def create_app(
   settings: Settings | None = None,
   store: TrainingStore | None = None,
@@ -178,81 +88,34 @@ def create_app(
   audit_sink=None,
   memory_runtime=None,
 ) -> FastAPI:
-  resolved_settings = settings or load_settings()
-  configure_torch_threads()
-  resolved_store = store or TrainingStore(resolved_settings.training_data_path)
-
-  resolved_ai_service = ai_service or QuadrantAIService(
-      settings=resolved_settings,
-      store=resolved_store,
+  dependencies = build_dependencies(
+    settings=settings,
+    store=store,
+    ai_service=ai_service,
+    rag_service=rag_service,
+    token_verifier=token_verifier,
+    metrics_registry=metrics_registry,
+    audit_sink=audit_sink,
+    memory_runtime=memory_runtime,
   )
-  resolved_rag_service = rag_service
-  if resolved_rag_service is None and resolved_settings.rag_retrieval_enabled:
-    from .rag.bootstrap import build_rag_service
-
-    resolved_rag_service = build_rag_service(resolved_settings, resolved_ai_service)
-  response_canary_router = (
-    ResponseCanaryRouter(
-      resolved_settings.rag_response_promotion_pointer_path,
-      candidate_id=str(resolved_settings.rag_response_candidate_id),
-    )
-    if resolved_settings.rag_response_promotion_pointer_path
-    and resolved_settings.rag_response_candidate_id
-    else None
-  )
-  resolved_settings.model_cache_dir.mkdir(parents=True, exist_ok=True)
-  resolved_verifier = token_verifier
-  if resolved_verifier is None:
-    if resolved_settings.auth_mode == "oidc":
-      resolved_verifier = OIDCVerifier(
-        issuer=str(resolved_settings.oidc_issuer),
-        audience=str(resolved_settings.oidc_audience),
-        jwks_url=resolved_settings.oidc_jwks_url,
-      )
-    else:
-      resolved_verifier = StaticTokenVerifier(
-        user_token=resolved_settings.api_token,
-        admin_token=resolved_settings.admin_token,
-      )
-  internal_verifier = None
-  webhook_verifier = None
-  job_queue = None
-  if resolved_settings.internal_api_token:
-    internal_verifier = ServiceTokenVerifier(
-      token=resolved_settings.internal_api_token,
-      service_id="n8n-ingestion",
-      scopes=["rag:ingest"],
-    )
-    job_queue = SqliteJobQueue(
-      resolved_settings.jobs_database_path,
-      max_queued_jobs=resolved_settings.jobs_max_queued,
-    )
-  if resolved_settings.webhook_secret:
-    webhook_verifier = WebhookReplayVerifier(
-      resolved_settings.model_cache_dir / "webhook-replay.sqlite3",
-      secret=resolved_settings.webhook_secret,
-    )
+  resolved_settings = dependencies.settings
+  resolved_store = dependencies.store
+  resolved_ai_service = dependencies.ai_service
+  resolved_rag_service = dependencies.rag_service
+  resolved_verifier = dependencies.token_verifier
+  internal_verifier = dependencies.internal_verifier
+  webhook_verifier = dependencies.webhook_verifier
+  job_queue = dependencies.job_queue
+  metrics = dependencies.metrics_registry
+  audit = dependencies.audit_sink
+  resolved_memory_runtime = dependencies.memory_runtime
+  response_canary_router = dependencies.response_canary_router
   ai_rate_limiter = SlidingWindowRateLimiter(limit=30, window_seconds=60)
-  metrics = metrics_registry or MetricsRegistry()
-  metrics.set_release_sha(resolved_settings.release_sha)
-  audit = audit_sink or SqliteAuditSink(
-    resolved_settings.audit_database_path,
-    hmac_key=resolved_settings.audit_hmac_key.encode("utf-8"),
-  )
-  resolved_memory_runtime = memory_runtime
   memory_requested = bool(
     resolved_settings.memory_write_enabled
     or resolved_settings.memory_retrieval_enabled
     or resolved_settings.memory_response_enabled
   )
-  if memory_requested and resolved_memory_runtime is None:
-    from .memory.runtime import build_memory_runtime
-
-    resolved_memory_runtime = build_memory_runtime(
-      resolved_settings,
-      resolved_ai_service,
-      audit_sink=audit,
-    )
 
   app = FastAPI(
     title=resolved_settings.app_name,
