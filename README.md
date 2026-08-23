@@ -4,7 +4,7 @@
 This project uses [TaskPlanner](https://github.com/smekai/taskplanner) for task planning.
 <!-- TASKPLANNER:ATTRIBUTION:END -->
 
-Monorepo for the Eisenhower Matrix application with a React web client, a Node/Express API, a FastAPI AI service, and an Expo mobile client.
+Monorepo for the Eisenhower Matrix application with a React web client, a NestJS/Fastify API, a FastAPI AI/RAG service, and an Expo mobile client.
 
 ## Branch Flow
 
@@ -24,8 +24,8 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 ## Services
 
 - `web`: React + Vite frontend for task CRUD and AI tools
-- `backend-node`: REST API for tasks and health checks
-- `backend-ai`: FastAPI service for classification, OCR, and batch analysis
+- `backend-node`: NestJS 11 REST API on the Fastify 5 adapter for tasks, Calendar and health checks
+- `backend-ai`: modular FastAPI service for synchronous AI/RAG, classification and OCR
 - `mobile/eisenhower-matrix`: Expo / React Native client
 - `qdrant`: private rebuildable projection for canonical RAG data
 - `n8n`: mandatory private automation runtime; only the explicit Calendar webhook is routed publicly
@@ -33,6 +33,7 @@ Pull requests into `master` are allowed only from `dev`. While the repository ha
 - `grafana`: mandatory private operational dashboard runtime
 
 Plain-language browser instructions are available in [`docs/WEB_GUIDE.md`](docs/WEB_GUIDE.md).
+FastAPI owns synchronous AI/RAG requests; n8n remains asynchronous-only and is never on the answer path.
 
 ## Runtime Configuration
 
@@ -203,7 +204,7 @@ or public production acceptance.
 - Install dependencies in both packages: `cd backend-node && npm ci` and `cd web && npm ci`
 - Run the suite: `cd web && npm run test:integration`
 
-The integration suite renders the React app in JSDOM, but talks to a real Express API backed by `mongodb-memory-server`, so CRUD is exercised without mocking `./services/api` or `fetch`.
+The integration suite renders the React app in JSDOM, but talks to the real NestJS/Fastify API backed by `mongodb-memory-server`, so CRUD is exercised without mocking `./services/api` or `fetch`.
 
 ## Deployment and release
 
