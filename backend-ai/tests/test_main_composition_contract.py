@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from fastapi import FastAPI
 
 import app.main as app_main
@@ -64,6 +65,10 @@ def test_middleware_order_and_options_match_the_frozen_boundary(tmp_path: Path):
   assert build_contract(tmp_path)["middleware"] == expected["middleware"]
 
 
+@pytest.mark.xfail(
+  reason="Compatibility facade becomes green after all routers move in Task 14.",
+  strict=True,
+)
 def test_main_is_a_compatibility_facade():
   source = Path(app_main.__file__).read_text(encoding="utf-8")
 

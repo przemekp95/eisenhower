@@ -1,22 +1,16 @@
 from __future__ import annotations
 
 import logging
-import re
 import time
-from hashlib import sha256
 from typing import Literal
-from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
-from .auth import AuthError, TokenVerifier
-from .audit import AuditAction, AuditEvent, AuditOutcome
+from .auth import TokenVerifier
 from .config import Settings
 from .device import get_device
 from .defaults import QUADRANT_NAMES
-from .local_model import ModelNotReadyError
 from .jobs import JobConflictError, QueueCapacityExceeded
 from .metrics import MetricsRegistry
 from .rag.errors import RerankerUnavailable
@@ -26,11 +20,12 @@ from .rag.models import (
   KnowledgeAnswerResponse,
   RetrievalSummary,
 )
-from .service import OCRImageRejectedError, ProviderDisabledError, QuadrantAIService
-from .security_controls import SlidingWindowRateLimiter
+from .service import OCRImageRejectedError, QuadrantAIService
 from .store import TrainingStore
 from .webhooks import parse_webhook_envelope
 from .http.composition import build_dependencies
+from .http.errors import register_exception_handlers
+from .http.middleware import register_middleware, require_internal_dispatch, require_operator
 from .http.schemas import (
   MAX_BATCH_TASKS,
   MAX_TASK_LENGTH,
@@ -50,7 +45,6 @@ from .http.schemas import (
 )
 
 request_logger = logging.getLogger("uvicorn.error")
-UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_WEBHOOK_BYTES = 8 * 1024 * 1024
 WEBHOOK_JOB_TYPES = {
@@ -59,25 +53,6 @@ WEBHOOK_JOB_TYPES = {
   "reindex_project": "rag.reindex_project",
   "start_rag_evaluation": "rag.evaluate",
 }
-REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
-SENSITIVE_ACTIONS = {
-  "/add-example": AuditAction.ADMIN_OPERATION,
-  "/retrain": AuditAction.ADMIN_OPERATION,
-  "/learn-feedback": AuditAction.ADMIN_OPERATION,
-  "/learn-ocr-feedback": AuditAction.ADMIN_OPERATION,
-  "/training-data": AuditAction.ADMIN_OPERATION,
-  "/internal/webhooks/n8n/verify": AuditAction.INGEST,
-  "/internal/rag/ingestion/upsert": AuditAction.INGEST,
-  "/internal/rag/ingestion/tombstone": AuditAction.INGEST,
-  "/internal/rag/ingestion/extract": AuditAction.INGEST,
-  "/internal/rag/reindex": AuditAction.REINDEX,
-  "/internal/rag/evaluations": AuditAction.ADMIN_OPERATION,
-  "/v2/memory/prepare": AuditAction.CONSENT_CHANGE,
-  "/v2/memory/confirm": AuditAction.MEMORY_CHANGE,
-  "/v2/memory/export": AuditAction.MEMORY_EXPORT,
-}
-
-
 def create_app(
   settings: Settings | None = None,
   store: TrainingStore | None = None,
@@ -102,15 +77,11 @@ def create_app(
   resolved_store = dependencies.store
   resolved_ai_service = dependencies.ai_service
   resolved_rag_service = dependencies.rag_service
-  resolved_verifier = dependencies.token_verifier
-  internal_verifier = dependencies.internal_verifier
   webhook_verifier = dependencies.webhook_verifier
   job_queue = dependencies.job_queue
   metrics = dependencies.metrics_registry
-  audit = dependencies.audit_sink
   resolved_memory_runtime = dependencies.memory_runtime
   response_canary_router = dependencies.response_canary_router
-  ai_rate_limiter = SlidingWindowRateLimiter(limit=30, window_seconds=60)
   memory_requested = bool(
     resolved_settings.memory_write_enabled
     or resolved_settings.memory_retrieval_enabled
@@ -121,13 +92,7 @@ def create_app(
     title=resolved_settings.app_name,
     description="Import-safe local task classifier with OCR support.",
   )
-  app.add_middleware(
-    CORSMiddleware,
-    allow_origins=list(resolved_settings.cors_allow_origins),
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Request-ID"],
-  )
+  register_middleware(app, dependencies)
   if memory_requested:
     from .memory.routes import create_memory_router
 
@@ -137,182 +102,6 @@ def create_app(
       retrieval_enabled=resolved_settings.memory_retrieval_enabled,
       metrics=metrics,
     ))
-
-  def record_audit(
-    request: Request,
-    action: AuditAction,
-    outcome: AuditOutcome,
-    *,
-    principal=None,
-  ) -> None:
-    resolved_principal = principal or getattr(request.state, "principal", None)
-    try:
-      audit.record(
-        AuditEvent(
-          service="backend-ai",
-          release_sha=resolved_settings.release_sha,
-          event_id=uuid4().hex,
-          request_id=request.state.request_id,
-          action=action,
-          outcome=outcome,
-          tenant_id=(resolved_principal.tenant_id if resolved_principal else "unknown"),
-          actor_id=(resolved_principal.user_id if resolved_principal else "anonymous"),
-          resource_id=request.url.path,
-        )
-      )
-    except Exception:
-      metrics.observe_audit("error")
-      raise
-    metrics.observe_audit(outcome.value)
-
-  @app.middleware("http")
-  async def audit_sensitive_requests(request: Request, call_next):
-    action = SENSITIVE_ACTIONS.get(request.url.path)
-    if action is None and request.url.path.startswith("/providers/"):
-      action = AuditAction.ADMIN_OPERATION
-    if action is None or (
-      request.method not in UNSAFE_METHODS
-      and action is not AuditAction.MEMORY_EXPORT
-    ):
-      return await call_next(request)
-    try:
-      record_audit(request, action, AuditOutcome.ATTEMPT)
-    except Exception:
-      request_logger.error("Required security audit preflight failed", exc_info=True)
-      return JSONResponse(status_code=503, content={"error": "Security audit is unavailable"})
-    try:
-      response = await call_next(request)
-    except Exception:
-      try:
-        record_audit(request, action, AuditOutcome.ERROR)
-      except Exception:
-        request_logger.critical("Security audit result write failed", exc_info=True)
-      raise
-    outcome = AuditOutcome.SUCCESS if response.status_code < 400 else AuditOutcome.REJECTED
-    try:
-      record_audit(request, action, outcome)
-    except Exception:
-      request_logger.critical("Security audit result write failed", exc_info=True)
-      return JSONResponse(status_code=503, content={"error": "Security audit is unavailable"})
-    return response
-
-  @app.middleware("http")
-  async def authenticate_requests(request: Request, call_next):
-    if request.url.path in {"/", "/metrics", "/health/live", "/health/ready"} or request.method == "OPTIONS":
-      return await call_next(request)
-    origin = request.headers.get("origin")
-    if origin and request.method in UNSAFE_METHODS and origin not in resolved_settings.cors_allow_origins:
-      try:
-        record_audit(request, AuditAction.ACL_REJECTION, AuditOutcome.REJECTED)
-      except Exception:
-        return JSONResponse(status_code=503, content={"error": "Security audit is unavailable"})
-      return JSONResponse(status_code=403, content={"error": "Untrusted browser origin"})
-    authorization = request.headers.get("authorization", "")
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not token:
-      try:
-        record_audit(request, AuditAction.AUTH_REJECTION, AuditOutcome.REJECTED)
-      except Exception:
-        return JSONResponse(status_code=503, content={"error": "Security audit is unavailable"})
-      return JSONResponse(
-        status_code=401,
-        content={"error": "Authentication required"},
-        headers={"WWW-Authenticate": "Bearer"},
-      )
-    try:
-      verifier = internal_verifier if request.url.path.startswith("/internal/") else resolved_verifier
-      if verifier is None:
-        raise AuthError("Internal API is disabled")
-      request.state.principal = verifier.verify(token)
-    except AuthError:
-      try:
-        record_audit(request, AuditAction.AUTH_REJECTION, AuditOutcome.REJECTED)
-      except Exception:
-        return JSONResponse(status_code=503, content={"error": "Security audit is unavailable"})
-      return JSONResponse(
-        status_code=401,
-        content={"error": "Access denied"},
-        headers={"WWW-Authenticate": "Bearer"},
-      )
-    principal = request.state.principal
-    if request.url.path in {
-      "/v2/ai/analyze",
-      "/v2/knowledge/search",
-      "/v2/knowledge/answer",
-      "/v2/memory/retrieval-shadow",
-    }:
-      rate_key = f"{principal.tenant_id}:{principal.user_id}:{request.url.path}"
-      if not ai_rate_limiter.allow(rate_key):
-        return JSONResponse(
-          status_code=429,
-          content={"error": "Rate limit exceeded"},
-          headers={"Retry-After": "60"},
-        )
-    response = await call_next(request)
-    if request.url.path.startswith(("/v2/", "/internal/")):
-      subject = sha256(
-        f"{principal.tenant_id}:{principal.user_id}".encode("utf-8")
-      ).hexdigest()[:16]
-      request_logger.info(
-        "audit path=%s method=%s status=%s subject=%s",
-        request.url.path,
-        request.method,
-        response.status_code,
-        subject,
-      )
-    return response
-
-  def require_internal_dispatch(
-    request: Request,
-    envelope: InternalJobRequest | InternalExtractionJobRequest,
-    operation: str,
-  ) -> None:
-    principal = request.state.principal
-    if "rag:ingest" not in principal.scopes or webhook_verifier is None:
-      raise HTTPException(status_code=403, detail="Internal ingestion is disabled.")
-    if envelope.tenant_id not in resolved_settings.internal_allowed_tenants:
-      raise HTTPException(status_code=403, detail="Tenant is outside the connector scope.")
-    signature = request.headers.get("x-eisenhower-signature", "")
-    if not webhook_verifier.verify_internal_dispatch(
-      signature,
-      envelope.event_id,
-      envelope.tenant_id,
-      operation,
-    ):
-      raise HTTPException(status_code=403, detail="Invalid internal dispatch signature.")
-
-  def require_operator(request: Request) -> None:
-    principal = request.state.principal
-    if "ai:operate" not in principal.scopes:
-      raise HTTPException(status_code=403, detail="Operator access required.")
-
-  @app.middleware("http")
-  async def log_requests(request: Request, call_next):
-    if request.url.path in {"/", "/metrics", "/health/live", "/health/ready"} or request.method == "OPTIONS":
-      return await call_next(request)
-
-    started_at = time.perf_counter()
-    response = await call_next(request)
-    duration_ms = int((time.perf_counter() - started_at) * 1000)
-    route = request.scope.get("route")
-    route_path = getattr(route, "path", request.url.path)
-    metrics.observe_http(request.method, route_path, response.status_code, duration_ms / 1000)
-    message = f"backend-ai {request.method} {request.url.path} {response.status_code} {duration_ms}ms"
-
-    if response.status_code >= 500:
-      request_logger.error(message)
-    else:
-      request_logger.info(message)
-
-    return response
-
-  @app.middleware("http")
-  async def bind_request_id(request: Request, call_next):
-    supplied = request.headers.get("x-request-id", "")
-    request.state.request_id = supplied if REQUEST_ID_PATTERN.fullmatch(supplied) else uuid4().hex
-    response = await call_next(request)
-    response.headers["X-Request-ID"] = request.state.request_id
-    return response
 
   @app.get("/")
   def root():
@@ -994,16 +783,5 @@ def create_app(
     require_management_enabled()
     return resolved_ai_service.set_provider_enabled(provider_name, request.enabled)
 
-  @app.exception_handler(HTTPException)
-  async def http_exception_handler(_request, exception: HTTPException):
-    return JSONResponse(status_code=exception.status_code, content={"error": exception.detail})
-
-  @app.exception_handler(ModelNotReadyError)
-  async def model_not_ready_handler(_request, exception: ModelNotReadyError):
-    return JSONResponse(status_code=503, content={"error": str(exception), "code": "model_not_ready"})
-
-  @app.exception_handler(ProviderDisabledError)
-  async def provider_disabled_handler(_request, exception: ProviderDisabledError):
-    return JSONResponse(status_code=503, content={"error": str(exception), "code": "provider_disabled"})
-
+  register_exception_handlers(app, dependencies)
   return app
