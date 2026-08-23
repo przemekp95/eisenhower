@@ -65,3 +65,7 @@ Status values: `express-baseline` (captured oracle), `candidate-green` (differen
 The fixture captures one deterministic real-transport probe per route plus status, complete response headers/body and observable Mongo/audit state. Existing focused suites remain the deeper evidence for happy paths, validation matrices, concurrency, ETags/If-Match, idempotency, pagination, OAuth, provider failures and Calendar durability. Candidate comparisons may normalize only explicitly named generated headers or JSON paths; ordered arrays, error fields, scalar types and unknown fields are never discarded.
 
 During a vertical slice, Express and Nest may temporarily call the same application service. A row becomes `candidate-green` only after the real Fastify adapter matches its fixture and focused suite. It becomes `nest-final` only after the Express handler is deleted and the route has exactly one runtime owner.
+
+## Observed migration deltas
+
+- Security substrate RED (Task 3): the Nest candidate initially had no global security metadata/guard or registered Fastify security pipeline; `tests/nest/security.test.ts` failed first on the absent `security.decorators` module. The next observed adapter mismatch was Fastify's pre-Nest plain-text 413 body. The single-owner pipeline now maps it in an `onSend` hook without overriding Nest's error handler. Security GREEN evidence: 7 Nest/Fastify differential groups plus 52 focused legacy auth/audit/app/config cases pass; build, typecheck and production dependency audit pass.

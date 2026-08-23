@@ -27,10 +27,48 @@ declare global {
   }
 }
 
-function tokensMatch(actual: string, expected: string) {
+export function tokensMatch(actual: string, expected: string) {
   const actualDigest = createHash('sha256').update(actual).digest();
   const expectedDigest = createHash('sha256').update(expected).digest();
   return timingSafeEqual(actualDigest, expectedDigest);
+}
+
+export type BearerAuthenticationFailure = 'missing' | 'invalid';
+
+export class BearerAuthenticationError extends Error {
+  constructor(readonly failure: BearerAuthenticationFailure) {
+    super(failure === 'missing' ? 'Authentication required' : 'Invalid bearer token');
+  }
+}
+
+export function readBearerAuthorization(authorization: string | undefined): string {
+  const match = authorization ? /^Bearer[ \t]+(.+)$/i.exec(authorization) : null;
+  if (!match) throw new BearerAuthenticationError('missing');
+  return match[1];
+}
+
+export function authenticateStaticBearer(
+  authorization: string | undefined,
+  expectedToken: string,
+): AuthPrincipal {
+  const token = readBearerAuthorization(authorization);
+  if (!tokensMatch(token, expectedToken)) throw new BearerAuthenticationError('invalid');
+  return {
+    tenantId: 'local', userId: 'local-user', roles: ['user'], projectIds: [],
+    scopes: ['tasks:read', 'tasks:write', 'calendar:read', 'calendar:write'],
+  };
+}
+
+export async function authenticateOidcBearer(
+  authorization: string | undefined,
+  verifier: OidcTokenVerifier,
+): Promise<AuthPrincipal> {
+  const token = readBearerAuthorization(authorization);
+  try {
+    return await verifier(token);
+  } catch {
+    throw new BearerAuthenticationError('invalid');
+  }
 }
 
 function auditOrFail(
@@ -54,15 +92,14 @@ function readBearer(
   response: Response,
   onReject?: SecurityRejectionHandler,
 ): string | null {
-  const authorization = request.get('authorization');
-  const match = authorization ? /^Bearer[ \t]+(.+)$/i.exec(authorization) : null;
-  if (!match) {
+  try {
+    return readBearerAuthorization(request.get('authorization'));
+  } catch {
     if (!auditOrFail(request, response, 'auth_rejection', onReject)) return null;
     response.set('WWW-Authenticate', 'Bearer');
     response.status(401).json({ error: 'Authentication required' });
     return null;
   }
-  return match[1];
 }
 
 function rejectInvalidBearer(
@@ -77,16 +114,15 @@ function rejectInvalidBearer(
 
 export function requireBearerToken(expectedToken: string, onReject?: SecurityRejectionHandler) {
   return (request: Request, response: Response, next: NextFunction) => {
+    const authorization = request.get('authorization');
     const token = readBearer(request, response, onReject);
     if (token === null) return;
-    if (!tokensMatch(token, expectedToken)) {
+    try {
+      request.auth = authenticateStaticBearer(authorization, expectedToken);
+    } catch {
       rejectInvalidBearer(request, response, onReject);
       return;
     }
-    request.auth = {
-      tenantId: 'local', userId: 'local-user', roles: ['user'], projectIds: [],
-      scopes: ['tasks:read', 'tasks:write', 'calendar:read', 'calendar:write'],
-    };
     next();
   };
 }
@@ -178,10 +214,10 @@ export function requireOidcToken(
   onReject?: SecurityRejectionHandler,
 ) {
   return async (request: Request, response: Response, next: NextFunction) => {
-    const token = readBearer(request, response, onReject);
-    if (token === null) return;
+    const authorization = request.get('authorization');
+    if (readBearer(request, response, onReject) === null) return;
     try {
-      request.auth = await verifier(token);
+      request.auth = await authenticateOidcBearer(authorization, verifier);
       next();
     } catch {
       rejectInvalidBearer(request, response, onReject);

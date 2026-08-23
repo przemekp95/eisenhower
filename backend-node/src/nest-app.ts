@@ -4,7 +4,7 @@ import { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
 import { CreateAppOptions } from './app-options';
 import { loadConfig } from './config';
-import { createFastifyAdapter } from './platform/http/fastify-platform';
+import { createFastifyAdapter, registerFastifyPlatform } from './platform/http/fastify-platform';
 import { HttpErrorFilter } from './platform/http/http-error.filter';
 
 export async function createNestApp(
@@ -17,6 +17,7 @@ export async function createNestApp(
     { rawBody: true, logger: false },
   );
   app.setGlobalPrefix('');
+  await registerFastifyPlatform(app, config, options);
   app.useGlobalFilters(new HttpErrorFilter(config.nodeEnv === 'production'));
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
