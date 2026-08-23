@@ -18,7 +18,7 @@ Status values: `express-baseline` (captured oracle), `candidate-green` (differen
 
 | Method | Path | Express owner | Final owner | Auth | Scope | Origin | Body | Side effects | Consumers | Status |
 |---|---|---|---|---|---|---|---|---|---|---|
-| DELETE | `/tasks/:id` | tasks | TasksModule | bearer-or-oidc | tasks:write | unsafe-methods | none | deletes-trashed-task, updates-idempotency-receipt | packages/api-client, web, mobile | express-baseline |
+| DELETE | `/tasks/:id` | tasks -> TaskCommandService | TasksModule | bearer-or-oidc | tasks:write | unsafe-methods | none | deletes-trashed-task, updates-idempotency-receipt | packages/api-client, web, mobile | candidate-green |
 | GET | `/calendar/conflicts` | calendar | CalendarModule | bearer-or-oidc | calendar:read | unsafe-methods | none | reads-conflicts | packages/api-client, web | express-baseline |
 | GET | `/calendar/deleted-bindings` | calendar | CalendarModule | bearer-or-oidc | calendar:read | unsafe-methods | none | reads-deleted-bindings | packages/api-client, web | express-baseline |
 | GET | `/calendar/events` | calendar | CalendarModule | bearer-or-oidc | calendar:read | unsafe-methods | none | reads-provider-events | packages/api-client, web | express-baseline |
@@ -53,12 +53,12 @@ Status values: `express-baseline` (captured oracle), `candidate-green` (differen
 | POST | `/internal/calendar/sync/apply-batch` | calendarInternal | CalendarInternalModule | internal-hmac | - | not-applicable | raw-json-32kb | applies-inbound-batch | n8n | express-baseline |
 | POST | `/internal/calendar/sync/reset` | calendarInternal | CalendarInternalModule | internal-hmac | - | not-applicable | raw-json-32kb | marks-full-resync | n8n | express-baseline |
 | POST | `/internal/calendar/watch/renew` | calendarInternal | CalendarInternalModule | internal-hmac | - | not-applicable | raw-json-32kb | renews-watch-state | n8n | express-baseline |
-| POST | `/tasks` | tasks | TasksModule | bearer-or-oidc | tasks:write | unsafe-methods | json-32kb | creates-task, writes-idempotency-receipt | packages/api-client, web, mobile | express-baseline |
-| PUT | `/tasks/:id` | tasks | TasksModule | bearer-or-oidc | tasks:write | unsafe-methods | json-32kb | updates-task | packages/api-client, web, mobile | express-baseline |
-| PUT | `/tasks/:id/delegation` | tasks | TasksModule | bearer-or-oidc | tasks:write | unsafe-methods | json-32kb | updates-delegation | packages/api-client, web, mobile | express-baseline |
-| PUT | `/tasks/:id/delegation/status` | tasks | TasksModule | bearer-or-oidc | tasks:write | unsafe-methods | json-32kb | transitions-delegation | packages/api-client, web, mobile | express-baseline |
-| PUT | `/tasks/:id/lifecycle` | tasks | TasksModule | bearer-or-oidc | tasks:write | unsafe-methods | json-32kb | transitions-lifecycle, writes-calendar-outbox | packages/api-client, web, mobile | express-baseline |
-| PUT | `/tasks/:id/schedule` | tasks | TasksModule | bearer-or-oidc | tasks:write | unsafe-methods | json-32kb | updates-schedule, writes-calendar-outbox | packages/api-client, web, mobile | express-baseline |
+| POST | `/tasks` | tasks -> TaskCommandService | TasksModule | bearer-or-oidc | tasks:write | unsafe-methods | json-32kb | creates-task, writes-idempotency-receipt | packages/api-client, web, mobile | candidate-green |
+| PUT | `/tasks/:id` | tasks -> TaskCommandService | TasksModule | bearer-or-oidc | tasks:write | unsafe-methods | json-32kb | updates-task | packages/api-client, web, mobile | candidate-green |
+| PUT | `/tasks/:id/delegation` | tasks -> TaskCommandService | TasksModule | bearer-or-oidc | tasks:write | unsafe-methods | json-32kb | updates-delegation | packages/api-client, web, mobile | candidate-green |
+| PUT | `/tasks/:id/delegation/status` | tasks -> TaskCommandService | TasksModule | bearer-or-oidc | tasks:write | unsafe-methods | json-32kb | transitions-delegation | packages/api-client, web, mobile | candidate-green |
+| PUT | `/tasks/:id/lifecycle` | tasks -> TaskCommandService | TasksModule | bearer-or-oidc | tasks:write | unsafe-methods | json-32kb | transitions-lifecycle, writes-calendar-outbox | packages/api-client, web, mobile | candidate-green |
+| PUT | `/tasks/:id/schedule` | tasks -> TaskCommandService | TasksModule | bearer-or-oidc | tasks:write | unsafe-methods | json-32kb | updates-schedule, writes-calendar-outbox | packages/api-client, web, mobile | candidate-green |
 
 ## Differential evidence rules
 
@@ -70,3 +70,4 @@ During a vertical slice, Express and Nest may temporarily call the same applicat
 
 - Security substrate RED (Task 3): the Nest candidate initially had no global security metadata/guard or registered Fastify security pipeline; `tests/nest/security.test.ts` failed first on the absent `security.decorators` module. The next observed adapter mismatch was Fastify's pre-Nest plain-text 413 body. The single-owner pipeline now maps it in an `onSend` hook without overriding Nest's error handler. Security GREEN evidence: 7 Nest/Fastify differential groups plus 52 focused legacy auth/audit/app/config cases pass; build, typecheck and production dependency audit pass.
 - Task-query RED/GREEN (Task 4): all `/tasks` reads initially returned the candidate's exact 404. `TaskQueryService` now solely owns owner/tenant scope, lifecycle selection, cursor encoding/decoding and repository coordination; both temporary adapters call it. Thirteen Nest/Fastify query groups plus 100 focused legacy task/delegation/shared-contract cases pass, including repeated cursor rejection and pagination headers.
+- Task-command RED/GREEN (Task 5): every candidate write initially returned 404. `TaskCommandService` now solely owns create/replay, optimistic concurrency, lifecycle, schedule, delegation and purge coordination; Express and Nest call the same service. Nest uses concrete DTO metadata plus one validation pipe, while strict ETag/idempotency grammars remain explicit transport helpers. Candidate and legacy suites preserve concurrent replay, deleted replay, exact validation ordering, tenant isolation and durable Calendar side effects.

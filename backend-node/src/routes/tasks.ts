@@ -1,11 +1,6 @@
 import { NextFunction, Request, Response, Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import {
-  createTask,
-  IdempotencyKeyReuseError,
-  IdempotencyResultDeletedError,
-} from '../application/createTask';
-import {
   TASK_DELEGATION_STATUSES,
   TASK_LIFECYCLE_ACTIONS,
   TaskLifecycleAction,
@@ -19,6 +14,8 @@ import { MongooseTaskRepository } from '../repositories/mongooseTaskRepository';
 import { TaskQueryError } from '../application/tasks/task-query.errors';
 import { TaskQueryService } from '../application/tasks/task-query.service';
 import { parseDelegatedTaskQuery, parseTaskListQuery } from '../modules/tasks/task-query.dto';
+import { TaskCommandService } from '../application/tasks/task-command.service';
+import { TaskCommandError } from '../application/tasks/task-errors';
 
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 const UTC_ISO_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
@@ -185,20 +182,6 @@ function ensureValidRequest(request: Parameters<typeof validationResult>[0]) {
   return errors.isEmpty() ? null : errors.array().map((entry) => entry.msg);
 }
 
-function taskScope(request: Request) {
-  return {
-    tenantId: request.auth!.tenantId,
-    ownerId: request.auth!.userId,
-  };
-}
-
-function principalScope(request: Request) {
-  return {
-    tenantId: request.auth!.tenantId,
-    userId: request.auth!.userId,
-  };
-}
-
 function formatRevisionEtag(revision: number) {
   return `"${revision}"`;
 }
@@ -243,9 +226,11 @@ function readIdempotencyKey(request: Request, response: Response) {
 export function createTasksRouter(repository: TaskRepository = new MongooseTaskRepository()) {
   const router = Router();
   const queries = new TaskQueryService(repository);
+  const commands = new TaskCommandService(repository);
 
   const queryError = (error: unknown, response: Response, next: NextFunction) => {
     if (error instanceof TaskQueryError) return response.status(error.status).json(error.body);
+    if (error instanceof TaskCommandError) return response.status(error.status).json(error.body);
     return next(error);
   };
 
@@ -300,20 +285,14 @@ export function createTasksRouter(repository: TaskRepository = new MongooseTaskR
     };
 
     try {
-      const result = await createTask(repository, taskScope(req), payload, clientOperationId);
-      if (result.replayed) res.set('Idempotency-Replayed', 'true');
+      const result = await commands.create(req.auth!, payload, clientOperationId);
+      if (result.idempotencyReplayed) res.set('Idempotency-Replayed', 'true');
       return res
-        .status(result.replayed ? 200 : 201)
+        .status(result.status)
         .set('ETag', formatRevisionEtag(result.task.revision))
         .json(result.task);
     } catch (error) {
-      if (error instanceof IdempotencyKeyReuseError) {
-        return res.status(409).json({ error: error.message, code: error.code });
-      }
-      if (error instanceof IdempotencyResultDeletedError) {
-        return res.status(410).json({ error: error.message, code: error.code });
-      }
-      return next(error);
+      return queryError(error, res, next);
     }
   });
 
@@ -326,21 +305,10 @@ export function createTasksRouter(repository: TaskRepository = new MongooseTaskR
     if (expectedRevision === null) return;
 
     try {
-      const scope = taskScope(req);
-      const task = await repository.update(scope, req.params.id, expectedRevision, req.body);
-      if (!task) {
-        if (await repository.exists(scope, req.params.id)) {
-          return res.status(412).json({
-            error: 'Task revision conflict',
-            code: 'task_revision_conflict',
-          });
-        }
-        return res.status(404).json({ error: 'Task not found' });
-      }
-
+      const task = await commands.update(req.auth!, req.params.id, expectedRevision, req.body);
       return res.set('ETag', formatRevisionEtag(task.revision)).json(task);
     } catch (error) {
-      return next(error);
+      return queryError(error, res, next);
     }
   });
 
@@ -356,28 +324,12 @@ export function createTasksRouter(repository: TaskRepository = new MongooseTaskR
       if (expectedRevision === null) return;
 
       try {
-        const result = await repository.transitionLifecycle(
-          taskScope(req),
-          req.params.id,
-          expectedRevision,
-          req.body.action as TaskLifecycleAction
+        const task = await commands.transitionLifecycle(
+          req.auth!, req.params.id, expectedRevision, req.body.action as TaskLifecycleAction,
         );
-        if (result.status === 'not_found') return res.status(404).json({ error: 'Task not found' });
-        if (result.status === 'revision_conflict') {
-          return res.status(412).json({
-            error: 'Task revision conflict',
-            code: 'task_revision_conflict',
-          });
-        }
-        if (result.status === 'invalid_transition') {
-          return res.status(409).json({
-            error: 'Invalid task lifecycle transition',
-            code: 'invalid_lifecycle_transition',
-          });
-        }
-        return res.set('ETag', formatRevisionEtag(result.task.revision)).json(result.task);
+        return res.set('ETag', formatRevisionEtag(task.revision)).json(task);
       } catch (error) {
-        return next(error);
+        return queryError(error, res, next);
       }
     }
   );
@@ -405,25 +357,10 @@ export function createTasksRouter(repository: TaskRepository = new MongooseTaskR
                 : {}),
             };
       try {
-        const scope = taskScope(req);
-        const task = await repository.updateSchedule(
-          scope,
-          req.params.id,
-          expectedRevision,
-          schedule
-        );
-        if (!task) {
-          if (await repository.exists(scope, req.params.id)) {
-            return res.status(412).json({
-              error: 'Task revision conflict',
-              code: 'task_revision_conflict',
-            });
-          }
-          return res.status(404).json({ error: 'Task not found' });
-        }
+        const task = await commands.updateSchedule(req.auth!, req.params.id, expectedRevision, schedule);
         return res.set('ETag', formatRevisionEtag(task.revision)).json(task);
       } catch (error) {
-        return next(error);
+        return queryError(error, res, next);
       }
     }
   );
@@ -447,25 +384,12 @@ export function createTasksRouter(repository: TaskRepository = new MongooseTaskR
           handoffNote: req.body.delegation.handoffNote?.trim() ?? '',
         };
       try {
-        const scope = taskScope(req);
-        const task = await repository.updateDelegation(
-          scope,
-          req.params.id,
-          expectedRevision,
-          delegation
+        const task = await commands.updateDelegation(
+          req.auth!, req.params.id, expectedRevision, delegation,
         );
-        if (!task) {
-          if (await repository.exists(scope, req.params.id)) {
-            return res.status(412).json({
-              error: 'Task revision conflict',
-              code: 'task_revision_conflict',
-            });
-          }
-          return res.status(404).json({ error: 'Task not found' });
-        }
         return res.set('ETag', formatRevisionEtag(task.revision)).json(task);
       } catch (error) {
-        return next(error);
+        return queryError(error, res, next);
       }
     }
   );
@@ -482,28 +406,12 @@ export function createTasksRouter(repository: TaskRepository = new MongooseTaskR
       if (expectedRevision === null) return;
 
       try {
-        const result = await repository.transitionDelegation(
-          principalScope(req),
-          req.params.id,
-          expectedRevision,
-          req.body.status as TaskDelegationStatus
+        const task = await commands.transitionDelegation(
+          req.auth!, req.params.id, expectedRevision, req.body.status as TaskDelegationStatus,
         );
-        if (result.status === 'not_found') return res.status(404).json({ error: 'Task not found' });
-        if (result.status === 'revision_conflict') {
-          return res.status(412).json({
-            error: 'Task revision conflict',
-            code: 'task_revision_conflict',
-          });
-        }
-        if (result.status === 'invalid_transition') {
-          return res.status(409).json({
-            error: 'Invalid delegation status transition',
-            code: 'invalid_delegation_transition',
-          });
-        }
-        return res.set('ETag', formatRevisionEtag(result.task.revision)).json(result.task);
+        return res.set('ETag', formatRevisionEtag(task.revision)).json(task);
       } catch (error) {
-        return next(error);
+        return queryError(error, res, next);
       }
     }
   );
@@ -520,29 +428,10 @@ export function createTasksRouter(repository: TaskRepository = new MongooseTaskR
       if (expectedRevision === null) return;
 
       try {
-        const scope = taskScope(req);
-        const lifecycleState = await repository.getLifecycleState(scope, req.params.id);
-        if (lifecycleState === null) return res.status(404).json({ error: 'Task not found' });
-        if (lifecycleState !== 'trashed') {
-          return res.status(409).json({
-            error: 'Task must be trashed before final deletion',
-            code: 'task_not_trashed',
-          });
-        }
-        const task = await repository.delete(scope, req.params.id, expectedRevision);
-        if (!task) {
-          if (await repository.exists(scope, req.params.id)) {
-            return res.status(412).json({
-              error: 'Task revision conflict',
-              code: 'task_revision_conflict',
-            });
-          }
-          return res.status(404).json({ error: 'Task not found' });
-        }
-
+        await commands.delete(req.auth!, req.params.id, expectedRevision);
         return res.status(204).send();
       } catch (error) {
-        return next(error);
+        return queryError(error, res, next);
       }
     }
   );
