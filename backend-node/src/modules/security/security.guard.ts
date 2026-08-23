@@ -7,7 +7,7 @@ import { BearerAuthenticationError } from '../../auth';
 import { requestContextFor } from '../../platform/http/request-context';
 import { AuditService, SecurityAuditUnavailableError } from './audit.service';
 import {
-  PUBLIC_ROUTE_METADATA, REQUIRED_SCOPES_METADATA,
+  INTERNAL_ROUTE_METADATA, PUBLIC_ROUTE_METADATA, REQUIRED_SCOPES_METADATA,
 } from './security.decorators';
 import { SecurityService } from './security.service';
 
@@ -25,7 +25,10 @@ export class SecurityGuard implements CanActivate {
     const isPublic = this.reflector.getAllAndOverride<boolean>(PUBLIC_ROUTE_METADATA, [
       execution.getHandler(), execution.getClass(),
     ]);
-    if (isPublic || request.method === 'OPTIONS') return true;
+    const isInternal = this.reflector.getAllAndOverride<boolean>(INTERNAL_ROUTE_METADATA, [
+      execution.getHandler(), execution.getClass(),
+    ]);
+    if (isPublic || isInternal || request.method === 'OPTIONS') return true;
 
     const context = requestContextFor(request);
     try {

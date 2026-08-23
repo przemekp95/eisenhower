@@ -6,6 +6,7 @@ import { DatabaseState, HealthState } from './types';
 import type { TaskRepository } from './application/taskRepository';
 import type { CalendarApplicationService } from './application/calendar';
 import type { GoogleCalendarService } from './application/googleCalendar';
+import type { GoogleOAuthService } from './application/googleOAuth';
 
 export interface CreateAppOptions {
   aiHealthChecker?: () => Promise<HealthState>;
@@ -22,4 +23,5 @@ export interface CreateAppOptions {
   calendarApplicationService?: CalendarApplicationService;
   googleCalendarService?: GoogleCalendarService;
   calendarCanConnect?: boolean;
+  googleOAuthService?: GoogleOAuthService;
 }
