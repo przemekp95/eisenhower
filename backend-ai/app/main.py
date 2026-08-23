@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import logging
-import time
 from typing import Literal
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import JSONResponse, Response
+from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 
 from .auth import TokenVerifier
 from .config import Settings
@@ -13,22 +11,17 @@ from .device import get_device
 from .defaults import QUADRANT_NAMES
 from .jobs import JobConflictError, QueueCapacityExceeded
 from .metrics import MetricsRegistry
-from .rag.errors import RerankerUnavailable
-from .rag.models import (
-  AccessScope,
-  AnalyzeResult,
-  KnowledgeAnswerResponse,
-  RetrievalSummary,
-)
-from .service import OCRImageRejectedError, QuadrantAIService
+from .service import QuadrantAIService
 from .store import TrainingStore
 from .webhooks import parse_webhook_envelope
 from .http.composition import build_dependencies
+from .http.analysis import create_analysis_router
 from .http.errors import register_exception_handlers
+from .http.health import create_health_router
+from .http.knowledge import create_knowledge_router
 from .http.middleware import register_middleware, require_internal_dispatch, require_operator
+from .http.ocr import create_ocr_router
 from .http.schemas import (
-  MAX_BATCH_TASKS,
-  MAX_TASK_LENGTH,
   AnalyzeRequest,
   BatchRequest,
   ClassifyRequest,
@@ -44,8 +37,6 @@ from .http.schemas import (
   StrictRequest,
 )
 
-request_logger = logging.getLogger("uvicorn.error")
-MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_WEBHOOK_BYTES = 8 * 1024 * 1024
 WEBHOOK_JOB_TYPES = {
   "upsert": "rag.upsert",
@@ -53,6 +44,8 @@ WEBHOOK_JOB_TYPES = {
   "reindex_project": "rag.reindex_project",
   "start_rag_evaluation": "rag.evaluate",
 }
+
+
 def create_app(
   settings: Settings | None = None,
   store: TrainingStore | None = None,
@@ -102,355 +95,10 @@ def create_app(
       retrieval_enabled=resolved_settings.memory_retrieval_enabled,
       metrics=metrics,
     ))
-
-  @app.get("/")
-  def root():
-    return {"service": resolved_settings.app_name, "status": "ok"}
-
-  @app.get("/metrics", include_in_schema=False)
-  def prometheus_metrics():
-    metrics.set_job_queue_enabled(job_queue is not None)
-    if job_queue is not None:
-      metrics.set_job_depths(job_queue.counts_by_status())
-      metrics.set_job_depths_by_type(job_queue.counts_by_type_and_status())
-      metrics.set_job_worker_heartbeat_age(job_queue.latest_worker_heartbeat_age_seconds())
-    generation_status = (
-      resolved_rag_service.generation_status()
-      if resolved_rag_service is not None and hasattr(resolved_rag_service, "generation_status")
-      else {"state": "disabled", "failures": 0}
-    )
-    metrics.set_generation_status(
-      str(generation_status.get("state", "unknown")),
-      failures=int(generation_status.get("failures", 0)),
-    )
-    return Response(content=metrics.render(), media_type="text/plain; version=0.0.4")
-
-  @app.get("/health/live", include_in_schema=False)
-  def health_live():
-    return {"status": "ok"}
-
-  @app.get("/health/ready", include_in_schema=False)
-  def health_ready():
-    capabilities = resolved_ai_service.capabilities()
-    if not capabilities.get("classification"):
-      raise HTTPException(status_code=503, detail="Local classifier is not ready.")
-    generation_status = (
-      resolved_rag_service.generation_status()
-      if resolved_rag_service is not None and hasattr(resolved_rag_service, "generation_status")
-      else {"enabled": False, "state": "disabled", "failures": 0}
-    )
-    return {
-      "status": "ready",
-      "generation_id": capabilities.get("model", {}).get("generation_id"),
-      "optional_dependencies": {"generation": generation_status},
-    }
-
-  @app.post("/v2/ai/analyze", response_model=AnalyzeResult)
-  def analyze_with_rag(request: RagAnalyzeRequest, http_request: Request):
-    analysis_started = time.perf_counter()
-    principal = http_request.state.principal
-    if "*" not in principal.scopes and "ai:analyze" not in principal.scopes:
-      raise HTTPException(status_code=403, detail="Missing ai:analyze scope.")
-    scope = AccessScope(
-      tenant_id=principal.tenant_id,
-      user_id=principal.user_id,
-      project_ids=principal.project_ids,
-      roles=principal.roles,
-    )
-    tenant_enabled = (
-      not resolved_settings.rag_allowed_tenants
-      or principal.tenant_id in resolved_settings.rag_allowed_tenants
-    )
-    user_enabled = (
-      (
-        resolved_settings.app_env != "production"
-        and not resolved_settings.rag_response_allowed_users
-      )
-      or principal.user_id in resolved_settings.rag_response_allowed_users
-    )
-    generation_enabled = bool(
-      resolved_rag_service is not None
-      and getattr(resolved_rag_service, "generation_enabled", True)
-    )
-    current_world_abstention = (
-      resolved_rag_service is not None
-      and tenant_enabled
-      and request.freshness_requirement == "current_world_required"
-    )
-    response_promotion_reason = None
-    if (
-      response_canary_router is not None
-      and resolved_settings.rag_response_enabled
-      and generation_enabled
-      and tenant_enabled
-      and user_enabled
-    ):
-      response_canary_decision = response_canary_router.evaluate(
-        principal.tenant_id, principal.user_id
-      )
-      metrics.observe_response_canary(response_canary_decision.outcome)
-      response_promotion_reason = response_canary_decision.reason
-    response_enabled = (
-      generation_enabled
-      and resolved_settings.rag_response_enabled
-      and tenant_enabled
-      and user_enabled
-      and response_promotion_reason is None
-    )
-    if (
-      resolved_rag_service is not None
-      and response_enabled
-    ) or current_world_abstention:
-      delta_requested = (
-        request.known_state is not None
-        or request.previous_output_statements is not None
-        or request.freshness_requirement == "current_world_required"
-      )
-      if delta_requested:
-        result = resolved_rag_service.analyze(
-          request.task,
-          scope,
-          language=request.language,
-          known_state=request.known_state,
-          previous_output_statements=request.previous_output_statements,
-          freshness_requirement=request.freshness_requirement,
-        )
-      else:
-        result = resolved_rag_service.analyze(request.task, scope, language=request.language)
-    else:
-      if resolved_rag_service is not None and tenant_enabled and generation_enabled:
-        generation_started = time.perf_counter()
-        try:
-          shadow_result = resolved_rag_service.analyze(
-            request.task,
-            scope,
-            language=request.language,
-          )
-          shadow_outcome = "no_answer" if shadow_result.mode == "no_answer" else "success"
-          metrics.observe_generation(
-            shadow_outcome,
-            duration_seconds=time.perf_counter() - generation_started,
-            input_tokens=(
-              shadow_result.generation.input_tokens
-              if shadow_result.generation is not None
-              else 0
-            ),
-          )
-          if shadow_result.generation is not None:
-            metrics.observe_rag_validation("schema", "accepted")
-            if shadow_result.mode == "rag":
-              metrics.observe_rag_validation("citations", "accepted")
-        except Exception:
-          request_logger.warning("Optional generation shadow failed", exc_info=True)
-          metrics.observe_generation(
-            "unavailable",
-            duration_seconds=time.perf_counter() - generation_started,
-            input_tokens=0,
-          )
-      elif resolved_rag_service is not None and tenant_enabled:
-        retrieval_started = time.perf_counter()
-        try:
-          shadow = resolved_rag_service.retrieve_summary(request.task, scope)
-          metrics.observe_rag_retrieval(
-            "shadow",
-            hit_count=shadow.hit_count,
-            duration_seconds=time.perf_counter() - retrieval_started,
-          )
-        except Exception:
-          request_logger.warning("Optional shadow retrieval failed", exc_info=True)
-          metrics.observe_rag_retrieval(
-            "shadow",
-            hit_count=None,
-            duration_seconds=time.perf_counter() - retrieval_started,
-          )
-      classification = resolved_ai_service.classify_task(request.task, use_rag=False)
-      if resolved_rag_service is None:
-        fallback_reason = "rag_disabled"
-      elif not resolved_settings.rag_response_enabled:
-        fallback_reason = "rag_response_disabled"
-      elif not generation_enabled:
-        fallback_reason = "generation_disabled"
-      elif not tenant_enabled:
-        fallback_reason = "tenant_not_enabled"
-      elif not user_enabled:
-        fallback_reason = "user_not_enabled"
-      else:
-        fallback_reason = response_promotion_reason or "response_promotion_invalid"
-      result = AnalyzeResult(
-        mode="fallback",
-        quadrant=classification["quadrant"],
-        quadrant_name=classification["quadrant_name"],
-        confidence=classification["confidence"],
-        explanation="The local MiniLM classifier produced this fallback result.",
-        retrieval=RetrievalSummary(),
-        fallback_reason=fallback_reason,
-      )
-    analysis_duration = time.perf_counter() - analysis_started
-    metrics.observe_rag_result(result.mode, result.fallback_reason)
-    metrics.observe_rag_analysis(result.mode, duration_seconds=analysis_duration)
-    if result.information_delta is not None:
-      metrics.observe_information_delta(result.information_delta.status)
-      metrics.observe_rag_validation("information_delta", "accepted")
-    if result.generation is not None:
-      generation_outcome = "no_answer" if result.mode == "no_answer" else "success"
-      metrics.observe_generation(
-        generation_outcome,
-        duration_seconds=analysis_duration,
-        input_tokens=result.generation.input_tokens,
-      )
-      metrics.observe_rag_validation("schema", "accepted")
-      if result.mode == "rag":
-        metrics.observe_rag_validation("citations", "accepted")
-    elif result.fallback_reason == "invalid_generation_output":
-      metrics.observe_generation("rejected", duration_seconds=analysis_duration, input_tokens=0)
-      metrics.observe_rag_validation("schema", "rejected")
-    elif result.fallback_reason == "invalid_citations":
-      metrics.observe_generation("rejected", duration_seconds=analysis_duration, input_tokens=0)
-      metrics.observe_rag_validation("citations", "rejected")
-    elif result.fallback_reason == "invalid_information_delta":
-      metrics.observe_generation("rejected", duration_seconds=analysis_duration, input_tokens=0)
-      metrics.observe_rag_validation("information_delta", "rejected")
-    elif result.fallback_reason == "generation_unavailable":
-      metrics.observe_generation("unavailable", duration_seconds=analysis_duration, input_tokens=0)
-    return result
-
-  @app.post("/v2/knowledge/search", response_model=KnowledgeSearchResponse)
-  def search_knowledge(request: KnowledgeSearchRequest, http_request: Request):
-    principal = http_request.state.principal
-    if "*" not in principal.scopes and not ({"knowledge:read", "ai:analyze"} & set(principal.scopes)):
-      raise HTTPException(status_code=403, detail="Missing knowledge:read scope.")
-    project_ids = list(principal.project_ids)
-    if request.project_id:
-      if "admin" not in principal.roles and request.project_id not in project_ids:
-        raise HTTPException(status_code=403, detail="Project is outside the authenticated scope.")
-      project_ids = [request.project_id]
-    scope = AccessScope(
-      tenant_id=principal.tenant_id,
-      user_id=principal.user_id,
-      project_ids=project_ids,
-      roles=principal.roles,
-    )
-    if resolved_rag_service is None:
-      return {
-        "query": request.query,
-        "answer": None,
-        "citations": [],
-        "retrieval": RetrievalSummary(),
-        "no_answer_reason": "rag_disabled",
-      }
-    retrieval_started = time.perf_counter()
-    try:
-      result = resolved_rag_service.search(
-        request.query,
-        scope,
-        limit=request.limit,
-        project_id=request.project_id,
-      )
-    except RerankerUnavailable as error:
-      metrics.observe_rag_retrieval(
-        "search",
-        hit_count=None,
-        duration_seconds=time.perf_counter() - retrieval_started,
-      )
-      raise HTTPException(
-        status_code=503,
-        detail="Default retrieval reranker is unavailable.",
-      ) from error
-    except Exception:
-      metrics.observe_rag_retrieval(
-        "search",
-        hit_count=None,
-        duration_seconds=time.perf_counter() - retrieval_started,
-      )
-      raise
-    metrics.observe_rag_retrieval(
-      "search",
-      hit_count=result["retrieval"].hit_count,
-      duration_seconds=time.perf_counter() - retrieval_started,
-    )
-    return result
-
-  @app.post("/v2/knowledge/answer", response_model=KnowledgeAnswerResponse)
-  def answer_knowledge(request: KnowledgeAnswerApiRequest, http_request: Request):
-    principal = http_request.state.principal
-    if "*" not in principal.scopes and not ({"knowledge:read", "ai:analyze"} & set(principal.scopes)):
-      raise HTTPException(status_code=403, detail="Missing knowledge:read scope.")
-    project_ids = list(principal.project_ids)
-    if request.project_id:
-      if "admin" not in principal.roles and request.project_id not in project_ids:
-        raise HTTPException(status_code=403, detail="Project is outside the authenticated scope.")
-      project_ids = [request.project_id]
-    scope = AccessScope(
-      tenant_id=principal.tenant_id,
-      user_id=principal.user_id,
-      project_ids=project_ids,
-      roles=principal.roles,
-    )
-    tenant_enabled = (
-      not resolved_settings.rag_allowed_tenants
-      or principal.tenant_id in resolved_settings.rag_allowed_tenants
-    )
-    user_enabled = (
-      (
-        resolved_settings.app_env != "production"
-        and not resolved_settings.rag_response_allowed_users
-      )
-      or principal.user_id in resolved_settings.rag_response_allowed_users
-    )
-    generation_enabled = bool(
-      resolved_rag_service is not None
-      and getattr(resolved_rag_service, "generation_enabled", True)
-    )
-    if resolved_rag_service is None:
-      reason = "rag_disabled"
-    elif not resolved_settings.rag_response_enabled:
-      reason = "rag_response_disabled"
-    elif not generation_enabled:
-      reason = "generation_disabled"
-    elif not tenant_enabled:
-      reason = "tenant_not_enabled"
-    elif not user_enabled:
-      reason = "user_not_enabled"
-    elif response_canary_router is not None:
-      response_canary_decision = response_canary_router.evaluate(
-        principal.tenant_id, principal.user_id
-      )
-      metrics.observe_response_canary(response_canary_decision.outcome)
-      reason = response_canary_decision.reason
-    else:
-      reason = None
-    if reason is not None:
-      return KnowledgeAnswerResponse(
-        status="insufficient_evidence",
-        answer=None,
-        claims=[],
-        citations=[],
-        retrieval=RetrievalSummary(),
-        no_answer_reason=reason,
-      )
-
-    started = time.perf_counter()
-    result = resolved_rag_service.answer(
-      request.query,
-      scope,
-      language=request.language,
-      limit=request.limit,
-      project_id=request.project_id,
-    )
-    metrics.observe_rag_retrieval(
-      "answer",
-      hit_count=result.retrieval.hit_count,
-      duration_seconds=time.perf_counter() - started,
-    )
-    generation_outcome = (
-      "success" if result.status == "answered" else "no_answer"
-    )
-    metrics.observe_generation(
-      generation_outcome,
-      duration_seconds=time.perf_counter() - started,
-      input_tokens=result.generation.input_tokens if result.generation else 0,
-    )
-    return result
+  app.include_router(create_health_router(dependencies))
+  app.include_router(create_analysis_router(dependencies))
+  app.include_router(create_knowledge_router(dependencies))
+  app.include_router(create_ocr_router(dependencies))
 
   @app.post("/internal/webhooks/n8n/verify")
   async def verify_n8n_webhook(http_request: Request):
@@ -595,41 +243,6 @@ def create_app(
     if not envelope.dataset_version:
       raise HTTPException(status_code=422, detail="dataset_version is required.")
     return enqueue_internal_job("start_rag_evaluation", "rag.evaluate", envelope, http_request)
-
-  @app.post("/classify")
-  def classify_text(request: ClassifyRequest):
-    return resolved_ai_service.classify_task(request.title, use_rag=request.use_rag)
-
-  @app.post("/analyze")
-  def analyze_with_langchain(request: AnalyzeRequest):
-    return resolved_ai_service.analyze_with_reasoning(request.task, language=request.language)
-
-  @app.post("/analyze-langchain", deprecated=True, include_in_schema=False)
-  def analyze_with_legacy_name(request: AnalyzeRequest):
-    return resolved_ai_service.analyze_with_reasoning(request.task, language=request.language)
-
-  @app.post("/extract-tasks-from-image")
-  async def extract_tasks_from_image(file: UploadFile = File(...)):
-    payload = await file.read(MAX_UPLOAD_BYTES + 1)
-    if len(payload) > MAX_UPLOAD_BYTES:
-      raise HTTPException(status_code=413, detail="Upload exceeds the 10 MiB limit.")
-    try:
-      return resolved_ai_service.extract_tasks_from_image(
-        file.filename or "upload",
-        payload,
-        file.content_type,
-      )
-    except OCRImageRejectedError as exception:
-      raise HTTPException(status_code=exception.status_code, detail=exception.code) from exception
-
-  @app.post("/batch-analyze")
-  def batch_analyze_tasks(request: BatchRequest):
-    tasks = [task.strip() for task in request.tasks if task.strip()]
-    if not tasks:
-      raise HTTPException(status_code=400, detail="At least one task is required.")
-    if any(len(task) > MAX_TASK_LENGTH for task in tasks):
-      raise HTTPException(status_code=422, detail=f"Each task must be at most {MAX_TASK_LENGTH} characters.")
-    return resolved_ai_service.batch_analyze(tasks)
 
   @app.post("/add-example")
   def add_training_example(
