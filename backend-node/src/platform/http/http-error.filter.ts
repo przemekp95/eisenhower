@@ -2,6 +2,7 @@ import {
   ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus,
 } from '@nestjs/common';
 import { FastifyReply } from 'fastify';
+import { TaskQueryError } from '../../application/tasks/task-query.errors';
 
 @Catch()
 export class HttpErrorFilter implements ExceptionFilter {
@@ -9,6 +10,10 @@ export class HttpErrorFilter implements ExceptionFilter {
 
   catch(error: unknown, host: ArgumentsHost) {
     const response = host.switchToHttp().getResponse<FastifyReply>();
+    if (error instanceof TaskQueryError) {
+      response.status(error.status).send(error.body);
+      return;
+    }
     if (
       error && typeof error === 'object'
       && ('statusCode' in error || 'code' in error)

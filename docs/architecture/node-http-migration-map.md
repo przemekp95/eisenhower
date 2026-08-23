@@ -26,9 +26,9 @@ Status values: `express-baseline` (captured oracle), `candidate-green` (differen
 | GET | `/calendar/status` | calendar | CalendarModule | bearer-or-oidc | calendar:read | unsafe-methods | none | reads-calendar-state | packages/api-client, web | express-baseline |
 | GET | `/health` | health | HealthModule | public | - | not-applicable | none | none | runtime-probes | express-baseline |
 | GET | `/health/ready` | health | HealthModule | public | - | not-applicable | none | checks-database, checks-ai | runtime-probes | express-baseline |
-| GET | `/tasks` | tasks | TasksModule | bearer-or-oidc | tasks:read | unsafe-methods | none | reads-tasks, emits-pagination | packages/api-client, web, mobile | express-baseline |
-| GET | `/tasks/:id` | tasks | TasksModule | bearer-or-oidc | tasks:read | unsafe-methods | none | reads-task | packages/api-client, web, mobile | express-baseline |
-| GET | `/tasks/delegated` | tasks | TasksModule | bearer-or-oidc | tasks:read | unsafe-methods | none | reads-tasks | packages/api-client, web, mobile | express-baseline |
+| GET | `/tasks` | tasks -> TaskQueryService | TasksModule | bearer-or-oidc | tasks:read | unsafe-methods | none | reads-tasks, emits-pagination | packages/api-client, web, mobile | candidate-green |
+| GET | `/tasks/:id` | tasks -> TaskQueryService | TasksModule | bearer-or-oidc | tasks:read | unsafe-methods | none | reads-task | packages/api-client, web, mobile | candidate-green |
+| GET | `/tasks/delegated` | tasks -> TaskQueryService | TasksModule | bearer-or-oidc | tasks:read | unsafe-methods | none | reads-tasks | packages/api-client, web, mobile | candidate-green |
 | POST | `/calendar/bindings` | calendar | CalendarModule | bearer-or-oidc | calendar:write | unsafe-methods | json-32kb | writes-binding, updates-task, writes-outbox | packages/api-client, web | express-baseline |
 | POST | `/calendar/bindings/preview` | calendar | CalendarModule | bearer-or-oidc | calendar:read | unsafe-methods | json-32kb | reads-task-and-provider-event | packages/api-client, web | express-baseline |
 | POST | `/calendar/conflicts/:id/resolve` | calendar | CalendarModule | bearer-or-oidc | calendar:write | unsafe-methods | json-32kb | resolves-conflict, updates-task, writes-outbox | packages/api-client, web | express-baseline |
@@ -69,3 +69,4 @@ During a vertical slice, Express and Nest may temporarily call the same applicat
 ## Observed migration deltas
 
 - Security substrate RED (Task 3): the Nest candidate initially had no global security metadata/guard or registered Fastify security pipeline; `tests/nest/security.test.ts` failed first on the absent `security.decorators` module. The next observed adapter mismatch was Fastify's pre-Nest plain-text 413 body. The single-owner pipeline now maps it in an `onSend` hook without overriding Nest's error handler. Security GREEN evidence: 7 Nest/Fastify differential groups plus 52 focused legacy auth/audit/app/config cases pass; build, typecheck and production dependency audit pass.
+- Task-query RED/GREEN (Task 4): all `/tasks` reads initially returned the candidate's exact 404. `TaskQueryService` now solely owns owner/tenant scope, lifecycle selection, cursor encoding/decoding and repository coordination; both temporary adapters call it. Thirteen Nest/Fastify query groups plus 100 focused legacy task/delegation/shared-contract cases pass, including repeated cursor rejection and pagination headers.

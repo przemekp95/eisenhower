@@ -3,6 +3,7 @@ import { GoogleCalendarConfig, GoogleCalendarPort } from './application/googleCa
 import { GoogleOAuthConfig, GoogleOAuthPort } from './application/googleOAuth';
 import { OidcTokenVerifier } from './auth';
 import { DatabaseState, HealthState } from './types';
+import type { TaskRepository } from './application/taskRepository';
 
 export interface CreateAppOptions {
   aiHealthChecker?: () => Promise<HealthState>;
@@ -15,4 +16,5 @@ export interface CreateAppOptions {
   googleCalendarPort?: GoogleCalendarPort;
   googleCalendarConfig?: GoogleCalendarConfig;
   oidcTokenVerifier?: OidcTokenVerifier;
+  taskRepository?: TaskRepository;
 }

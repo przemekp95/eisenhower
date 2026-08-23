@@ -6,12 +6,9 @@ import {
   IdempotencyResultDeletedError,
 } from '../application/createTask';
 import {
-  StoredTask,
   TASK_DELEGATION_STATUSES,
   TASK_LIFECYCLE_ACTIONS,
-  TASK_LIFECYCLE_STATES,
   TaskLifecycleAction,
-  TaskLifecycleFilter,
   TaskDelegationAssignment,
   TaskDelegationStatus,
   TaskPayload,
@@ -19,17 +16,12 @@ import {
   TaskSchedule,
 } from '../application/taskRepository';
 import { MongooseTaskRepository } from '../repositories/mongooseTaskRepository';
+import { TaskQueryError } from '../application/tasks/task-query.errors';
+import { TaskQueryService } from '../application/tasks/task-query.service';
+import { parseDelegatedTaskQuery, parseTaskListQuery } from '../modules/tasks/task-query.dto';
 
-const DEFAULT_PAGE_LIMIT = 100;
-const MAX_PAGE_LIMIT = 200;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
-const MONGO_ID_PATTERN = /^[a-f0-9]{24}$/i;
 const UTC_ISO_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
-
-interface TaskCursor {
-  createdAt: string;
-  id: string;
-}
 
 const taskFields = new Set(['title', 'description', 'urgent', 'important']);
 const rejectUnexpectedFields = body().custom((value) => {
@@ -248,111 +240,47 @@ function readIdempotencyKey(request: Request, response: Response) {
   return value;
 }
 
-function encodeCursor(task: Pick<StoredTask, 'createdAt' | '_id'>) {
-  return Buffer.from(
-    JSON.stringify({
-      createdAt: task.createdAt.toISOString(),
-      id: task._id,
-    } satisfies TaskCursor)
-  ).toString('base64url');
-}
-
-function decodeCursor(value: unknown): TaskCursor | null {
-  if (typeof value !== 'string' || !value) return null;
-  try {
-    const cursor = JSON.parse(
-      Buffer.from(value, 'base64url').toString('utf8')
-    ) as Partial<TaskCursor>;
-    if (
-      typeof cursor.createdAt !== 'string' ||
-      Number.isNaN(Date.parse(cursor.createdAt)) ||
-      typeof cursor.id !== 'string' ||
-      !MONGO_ID_PATTERN.test(cursor.id)
-    ) {
-      return null;
-    }
-    return cursor as TaskCursor;
-  } catch {
-    return null;
-  }
-}
-
 export function createTasksRouter(repository: TaskRepository = new MongooseTaskRepository()) {
   const router = Router();
+  const queries = new TaskQueryService(repository);
+
+  const queryError = (error: unknown, response: Response, next: NextFunction) => {
+    if (error instanceof TaskQueryError) return response.status(error.status).json(error.body);
+    return next(error);
+  };
 
   router.get('/delegated', async (req, res, next) => {
     try {
-      const lifecycleValue = req.query.lifecycle ?? 'active';
-      if (
-        typeof lifecycleValue !== 'string' ||
-        (lifecycleValue !== 'all' && !TASK_LIFECYCLE_STATES.includes(lifecycleValue as never))
-      ) {
-        return res.status(400).json({ error: 'Invalid lifecycle filter' });
-      }
-      const tasks = await repository.listDelegated(
-        principalScope(req),
-        MAX_PAGE_LIMIT,
-        lifecycleValue as TaskLifecycleFilter
-      );
-      return res.json(tasks);
+      return res.json(await queries.listDelegated(
+        req.auth!, parseDelegatedTaskQuery(req.originalUrl),
+      ));
     } catch (error) {
-      return next(error);
+      return queryError(error, res, next);
     }
   });
 
-  router.get('/:id', param('id').isMongoId(), async (req: Request, res: Response, next: NextFunction) => {
-    const errors = ensureValidRequest(req);
-    if (errors) return res.status(400).json({ error: 'Validation failed', details: errors });
+  router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const task = await repository.get(taskScope(req), req.params.id);
-      if (!task) return res.status(404).json({ error: 'Task not found' });
+      const task = await queries.getOwned(req.auth!, req.params.id);
       return res.set('ETag', formatRevisionEtag(task.revision)).json(task);
-    } catch (error) { return next(error); }
+    } catch (error) { return queryError(error, res, next); }
   });
 
   router.get('/', async (req, res, next) => {
     try {
-      const lifecycleValue = req.query.lifecycle ?? 'active';
-      if (
-        typeof lifecycleValue !== 'string' ||
-        (lifecycleValue !== 'all' && !TASK_LIFECYCLE_STATES.includes(lifecycleValue as never))
-      ) {
-        return res.status(400).json({ error: 'Invalid lifecycle filter' });
-      }
-      const lifecycle = lifecycleValue as TaskLifecycleFilter;
-      const requestedLimit = req.query.limit === undefined ? undefined : Number(req.query.limit);
-      if (
-        requestedLimit !== undefined &&
-        (!Number.isInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > MAX_PAGE_LIMIT)
-      ) {
-        return res
-          .status(400)
-          .json({ error: `limit must be an integer from 1 to ${MAX_PAGE_LIMIT}` });
-      }
-      const cursor = req.query.cursor === undefined ? undefined : decodeCursor(req.query.cursor);
-      if (req.query.cursor !== undefined && !cursor) {
-        return res.status(400).json({ error: 'Invalid task cursor' });
-      }
-
-      const limit = requestedLimit ?? DEFAULT_PAGE_LIMIT;
-      const page = await repository.listPage(
-        taskScope(req),
-        limit,
-        cursor ? { createdAt: new Date(cursor.createdAt), id: cursor.id } : undefined,
-        lifecycle
-      );
-      if (page.hasNextPage) {
-        const nextCursor = encodeCursor(page.tasks[page.tasks.length - 1]);
-        res.set('X-Next-Cursor', nextCursor);
-        const lifecycleQuery = lifecycle === 'active' ? '' : `&lifecycle=${lifecycle}`;
+      const query = parseTaskListQuery(req.originalUrl);
+      const result = await queries.listOwned(req.auth!, query);
+      if (result.nextCursor) {
+        res.set('X-Next-Cursor', result.nextCursor);
+        const lifecycleQuery = query.lifecycle === 'active' ? '' : `&lifecycle=${query.lifecycle}`;
         res.set(
           'Link',
-          `<?limit=${limit}${lifecycleQuery}&cursor=${encodeURIComponent(nextCursor)}>; rel="next"`
+          `<?limit=${query.limit}${lifecycleQuery}&cursor=${encodeURIComponent(result.nextCursor)}>; rel="next"`
         );
       }
-      return res.json(page.tasks);
+      return res.json(result.tasks);
     } catch (error) {
-      return next(error);
+      return queryError(error, res, next);
     }
   });
 

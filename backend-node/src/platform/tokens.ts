@@ -1,3 +1,4 @@
 export const APP_OPTIONS = Symbol('APP_OPTIONS');
 export const AI_HEALTH_CHECKER = Symbol('AI_HEALTH_CHECKER');
 export const DATABASE_STATUS_RESOLVER = Symbol('DATABASE_STATUS_RESOLVER');
+export const TASK_REPOSITORY = Symbol('TASK_REPOSITORY');
