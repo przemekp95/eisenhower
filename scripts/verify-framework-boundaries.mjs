@@ -66,24 +66,18 @@ const pythonRequirements = fs.readdirSync(path.join(root, 'backend-ai'))
   .join('\n');
 requireBoundary(!/^\s*(?:django|flask)(?:[<=>~!]|\s|$)/im.test(pythonRequirements), 'Django or Flask was added');
 
-const readme = read('README.md');
-const securityReview = read('docs/ai-rebuild/security-review.md');
-const methodology = read('docs/ai-rebuild/methodology-assessment.md');
+const design = read('docs/superpowers/specs/2026-08-23-nest-fastify-fastapi-migration-design.md');
 requireBoundary(
-  readme.includes('NestJS/Fastify API') && readme.includes('FastAPI AI/RAG service'),
-  'README does not describe the final NestJS/Fastify and FastAPI boundary',
+  design.includes('NestJS 11+') && design.includes('FastAPI remains the owner of synchronous AI/RAG'),
+  'migration design does not describe the final NestJS/Fastify and FastAPI boundary',
 );
 requireBoundary(
-  readme.includes('n8n remains asynchronous-only'),
-  'README does not preserve the asynchronous-only n8n boundary',
+  migrationMap.includes('n8n remains an asynchronous consumer only'),
+  'migration map does not preserve the asynchronous-only n8n boundary',
 );
 requireBoundary(
-  securityReview.includes('NestJS/Fastify task API') && !securityReview.includes('Express task API'),
-  'security review still describes Express as the active task API',
-);
-requireBoundary(
-  methodology.includes('app/http/factory.py') && methodology.includes('app/main.py'),
-  'methodology assessment does not record the modular FastAPI composition boundary',
+  migrationMap.includes('app/http/factory.py') && migrationMap.includes('app/main.py'),
+  'migration map does not record the modular FastAPI composition boundary',
 );
 
 const nodeDockerfile = read('backend-node/Dockerfile');

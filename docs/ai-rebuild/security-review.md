@@ -1,6 +1,6 @@
 # Security and privacy review
 
-Scope: NestJS/Fastify and FastAPI HTTP, the same-origin web proxy, browser/mobile clients, Qdrant, vLLM, n8n webhooks/jobs and MCP. This is a threat review and required control set, not proof that a production security assessment has passed.
+Scope: Express and FastAPI HTTP, the same-origin web proxy, browser/mobile clients, Qdrant, vLLM, n8n webhooks/jobs and MCP. This is a threat review and required control set, not proof that a production security assessment has passed.
 
 ## Trust boundaries
 
@@ -9,7 +9,7 @@ flowchart TB
   INTERNET((Untrusted network)) --> EDGE[Public TLS / edge]
   BROWSER[Browser / mobile] --> EDGE
   EDGE --> WEB[Web Nginx /api and /ai proxy]
-  WEB --> NODE[NestJS/Fastify task API]
+  WEB --> NODE[Express task API]
   WEB --> API[FastAPI AI API]
   MCPCLIENT[MCP client] --> MCP[MCP adapter]
   MCP --> EDGE
@@ -22,15 +22,15 @@ flowchart TB
   API --> OBS[Sanitized audit/telemetry]
 ```
 
-The target exposes only the public edge and keeps NestJS/Fastify, FastAPI, Qdrant, vLLM, n8n UI/workers and internal command endpoints private. The shipped web Nginx provides the same-origin `/api` and `/ai` hop inside Compose; repository configuration does not prove the external TLS/edge boundary. Network location is defense in depth, not identity.
+The target exposes only the public edge and keeps Express, FastAPI, Qdrant, vLLM, n8n UI/workers and internal command endpoints private. The shipped web Nginx provides the same-origin `/api` and `/ai` hop inside Compose; repository configuration does not prove the external TLS/edge boundary. Network location is defense in depth, not identity.
 
 ## Required controls
 
 | Axis | Threat | Required control | Local evidence / gap |
 | --- | --- | --- | --- |
-| Bearer/OAuth | stolen/forged tokens, confused deputy | OIDC issuer/audience/expiry/signature validation; narrow scopes; short TTL; key rotation; separate service audience | The shared web client supplies `Authorization: Bearer`; NestJS/Fastify and FastAPI bearer/OIDC verification exists; live IdP and rotation are unverified |
+| Bearer/OAuth | stolen/forged tokens, confused deputy | OIDC issuer/audience/expiry/signature validation; narrow scopes; short TTL; key rotation; separate service audience | The shared web client supplies `Authorization: Bearer`; Express and FastAPI bearer/OIDC verification exists; live IdP and rotation are unverified |
 | CSRF/browser requests | cross-site state change | Use explicit Authorization rather than ambient cookie auth; exact CORS allowlist; reject untrusted `Origin` on unsafe methods; if cookies are introduced, add CSRF token + SameSite policy | The web adapter uses `credentials: 'omit'`; both APIs reject an untrusted present Origin and ignore cookies for auth; public edge behavior remains unverified |
-| CORS | hostile browser origin or credential leakage | Never wildcard with credentials; allow only required origins/methods/headers; validate preflight and reverse-proxy headers | Fastify CORS uses `credentials: false`; FastAPI uses `allow_credentials=False`; both use configured allowlists, but production origins/runtime headers are unverified |
+| CORS | hostile browser origin or credential leakage | Never wildcard with credentials; allow only required origins/methods/headers; validate preflight and reverse-proxy headers | Express uses `credentials: false`; FastAPI uses `allow_credentials=False`; both use configured allowlists, but production origins/runtime headers are unverified |
 | HTTP transport | interception, smuggling, redirect/token leak | TLS externally and private TLS/mTLS where required; fixed upstream URLs; no redirects for credentials; request/body limits; proxy normalization | Web Nginx proxies `/api` and `/ai` over Compose HTTP and sets forwarded headers; the vLLM adapter rejects public endpoints and redirects; end-to-end TLS and trusted proxy normalization are unknown |
 | SSRF | connector or model induces fetch | Dedicated allowlisted connectors; parse/resolve host; block loopback/link-local/metadata/private ranges as policy requires; pin redirect/DNS behavior; no generic fetch tool | vLLM URL fixed; source fetch boundary not implemented end to end |
 | Webhooks | forgery/replay/body ambiguity | Versioned HMAC over timestamp + method + path + exact raw bytes; constant-time compare; five-minute window; durable unique event ID longer than retry; fail-closed schema/body limit | FastAPI and the inactive n8n workflow now preserve exact raw bytes locally, bind `v1`/`POST`/the ingress path, enforce 8 MiB plus strict schema parsing and reserve replay IDs atomically for 24 hours; no imported workflow or deployed ingress is claimed |

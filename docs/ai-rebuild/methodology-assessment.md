@@ -32,8 +32,6 @@ Retire or quarantine misleading language: `use_rag` for local similarity, `analy
 
 Local `rag.models`, `ports`, `application`, `ingestion` and `adapters` move in this direction. Generation-provider failures now use explicit application-level error types; incremental ingestion replaces prior document chunks fail-closed and persists a monotonic source sequence that rejects stale upserts and tombstones. Remaining gaps include a canonical `Quadrant` value object shared across boundaries, a complete canonical document store and transaction/reconciliation strategy for a future multi-consumer topology, route-independent authorization policy, and typed results in the older classifier flow.
 
-The FastAPI delivery boundary is now composed in `app/http/factory.py`; focused middleware, error, schema and router modules own HTTP mapping, while `app/main.py` is a 36-line compatibility export surface. This improves delivery/composition separation without claiming that older classifier policy has become strict hexagonal architecture.
-
 ## Hexagonal / ports and adapters
 
 The local experimental RAG package defines `Retriever`, `EmbeddingProvider`, `GenerationProvider`, `DocumentStore`, `IngestionPort` and `FallbackClassifier`. Qdrant, vLLM and MiniLM are useful driven adapters in that bounded slice; FastAPI, MCP and the webhook are driving adapters. Direct framework, persistence and service dependencies remain elsewhere, so the supported monorepo is pragmatic layered/hybrid rather than strict hexagonal architecture.
