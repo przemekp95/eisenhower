@@ -10,3 +10,11 @@ node benchmarks/http-migration/runner.mjs \
 ```
 
 The benchmark is synthetic and deliberately does not claim production behavior. `memory` is an isolated standalone MongoMemoryServer; `mongo` is an isolated one-node MongoMemoryReplSet with transaction support.
+
+Cold start records process-to-server-ready, liveness response and readiness response separately. To refresh only the 40 cold-start samples without repeating the load matrix:
+
+```bash
+node benchmarks/http-migration/runner.mjs \
+  --baseline-sha 5db1983da7f4e583a133f42d6b4a95ac8b3ab9c9 \
+  --cold-start-only true --cold-starts 10
+```

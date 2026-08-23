@@ -17,6 +17,9 @@ export function renderReport(result) {
     'To jest syntetyczny benchmark transportu na jednej maszynie i nie jest dowodem produkcyjnym ani pomiarem realnego ruchu. Tryb `memory` używa izolowanego MongoMemoryServer, a `mongo` jednoelementowego MongoMemoryReplSet; oba kontrolują dane, lecz nie odtwarzają sieci, dysku i obciążenia produkcyjnego.',
     '',
     `Metoda: warm-up ${result.method.warmup_seconds}s, pomiar ${result.method.measurement_seconds}s, ${result.method.repetitions} naprzemiennych powtórzeń, concurrency ${result.method.concurrency.join('/')}, ${result.method.cold_starts} cold startów.`,
+    ...(result.cold_start_generated_at ? [
+      `Cold start liveness/readiness odświeżono: ${result.cold_start_generated_at}; candidate: \`${result.cold_start_candidate_sha}\`.`,
+    ] : []),
     '',
     '| Storage | Scenariusz | C | Implementacja | throughput req/s | p50 ms | p95 ms | p99 ms | RSS MiB |',
     '| --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |',
@@ -54,21 +57,27 @@ export function renderReport(result) {
       }
     }
   }
-  lines.push('', '## Cold start', '', '| Storage | Implementacja | median ms |', '| --- | --- | ---: |');
+  lines.push('', '## Cold start', '', '| Storage | Implementacja | server ready median ms | liveness median ms | readiness median ms |', '| --- | --- | ---: | ---: | ---: |');
   for (const storage of result.method.storage) {
     const coldStartRows = {};
     for (const implementation of result.method.implementations) {
-      const values = result.cold_start_samples
-        .filter((sample) => sample.storage === storage && sample.implementation === implementation)
-        .map((sample) => sample.duration_ms);
-      coldStartRows[implementation] = median(values);
-      lines.push(`| ${storage} | ${implementation} | ${fixed(coldStartRows[implementation])} |`);
+      const samples = result.cold_start_samples
+        .filter((sample) => sample.storage === storage && sample.implementation === implementation);
+      coldStartRows[implementation] = {
+        serverReady: median(samples.map((sample) => sample.server_ready_duration_ms)),
+        liveness: median(samples.map((sample) => sample.liveness_duration_ms)),
+        readiness: median(samples.map((sample) => sample.readiness_duration_ms)),
+      };
+      const row = coldStartRows[implementation];
+      lines.push(`| ${storage} | ${implementation} | ${fixed(row.serverReady)} | ${fixed(row.liveness)} | ${fixed(row.readiness)} |`);
     }
-    const coldStartDelta = (
-      coldStartRows['nest-fastify'] / coldStartRows.express - 1
-    ) * 100;
-    if (coldStartDelta > 20) {
-      regressions.push(`${storage}/cold-start: czas uruchomienia ${fixed(coldStartDelta)}%`);
+    for (const [label, field] of [['server-ready', 'serverReady'], ['liveness', 'liveness'], ['readiness', 'readiness']]) {
+      const coldStartDelta = (
+        coldStartRows['nest-fastify'][field] / coldStartRows.express[field] - 1
+      ) * 100;
+      if (coldStartDelta > 20) {
+        regressions.push(`${storage}/cold-start/${label}: czas uruchomienia ${fixed(coldStartDelta)}%`);
+      }
     }
   }
   lines.push('', '## Regresje powyżej 20%', '');

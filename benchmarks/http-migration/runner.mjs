@@ -112,16 +112,25 @@ async function stopFixture(fixture) {
 async function coldStartSamples({ count, storage, implementation, appRoot, mongoUri }) {
   const samples = [];
   for (let index = 0; index < count; index += 1) {
+    const startedAt = performance.now();
     const fixture = await startFixture({ implementation, appRoot, mongoUri });
     try {
-      const response = await fetch(`${fixture.baseUrl}/health`);
-      await response.arrayBuffer();
-      if (!response.ok) throw new Error(`cold-start liveness returned ${response.status}`);
+      const liveness = await fetch(`${fixture.baseUrl}/health`);
+      await liveness.arrayBuffer();
+      const livenessDurationMs = performance.now() - startedAt;
+      if (!liveness.ok) throw new Error(`cold-start liveness returned ${liveness.status}`);
+      const readiness = await fetch(`${fixture.baseUrl}/health/ready`);
+      await readiness.arrayBuffer();
+      const readinessDurationMs = performance.now() - startedAt;
+      if (!readiness.ok) throw new Error(`cold-start readiness returned ${readiness.status}`);
       samples.push({
         storage,
         implementation,
         repetition: index + 1,
-        duration_ms: fixture.readyDurationMs,
+        duration_ms: livenessDurationMs,
+        server_ready_duration_ms: fixture.readyDurationMs,
+        liveness_duration_ms: livenessDurationMs,
+        readiness_duration_ms: readinessDurationMs,
         rss_bytes: readRss(fixture.child.pid),
       });
     } finally {
@@ -161,6 +170,48 @@ async function main() {
     const appRoots = { express: baselineRoot, 'nest-fastify': candidateRoot };
     const candidateRequire = createRequire(path.join(candidateRoot, 'package.json'));
     const { MongoMemoryServer, MongoMemoryReplSet } = candidateRequire('mongodb-memory-server');
+
+    if (args['cold-start-only'] === 'true') {
+      const existing = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+      if (existing.baseline?.sha !== baselineSha) {
+        throw new Error('existing benchmark baseline does not match --baseline-sha');
+      }
+      for (const storage of existing.method.storage) {
+        process.stdout.write(`Starting isolated ${storage} database for cold starts...\n`);
+        const database = storage === 'mongo'
+          ? await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: 'wiredTiger' } })
+          : await MongoMemoryServer.create();
+        databases.push(database);
+        const uriFor = (name) => database.getUri(`bench_${storage}_${name}`);
+        for (const implementation of implementations) {
+          process.stdout.write(`Cold starts ${storage}/${implementation}\n`);
+          coldSamples.push(...await coldStartSamples({
+            count: coldStarts,
+            storage,
+            implementation,
+            appRoot: appRoots[implementation],
+            mongoUri: uriFor(`cold_${implementation.replace('-', '_')}`),
+          }));
+        }
+      }
+      const refreshed = {
+        ...existing,
+        cold_start_generated_at: new Date().toISOString(),
+        cold_start_candidate_sha: candidateSha,
+        method: {
+          ...existing.method,
+          cold_starts: coldStarts,
+          cold_start_paths: ['/health', '/health/ready'],
+        },
+        cold_start_samples: coldSamples,
+      };
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+      fs.mkdirSync(path.dirname(reportPath), { recursive: true });
+      fs.writeFileSync(outputPath, `${JSON.stringify(refreshed, null, 2)}\n`);
+      fs.writeFileSync(reportPath, renderReport(refreshed));
+      process.stdout.write(`Cold-start evidence refreshed in ${outputPath}\n`);
+      return;
+    }
 
     for (const storage of storageValues) {
       process.stdout.write(`Starting isolated ${storage} database...\n`);
@@ -267,6 +318,7 @@ async function main() {
         warmup_seconds: warmupSeconds,
         measurement_seconds: measurementSeconds,
         cold_starts: coldStarts,
+        cold_start_paths: ['/health', '/health/ready'],
         alternating_order: true,
       },
       samples,

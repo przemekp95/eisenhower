@@ -7,6 +7,7 @@ Baseline: `5db1983da7f4e583a133f42d6b4a95ac8b3ab9c9`; candidate: `5d74809cd334eb
 To jest syntetyczny benchmark transportu na jednej maszynie i nie jest dowodem produkcyjnym ani pomiarem realnego ruchu. Tryb `memory` używa izolowanego MongoMemoryServer, a `mongo` jednoelementowego MongoMemoryReplSet; oba kontrolują dane, lecz nie odtwarzają sieci, dysku i obciążenia produkcyjnego.
 
 Metoda: warm-up 5s, pomiar 15s, 5 naprzemiennych powtórzeń, concurrency 1/10/50, 10 cold startów.
+Cold start liveness/readiness odświeżono: 2026-08-23T15:20:58.207Z; candidate: `0c27d31fc6011c0e43bd205cb79b15d1f3a2b1ce`.
 
 | Storage | Scenariusz | C | Implementacja | throughput req/s | p50 ms | p95 ms | p99 ms | RSS MiB |
 | --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |
@@ -49,12 +50,12 @@ Metoda: warm-up 5s, pomiar 15s, 5 naprzemiennych powtórzeń, concurrency 1/10/5
 
 ## Cold start
 
-| Storage | Implementacja | median ms |
-| --- | --- | ---: |
-| memory | express | 234.09 |
-| memory | nest-fastify | 374.32 |
-| mongo | express | 242.80 |
-| mongo | nest-fastify | 375.15 |
+| Storage | Implementacja | server ready median ms | liveness median ms | readiness median ms |
+| --- | --- | ---: | ---: | ---: |
+| memory | express | 213.49 | 219.56 | 221.18 |
+| memory | nest-fastify | 336.22 | 343.20 | 344.65 |
+| mongo | express | 243.80 | 250.46 | 252.03 |
+| mongo | nest-fastify | 342.09 | 348.92 | 350.55 |
 
 ## Regresje powyżej 20%
 
@@ -71,7 +72,11 @@ Metoda: warm-up 5s, pomiar 15s, 5 naprzemiennych powtórzeń, concurrency 1/10/5
 - mongo/task-list/c1: throughput 1.59%, p95 -2.48%, RSS 86.80%
 - mongo/task-create/c1: throughput -0.98%, p95 12.07%, RSS 69.43%
 - mongo/task-create/c10: throughput 0.96%, p95 2.39%, RSS 32.43%
-- memory/cold-start: czas uruchomienia 59.90%
-- mongo/cold-start: czas uruchomienia 54.51%
+- memory/cold-start/server-ready: czas uruchomienia 57.49%
+- memory/cold-start/liveness: czas uruchomienia 56.31%
+- memory/cold-start/readiness: czas uruchomienia 55.82%
+- mongo/cold-start/server-ready: czas uruchomienia 40.32%
+- mongo/cold-start/liveness: czas uruchomienia 39.31%
+- mongo/cold-start/readiness: czas uruchomienia 39.09%
 
 Wynik wskazuje koszt pełnego kontenera DI/dekoratorów Nest przy zachowaniu kontraktu. Każda wymieniona regresja jest jawna; syntetyczny pomiar nie uzasadnia sam w sobie optymalizacji kosztem bezpieczeństwa lub zgodności.

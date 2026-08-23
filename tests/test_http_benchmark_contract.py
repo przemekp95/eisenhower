@@ -23,6 +23,7 @@ def test_benchmark_method_and_results_are_complete():
   assert method["warmup_seconds"] >= 5
   assert method["measurement_seconds"] >= 15
   assert method["cold_starts"] >= 10
+  assert method["cold_start_paths"] == ["/health", "/health/ready"]
   assert method["alternating_order"] is True
   assert result["environment"]["node"]
   assert result["environment"]["cpu"]
@@ -37,6 +38,11 @@ def test_benchmark_method_and_results_are_complete():
     assert sample["rss_bytes"] > 0
     assert sample["order"] in (0, 1)
   assert len(result["cold_start_samples"]) == 2 * 2 * method["cold_starts"]
+  for sample in result["cold_start_samples"]:
+    assert sample["liveness_duration_ms"] > 0
+    assert sample["readiness_duration_ms"] > 0
+    assert sample["server_ready_duration_ms"] > 0
+    assert sample["rss_bytes"] > 0
 
 
 def test_benchmark_report_is_explicitly_synthetic_and_reports_regressions():
@@ -47,5 +53,6 @@ def test_benchmark_report_is_explicitly_synthetic_and_reports_regressions():
   assert "p50" in report and "p95" in report and "p99" in report
   assert "throughput" in report.lower() and "RSS" in report
   assert "cold start" in report.lower()
+  assert "liveness" in report.lower() and "readiness" in report.lower()
   assert "regres" in report.lower()
   assert "5db1983da7f4e583a133f42d6b4a95ac8b3ab9c9" in report
