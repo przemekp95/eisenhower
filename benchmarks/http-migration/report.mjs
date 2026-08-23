@@ -57,6 +57,20 @@ export function renderReport(result) {
       }
     }
   }
+  if (result.memory_diagnostics?.length) {
+    lines.push(
+      '',
+      '## Pamięć po obciążeniu i wymuszonym GC',
+      '',
+      'RSS jest high-water mark procesu i może pozostać wysokie po zwolnieniu obiektów. Dlatego obok RSS raport pokazuje żywy heap po dwukrotnym pełnym GC; wymuszony GC służy wyłącznie diagnostyce i nie jest rekomendacją dla runtime.',
+      '',
+      '| Storage | Scenariusz | Implementacja | heap przed GC MiB | heap po GC MiB | RSS po GC MiB |',
+      '| --- | --- | --- | ---: | ---: | ---: |',
+    );
+    for (const diagnostic of result.memory_diagnostics) {
+      lines.push(`| ${diagnostic.storage} | ${diagnostic.scenario} | ${diagnostic.implementation} | ${fixed(diagnostic.before_gc.heap_used_bytes / 1024 / 1024)} | ${fixed(diagnostic.after_gc.heap_used_bytes / 1024 / 1024)} | ${fixed(diagnostic.after_gc.rss_bytes / 1024 / 1024)} |`);
+    }
+  }
   lines.push('', '## Cold start', '', '| Storage | Implementacja | server ready median ms | liveness median ms | readiness median ms |', '| --- | --- | ---: | ---: | ---: |');
   for (const storage of result.method.storage) {
     const coldStartRows = {};
@@ -83,6 +97,6 @@ export function renderReport(result) {
   lines.push('', '## Regresje powyżej 20%', '');
   if (regressions.length) lines.push(...regressions.map((entry) => `- ${entry}`));
   else lines.push('- Nie zaobserwowano medianowej regresji >20% dla throughput, p95, RSS ani cold startu.');
-  lines.push('', 'Wynik wskazuje koszt pełnego kontenera DI/dekoratorów Nest przy zachowaniu kontraktu. Każda wymieniona regresja jest jawna; syntetyczny pomiar nie uzasadnia sam w sobie optymalizacji kosztem bezpieczeństwa lub zgodności.');
+  lines.push('', 'Wynik wskazuje koszt pełnego kontenera DI/dekoratorów Nest przy zachowaniu kontraktu. Diagnostyka heap/RSS pozwala odróżnić żywe obiekty od pamięci zachowanej przez V8 po skoku alokacji. Każda wymieniona regresja jest jawna; syntetyczny pomiar nie uzasadnia sam w sobie optymalizacji kosztem bezpieczeństwa lub zgodności.');
   return `${lines.join('\n')}\n`;
 }

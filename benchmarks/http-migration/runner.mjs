@@ -59,13 +59,14 @@ function readRss(pid) {
 async function startFixture({ implementation, appRoot, mongoUri }) {
   const startedAt = performance.now();
   const child = spawn(process.execPath, [
+    '--expose-gc',
     fixtureServer,
     `--implementation=${implementation}`,
     `--app-root=${appRoot}`,
     `--mongo-uri=${mongoUri}`,
   ], {
     cwd: appRoot,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     env: process.env,
   });
   let stderr = '';
@@ -92,6 +93,31 @@ async function startFixture({ implementation, appRoot, mongoUri }) {
     readyDurationMs: performance.now() - startedAt,
     stderr: () => stderr,
   };
+}
+
+let memoryRequestId = 0;
+
+async function memorySnapshot(fixture, forceGc = false) {
+  const id = ++memoryRequestId;
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      fixture.child.off('message', onMessage);
+      reject(new Error(`fixture memory snapshot timed out: ${fixture.stderr()}`));
+    }, 5_000);
+    function onMessage(message) {
+      if (!message || message.type !== 'BENCH_MEMORY' || message.id !== id) return;
+      clearTimeout(timeout);
+      fixture.child.off('message', onMessage);
+      resolve(message.usage);
+    }
+    fixture.child.on('message', onMessage);
+    fixture.child.send({ type: 'BENCH_MEMORY', id, forceGc }, (error) => {
+      if (!error) return;
+      clearTimeout(timeout);
+      fixture.child.off('message', onMessage);
+      reject(error);
+    });
+  });
 }
 
 async function stopFixture(fixture) {
@@ -132,6 +158,7 @@ async function coldStartSamples({ count, storage, implementation, appRoot, mongo
         liveness_duration_ms: livenessDurationMs,
         readiness_duration_ms: readinessDurationMs,
         rss_bytes: readRss(fixture.child.pid),
+        memory_usage: await memorySnapshot(fixture),
       });
     } finally {
       await stopFixture(fixture);
@@ -161,6 +188,7 @@ async function main() {
   );
   const samples = [];
   const coldSamples = [];
+  const memoryDiagnostics = [];
   const servers = [];
   const databases = [];
   try {
@@ -266,9 +294,21 @@ async function main() {
                   implementation,
                   ...summarizeWindow(window),
                   rss_bytes: readRss(fixtures[implementation].child.pid),
+                  memory_usage: await memorySnapshot(fixtures[implementation]),
                 });
               }
             }
+          }
+          for (const implementation of implementations) {
+            const beforeGc = await memorySnapshot(fixtures[implementation]);
+            const afterGc = await memorySnapshot(fixtures[implementation], true);
+            memoryDiagnostics.push({
+              storage,
+              scenario,
+              implementation,
+              before_gc: beforeGc,
+              after_gc: afterGc,
+            });
           }
         } finally {
           for (const implementation of implementations) {
@@ -320,9 +360,11 @@ async function main() {
         cold_starts: coldStarts,
         cold_start_paths: ['/health', '/health/ready'],
         alternating_order: true,
+        forced_gc_diagnostics: true,
       },
       samples,
       cold_start_samples: coldSamples,
+      memory_diagnostics: memoryDiagnostics,
       limitations: [
         'Synthetic single-host benchmark; not production traffic evidence.',
         'Ephemeral Mongo processes do not reproduce production storage or network latency.',

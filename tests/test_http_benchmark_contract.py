@@ -25,6 +25,7 @@ def test_benchmark_method_and_results_are_complete():
   assert method["cold_starts"] >= 10
   assert method["cold_start_paths"] == ["/health", "/health/ready"]
   assert method["alternating_order"] is True
+  assert method["forced_gc_diagnostics"] is True
   assert result["environment"]["node"]
   assert result["environment"]["cpu"]
   assert result["environment"]["kernel"]
@@ -36,6 +37,9 @@ def test_benchmark_method_and_results_are_complete():
     assert sample["throughput_rps"] > 0
     assert 0 <= sample["p50_ms"] <= sample["p95_ms"] <= sample["p99_ms"]
     assert sample["rss_bytes"] > 0
+    assert sample["memory_usage"]["heap_used_bytes"] > 0
+    assert sample["memory_usage"]["heap_total_bytes"] >= sample["memory_usage"]["heap_used_bytes"]
+    assert sample["memory_usage"]["external_bytes"] >= sample["memory_usage"]["array_buffers_bytes"]
     assert sample["order"] in (0, 1)
   assert len(result["cold_start_samples"]) == 2 * 2 * method["cold_starts"]
   for sample in result["cold_start_samples"]:
@@ -43,6 +47,12 @@ def test_benchmark_method_and_results_are_complete():
     assert sample["readiness_duration_ms"] > 0
     assert sample["server_ready_duration_ms"] > 0
     assert sample["rss_bytes"] > 0
+    assert sample["memory_usage"]["heap_used_bytes"] > 0
+  assert len(result["memory_diagnostics"]) == 2 * 3 * 2
+  for diagnostic in result["memory_diagnostics"]:
+    assert diagnostic["before_gc"]["heap_used_bytes"] > 0
+    assert diagnostic["after_gc"]["heap_used_bytes"] > 0
+    assert diagnostic["after_gc"]["heap_used_bytes"] <= diagnostic["before_gc"]["heap_used_bytes"]
 
 
 def test_benchmark_report_is_explicitly_synthetic_and_reports_regressions():
@@ -52,6 +62,7 @@ def test_benchmark_report_is_explicitly_synthetic_and_reports_regressions():
   assert "nie jest dowodem produkcyjnym" in report.lower()
   assert "p50" in report and "p95" in report and "p99" in report
   assert "throughput" in report.lower() and "RSS" in report
+  assert "wymuszonym GC" in report and "heap po GC" in report
   assert "cold start" in report.lower()
   assert "liveness" in report.lower() and "readiness" in report.lower()
   assert "regres" in report.lower()

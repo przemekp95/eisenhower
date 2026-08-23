@@ -44,6 +44,26 @@ if (implementation === 'nest-fastify') {
 }
 process.stdout.write(`BENCH_READY ${JSON.stringify({ port })}\n`);
 
+function memoryUsage() {
+  const usage = process.memoryUsage();
+  return {
+    rss_bytes: usage.rss,
+    heap_total_bytes: usage.heapTotal,
+    heap_used_bytes: usage.heapUsed,
+    external_bytes: usage.external,
+    array_buffers_bytes: usage.arrayBuffers,
+  };
+}
+
+process.on('message', (message) => {
+  if (!message || message.type !== 'BENCH_MEMORY' || typeof message.id !== 'number') return;
+  if (message.forceGc && typeof global.gc === 'function') {
+    global.gc();
+    global.gc();
+  }
+  process.send?.({ type: 'BENCH_MEMORY', id: message.id, usage: memoryUsage() });
+});
+
 let stopping = false;
 async function stop() {
   if (stopping) return;

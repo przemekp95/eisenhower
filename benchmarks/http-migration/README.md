@@ -1,6 +1,6 @@
 # HTTP migration benchmark
 
-Runner builds the exact Express oracle from a temporary `git archive`, starts it and the current NestJS/Fastify build against isolated ephemeral Mongo instances, alternates measurement order, and records per-repetition latency/throughput/RSS plus cold-start samples.
+Runner builds the exact Express oracle from a temporary `git archive`, starts it and the current NestJS/Fastify build against isolated ephemeral Mongo instances, alternates measurement order, and records per-repetition latency/throughput/RSS plus cold-start samples. Fixtures run with `--expose-gc`: after each scenario the runner records heap/RSS before and after two forced full collections. This is diagnostic evidence only; production runtime does not force GC.
 
 ```bash
 node benchmarks/http-migration/runner.mjs \
