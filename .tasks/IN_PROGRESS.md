@@ -1,5 +1,24 @@
 # In Progress
 
+## TASK-066: Migrate Express to NestJS/Fastify and modularize the FastAPI boundary
+**Priority:** P1 | **Tags:** architecture, backend-node, backend-ai, nestjs, fastify, fastapi
+
+Replace the `backend-node` Express transport with a single NestJS application on the Fastify adapter, preserve every existing client and integration contract, and split the oversized FastAPI composition root without changing FastAPI ownership of synchronous AI/RAG.
+
+### Plan
+
+- Freeze the exact Express baseline and build a transport-independent contract harness plus a complete migration map before replacing routes.
+- Migrate `backend-node` in vertical RED/GREEN/refactor slices to modular NestJS/Fastify, preferring Nest/Fastify components for technical concerns while preserving contract behavior and durable guarantees.
+- Keep FastAPI as the import-safe AI/RAG boundary, extract focused composition, dependency, middleware and router modules, and preserve Pydantic/OpenAPI, security, audit, metrics, citation and fallback contracts.
+- Remove Express, its middleware packages, types and duplicate transport implementations only after full parity; retain no permanent dual runtime or duplicate business logic.
+- Verify focused unit/integration/BDD/client/web/mobile/n8n suites, builds, typechecks and lint, then run fresh root verification, comparative Express-versus-Nest/Fastify benchmarks and a data-compatible rollback rehearsal.
+
+### Evidence boundaries
+
+TASK-066 may change and commit only local source, tests and documentation in this isolated worktree. It does not complete or alter TASK-065 and does not authorize push, PR creation or merge, `dev`/`master` promotion, artifact or image publication, deployment, runtime activation, public or production claims, physical acceptance or real-traffic proof.
+
+---
+
 ## TASK-065: Align task-first UX, bulk import, Calendar semantics, and governed local AI
 **Priority:** P0 | **Tags:** product, bulk-import, calendar, rag, local-runtime
 
