@@ -1,12 +1,13 @@
 # NestJS/Fastify + FastAPI migration evidence
 
-Data świeżej weryfikacji: 2026-08-23. Bazowy oracle i artefakt rollbacku Express: `5db1983da7f4e583a133f42d6b4a95ac8b3ab9c9`. Zweryfikowany lokalny kandydat przed tym dokumentem: `0c27d31fc6011c0e43bd205cb79b15d1f3a2b1ce`.
+Data świeżej weryfikacji: 2026-08-23. Bazowy oracle i artefakt rollbacku Express: `5db1983da7f4e583a133f42d6b4a95ac8b3ab9c9`. Zweryfikowany lokalny kandydat przed tym dokumentem: `b3d53d0afdd85d8362189f72e8286c672cf971a9`.
 
 Status: lokalny kod, kontrakty, testy, benchmark i rollback są zielone. TASK-066 pozostaje **In Progress**, ponieważ materialny narzut RSS/cold startu wymaga osobistej decyzji właściciela `accept` albo `fix`; automatyczna kontynuacja celu nie jest taką decyzją.
 
 ## Architektura i granice
 
 - `backend-node` ma jeden bootstrap NestJS 11 na adapterze Fastify 5. Wszystkie 41 wierszy w mapie HTTP ma jednego właściciela `nest-final`; legacy route tree i Express-only bootstrap zostały usunięte.
+- Bootstrap ładuje i waliduje konfigurację raz, publiczny i wewnętrzny Calendar używają jednej instancji `CalendarApplicationService`, a request ID, principal i timing są przechowywane w jednym kontekście dekorowanym przez Fastify. Usunięto wcześniejsze wielokrotne composition allocations bez tworzenia drugiego runtime'u lub ścieżki kompatybilności.
 - Kontrolery są adapterami HTTP. `TaskCommandService`, `TaskQueryService`, `CalendarApplicationService`, `CalendarInternalService`, `GoogleOAuthService` i `GoogleCalendarService` pozostają właścicielami koordynacji semantycznej. Nie wprowadzono generycznego `BaseRepository`, event sourcingu ani ceremonialnego framework busa.
 - FastAPI pozostaje właścicielem synchronicznego AI/RAG zgodnie z ADR 0001. n8n jest wyłącznie asynchronicznym konsumentem; Django i Flask nie zostały dodane.
 - `backend-ai/app/main.py` jest 36-liniową fasadą kompatybilności. Import-safe `app/http/factory.py` składa skupione moduły composition, middleware, errors, schemas, health, analysis, knowledge, OCR, internal, training i operator; lightweight oraz knowledge-only role zachowują ograniczone powierzchnie.
@@ -27,24 +28,24 @@ Status: lokalny kod, kontrakty, testy, benchmark i rollback są zielone. TASK-06
 Wszystkie poniższe polecenia zakończyły się kodem `0` w tym worktree:
 
 - `make prepare-verify`: zależności przygotowane; npm backend-node zgłosił 0 podatności.
-- `backend-node`: build i typecheck; 25 suite / 386 testów; 100% statements, branches, functions i lines dla mierzonej logiki application/domain/persistence/provider; 21 scenariuszy BDD / 149 kroków.
+- `backend-node`: build i typecheck; 27 suite / 389 testów; 100% statements, branches, functions i lines dla mierzonej logiki application/domain/persistence/provider; 21 scenariuszy BDD / 149 kroków. Nowe testy kompozycji potwierdzają pojedynczy odczyt konfiguracji, jedną instancję Calendar i jeden kontekst requestu dekorowany przez Fastify.
 - `backend-ai`: 893 passed, 13 skipped, 87.58% coverage; Pylint 10.00/10. Zamrożone pliki zatwierdzonego korpusu RAG są bajtowo identyczne z bazą, a 4 testy reprodukowalności review packet są zielone.
 - API client: 34 testy i typecheck. MCP: 50 testów. n8n: 13 testów Python oraz 7 Node.
 - web: build, 30 suite / 254 testy przy 100% coverage oraz 2 testy integracyjne. mobile: 21 suite / 202 testy; root coverage 95.55% statements / 90.16% branches / 95.65% functions / 96.58% lines.
 - `make verify`: pełna bramka zakończona kodem `0`, łącznie z audytami produkcyjnymi, formatowaniem, buildami, testami, typecheck i lint.
-- Evidence gate: `7 passed`; framework verifier, ancestor check, forbidden-import searches oraz `git diff --check` są zielone. TASK-065 pozostaje bajtowo identyczny z bazą (`12 355` bajtów sekcji).
+- Evidence gate: `7 passed`; framework verifier, ancestor check, forbidden-import searches oraz `git diff --check` są zielone. TASK-065 pozostaje bajtowo identyczny z bazą (SHA-256 sekcji `61cc8258303c6827e185648698b9f8eb73c82fe83d8c044e4ac8bbb1c4db9bb9`).
 
 Audyt zależności nie jest kompletnym dowodem braku podatności. Własny audyt Python sprawdził 201 zależności, ale pozostawił jawne blind spoty dla `en-core-web-sm==3.8.0`, `torch==2.13.0+cpu` i `torchvision==0.28.0+cpu`; `pip-audit` nie potrafił audytować wheel `torch` spoza PyPI. Osobny skan źródłowy/obrazu pozostaje odrębną bramką release.
 
-## Benchmark i otwarta decyzja
+## Benchmark, optymalizacja i otwarta decyzja
 
 Surowe dane są w `benchmarks/results/nest-fastify-migration.json`, a interpretacja w `docs/benchmarks/2026-08-23-express-vs-nest-fastify.md`. Metoda: ten sam host i Node `v24.18.0`, Express z exact baseline, Nest/Fastify candidate, warm-up 5 s, pomiar 15 s, 5 naprzemiennych powtórzeń, concurrency 1/10/50, pamięciowy Mongo i jednoelementowy Mongo replica set, po 10 cold startów. Cold start zapisuje oddzielnie czas do gotowości serwera, odpowiedzi liveness `/health` i odpowiedzi readiness `/health/ready`.
 
-- Nie ma regresji >20% w throughput ani p95. Najgorszy throughput to `-4.96%`, a najgorszy p95 `+16.16%`.
-- RSS przekracza próg w części scenariuszy: od `+28.05%` do `+162.19%` w pozycjach objętych alertem.
-- W trybie memory Nest/Fastify jest wolniejszy przy cold starcie o `+57.49%` do server-ready, `+56.31%` do liveness i `+55.82%` do readiness.
-- W trybie Mongo analogiczne regresje wynoszą `+40.32%`, `+39.31%` i `+39.09%`.
-- Najbardziej prawdopodobną przyczyną jest stały koszt kontenera DI, metadata/dekoratorów i modułów Nest przy podobnym zachowaniu request path. Nie zaobserwowano kontraktowej ani przepustowościowej przesłanki do usuwania zabezpieczeń w celu redukcji tego kosztu.
+- Po usunięciu duplikatów kompozycji nie ma regresji >20% w throughput ani p95. Przy medianie delt sparowanych powtórzeń zakres throughput wynosi od `-2.40%` do `+8.28%`, a p95 od `-6.00%` do `+3.68%`. Poprzedni alert p95 był artefaktem dzielenia niezależnie agregowanych median z narastającej serii zapisów.
+- RSS po długim obciążeniu nadal przekracza próg w części scenariuszy, ale diagnostyka dwukrotnego pełnego GC nie wskazuje wycieku: żywy heap Nest wynosi `30.93–33.42 MiB`, Express `23.20–26.13 MiB`, czyli różnica absolutna `7.29–7.83 MiB`. W świeżym procesie medianowy RSS Nest wynosi około `124 MiB`, o około `18–20 MiB` więcej niż Express; pozostała część wysokiego RSS to pojemność sterty zachowana przez V8 po skoku alokacji.
+- W trybie memory Nest/Fastify jest wolniejszy przy cold starcie o `+67.45%` do server-ready, `+67.21%` do liveness i `+66.94%` do readiness. W trybie Mongo analogiczne regresje wynoszą `+50.51%`, `+50.11%` i `+49.95%`. W wartościach bezwzględnych Nest odpowiada na liveness po medianie `428.16 ms` (memory) i `376.32 ms` (Mongo).
+- Krótki eksperyment z `--max-semi-space-size=4` obniżył high-water RSS, lecz pogorszył przepustowość liveness Nest względem Express; nie został przyjęty. Globalne raw body zachowano, ponieważ różnica żywego heap między task-create i liveness była podobna po obu stronach, a mechanizm jest częścią fail-closed kontraktu internal HMAC.
+- Pozostały koszt pochodzi przede wszystkim z pełnego kontenera DI, skanowania metadata/dekoratorów i request lifecycle Nest. Usunięcie go wymagałoby rezygnacji z Nest na rzecz czystego Fastify albo osobnego, lżejszego procesu health; oba warianty zmieniają zaakceptowaną architekturę lub ponownie tworzą podwójne elementy.
 
 To syntetyczny benchmark transportu, nie capacity test ani dowód produkcyjny. Zgodnie ze specyfikacją materialny koszt wymaga jawnego `accept` lub pracy optymalizacyjnej. Status decyzji: **PENDING OWNER ACCEPTANCE**.
 
