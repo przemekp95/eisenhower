@@ -51,7 +51,7 @@ set -eu
 printf '%s\\n' \"$*\" >> \"{log}\"
 previous=''
 for arg in \"$@\"; do
-  if [ \"$previous\" = '--env-file' ]; then grep -E '^(RELEASE_SHA|WEB_IMAGE|AMD_RESPONSE_IMAGE)=' \"$arg\" >> \"{log}\" || true; fi
+  if [ \"$previous\" = '--env-file' ]; then grep -E '^(APP_ENV|RELEASE_SHA|WEB_IMAGE|AMD_RESPONSE_IMAGE)=' \"$arg\" >> \"{log}\" || true; fi
   previous=$arg
 done
 case \" $* \" in
@@ -141,6 +141,19 @@ def test_deploy_maps_the_scanned_response_digest_for_the_private_provider_stack(
     "AMD_RESPONSE_IMAGE=registry.example/backend-ai-response-rocm@sha256:"
     f"{'b' * 64}"
   ) in log
+
+
+def test_deploy_separates_generated_values_from_env_without_trailing_newline(tmp_path):
+  host, env_file = _host(tmp_path)
+  env_file.write_text("OIDC_ISSUER=https://identity.example.test")
+  candidate = tmp_path / "candidate.json"
+  _manifest(candidate, "2" * 40, "b")
+  env = _fake_docker(tmp_path)
+  env["EISENHOWER_DEPLOY_ROOT"] = str(host)
+
+  subprocess.run([DEPLOY, candidate, env_file], env=env, text=True, capture_output=True)
+
+  assert "APP_ENV=production\n" in (tmp_path / "docker.log").read_text()
 
 
 def test_backup_is_checksummed_and_restore_requires_explicit_confirmation(tmp_path):

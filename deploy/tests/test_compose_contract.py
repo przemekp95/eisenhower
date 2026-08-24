@@ -201,3 +201,9 @@ def test_mcp_runtime_discovers_installed_console_script():
   dockerfile = MCP_DOCKERFILE_PATH.read_text()
 
   assert re.search(r"(?m)^\s*PATH=/opt/python/bin:", dockerfile)
+
+
+def test_mcp_secret_tmpfs_is_owned_by_the_image_runtime_user():
+  mcp = _compose()["services"]["mcp-service"]
+
+  assert mcp["tmpfs"] == ["/run/eisenhower:mode=0700,uid=65532,gid=65532"]

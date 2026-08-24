@@ -618,7 +618,7 @@ services:
     volumes:
       - audit_data:/app/audit
     tmpfs:
-      - /run/eisenhower:mode=0700,uid=1001,gid=1001
+      - /run/eisenhower:mode=0700,uid=65532,gid=65532
 
   oauth2-proxy:
     <<: *common
