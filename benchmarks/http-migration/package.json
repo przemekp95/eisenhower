@@ -1,0 +1,8 @@
+{
+  "name": "eisenhower-http-migration-benchmark",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "benchmark": "node runner.mjs"
+  }
+}

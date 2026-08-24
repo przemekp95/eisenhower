@@ -1,0 +1,114 @@
+function median(values) {
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+const fixed = (value) => Number(value).toFixed(2);
+
+function medianPairedDelta(samples, field) {
+  const repetitions = [...new Set(samples.map((sample) => sample.repetition))];
+  return median(repetitions.map((repetition) => {
+    const express = samples.find((sample) => (
+      sample.repetition === repetition && sample.implementation === 'express'
+    ));
+    const nest = samples.find((sample) => (
+      sample.repetition === repetition && sample.implementation === 'nest-fastify'
+    ));
+    return (nest[field] / express[field] - 1) * 100;
+  }));
+}
+
+export function renderReport(result) {
+  const lines = [
+    '# Express baseline vs NestJS/Fastify',
+    '',
+    `Data: ${result.generated_at}`,
+    '',
+    `Baseline: \`${result.baseline.sha}\`; candidate: \`${result.candidate.sha}\`; Node: \`${result.environment.node}\`.`,
+    '',
+    'To jest syntetyczny benchmark transportu na jednej maszynie i nie jest dowodem produkcyjnym ani pomiarem realnego ruchu. Tryb `memory` używa izolowanego MongoMemoryServer, a `mongo` jednoelementowego MongoMemoryReplSet; oba kontrolują dane, lecz nie odtwarzają sieci, dysku i obciążenia produkcyjnego.',
+    '',
+    `Metoda: warm-up ${result.method.warmup_seconds}s, pomiar ${result.method.measurement_seconds}s, ${result.method.repetitions} naprzemiennych powtórzeń, concurrency ${result.method.concurrency.join('/')}, ${result.method.cold_starts} cold startów. Progi regresji load są liczone jako mediana delt sparowanych powtórzeń Express/Nest, co ogranicza błąd wynikający z narastania danych i kolejności pomiaru.`,
+    ...(result.cold_start_generated_at ? [
+      `Cold start liveness/readiness odświeżono: ${result.cold_start_generated_at}; candidate: \`${result.cold_start_candidate_sha}\`.`,
+    ] : []),
+    '',
+    '| Storage | Scenariusz | C | Implementacja | throughput req/s | p50 ms | p95 ms | p99 ms | RSS MiB |',
+    '| --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |',
+  ];
+  const regressions = [];
+  for (const storage of result.method.storage) {
+    for (const scenario of result.method.scenarios) {
+      for (const concurrency of result.method.concurrency) {
+        const rows = {};
+        const comparisonSamples = result.samples.filter((sample) => (
+          sample.storage === storage
+          && sample.scenario === scenario
+          && sample.concurrency === concurrency
+        ));
+        for (const implementation of result.method.implementations) {
+          const samples = comparisonSamples.filter((sample) => sample.implementation === implementation);
+          rows[implementation] = {
+            throughput: median(samples.map((sample) => sample.throughput_rps)),
+            p50: median(samples.map((sample) => sample.p50_ms)),
+            p95: median(samples.map((sample) => sample.p95_ms)),
+            p99: median(samples.map((sample) => sample.p99_ms)),
+            rss: median(samples.map((sample) => sample.rss_bytes)) / 1024 / 1024,
+          };
+          const row = rows[implementation];
+          lines.push(`| ${storage} | ${scenario} | ${concurrency} | ${implementation} | ${fixed(row.throughput)} | ${fixed(row.p50)} | ${fixed(row.p95)} | ${fixed(row.p99)} | ${fixed(row.rss)} |`);
+        }
+        const throughputDelta = medianPairedDelta(comparisonSamples, 'throughput_rps');
+        const p95Delta = medianPairedDelta(comparisonSamples, 'p95_ms');
+        const rssDelta = medianPairedDelta(comparisonSamples, 'rss_bytes');
+        if (throughputDelta < -20 || p95Delta > 20 || rssDelta > 20) {
+          regressions.push(`${storage}/${scenario}/c${concurrency}: throughput ${fixed(throughputDelta)}%, p95 ${fixed(p95Delta)}%, RSS ${fixed(rssDelta)}%`);
+        }
+      }
+    }
+  }
+  if (result.memory_diagnostics?.length) {
+    lines.push(
+      '',
+      '## Pamięć po obciążeniu i wymuszonym GC',
+      '',
+      'RSS jest high-water mark procesu i może pozostać wysokie po zwolnieniu obiektów. Dlatego obok RSS raport pokazuje żywy heap po dwukrotnym pełnym GC; wymuszony GC służy wyłącznie diagnostyce i nie jest rekomendacją dla runtime.',
+      '',
+      '| Storage | Scenariusz | Implementacja | heap przed GC MiB | heap po GC MiB | RSS po GC MiB |',
+      '| --- | --- | --- | ---: | ---: | ---: |',
+    );
+    for (const diagnostic of result.memory_diagnostics) {
+      lines.push(`| ${diagnostic.storage} | ${diagnostic.scenario} | ${diagnostic.implementation} | ${fixed(diagnostic.before_gc.heap_used_bytes / 1024 / 1024)} | ${fixed(diagnostic.after_gc.heap_used_bytes / 1024 / 1024)} | ${fixed(diagnostic.after_gc.rss_bytes / 1024 / 1024)} |`);
+    }
+  }
+  lines.push('', '## Cold start', '', '| Storage | Implementacja | server ready median ms | liveness median ms | readiness median ms | RSS median MiB |', '| --- | --- | ---: | ---: | ---: | ---: |');
+  for (const storage of result.method.storage) {
+    const coldStartRows = {};
+    for (const implementation of result.method.implementations) {
+      const samples = result.cold_start_samples
+        .filter((sample) => sample.storage === storage && sample.implementation === implementation);
+      coldStartRows[implementation] = {
+        serverReady: median(samples.map((sample) => sample.server_ready_duration_ms)),
+        liveness: median(samples.map((sample) => sample.liveness_duration_ms)),
+        readiness: median(samples.map((sample) => sample.readiness_duration_ms)),
+        rss: median(samples.map((sample) => sample.rss_bytes)) / 1024 / 1024,
+      };
+      const row = coldStartRows[implementation];
+      lines.push(`| ${storage} | ${implementation} | ${fixed(row.serverReady)} | ${fixed(row.liveness)} | ${fixed(row.readiness)} | ${fixed(row.rss)} |`);
+    }
+    for (const [label, field] of [['server-ready', 'serverReady'], ['liveness', 'liveness'], ['readiness', 'readiness']]) {
+      const coldStartDelta = (
+        coldStartRows['nest-fastify'][field] / coldStartRows.express[field] - 1
+      ) * 100;
+      if (coldStartDelta > 20) {
+        regressions.push(`${storage}/cold-start/${label}: czas uruchomienia ${fixed(coldStartDelta)}%`);
+      }
+    }
+  }
+  lines.push('', '## Regresje powyżej 20%', '');
+  if (regressions.length) lines.push(...regressions.map((entry) => `- ${entry}`));
+  else lines.push('- Nie zaobserwowano medianowej regresji >20% dla throughput, p95, RSS ani cold startu.');
+  lines.push('', 'Wynik wskazuje koszt pełnego kontenera DI/dekoratorów Nest przy zachowaniu kontraktu. Diagnostyka heap/RSS pozwala odróżnić żywe obiekty od pamięci zachowanej przez V8 po skoku alokacji. Każda wymieniona regresja jest jawna; syntetyczny pomiar nie uzasadnia sam w sobie optymalizacji kosztem bezpieczeństwa lub zgodności.');
+  return `${lines.join('\n')}\n`;
+}

@@ -1,11 +1,9 @@
 import mongoose from 'mongoose';
-import express from 'express';
-import request from 'supertest';
+import request from './helpers/http-test-client';
 import { createApp } from '../src/app';
 import { resolveLifecycleTransition } from '../src/application/taskRepository';
 import { TaskModel } from '../src/models/task';
 import { MongooseTaskRepository } from '../src/repositories/mongooseTaskRepository';
-import { createTasksRouter } from '../src/routes/tasks';
 import {
   CalendarBindingModel,
   CalendarConnectionModel,
@@ -99,20 +97,22 @@ describe('task routes', () => {
       urgent: true,
       important: true,
     });
-    const oidcApp = express();
-    oidcApp.use(express.json());
-    oidcApp.use((req, _res, next) => {
-      req.auth = { tenantId: 'tenant-a', userId: 'user-a', roles: ['user'], projectIds: [] };
-      next();
+    const oidcApp = createApp({
+      auditSink: { record: () => undefined },
+      oidcTokenVerifier: async () => ({
+        tenantId: 'tenant-a', userId: 'user-a', roles: ['user'], projectIds: [],
+        scopes: ['tasks:read', 'tasks:write'],
+      }),
     });
-    oidcApp.use('/tasks', createTasksRouter());
 
-    const listed = await request(oidcApp).get('/tasks');
+    const listed = await request(oidcApp).get('/tasks').set('Authorization', 'Bearer user-a');
     const updated = await request(oidcApp)
       .put(`/tasks/${foreign.id}`)
+      .set('Authorization', 'Bearer user-a')
       .set('If-Match', '"0"')
       .send({ urgent: false });
-    const deleted = await request(oidcApp).delete(`/tasks/${foreign.id}`).set('If-Match', '"0"');
+    const deleted = await request(oidcApp).delete(`/tasks/${foreign.id}`)
+      .set('Authorization', 'Bearer user-a').set('If-Match', '"0"');
 
     expect(listed.body).toEqual([]);
     expect(updated.status).toBe(404);
@@ -679,24 +679,21 @@ describe('task routes', () => {
   });
 
   it('scopes an idempotency key by both tenant and owner', async () => {
-    const scopedApp = express();
-    scopedApp.use(express.json());
-    scopedApp.use((req, _res, next) => {
-      req.auth = {
-        tenantId: String(req.get('x-test-tenant')),
-        userId: String(req.get('x-test-owner')),
-        roles: ['user'],
-        projectIds: [],
-      };
-      next();
+    const scopedApp = createApp({
+      auditSink: { record: () => undefined },
+      oidcTokenVerifier: async (token) => {
+        const [tenantId, userId] = token.split(':');
+        return {
+          tenantId, userId, roles: ['user'], projectIds: [],
+          scopes: ['tasks:read', 'tasks:write'],
+        };
+      },
     });
-    scopedApp.use('/tasks', createTasksRouter());
 
     const createFor = (tenantId: string, ownerId: string) =>
       request(scopedApp)
         .post('/tasks')
-        .set('X-Test-Tenant', tenantId)
-        .set('X-Test-Owner', ownerId)
+        .set('Authorization', `Bearer ${tenantId}:${ownerId}`)
         .set('Idempotency-Key', 'shared-operation-key')
         .send({ title: `${tenantId}/${ownerId}` });
     const [tenantAOwnerA, tenantAOwnerB, tenantBOwnerA] = await Promise.all([

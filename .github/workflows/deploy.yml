@@ -48,7 +48,7 @@ jobs:
           set -euo pipefail
           (cd release && sha256sum -c release-manifest.json.sha256)
           test "$(jq -r .release_sha release/release-manifest.json)" = "$RELEASE_SHA_INPUT"
-          test "$(jq '.images | length' release/release-manifest.json)" -eq 7
+          test "$(jq '.images | length' release/release-manifest.json)" -eq 8
           jq -e 'all(.images[]; .digest | test("@sha256:[0-9a-f]{64}$"))' release/release-manifest.json
 
       - name: Deploy only manifest-bound digests

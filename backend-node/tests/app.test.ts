@@ -1,4 +1,4 @@
-import request from 'supertest';
+import request from './helpers/http-test-client';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createApp } from '../src/app';
@@ -188,7 +188,7 @@ describe('app middleware', () => {
       .toThrow('CALENDAR_INTERNAL_HMAC_KEY must contain at least 32 bytes');
   });
 
-  it('constructs default Google OAuth and Calendar HTTP adapters from configuration', () => {
+  it('constructs default Google OAuth and Calendar HTTP adapters from configuration', async () => {
     process.env.CALENDAR_INTERNAL_HMAC_KEY = 'configured-internal-calendar-key-at-least-32-bytes';
     process.env.GOOGLE_CALENDAR_OAUTH_CLIENT_ID = 'client';
     process.env.GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET = 'secret';
@@ -196,7 +196,8 @@ describe('app middleware', () => {
     process.env.GOOGLE_CALENDAR_OAUTH_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
     process.env.GOOGLE_CALENDAR_WATCH_CALLBACK_URLS = 'https://hooks.example.com/google-calendar';
 
-    expect(() => createApp()).not.toThrow();
+    const app = await createApp();
+    await app.close();
   });
 
   it('authenticates before returning an authorization denial for browser origin', async () => {
@@ -374,7 +375,7 @@ describe('app middleware', () => {
     expect(response.body).toEqual({ error: 'Internal server error' });
   });
 
-  it('constructs the OIDC middleware for a valid production configuration', () => {
+  it('constructs the OIDC guard for a valid production configuration', async () => {
     process.env.NODE_ENV = 'production';
     process.env.AUTH_MODE = 'oidc';
     process.env.OIDC_ISSUER = 'https://identity.example.com';
@@ -387,7 +388,12 @@ describe('app middleware', () => {
     process.env.AUDIT_HMAC_KEY = 'production-node-audit-key-at-least-32-bytes';
     process.env.RELEASE_SHA = 'a'.repeat(40);
 
-    expect(() => createApp()).not.toThrow();
+    const app = await createApp({
+      oidcTokenVerifier: async () => ({
+        tenantId: 'tenant-a', userId: 'user-a', roles: [], projectIds: [], scopes: [],
+      }),
+    });
+    await app.close();
   });
 
   it('uses one trusted nginx hop for rate limiting and ignores a spoofed leftmost address', async () => {

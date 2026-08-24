@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import HTTPException
 
 from .config import Settings, load_settings
-from .main import create_app
+from .http.factory import create_app
 from .rag.bootstrap import build_rag_service
 
 
@@ -46,10 +46,16 @@ def create_knowledge_runtime(
     "/v2/knowledge/search",
     "/v2/knowledge/answer",
   }
-  application.router.routes = [
-    route for route in application.router.routes
-    if getattr(route, "path", None) in allowed_paths
-  ]
+  role_routes = []
+  for route in application.router.routes:
+    original_router = getattr(route, "original_router", None)
+    candidates = original_router.routes if original_router is not None else [route]
+    role_routes.extend(
+      candidate
+      for candidate in candidates
+      if getattr(candidate, "path", None) in allowed_paths
+    )
+  application.router.routes = role_routes
 
   @application.get("/health/ready", include_in_schema=False)
   def knowledge_ready():

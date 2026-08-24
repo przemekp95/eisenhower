@@ -1,4 +1,4 @@
-import request from 'supertest';
+import request from './helpers/http-test-client';
 import { isHealthResponseDto, isTaskDto } from '@eisenhower/api-client';
 import { createApp } from '../src/app';
 import { clearMongo, startMongo, stopMongo } from './helpers/mongo';
