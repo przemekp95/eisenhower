@@ -48,3 +48,13 @@ test("CI service and scanner images are immutable", () => {
   assert.match(ci, /aquasec\/trivy:0\.71\.1@sha256:[a-f0-9]{64}/);
   assert.doesNotMatch(ci, /aquasec\/trivy:0\.63\.0/);
 });
+
+test("release image analysis allows large ROCm layers to exceed Trivy's five-minute default", () => {
+  const release = readWorkflow("release.yml");
+  const invocations = release.match(/"\$TRIVY_IMAGE" image \\\n(?:\s+.*\\\n)+?\s+"\$image_ref"/g) ?? [];
+
+  assert.equal(invocations.length, 2, "release must scan vulnerabilities and generate an SBOM");
+  for (const invocation of invocations) {
+    assert.match(invocation, /\s+--timeout 15m \\\n/);
+  }
+});
