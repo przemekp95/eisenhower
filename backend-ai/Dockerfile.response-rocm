@@ -1,7 +1,7 @@
 FROM cgr.dev/chainguard/python@sha256:91418fa26adfd56d959d80e5da0d7470b5653e4f00ba698ef5d8212e58e3f7f8 AS dependencies
 
 USER root
-COPY backend-ai/requirements-response-rocm.txt /tmp/requirements-response-rocm.txt
+COPY requirements-response-rocm.txt /tmp/requirements-response-rocm.txt
 RUN --mount=type=cache,target=/root/.cache/pip mkdir -p /opt/python \
     && python -m pip install --target=/opt/python \
       --requirement /tmp/requirements-response-rocm.txt \
@@ -17,8 +17,8 @@ LABEL org.opencontainers.image.revision=$RELEASE_SHA \
 USER root
 RUN apk add --no-cache libatomic
 COPY --from=dependencies /opt/python /opt/python
-COPY backend-ai/app/__init__.py /app/app/__init__.py
-COPY backend-ai/app/response_runtime.py /app/app/response_runtime.py
+COPY app/__init__.py /app/app/__init__.py
+COPY app/response_runtime.py /app/app/response_runtime.py
 
 ENV PYTHONPATH=/app:/opt/python \
     LD_LIBRARY_PATH=/opt/python/torch/lib \
