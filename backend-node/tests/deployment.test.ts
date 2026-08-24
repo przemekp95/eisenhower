@@ -62,7 +62,7 @@ describe('host-neutral deployment and release boundaries', () => {
     const ai = fs.readFileSync(path.join(repositoryRoot, 'backend-ai/Dockerfile'), 'utf8');
     const node = fs.readFileSync(path.join(repositoryRoot, 'backend-node/Dockerfile'), 'utf8');
     const mcp = fs.readFileSync(path.join(repositoryRoot, 'mcp/eisenhower_adapter/Dockerfile'), 'utf8');
-    const wolfi = 'cgr.dev/chainguard/wolfi-base@sha256:0a8fd427de5882aed77471b0a432c3675eda6b6a0ae952b5d640b46da628cdbe';
+    const wolfi = 'cgr.dev/chainguard/wolfi-base@sha256:a31344ab2cb8618db84f535eec56f76f6178b142cb92cb2e48676cc2dcebea72';
 
     expect(ai).toContain(`FROM ${wolfi} AS python-builder`);
     expect(ai).toContain(`FROM ${wolfi} AS runtime-base`);

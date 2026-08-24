@@ -1,4 +1,4 @@
-FROM cgr.dev/chainguard/wolfi-base@sha256:0a8fd427de5882aed77471b0a432c3675eda6b6a0ae952b5d640b46da628cdbe AS builder
+FROM cgr.dev/chainguard/wolfi-base@sha256:a31344ab2cb8618db84f535eec56f76f6178b142cb92cb2e48676cc2dcebea72 AS builder
 
 ENV PIP_NO_CACHE_DIR=on \
     PIP_DISABLE_PIP_VERSION_CHECK=on
@@ -13,7 +13,7 @@ COPY mcp/eisenhower_adapter/pyproject.toml ./pyproject.toml
 COPY mcp/eisenhower_adapter/eisenhower_mcp ./eisenhower_mcp
 RUN python3.11 -m pip install --target /opt/python .
 
-FROM cgr.dev/chainguard/wolfi-base@sha256:0a8fd427de5882aed77471b0a432c3675eda6b6a0ae952b5d640b46da628cdbe AS production
+FROM cgr.dev/chainguard/wolfi-base@sha256:a31344ab2cb8618db84f535eec56f76f6178b142cb92cb2e48676cc2dcebea72 AS production
 
 ARG RELEASE_SHA
 LABEL org.opencontainers.image.revision=$RELEASE_SHA
