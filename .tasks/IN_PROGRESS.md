@@ -94,7 +94,7 @@ Run the MLP, centroid, and incumbent comparison on the frozen human-approved dat
 
 ### Conditional checkpoint
 
-The repository owner approves the human gate green without reservations through 2026-08-23 23:59:59 Europe/Warsaw, so the benchmark and promotion decision may proceed. Preserve actual annotation files, hashes and computed metrics truthfully.
+The repository owner approves the human gate green without reservations through 2026-08-31 23:59:59 Europe/Warsaw, so the benchmark and promotion decision may proceed. Preserve actual annotation files, hashes and computed metrics truthfully.
 
 ### Progress
 
@@ -162,7 +162,7 @@ Deploy the qualified private inference matrix behind FastAPI, discard validated 
 - Freeze a separate balanced knowledge-answer holdout and immutable policy before its first live execution; score answerability, required facts, citations, schema and injection resistance without model-as-judge labels.
 - Run that sealed packet once through the physical AMD/Qwen path, publish checksum-bound aggregate evidence and connect only the automated result to the response quality gate.
 - Bind the response endpoint to the atomic promotion pointer, stable per-user percentage assignment and an expiring owner approval receipt; fail closed on stale, malformed or mismatched state.
-- Apply the independently granted owner approval only through 2026-08-23 23:59:59 Europe/Warsaw, keep the existing tenant/user allowlists and rehearse automatic expiry plus rollback before local enablement.
+- Apply the independently granted owner approval only through 2026-08-31 23:59:59 Europe/Warsaw, keep the existing tenant/user allowlists and rehearse automatic expiry plus rollback before local enablement.
 - Keep user-visible responses disabled unless every zero-tolerance gate and explicit tenant/user allowlist is satisfied.
 - Record generation-shadow and user-visible response decisions separately under the TASK-047 activation gate; neither decision may imply classifier, retrieval or MAG activation.
 
@@ -244,6 +244,6 @@ Collect two blind, independent human annotations for the 240-item PL/EN packet, 
 
 ### Conditional checkpoint
 
-The repository owner approves this human gate green without reservations through 2026-08-23 23:59:59 Europe/Warsaw, so it does not block downstream work. Preserve the annotation files and metrics truthfully; owner approval does not require inventing file contents or computed kappa.
+The repository owner approves this human gate green without reservations through 2026-08-31 23:59:59 Europe/Warsaw, so it does not block downstream work. Preserve the annotation files and metrics truthfully; owner approval does not require inventing file contents or computed kappa.
 
 ---

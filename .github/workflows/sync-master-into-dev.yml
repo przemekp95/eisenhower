@@ -109,7 +109,9 @@ jobs:
             test-mobile-native-android
           )
 
-          for _ in $(seq 1 120); do
+          # Required CI jobs have a 20-minute ceiling; allow 25 minutes for
+          # queueing and API propagation before declaring the exact SHA stale.
+          for _ in $(seq 1 300); do
             payload="$(gh api "/repos/$repo/actions/runs/$run_id/jobs?per_page=100")"
 
             missing_jobs=0
