@@ -1,5 +1,32 @@
 # Done
 
+## TASK-067: Promote and deploy the NestJS/Fastify migration
+**Priority:** P1 | **Tags:** release, deployment, nestjs, fastify, fastapi
+
+Promote the completed TASK-066 migration through the protected feature-to-dev and dev-to-master flow, publish only scanned immutable final-SHA artifacts, and deploy the manifest-bound release to the supported private runtime with readiness, smoke and rollback evidence.
+
+### Plan
+
+- Repair and test the fail-closed release/deploy manifest contract so all eight published images are required consistently.
+- Push the detached candidate as a feature branch, create a PR to `dev`, resolve review/CI, and verify the exact merged remote SHA.
+- Promote only the green `dev` head through a `dev`-to-`master` PR, require exact post-merge CI, then restore verified `origin/dev == origin/master` through the governed sync flow.
+- Dispatch the release for the exact green master SHA, require scanned images, SBOMs, signed Android output and immutable manifest evidence before publication is accepted.
+- Dispatch the manifest-bound private deployment, require readiness, exact revision labels, smoke and rollback-safe state, then record evidence and close the task.
+
+### Evidence boundaries
+
+Authorization covers push, PRs, governed `dev`/`master` promotion, immutable artifact/image publication and deployment to the existing supported private runtime. It does not authorize public exposure, unrelated TASK-065 changes, capability activation beyond an already valid receipt, destructive data migration, fabricated production traffic or physical acceptance.
+
+### Outcome
+
+Promoted the completed migration through green PRs #312 and #313 and synchronized `origin/dev == origin/master == 6a00f3efe40c357083f20547e94d1bf1bea43442`. Release run `32771588708` published the eight manifest-bound images after vulnerability scans and SBOM generation, produced the signed Android artifact, and passed its final release gate; the retained release manifest SHA-256 is `9f4d2cacef2095539518853e0077b4b56def1e917c3e4d4a539aec27c9bea154`.
+
+Private deployment run `32781354224` then passed for that exact release. The supported stack is bound only to `127.0.0.1:8791`; every required first-party container is healthy and carries the final source revision. HTTP readiness passed, unauthenticated API/AI requests failed closed with 401, an untrusted Origin failed with 403, and generation, response, memory, inference and reranker capabilities remain disabled. The empty legacy Qdrant projection was migrated to the approved 1024-dimensional LlamaIndex candidate through an audited atomic alias cutover after a zero-document backfill; the old collection and checksum-bound snapshot remain, and the rollback preflight passed without changing the active alias. The checksum-matching approved classifier generation was restored from the isolated migration worktree, after which both classifier and FastAPI boundary readiness passed.
+
+The previous loopback runtime remains available on port 8790 as blue/green recovery evidence, but its AI dependency is degraded and it is not claimed as a fully healthy automated rollback. No public exposure, authenticated end-user acceptance, live Google provider acceptance, physical-device proof, real traffic, generated-response activation or TASK-065 completion is claimed.
+
+---
+
 ## TASK-066: Migrate Express to NestJS/Fastify and modularize the FastAPI boundary
 **Priority:** P1 | **Tags:** architecture, backend-node, backend-ai, nestjs, fastify, fastapi
 
