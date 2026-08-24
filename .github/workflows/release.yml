@@ -167,6 +167,7 @@ jobs:
             -v "$RUNNER_TEMP/trivy-cache:/root/.cache/" \
             -v "$PWD/release-security:/evidence" \
             "$TRIVY_IMAGE" image \
+            --timeout 15m \
             --scanners vuln \
             --severity LOW,MEDIUM,HIGH,CRITICAL \
             --exit-code 1 \
@@ -186,6 +187,7 @@ jobs:
             -v "$RUNNER_TEMP/trivy-cache:/root/.cache/" \
             -v "$PWD/release-security:/evidence" \
             "$TRIVY_IMAGE" image \
+            --timeout 15m \
             --format cyclonedx \
             --output "/evidence/${{ matrix.name }}-${RELEASE_SHA}.cdx.json" \
             "$image_ref"
