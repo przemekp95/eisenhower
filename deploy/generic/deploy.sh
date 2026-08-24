@@ -36,7 +36,7 @@ build_release_env() {
   local manifest=$1 output=$2 sha
   sha=$(jq -er '.release_sha | select(test("^[0-9a-f]{40}$"))' "$manifest")
   cp "$source_env" "$output"
-  printf 'APP_ENV=production\nAUTH_MODE=oidc\nRELEASE_SHA=%s\n' "$sha" >> "$output"
+  printf '\nAPP_ENV=production\nAUTH_MODE=oidc\nRELEASE_SHA=%s\n' "$sha" >> "$output"
   require_digest "$manifest" "$output" backend-ai-boundary AI_BOUNDARY_IMAGE
   require_digest "$manifest" "$output" backend-ai-classifier AI_CLASSIFIER_IMAGE
   require_digest "$manifest" "$output" backend-ai-knowledge AI_KNOWLEDGE_IMAGE
