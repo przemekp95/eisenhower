@@ -3,7 +3,7 @@
 Recorded: 2026-08-12, Europe/Warsaw
 
 The repository owner explicitly approved, without reservations and as green, all gates whose only
-remaining condition is a human decision through **2026-08-23 23:59:59 Europe/Warsaw**. This covers
+remaining condition is a human decision through **2026-08-31 23:59:59 Europe/Warsaw**. This covers
 product choices, go/no-go decisions, rollout/cohort/monitoring ownership decisions and acceptance
 of proposed review decisions during that window.
 
