@@ -1,8 +1,8 @@
 # NestJS/Fastify + FastAPI migration evidence
 
-Data świeżej weryfikacji: 2026-08-23. Bazowy oracle i artefakt rollbacku Express: `5db1983da7f4e583a133f42d6b4a95ac8b3ab9c9`. Zweryfikowany lokalny kandydat przed tym dokumentem: `b3d53d0afdd85d8362189f72e8286c672cf971a9`.
+Data świeżej weryfikacji i akceptacji właściciela: 2026-08-24. Bazowy oracle i artefakt rollbacku Express: `5db1983da7f4e583a133f42d6b4a95ac8b3ab9c9`. Zweryfikowany lokalny kandydat przed tym dokumentem: `b3d53d0afdd85d8362189f72e8286c672cf971a9`.
 
-Status: lokalny kod, kontrakty, testy, benchmark i rollback są zielone. TASK-066 pozostaje **In Progress**, ponieważ materialny narzut RSS/cold startu wymaga osobistej decyzji właściciela `accept` albo `fix`; automatyczna kontynuacja celu nie jest taką decyzją.
+Status: lokalny kod, kontrakty, testy, benchmark i rollback są zielone. Właściciel zdecydował pozostawić aktualną architekturę Nest/Fastify i kontynuować ukończenie celu, akceptując jawnie zmierzony koszt RSS/cold startu. TASK-066 może zostać lokalnie zakończony.
 
 ## Architektura i granice
 
@@ -37,7 +37,7 @@ Wszystkie poniższe polecenia zakończyły się kodem `0` w tym worktree:
 
 Audyt zależności nie jest kompletnym dowodem braku podatności. Własny audyt Python sprawdził 201 zależności, ale pozostawił jawne blind spoty dla `en-core-web-sm==3.8.0`, `torch==2.13.0+cpu` i `torchvision==0.28.0+cpu`; `pip-audit` nie potrafił audytować wheel `torch` spoza PyPI. Osobny skan źródłowy/obrazu pozostaje odrębną bramką release.
 
-## Benchmark, optymalizacja i otwarta decyzja
+## Benchmark, optymalizacja i zaakceptowana decyzja
 
 Surowe dane są w `benchmarks/results/nest-fastify-migration.json`, a interpretacja w `docs/benchmarks/2026-08-23-express-vs-nest-fastify.md`. Metoda: ten sam host i Node `v24.18.0`, Express z exact baseline, Nest/Fastify candidate, warm-up 5 s, pomiar 15 s, 5 naprzemiennych powtórzeń, concurrency 1/10/50, pamięciowy Mongo i jednoelementowy Mongo replica set, po 10 cold startów. Cold start zapisuje oddzielnie czas do gotowości serwera, odpowiedzi liveness `/health` i odpowiedzi readiness `/health/ready`.
 
@@ -47,7 +47,7 @@ Surowe dane są w `benchmarks/results/nest-fastify-migration.json`, a interpreta
 - Krótki eksperyment z `--max-semi-space-size=4` obniżył high-water RSS, lecz pogorszył przepustowość liveness Nest względem Express; nie został przyjęty. Globalne raw body zachowano, ponieważ różnica żywego heap między task-create i liveness była podobna po obu stronach, a mechanizm jest częścią fail-closed kontraktu internal HMAC.
 - Pozostały koszt pochodzi przede wszystkim z pełnego kontenera DI, skanowania metadata/dekoratorów i request lifecycle Nest. Usunięcie go wymagałoby rezygnacji z Nest na rzecz czystego Fastify albo osobnego, lżejszego procesu health; oba warianty zmieniają zaakceptowaną architekturę lub ponownie tworzą podwójne elementy.
 
-To syntetyczny benchmark transportu, nie capacity test ani dowód produkcyjny. Zgodnie ze specyfikacją materialny koszt wymaga jawnego `accept` lub pracy optymalizacyjnej. Status decyzji: **PENDING OWNER ACCEPTANCE**.
+To syntetyczny benchmark transportu, nie capacity test ani dowód produkcyjny. Po pracy optymalizacyjnej właściciel zaakceptował 2026-08-24 pozostawienie aktualnej architektury i jej jawnego kosztu. Status decyzji: **ACCEPTED FOR LOCAL COMPLETION**.
 
 ## Rollback
 
@@ -61,6 +61,6 @@ Dowód i procedura: `docs/evidence/2026-08-23-node-transport-rollback.md` oraz `
 
 ## Kryteria ukończenia i granica dowodu
 
-Wszystkie kryteria source/contract/test/docs/benchmark/rollback są spełnione poza zaakceptowaniem materialnej regresji RSS/cold startu i wynikającym z tej decyzji bookkeepingiem TASK-066. Do czasu osobistego `tak` właściciela TASK-066 pozostaje In Progress, a aktywny cel nie jest oznaczony jako complete.
+Wszystkie lokalne kryteria source/contract/test/docs/benchmark/rollback są spełnione, a materialny koszt RSS/cold startu został osobiście zaakceptowany przez właściciela. TASK-066 zostaje przeniesiony do Done; ukończenie pozostaje ograniczone do lokalnego źródła i dowodów.
 
 Nie wykonano push, PR, merge/promocji `dev` lub `master`, publikacji pakietu/obrazu/SBOM, deploymentu, aktywacji runtime, zmiany routingu ani danych użytkownika. Ten dokument nie twierdzi publicznego runtime, produkcji, realnego ruchu, fizycznej akceptacji ani human acceptance.
