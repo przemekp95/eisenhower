@@ -1,5 +1,28 @@
 # Done
 
+## TASK-066: Migrate Express to NestJS/Fastify and modularize the FastAPI boundary
+**Priority:** P1 | **Tags:** architecture, backend-node, backend-ai, nestjs, fastify, fastapi
+
+Replace the `backend-node` Express transport with a single NestJS application on the Fastify adapter, preserve every existing client and integration contract, and split the oversized FastAPI composition root without changing FastAPI ownership of synchronous AI/RAG.
+
+### Plan
+
+- Freeze the exact Express baseline and prove transport-independent parity before removing Express.
+- Deliver one modular NestJS/Fastify runtime and a focused import-safe FastAPI composition while preserving security, durable async and client contracts.
+- Verify contracts, focused and full suites, comparative performance, rollback and explicit evidence boundaries before local completion.
+
+### Evidence boundaries
+
+TASK-066 may change and commit only local source, tests and documentation in this isolated worktree. It does not complete or alter TASK-065 and does not authorize push, PR creation or merge, `dev`/`master` promotion, artifact or image publication, deployment, runtime activation, public or production claims, physical acceptance or real-traffic proof.
+
+### Outcome
+
+Replaced the sole `backend-node` Express transport with NestJS 11 on Fastify 5 across all 41 mapped HTTP contracts, removed Express-only packages and duplicate runtime paths, and retained one shared application/domain/persistence implementation. FastAPI remains the synchronous AI/RAG owner; its former 1108-line composition root is now a 36-line compatibility facade over focused import-safe routers, dependencies and composition modules. Security, ETag/idempotency/pagination, OIDC/Origin/CORS, audit, internal HMAC, OAuth, Calendar outbox/webhook/reconciliation and n8n async-only contracts remain covered.
+
+Fresh local verification passed: root `make verify`; Node build/typecheck, 27 suites / 389 tests at 100% measured coverage and 21 BDD scenarios / 149 steps; AI 893 passed / 13 skipped at 87.58% and Pylint 10.00/10; API client 34, MCP 50, n8n 13 Python + 7 Node, web 254 + 2 integration, and mobile 202. Seven evidence contracts, framework-boundary verification, exact-baseline rollback rehearsal and TASK-065 byte identity passed. The owner accepted the measured synthetic Nest cost on 2026-08-24: throughput/p95 remain at parity, live heap is about 7.3–7.8 MiB above Express, and liveness cold start is about 376–428 ms. No push, PR, promotion, publication, deployment, runtime activation or production claim occurred.
+
+---
+
 ## TASK-006: Revisit the React Native 0.84 migration when Expo supports it
 **Priority:** P3 | **Tags:** mobile, dependencies, deferred
 

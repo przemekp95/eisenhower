@@ -1,4 +1,4 @@
-import request from 'supertest';
+import request from './helpers/http-test-client';
 import { createApp } from '../src/app';
 import {
   GoogleOAuthHttpClient, GoogleOAuthPort, GoogleOAuthService, GoogleTokenSet,
