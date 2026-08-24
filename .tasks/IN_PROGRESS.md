@@ -1,24 +1,5 @@
 # In Progress
 
-## TASK-067: Promote and deploy the NestJS/Fastify migration
-**Priority:** P1 | **Tags:** release, deployment, nestjs, fastify, fastapi
-
-Promote the completed TASK-066 migration through the protected feature-to-dev and dev-to-master flow, publish only scanned immutable final-SHA artifacts, and deploy the manifest-bound release to the supported private runtime with readiness, smoke and rollback evidence.
-
-### Plan
-
-- Repair and test the fail-closed release/deploy manifest contract so all eight published images are required consistently.
-- Push the detached candidate as a feature branch, create a PR to `dev`, resolve review/CI, and verify the exact merged remote SHA.
-- Promote only the green `dev` head through a `dev`-to-`master` PR, require exact post-merge CI, then restore verified `origin/dev == origin/master` through the governed sync flow.
-- Dispatch the release for the exact green master SHA, require scanned images, SBOMs, signed Android output and immutable manifest evidence before publication is accepted.
-- Dispatch the manifest-bound private deployment, require readiness, exact revision labels, smoke and rollback-safe state, then record evidence and close the task.
-
-### Evidence boundaries
-
-Authorization covers push, PRs, governed `dev`/`master` promotion, immutable artifact/image publication and deployment to the existing supported private runtime. It does not authorize public exposure, unrelated TASK-065 changes, capability activation beyond an already valid receipt, destructive data migration, fabricated production traffic or physical acceptance.
-
----
-
 ## TASK-065: Align task-first UX, bulk import, Calendar semantics, and governed local AI
 **Priority:** P0 | **Tags:** product, bulk-import, calendar, rag, local-runtime
 
