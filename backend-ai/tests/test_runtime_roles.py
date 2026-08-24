@@ -49,7 +49,7 @@ def test_rocm_response_image_is_hardened_pinned_and_built_for_both_response_role
   dockerfile = (ROOT / "backend-ai" / "Dockerfile.response-rocm").read_text(encoding="utf-8")
   provider = (ROOT / "deploy" / "inference" / "compose.amd.yaml").read_text(encoding="utf-8")
 
-  assert "cgr.dev/chainguard/python@sha256:d812438658b47b73cb4c089f4cca09bca1ba50f6cd1843133864ee074d9ec49b" in dockerfile
+  assert "cgr.dev/chainguard/python@sha256:14acabef9a759e7d07bf647afec92bc28cbe0f89c978fe426411c85035121c14" in dockerfile
   assert "torch==2.13.0+rocm7.2" in (ROOT / "backend-ai/requirements-response-rocm.txt").read_text()
   assert "requirements-response-rocm.txt" in dockerfile
   assert "libatomic" in dockerfile

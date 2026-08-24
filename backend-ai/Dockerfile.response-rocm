@@ -1,4 +1,4 @@
-FROM cgr.dev/chainguard/python@sha256:d812438658b47b73cb4c089f4cca09bca1ba50f6cd1843133864ee074d9ec49b AS dependencies
+FROM cgr.dev/chainguard/python@sha256:14acabef9a759e7d07bf647afec92bc28cbe0f89c978fe426411c85035121c14 AS dependencies
 
 USER root
 COPY requirements-response-rocm.txt /tmp/requirements-response-rocm.txt
@@ -7,12 +7,12 @@ RUN --mount=type=cache,target=/root/.cache/pip mkdir -p /opt/python \
       --requirement /tmp/requirements-response-rocm.txt \
     && PYTHONPATH=/opt/python python -m pip check
 
-FROM cgr.dev/chainguard/python@sha256:d812438658b47b73cb4c089f4cca09bca1ba50f6cd1843133864ee074d9ec49b AS response
+FROM cgr.dev/chainguard/python@sha256:14acabef9a759e7d07bf647afec92bc28cbe0f89c978fe426411c85035121c14 AS response
 
 ARG RELEASE_SHA
 LABEL org.opencontainers.image.revision=$RELEASE_SHA \
       eisenhower.runtime.role=response-transformers-rocm \
-      org.opencontainers.image.base.digest=sha256:d812438658b47b73cb4c089f4cca09bca1ba50f6cd1843133864ee074d9ec49b
+      org.opencontainers.image.base.digest=sha256:14acabef9a759e7d07bf647afec92bc28cbe0f89c978fe426411c85035121c14
 
 USER root
 RUN apk add --no-cache libatomic
