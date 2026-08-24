@@ -102,3 +102,18 @@ def test_release_scans_and_publishes_the_exact_rocm_response_image():
   response_matrix = workflow[response_entry:next_entry]
   assert "require_torch: false" in response_matrix
   assert "require_torchvision: false" in response_matrix
+
+
+def test_rocm_response_dockerfile_uses_paths_relative_to_backend_ai_context():
+  dockerfile = ROOT.joinpath("backend-ai/Dockerfile.response-rocm").read_text(encoding="utf-8")
+
+  assert "COPY requirements-response-rocm.txt /tmp/requirements-response-rocm.txt" in dockerfile
+  assert "COPY app/__init__.py /app/app/__init__.py" in dockerfile
+  assert "COPY app/response_runtime.py /app/app/response_runtime.py" in dockerfile
+  assert "COPY backend-ai/" not in dockerfile
+
+
+def test_master_to_dev_sync_wait_covers_the_longest_required_ci_job():
+  workflow = ROOT.joinpath(".github/workflows/sync-master-into-dev.yml").read_text(encoding="utf-8")
+
+  assert "for _ in $(seq 1 300); do" in workflow
