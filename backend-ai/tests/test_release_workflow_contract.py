@@ -46,6 +46,14 @@ def test_generic_deploy_consumes_release_manifest_without_provider_specific_jobs
   assert "--profile n8n" not in workflow
 
 
+def test_deploy_requires_every_image_published_in_the_release_manifest():
+  release = ROOT.joinpath(".github/workflows/release.yml").read_text(encoding="utf-8")
+  deploy = ROOT.joinpath(".github/workflows/deploy.yml").read_text(encoding="utf-8")
+
+  assert "test \"$(jq '.images | length' \"$manifest\")\" -eq 8" in release
+  assert "test \"$(jq '.images | length' release/release-manifest.json)\" -eq 8" in deploy
+
+
 def test_final_release_gate_binds_container_and_android_artifacts():
   workflow = ROOT.joinpath(".github/workflows/release.yml").read_text(encoding="utf-8")
   final_gate = workflow[workflow.index("  final-release-gate:"):]
