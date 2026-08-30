@@ -166,7 +166,7 @@ jobs:
 
       - name: Setup pinned uv for the MCP lockfile audit
         if: ${{ needs.resolve-run-mode.outputs.dependency_audit == 'true' }}
-        uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           version: "0.11.17"
           enable-cache: true
@@ -230,7 +230,7 @@ jobs:
 
       - name: Upload SARIF to code scanning
         if: ${{ always() && needs.resolve-run-mode.outputs.security_lint == 'true' && hashFiles('trivy-results.sarif') != '' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) }}
-        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           sarif_file: trivy-results.sarif
 
@@ -375,7 +375,7 @@ jobs:
 
       - name: Setup pinned uv runner
         if: ${{ needs.resolve-run-mode.outputs.mcp == 'true' }}
-        uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           version: "0.11.17"
           enable-cache: true
@@ -825,7 +825,7 @@ jobs:
 
       - name: Setup Java
         if: ${{ needs.resolve-run-mode.outputs.mobile_native_android == 'true' }}
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: temurin
           java-version: "17"
