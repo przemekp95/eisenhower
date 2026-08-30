@@ -3,12 +3,12 @@
 -r requirements-boundary.txt
 python-multipart==0.0.32
 sentence-transformers==5.7.0
-transformers==5.15.0
+transformers==5.16.1
 qdrant-client==1.19.0
 grpcio==1.83.0
 grpcio-tools==1.83.0
 protobuf>=7.35.1,<8
 pymongo==4.17.0
-llama-index-core==0.14.23
+llama-index-core==0.14.24
 llama-index-vector-stores-qdrant==0.10.3
 numpy==2.4.6

@@ -3,4 +3,4 @@
 -r requirements-boundary.txt
 torch==2.13.0+cpu
 sentence-transformers==5.7.0
-transformers==5.15.0
+transformers==5.16.1
