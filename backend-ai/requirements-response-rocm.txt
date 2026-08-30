@@ -4,5 +4,5 @@ numpy==2.4.6
 pydantic==2.13.4
 setuptools==83.0.0
 torch==2.13.0+rocm7.2
-transformers==5.15.0
-uvicorn==0.52.3
+transformers==5.16.1
+uvicorn==0.52.4
