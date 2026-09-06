@@ -35,11 +35,11 @@
     "@cucumber/cucumber": "^13.2.1",
     "@nestjs/testing": "11.2.1",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.2.0",
-    "jest": "^30.4.2",
+    "@types/node": "^26.4.1",
+    "jest": "^30.5.1",
     "mongodb-memory-server": "^11.2.0",
     "ts-jest": "^29.4.12",
-    "tsx": "^4.23.12",
+    "tsx": "^4.23.13",
     "typescript": "^5.7.3"
   }
 }
