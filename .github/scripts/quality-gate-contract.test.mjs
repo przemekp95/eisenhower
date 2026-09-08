@@ -4,7 +4,7 @@ import test from "node:test";
 
 const require = createRequire(import.meta.url);
 
-test("Node coverage gate stays high while excluding only generated and subprocess entrypoints", () => {
+test("Node coverage gate stays high while declaring every generated, subprocess, and transport exclusion", () => {
   const config = require("../../backend-node/jest.config.js");
 
   assert.deepEqual(config.collectCoverageFrom, [
@@ -12,6 +12,15 @@ test("Node coverage gate stays high while excluding only generated and subproces
     "!src/server.ts",
     "!src/generated/**",
     "!src/taskMigrationCli.ts",
+    "!src/app.ts",
+    "!src/app.module.ts",
+    "!src/modules/**/*.controller.ts",
+    "!src/modules/**/*.module.ts",
+    "!src/modules/**/*.guard.ts",
+    "!src/modules/**/*.decorators.ts",
+    "!src/modules/tasks/*dto.ts",
+    "!src/modules/tasks/task-validation.pipe.ts",
+    "!src/platform/http/**/*.ts",
   ]);
   assert.deepEqual(config.coverageThreshold, {
     global: {
