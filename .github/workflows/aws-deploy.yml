@@ -26,16 +26,40 @@ env:
   AWS_REGION: eu-central-1
 
 jobs:
-  deploy-staging:
-    name: deploy-staging
+  staging-deployment-gate:
+    name: staging-deployment-gate
     if: >-
       ${{
-        vars.AWS_STAGING_DEPLOY_ENABLED == 'true' &&
-        (
-          github.event_name == 'workflow_dispatch' ||
-          (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'dev')
-        )
+        github.event_name == 'workflow_dispatch' ||
+        (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'dev')
       }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: staging
+    permissions:
+      contents: read
+    outputs:
+      enabled: ${{ steps.gate.outputs.enabled }}
+    steps:
+      - name: Resolve the environment-scoped staging gate
+        id: gate
+        shell: bash
+        env:
+          DEPLOY_ENABLED: ${{ vars.AWS_STAGING_DEPLOY_ENABLED }}
+        run: |
+          set -euo pipefail
+          enabled=false
+          if test "$DEPLOY_ENABLED" = true; then
+            enabled=true
+          else
+            echo "::notice title=AWS staging deploy disabled::The staging environment gate is not enabled."
+          fi
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
+
+  deploy-staging:
+    name: deploy-staging
+    needs: staging-deployment-gate
+    if: ${{ needs.staging-deployment-gate.outputs.enabled == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: staging
