@@ -71,7 +71,10 @@ describe('application boundary validation', () => {
   it('rejects incomplete production audit configuration at the service boundary', () => {
     const config: AppConfig = {
       port: 3001,
+      databaseProvider: 'mongodb',
       mongodbUri: 'mongodb://localhost:27017/eisenhower',
+      postgresql: null,
+      redisUrl: null,
       aiServiceUrl: 'http://localhost:8000',
       nodeEnv: 'production',
       authMode: 'oidc',

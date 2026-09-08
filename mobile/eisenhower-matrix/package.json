@@ -38,6 +38,9 @@
     "react-test-renderer": "19.2.3"
   },
   "overrides": {
+    "@expo/plist": {
+      "@xmldom/xmldom": "0.8.15"
+    },
     "@tootallnate/once": "3.0.1",
     "brace-expansion@1.1.12": "1.1.18",
     "tar": "7.5.10",
@@ -45,6 +48,9 @@
     "xcode": {
       "uuid": "11.1.1"
     },
-    "image-size": "file:./vendor/metro-image-size"
+    "image-size": "file:./vendor/metro-image-size",
+    "plist": {
+      "@xmldom/xmldom": "0.9.12"
+    }
   }
 }

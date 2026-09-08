@@ -1,0 +1,30 @@
+#!/bin/sh
+set -eu
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+if [ "${1:-}" = "--scope" ] && [ "${2:-}" = "aws" ] && [ "$#" -eq 2 ]; then
+  cd infra/aws
+  npm test
+  npm run typecheck
+  for environment in staging production; do
+    env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+      AWS_SHARED_CREDENTIALS_FILE=/dev/null \
+      AWS_CONFIG_FILE=/dev/null \
+      AWS_EC2_METADATA_DISABLED=true \
+      AWS_REGION=eu-central-1 \
+      AWS_DEFAULT_REGION=eu-central-1 \
+      CDK_DEFAULT_ACCOUNT=111122223333 \
+      npm run synth -- --context "environment=$environment" --lookups=false --quiet \
+        --output "cdk.out/$environment"
+  done
+  exit 0
+fi
+
+if [ "$#" -ne 0 ]; then
+  echo "usage: .codex/verify [--scope aws]" >&2
+  exit 2
+fi
+
+exec make verify

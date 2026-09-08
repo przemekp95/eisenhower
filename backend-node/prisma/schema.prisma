@@ -1,0 +1,37 @@
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  moduleFormat           = "cjs"
+  generatedFileExtension = "ts"
+  importFileExtension    = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Task {
+  id                    String    @id @db.Char(24)
+  tenantId              String    @db.VarChar(128)
+  ownerId               String    @db.VarChar(128)
+  projectId             String?   @db.VarChar(128)
+  title                 String    @db.VarChar(200)
+  description           String    @default("") @db.VarChar(2000)
+  urgent                Boolean
+  important             Boolean
+  lifecycleState        String    @default("active") @db.VarChar(16)
+  priorLifecycleState   String?   @db.VarChar(16)
+  schedule              Json?
+  delegation            Json?
+  revision              Int       @default(0)
+  createOperationId     String?   @db.VarChar(200)
+  createOperationDigest String?   @db.Char(64)
+  deletedAt             DateTime? @db.Timestamptz(3)
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@unique([tenantId, ownerId, createOperationId])
+  @@index([tenantId, ownerId, lifecycleState, createdAt, id])
+  @@index([tenantId, ownerId, id, revision])
+  @@map("tasks")
+}

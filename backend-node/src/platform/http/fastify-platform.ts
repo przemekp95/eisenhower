@@ -9,11 +9,18 @@ import { AppConfig } from '../../config';
 import { attachRequestContext, requestContextFor } from './request-context';
 
 export const NODE_JSON_BODY_LIMIT = 32 * 1024;
+const TRUSTED_REVERSE_PROXY_RANGES = [
+  '127.0.0.0/8',
+  '::1/128',
+  '10.0.0.0/8',
+  '172.16.0.0/12',
+  '192.168.0.0/16',
+];
 
 export function createFastifyAdapter(nodeEnv: string) {
   return new FastifyAdapter({
     bodyLimit: NODE_JSON_BODY_LIMIT,
-    trustProxy: nodeEnv === 'production' ? 1 : false,
+    trustProxy: nodeEnv === 'production' ? TRUSTED_REVERSE_PROXY_RANGES : false,
     requestIdHeader: false,
   });
 }
@@ -29,19 +36,35 @@ export async function registerFastifyPlatform(
     attachRequestContext(request, reply);
   });
   fastify.addHook('onResponse', async (request, reply) => {
-    if (config.nodeEnv === 'test' || request.method === 'OPTIONS') return;
+    if ((config.nodeEnv === 'test' && !options.logSink) || request.method === 'OPTIONS') return;
     const path = request.url.split('?')[0];
     if (path === '/health' || path === '/health/ready') return;
     const durationMs = Date.now() - requestContextFor(request).startedAtMs;
-    const message = `backend-node ${request.method} ${path} ${reply.statusCode} ${durationMs}ms`;
-    if (reply.statusCode >= 500) console.error(message);
-    else console.info(message);
+    const level = reply.statusCode >= 500 ? 'error' : 'info';
+    const event = {
+      timestamp: new Date().toISOString(),
+      event: 'http_request_completed',
+      service: 'backend-node',
+      releaseSha: process.env.RELEASE_SHA ?? '0'.repeat(40),
+      requestId: requestContextFor(request).requestId,
+      method: request.method,
+      path,
+      statusCode: reply.statusCode,
+      durationMs,
+    };
+    if (options.logSink) options.logSink(level, event);
+    else if (level === 'error') console.error(JSON.stringify(event));
+    else console.info(JSON.stringify(event));
   });
   await fastify.register(helmet);
   await fastify.register(rateLimit, {
     global: true,
     timeWindow: 60_000,
     max: options.rateLimitLimit ?? 120,
+    ...(options.rateLimitRedis ? {
+      redis: options.rateLimitRedis,
+      nameSpace: options.rateLimitNameSpace ?? 'eisenhower:api:rate-limit:',
+    } : {}),
     enableDraftSpec: true,
     errorResponseBuilder: () => ({ statusCode: 429, code: 'EISENHOWER_RATE_LIMITED' }),
   });

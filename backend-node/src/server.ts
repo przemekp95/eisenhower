@@ -1,10 +1,14 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { createAppFromConfig } from './app';
 import { loadConfig } from './config';
-import { connectToDatabase, disconnectFromDatabase } from './db';
+import { buildPostgresUrl, createDatabaseRuntime, DatabaseRuntime } from './databaseRuntime';
+import { createRedisRateLimitRuntime, RedisRateLimitRuntime } from './redisRateLimit';
+import { connectApplicationRuntimes } from './runtimeLifecycle';
 
 let app: NestFastifyApplication | null = null;
 let isShuttingDown = false;
+let databaseRuntime: DatabaseRuntime | null = null;
+let redisRuntime: RedisRateLimitRuntime | null = null;
 
 async function shutdown(signal: NodeJS.Signals) {
   if (isShuttingDown) return;
@@ -17,9 +21,10 @@ async function shutdown(signal: NodeJS.Signals) {
     process.exitCode = 1;
   }
   try {
-    await disconnectFromDatabase();
+    await redisRuntime?.disconnect();
+    await databaseRuntime?.disconnect();
   } catch (error) {
-    console.error('Failed to disconnect backend-node from MongoDB', error);
+    console.error('Failed to disconnect backend-node runtimes', error);
     process.exitCode = 1;
   }
   process.exit(process.exitCode ?? 0);
@@ -31,8 +36,21 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 
 async function bootstrap() {
   const config = loadConfig();
-  await connectToDatabase(config.mongodbUri);
-  app = await createAppFromConfig({}, config);
+  databaseRuntime = config.databaseProvider === 'postgresql'
+    ? createDatabaseRuntime({ provider: 'postgresql', postgresqlUrl: buildPostgresUrl(config.postgresql!) })
+    : createDatabaseRuntime({ provider: 'mongodb', mongodbUri: config.mongodbUri });
+  if (config.redisUrl) redisRuntime = createRedisRateLimitRuntime(config.redisUrl);
+  await connectApplicationRuntimes(databaseRuntime, redisRuntime ?? undefined);
+  app = await createAppFromConfig({
+    taskRepository: databaseRuntime.taskRepository,
+    databaseStatusResolver: databaseRuntime.status,
+    ...(redisRuntime ? {
+      rateLimitRedis: redisRuntime.client,
+      rateLimitNameSpace: redisRuntime.nameSpace,
+      redisStatusResolver: redisRuntime.status,
+    } : {}),
+    calendarEnabled: databaseRuntime.calendarEnabled,
+  }, config);
   await app.listen({ port: config.port, host: '0.0.0.0' });
   console.log(`backend-node listening on ${config.port}`);
 }

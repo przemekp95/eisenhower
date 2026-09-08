@@ -267,6 +267,7 @@ Target required checks for both `dev` and `master`:
 - `test-backend-ai`
 - `test-mobile`
 - `test-mobile-native-android`
+- `test-aws-infrastructure`
 
 The workflow implements these stable checks with explicit successful not-applicable paths driven by the versioned, merge-base-aware `ci-impact-plan/v1`. Risky, unknown, release and scheduled inputs fail closed to full CI. GitHub branch rules are external state and must be verified after the changes are published. See [`docs/PRODUCTION_ACCEPTANCE.md`](docs/PRODUCTION_ACCEPTANCE.md) for the exact separation between local, CI, and public-runtime evidence.
 

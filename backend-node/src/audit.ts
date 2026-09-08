@@ -20,6 +20,41 @@ export interface AuditSink {
   record(event: AuditEvent): void;
 }
 
+export class StructuredStdoutAuditSink implements AuditSink {
+  constructor(
+    private readonly key: string,
+    private readonly writeLine: (line: string) => void = (line) => console.info(line),
+  ) {
+    if (Buffer.byteLength(key) < 32) throw new Error('audit key must contain at least 32 bytes');
+  }
+
+  record(event: AuditEvent): void {
+    if (!SHA_PATTERN.test(event.releaseSha)) throw new Error('release SHA is invalid');
+    if (!REQUEST_PATTERN.test(event.requestId)) throw new Error('request ID is invalid');
+    const payload = {
+      occurredAt: new Date().toISOString(),
+      event: 'security_audit',
+      service: event.service,
+      releaseSha: event.releaseSha,
+      requestId: event.requestId,
+      action: event.action,
+      outcome: event.outcome,
+      tenantPseudonym: this.mac('tenant', event.tenantId),
+      actorPseudonym: this.mac('actor', event.actorId),
+      ...(event.resourceId ? { resourcePseudonym: this.mac('resource', event.resourceId) } : {}),
+      integrityAlgorithm: 'hmac-sha256',
+    };
+    this.writeLine(JSON.stringify({
+      ...payload,
+      integrityHash: this.mac('audit-event-v1', JSON.stringify(payload)),
+    }));
+  }
+
+  private mac(domain: string, value: string): string {
+    return createHmac('sha256', this.key).update(`${domain}\0${value}`).digest('hex');
+  }
+}
+
 interface StoredEvent {
   sequence: number;
   occurredAt: string;

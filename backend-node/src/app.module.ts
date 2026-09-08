@@ -12,15 +12,18 @@ import { APP_OPTIONS } from './platform/tokens';
 @Module({})
 export class AppModule {
   static register(options: CreateAppOptions, config: AppConfig): DynamicModule {
+    const calendarEnabled = options.calendarEnabled ?? true;
     return {
       module: AppModule,
       imports: [
         SecurityModule.register(options, config),
         HealthModule.register(options, config),
         TasksModule.register(options),
-        CalendarModule.register(options),
-        CalendarInternalModule.register(options),
-        GoogleModule.register(options, config),
+        ...(calendarEnabled ? [
+          CalendarModule.register(options),
+          CalendarInternalModule.register(options),
+          GoogleModule.register(options, config),
+        ] : []),
       ],
       providers: [
         { provide: APP_OPTIONS, useValue: options },

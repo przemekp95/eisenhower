@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { DurableFileAuditSink } from '../src/audit';
+import { DurableFileAuditSink, StructuredStdoutAuditSink } from '../src/audit';
 
 describe('durable Node audit ledger', () => {
   const key = 'node-audit-key-with-at-least-32-bytes';
@@ -80,5 +80,27 @@ describe('durable Node audit ledger', () => {
     head.hmac = '0'.repeat(64);
     fs.writeFileSync(headPath, `${JSON.stringify(head)}\n`, { mode: 0o600 });
     expect(() => new DurableFileAuditSink(auditPath, key)).toThrow('head integrity');
+  });
+});
+
+test('structured stdout audit is pseudonymous, correlated, and independently authenticated', () => {
+  const lines: string[] = [];
+  const sink = new StructuredStdoutAuditSink(
+    'node-audit-key-with-at-least-32-bytes',
+    (line) => lines.push(line),
+  );
+  sink.record({
+    service: 'backend-node', releaseSha: 'a'.repeat(40), requestId: 'request-1',
+    action: 'auth_rejection', outcome: 'rejected', tenantId: 'private-tenant',
+    actorId: 'private-user', resourceId: '/api/tasks',
+  });
+
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).not.toContain('private-tenant');
+  expect(lines[0]).not.toContain('private-user');
+  expect(JSON.parse(lines[0])).toMatchObject({
+    event: 'security_audit', service: 'backend-node', releaseSha: 'a'.repeat(40),
+    requestId: 'request-1', action: 'auth_rejection', outcome: 'rejected',
+    integrityAlgorithm: 'hmac-sha256', integrityHash: expect.stringMatching(/^[a-f0-9]{64}$/),
   });
 });

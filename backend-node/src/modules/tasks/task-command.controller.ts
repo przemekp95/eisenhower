@@ -39,7 +39,7 @@ function idempotencyKey(value: string | undefined) {
   return value;
 }
 
-@Controller('tasks')
+@Controller(['tasks', 'api/tasks'])
 @UseGuards(new TaskInvalidIdAggregationGuard())
 export class TaskCommandController {
   constructor(@Inject(TaskCommandService) private readonly commands: TaskCommandService) {}

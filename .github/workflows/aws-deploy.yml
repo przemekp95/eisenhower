@@ -1,0 +1,233 @@
+name: AWS Staging Deploy
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    branches:
+      - dev
+    types:
+      - completed
+
+concurrency:
+  group: aws-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: eu-central-1
+
+jobs:
+  deploy-staging:
+    name: deploy-staging
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'dev' && vars.AWS_STAGING_DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+      AWS_ACCOUNT_ID: ${{ vars.AWS_STAGING_ACCOUNT_ID }}
+    steps:
+      - name: Checkout exact green dev SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Validate immutable deployment inputs
+        shell: bash
+        env:
+          CERTIFICATE_ARN: ${{ vars.AWS_STAGING_CERTIFICATE_ARN }}
+          PUBLIC_ORIGIN: ${{ vars.AWS_STAGING_PUBLIC_ORIGIN }}
+          OIDC_ISSUER: ${{ vars.APP_OIDC_ISSUER }}
+          OIDC_AUDIENCE: ${{ vars.APP_OIDC_AUDIENCE }}
+          OIDC_JWKS_URL: ${{ vars.APP_OIDC_JWKS_URL }}
+          AI_SERVICE_URL: ${{ vars.AWS_STAGING_AI_SERVICE_URL }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$AWS_ACCOUNT_ID" =~ ^[0-9]{12}$ ]]
+          test -n "$CERTIFICATE_ARN"
+          test -n "$PUBLIC_ORIGIN"
+          test -n "$OIDC_ISSUER"
+          test -n "$OIDC_AUDIENCE"
+          test -n "$OIDC_JWKS_URL"
+          test -n "$AI_SERVICE_URL"
+
+      - name: Configure AWS OIDC deployment identity
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_STAGING_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install pinned CDK toolchain
+        working-directory: infra/aws
+        run: npm ci && npm run build
+
+      - name: Deploy immutable ECR registries first
+        id: registries
+        working-directory: infra/aws
+        run: |
+          npm exec -- cdk deploy Eisenhower-staging-Registries --context environment=staging --exclusively --require-approval never --outputs-file cdk-registries.json
+          role_arn="$(node -e 'const o=require("./cdk-registries.json")["Eisenhower-staging-Registries"]; console.log(o.ImagePublishingRoleArn)')"
+          echo "image_publishing_role_arn=$role_arn" >> "$GITHUB_OUTPUT"
+
+      - name: Assume the scoped application image publishing role
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ steps.registries.outputs.image_publishing_role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-chaining: true
+
+      - name: Login to the private ECR registry
+        shell: bash
+        run: aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+
+      - name: Enable ARM64 container builds
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+
+      - name: Configure Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Build and publish exact-SHA API image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: ./backend-node/Dockerfile
+          target: production
+          platforms: linux/arm64
+          push: true
+          tags: ${{ format('{0}.dkr.ecr.{1}.amazonaws.com/eisenhower-staging-api:{2}', vars.AWS_STAGING_ACCOUNT_ID, env.AWS_REGION, github.event.workflow_run.head_sha) }}
+          build-args: RELEASE_SHA=${{ github.event.workflow_run.head_sha }}
+
+      - name: Build and publish exact-SHA web image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: ./web/Dockerfile
+          target: production
+          platforms: linux/arm64
+          push: true
+          tags: ${{ format('{0}.dkr.ecr.{1}.amazonaws.com/eisenhower-staging-web:{2}', vars.AWS_STAGING_ACCOUNT_ID, env.AWS_REGION, github.event.workflow_run.head_sha) }}
+          build-args: RELEASE_SHA=${{ github.event.workflow_run.head_sha }}
+
+      - name: Restore AWS OIDC deployment identity
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_STAGING_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Create the exact-SHA staging platform with services stopped
+        id: platform-stopped
+        working-directory: infra/aws
+        env:
+          CERTIFICATE_ARN: ${{ vars.AWS_STAGING_CERTIFICATE_ARN }}
+          PUBLIC_ORIGIN: ${{ vars.AWS_STAGING_PUBLIC_ORIGIN }}
+          OIDC_ISSUER: ${{ vars.APP_OIDC_ISSUER }}
+          OIDC_AUDIENCE: ${{ vars.APP_OIDC_AUDIENCE }}
+          OIDC_JWKS_URL: ${{ vars.APP_OIDC_JWKS_URL }}
+          AI_SERVICE_URL: ${{ vars.AWS_STAGING_AI_SERVICE_URL }}
+        run: |
+          npm exec -- cdk deploy Eisenhower-staging-Platform \
+            --context environment=staging \
+            --exclusively \
+            --require-approval never \
+            --parameters "ReleaseSha=$RELEASE_SHA" \
+            --parameters "CertificateArn=$CERTIFICATE_ARN" \
+            --parameters "PublicOrigin=$PUBLIC_ORIGIN" \
+            --parameters "OidcIssuer=$OIDC_ISSUER" \
+            --parameters "OidcAudience=$OIDC_AUDIENCE" \
+            --parameters "OidcJwksUrl=$OIDC_JWKS_URL" \
+            --parameters "AiServiceUrl=$AI_SERVICE_URL" \
+            --parameters "ServiceDesiredCount=0" \
+            --parameters "ServiceMinimumCapacity=0" \
+            --outputs-file cdk-platform.json
+          role_arn="$(node -e 'const o=require("./cdk-platform.json")["Eisenhower-staging-Platform"]; console.log(o.MigrationOpsRoleArn)')"
+          load_balancer_dns_name="$(node -e 'const o=require("./cdk-platform.json")["Eisenhower-staging-Platform"]; console.log(o.LoadBalancerDnsName)')"
+          echo "migration_ops_role_arn=$role_arn" >> "$GITHUB_OUTPUT"
+          echo "load_balancer_dns_name=$load_balancer_dns_name" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Cloudflare DNS target::$load_balancer_dns_name"
+
+      - name: Assume the staging migration operator role
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ steps.platform-stopped.outputs.migration_ops_role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-chaining: true
+
+      - name: Apply schema and restricted application role in a one-shot task
+        working-directory: infra/aws
+        shell: bash
+        run: |
+          set -euo pipefail
+          cluster="$(node -e "const o=require('./cdk-platform.json')['Eisenhower-staging-Platform']; console.log(o.ClusterName)")"
+          task_definition="$(node -e "const o=require('./cdk-platform.json')['Eisenhower-staging-Platform']; console.log(o.MigrationTaskDefinitionArn)")"
+          subnets="$(node -e "const o=require('./cdk-platform.json')['Eisenhower-staging-Platform']; console.log(o.MigrationSubnetIds)")"
+          security_group="$(node -e "const o=require('./cdk-platform.json')['Eisenhower-staging-Platform']; console.log(o.MigrationSecurityGroupId)")"
+          task_arn="$(aws ecs run-task \
+            --cluster "$cluster" \
+            --task-definition "$task_definition" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$subnets],securityGroups=[$security_group],assignPublicIp=DISABLED}" \
+            --query 'tasks[0].taskArn' \
+            --output text)"
+          test -n "$task_arn"
+          test "$task_arn" != "None"
+          aws ecs wait tasks-stopped --cluster "$cluster" --tasks "$task_arn"
+          test "$(aws ecs describe-tasks --cluster "$cluster" --tasks "$task_arn" --query 'tasks[0].containers[0].exitCode' --output text)" = "0"
+
+      - name: Restore AWS OIDC deployment identity after migration
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_STAGING_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Activate staging services only after migration
+        working-directory: infra/aws
+        env:
+          CERTIFICATE_ARN: ${{ vars.AWS_STAGING_CERTIFICATE_ARN }}
+          PUBLIC_ORIGIN: ${{ vars.AWS_STAGING_PUBLIC_ORIGIN }}
+          OIDC_ISSUER: ${{ vars.APP_OIDC_ISSUER }}
+          OIDC_AUDIENCE: ${{ vars.APP_OIDC_AUDIENCE }}
+          OIDC_JWKS_URL: ${{ vars.APP_OIDC_JWKS_URL }}
+          AI_SERVICE_URL: ${{ vars.AWS_STAGING_AI_SERVICE_URL }}
+        run: |
+          npm exec -- cdk deploy Eisenhower-staging-Platform \
+            --context environment=staging \
+            --exclusively \
+            --require-approval never \
+            --parameters "ReleaseSha=$RELEASE_SHA" \
+            --parameters "CertificateArn=$CERTIFICATE_ARN" \
+            --parameters "PublicOrigin=$PUBLIC_ORIGIN" \
+            --parameters "OidcIssuer=$OIDC_ISSUER" \
+            --parameters "OidcAudience=$OIDC_AUDIENCE" \
+            --parameters "OidcJwksUrl=$OIDC_JWKS_URL" \
+            --parameters "AiServiceUrl=$AI_SERVICE_URL" \
+            --parameters "ServiceDesiredCount=1" \
+            --parameters "ServiceMinimumCapacity=1" \
+            --outputs-file cdk-platform.json
+
+      - name: Verify HTTPS readiness and release evidence
+        working-directory: infra/aws
+        shell: bash
+        env:
+          PUBLIC_ORIGIN: ${{ vars.AWS_STAGING_PUBLIC_ORIGIN }}
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent --retry 60 --retry-all-errors --retry-delay 15 "$PUBLIC_ORIGIN/health/ready" > readiness.json
+          jq -e '.status == "ready" and .dependencies.database == "connected" and .dependencies.redis == "connected"' readiness.json
+
+      - name: Preserve staging deployment evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0 # v7.0.1
+        with:
+          name: aws-staging-${{ github.event.workflow_run.head_sha }}
+          path: |
+            infra/aws/cdk-registries.json
+            infra/aws/cdk-platform.json
+            infra/aws/readiness.json
+          if-no-files-found: error
+          retention-days: 30

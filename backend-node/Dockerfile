@@ -37,6 +37,7 @@ COPY --from=build --chown=65532:65532 /app/backend-node/package.json ./package.j
 COPY --from=build --chown=65532:65532 /app/backend-node/package-lock.json ./package-lock.json
 COPY --from=build --chown=65532:65532 /app/backend-node/node_modules ./node_modules
 COPY --from=build --chown=65532:65532 /app/backend-node/dist ./dist
+COPY --from=build --chown=65532:65532 /app/backend-node/prisma ./prisma
 
 USER 65532:65532
 

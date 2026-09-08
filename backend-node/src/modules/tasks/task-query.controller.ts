@@ -5,7 +5,7 @@ import { requestContextFor } from '../../platform/http/request-context';
 import { RequiredScopes } from '../security/security.decorators';
 import { parseDelegatedTaskQuery, parseTaskListQuery } from './task-query.dto';
 
-@Controller('tasks')
+@Controller(['tasks', 'api/tasks'])
 export class TaskQueryController {
   constructor(@Inject(TaskQueryService) private readonly queries: TaskQueryService) {}
 
