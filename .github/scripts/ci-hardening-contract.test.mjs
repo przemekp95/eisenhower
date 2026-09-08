@@ -32,9 +32,17 @@ test("every job has a bounded timeout and every external action is immutable", (
 test("AWS staging delivery uses environment-scoped OIDC and immutable green SHAs without static keys", () => {
   const aws = readWorkflow("aws-deploy.yml");
   const release = readWorkflow("release.yml");
+  const deploymentGate = aws.split(/^  staging-deployment-gate:\s*$/m)[1]?.split(/^  deploy-staging:\s*$/m)[0] ?? "";
+  const deployJob = aws.split(/^  deploy-staging:\s*$/m)[1] ?? "";
 
   assert.match(aws, /workflow_run:[\s\S]*branches:\n      - dev/);
   assert.match(aws, /workflow_dispatch:[\s\S]*release_sha:/);
+  assert.match(deploymentGate, /environment: staging/);
+  assert.match(deploymentGate, /DEPLOY_ENABLED: \$\{\{ vars\.AWS_STAGING_DEPLOY_ENABLED \}\}/);
+  assert.match(deploymentGate, /enabled: \$\{\{ steps\.gate\.outputs\.enabled \}\}/);
+  assert.match(deployJob, /needs: staging-deployment-gate/);
+  assert.match(deployJob, /needs\.staging-deployment-gate\.outputs\.enabled == 'true'/);
+  assert.doesNotMatch(deployJob, /vars\.AWS_STAGING_DEPLOY_ENABLED == 'true'/);
   assert.match(aws, /environment: staging/);
   assert.match(aws, /actions: read/);
   assert.match(aws, /id-token: write/);
