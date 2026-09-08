@@ -1,4 +1,4 @@
-import request from 'supertest';
+import request from './helpers/http-test-client';
 import { createApp } from '../src/app';
 import { createRedisRateLimitRuntime } from '../src/redisRateLimit';
 
@@ -14,13 +14,15 @@ describeRedis('shared Redis rate limiting', () => {
     try {
       const firstApp = createApp({
         rateLimitLimit: 1,
-        rateLimitStore: firstRuntime.store,
+        rateLimitRedis: firstRuntime.client,
+        rateLimitNameSpace: firstRuntime.nameSpace,
         aiHealthChecker: async () => 'healthy',
         databaseStatusResolver: () => 'connected',
       });
       const secondApp = createApp({
         rateLimitLimit: 1,
-        rateLimitStore: secondRuntime.store,
+        rateLimitRedis: secondRuntime.client,
+        rateLimitNameSpace: secondRuntime.nameSpace,
         aiHealthChecker: async () => 'healthy',
         databaseStatusResolver: () => 'connected',
       });

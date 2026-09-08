@@ -17,6 +17,8 @@ import { useMatrixController } from '../hooks/useMatrixController';
 import { AIToolsComponent, MatrixSceneComponent } from './matrixLazyComponents';
 import TaskDelegationPanel from './TaskDelegationPanel';
 import TaskScheduleEditor from './TaskScheduleEditor';
+import ImageUpload from './ai/ImageUpload';
+import BulkImport from './BulkImport';
 
 const LIFECYCLE_FILTERS: TaskLifecycleFilter[] = [
   'active',
@@ -81,7 +83,8 @@ export default function Matrix({
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
   const [pendingLifecycleId, setPendingLifecycleId] = useState<string | null>(null);
   const [taskErrors, setTaskErrors] = useState<Record<string, string>>({});
-  const [assistantTarget, setAssistantTarget] = useState<'draft' | string | null>(null);
+  const [assistantTarget, setAssistantTarget] = useState<string | null>(null);
+  const [utilityTarget, setUtilityTarget] = useState<'ocr' | 'bulk' | null>(null);
   const {
     aiError,
     aiLoading,
@@ -101,21 +104,9 @@ export default function Matrix({
     translate: t,
   });
 
-  const assistantTask =
-    assistantTarget === 'draft'
-      ? newTask
-      : (tasks.find((task) => task._id === assistantTarget) ?? null);
+  const assistantTask = tasks.find((task) => task._id === assistantTarget) ?? null;
 
-  const applyAssistantPatch = async (target: 'draft' | string, patch: Partial<TaskInput>) => {
-    if (target === 'draft') {
-      for (const [key, value] of Object.entries(patch) as Array<
-        [keyof TaskInput, TaskInput[keyof TaskInput]]
-      >) {
-        updateNewTaskField(key, value);
-      }
-      return;
-    }
-
+  const applyAssistantPatch = async (target: string, patch: Partial<TaskInput>) => {
     setPendingTaskId(target);
     setTaskErrors((current) => ({ ...current, [target]: '' }));
     try {
@@ -403,13 +394,17 @@ export default function Matrix({
             </button>
             <button
               type="button"
-              onClick={() => setAssistantTarget('draft')}
-              disabled={createPending || !newTask.title.trim()}
-              className={`rounded-full bg-white/10 px-4 py-2 text-sm text-white transition-all hover:bg-white/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10 ${
-                newTask.title.trim() ? 'pulse-ai' : ''
-              }`}
+              onClick={() => setUtilityTarget('ocr')}
+              className="rounded-full bg-white/10 px-4 py-2 text-sm text-white transition-all hover:bg-white/15"
             >
-              {t('ai.tools')}
+              {t('actions.scanPhoto')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setUtilityTarget('bulk')}
+              className="rounded-full bg-white/10 px-4 py-2 text-sm text-white transition-all hover:bg-white/15"
+            >
+              {t('actions.bulkAdd')}
             </button>
           </div>
           {aiError ? <p className="md:col-span-2 text-sm text-red-200">{aiError}</p> : null}
@@ -766,9 +761,39 @@ export default function Matrix({
               applyAssistantPatch(assistantTarget, { description })
             }
             onApplyQuadrant={(patch) => applyAssistantPatch(assistantTarget, patch)}
-            onOCRTasksExtracted={handleOCRImport}
           />
         </Suspense>
+      ) : null}
+      {utilityTarget ? (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-3 sm:p-6">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="mx-auto max-w-3xl rounded-3xl border border-white/10 bg-slate-900 p-5 shadow-2xl"
+          >
+            {utilityTarget === 'ocr' ? (
+              <>
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h2 className="text-xl font-semibold text-white">{t('actions.scanPhoto')}</h2>
+                  <button
+                    type="button"
+                    onClick={() => setUtilityTarget(null)}
+                    className="rounded-full bg-white/10 px-4 py-2 text-white"
+                  >
+                    {t('common.close')}
+                  </button>
+                </div>
+                <ImageUpload onTasksExtracted={handleOCRImport} />
+              </>
+            ) : (
+              <BulkImport
+                existingTitles={tasks.map((task) => task.title)}
+                onAddTask={onAddTask}
+                onClose={() => setUtilityTarget(null)}
+              />
+            )}
+          </div>
+        </div>
       ) : null}
     </div>
   );

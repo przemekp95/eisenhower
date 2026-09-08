@@ -1,4 +1,4 @@
-import request from 'supertest';
+import request from './helpers/http-test-client';
 import * as dbModule from '../src/db';
 import { createApp, defaultAiHealthChecker } from '../src/app';
 

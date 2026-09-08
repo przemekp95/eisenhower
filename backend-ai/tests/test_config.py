@@ -45,6 +45,45 @@ def test_load_settings_uses_defaults():
   assert settings.memory_response_enabled is False
 
 
+@pytest.mark.parametrize("value", ["development", "test", "production"])
+def test_app_env_accepts_only_documented_values(value):
+  settings = load_settings(
+    {
+      "APP_ENV": value,
+      **(
+        {
+          "AUTH_MODE": "oidc",
+          "OIDC_ISSUER": "https://identity.example.com",
+          "OIDC_AUDIENCE": "eisenhower-api",
+          "EISENHOWER_API_TOKEN": "a" * 32,
+          "EISENHOWER_ADMIN_TOKEN": "b" * 32,
+          "AUDIT_HMAC_KEY": "c" * 32,
+          "RELEASE_SHA": "1" * 40,
+        }
+        if value == "production"
+        else {}
+      ),
+    }
+  )
+
+  assert settings.app_env == value
+
+
+@pytest.mark.parametrize("value", ["prod", "staging", "local", "", "PRODUCTION-like"])
+def test_app_env_is_a_fail_closed_enum(value):
+  with pytest.raises(ValueError, match="APP_ENV"):
+    load_settings({"APP_ENV": value})
+
+
+def test_settings_cannot_bypass_app_env_validation(tmp_path: Path):
+  with pytest.raises(ValueError, match="APP_ENV"):
+    Settings(
+      training_data_path=tmp_path / "training.json",
+      model_cache_dir=tmp_path / "runtime",
+      app_env="staging",
+    )
+
+
 def test_load_settings_accepts_overrides(tmp_path: Path):
   settings = load_settings(
     {
@@ -240,6 +279,7 @@ def test_production_response_canary_requires_explicit_tenant_and_user_cohorts(tm
     "training_data_path": tmp_path / "training.json",
     "model_cache_dir": tmp_path / "runtime",
     "app_env": "production",
+    "auth_mode": "oidc",
     "rag_retrieval_enabled": True,
     "rag_generation_enabled": True,
     "rag_response_enabled": True,
@@ -282,8 +322,8 @@ def test_memory_flags_fail_closed_in_rollout_order(tmp_path: Path):
     Settings(**common, memory_write_enabled=True, memory_response_enabled=True)
 
 
-def test_production_static_auth_requires_distinct_long_tokens():
-  with pytest.raises(ValueError):
+def test_production_rejects_host_selected_static_auth():
+  with pytest.raises(ValueError, match="AUTH_MODE=oidc"):
     load_settings(
       {
         "APP_ENV": "production",
@@ -300,9 +340,9 @@ def test_production_static_auth_requires_distinct_long_tokens():
 def test_production_requires_separate_audit_key_and_immutable_release_sha():
   common = {
     "APP_ENV": "production",
-    "AUTH_MODE": "static",
-    "EISENHOWER_API_TOKEN": "u" * 32,
-    "EISENHOWER_ADMIN_TOKEN": "a" * 32,
+    "AUTH_MODE": "oidc",
+    "OIDC_ISSUER": "https://identity.example.com",
+    "OIDC_AUDIENCE": "eisenhower-api",
     "CORS_ALLOW_ORIGINS": "https://app.example.com",
   }
 

@@ -522,7 +522,10 @@ describe('AI component error paths', () => {
     renderWithLanguage(<ImageUpload onTasksExtracted={jest.fn()} />);
 
     expect(screen.getByTestId('image-upload-input')).not.toHaveAttribute('capture');
-    expect(screen.getByTestId('image-camera-input')).toHaveAttribute('accept', 'image/*');
+    expect(screen.getByTestId('image-camera-input')).toHaveAttribute(
+      'accept',
+      'image/jpeg,image/png'
+    );
     expect(screen.getByTestId('image-camera-input')).toHaveAttribute('capture', 'environment');
     expect(screen.getByRole('button', { name: 'Choose from gallery' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Take photo' })).toBeInTheDocument();

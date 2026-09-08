@@ -30,6 +30,8 @@ export default function ImageUpload({ onTasksExtracted }: Props) {
     language === 'pl'
       ? {
           review: 'Sprawdź zadania przed importem',
+          method:
+            'Tekst odczytuje Tesseract, a kwadrant sugeruje klasyfikator MiniLM + PyTorch/MLP.',
           include: 'Uwzględnij zadanie',
           quadrant: 'Kwadrant dla',
           import: 'Importuj wybrane',
@@ -40,6 +42,8 @@ export default function ImageUpload({ onTasksExtracted }: Props) {
         }
       : {
           review: 'Review tasks before import',
+          method:
+            'Tesseract reads the text; the MiniLM + PyTorch/MLP classifier suggests quadrants.',
           include: 'Include task',
           quadrant: 'Quadrant for',
           import: 'Import selected',
@@ -111,7 +115,7 @@ export default function ImageUpload({ onTasksExtracted }: Props) {
       <input
         ref={inputRef}
         type="file"
-        accept="image/*,.txt"
+        accept="image/jpeg,image/png"
         className="hidden"
         data-testid="image-upload-input"
         aria-label={t('ai.ocr.upload')}
@@ -120,7 +124,7 @@ export default function ImageUpload({ onTasksExtracted }: Props) {
       <input
         ref={cameraInputRef}
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png"
         capture="environment"
         className="hidden"
         data-testid="image-camera-input"
@@ -145,6 +149,7 @@ export default function ImageUpload({ onTasksExtracted }: Props) {
           {loading ? t('ai.ocr.extracting') : t('ai.ocr.camera')}
         </button>
       </div>
+      <p className="max-w-2xl text-xs leading-5 text-white/55">{copy.method}</p>
       <p className="max-w-2xl text-xs leading-5 text-white/55">{t('ai.ocr.privacy')}</p>
 
       {result ? (

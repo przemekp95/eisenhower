@@ -7,7 +7,9 @@ from app.knowledge_runtime import create_knowledge_runtime
 from tests.test_api import FakeRagService
 
 
-def test_knowledge_runtime_exposes_only_knowledge_readiness_liveness_and_metrics(tmp_path: Path):
+def test_knowledge_runtime_exposes_only_knowledge_capabilities_readiness_liveness_and_metrics(
+  tmp_path: Path,
+):
   settings = Settings(
     training_data_path=tmp_path / "training.json",
     model_cache_dir=tmp_path / "runtime",
@@ -27,5 +29,13 @@ def test_knowledge_runtime_exposes_only_knowledge_readiness_liveness_and_metrics
   assert client.get("/health/live", headers=headers).status_code == 200
   assert client.get("/health/ready", headers=headers).status_code == 200
   assert client.get("/metrics", headers=headers).status_code == 200
+  capabilities = client.get("/capabilities", headers=headers)
+  assert capabilities.status_code == 200
+  assert capabilities.json()["classification"] is False
+  assert capabilities.json()["knowledge_retrieval"] is True
+  assert capabilities.json()["retrieval_augmented_generation"] is True
+  assert capabilities.json()["memory_write"] is False
+  assert capabilities.json()["memory_retrieval"] is False
+  assert capabilities.json()["memory_response"] is False
   assert client.post("/v2/ai/analyze", json={"task": "hidden"}, headers=headers).status_code == 404
   assert client.get("/docs", headers=headers).status_code == 404

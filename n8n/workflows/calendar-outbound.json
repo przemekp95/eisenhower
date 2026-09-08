@@ -18,7 +18,7 @@
       "typeVersion": 2,
       "position": [-800, 0],
       "parameters": {
-        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/outbox/claim';\nconst body = {};\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+        "jsCode": "const { createHmac, randomUUID } = require('crypto');\nconst path = '/internal/calendar/outbox/claim';\nconst body = {};\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst requestId = randomUUID();\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\n${requestId}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedRequestId: requestId, signedSignature } }];"
       }
     },
     {
@@ -36,6 +36,7 @@
         "sendHeaders": true,
         "headerParameters": { "parameters": [
           { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Request-Id", "value": "={{ $json.signedRequestId }}" },
           { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
         ] },
         "sendBody": true,
@@ -70,7 +71,7 @@
       "typeVersion": 2,
       "position": [20, -180],
       "parameters": {
-        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/provider/changes';\nconst body = { connectionId: $json.provider.connectionId, checkpoint: $json.checkpoint };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+        "jsCode": "const { createHmac, randomUUID } = require('crypto');\nconst path = '/internal/calendar/provider/changes';\nconst body = { connectionId: $json.provider.connectionId, checkpoint: $json.checkpoint };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst requestId = randomUUID();\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\n${requestId}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedRequestId: requestId, signedSignature } }];"
       }
     },
     {
@@ -89,6 +90,7 @@
         "sendHeaders": true,
         "headerParameters": { "parameters": [
           { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Request-Id", "value": "={{ $json.signedRequestId }}" },
           { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
         ] },
         "sendBody": true,
@@ -115,7 +117,7 @@
       "typeVersion": 2,
       "position": [740, -180],
       "parameters": {
-        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/sync/apply-batch';\nconst body = { commands: $json.commands };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+        "jsCode": "const { createHmac, randomUUID } = require('crypto');\nconst path = '/internal/calendar/sync/apply-batch';\nconst body = { commands: $json.commands };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst requestId = randomUUID();\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\n${requestId}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedRequestId: requestId, signedSignature } }];"
       }
     },
     {
@@ -134,6 +136,7 @@
         "sendHeaders": true,
         "headerParameters": { "parameters": [
           { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Request-Id", "value": "={{ $json.signedRequestId }}" },
           { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
         ] },
         "sendBody": true,
@@ -170,7 +173,7 @@
       "typeVersion": 2,
       "position": [-160, 0],
       "parameters": {
-        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/provider/outbound';\nconst body = { eventId: $json.eventId };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+        "jsCode": "const { createHmac, randomUUID } = require('crypto');\nconst path = '/internal/calendar/provider/outbound';\nconst body = { eventId: $json.eventId };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst requestId = randomUUID();\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\n${requestId}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedRequestId: requestId, signedSignature } }];"
       }
     },
     {
@@ -189,6 +192,7 @@
         "sendHeaders": true,
         "headerParameters": { "parameters": [
           { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Request-Id", "value": "={{ $json.signedRequestId }}" },
           { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
         ] },
         "sendBody": true,
@@ -205,7 +209,7 @@
       "typeVersion": 2,
       "position": [560, 180],
       "parameters": {
-        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/outbox/acknowledge';\nconst claimed = $('Claim Calendar Outbox Batch').item.json;\nconst body = { eventId: claimed.eventId, leaseId: claimed.leaseId, delivered: false, error: 'provider_dispatch_failed' };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+        "jsCode": "const { createHmac, randomUUID } = require('crypto');\nconst path = '/internal/calendar/outbox/acknowledge';\nconst claimed = $('Claim Calendar Outbox Batch').item.json;\nconst body = { eventId: claimed.eventId, leaseId: claimed.leaseId, delivered: false, error: 'provider_dispatch_failed' };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst requestId = randomUUID();\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\n${requestId}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedRequestId: requestId, signedSignature } }];"
       }
     },
     {
@@ -223,6 +227,7 @@
         "sendHeaders": true,
         "headerParameters": { "parameters": [
           { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Request-Id", "value": "={{ $json.signedRequestId }}" },
           { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
         ] },
         "sendBody": true,
@@ -239,7 +244,7 @@
       "typeVersion": 2,
       "position": [320, 0],
       "parameters": {
-        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/outbox/acknowledge';\nconst claimed = $('Claim Calendar Outbox Batch').item.json;\nconst body = { eventId: claimed.eventId, leaseId: claimed.leaseId, delivered: true, providerEventId: $json.providerEventId, providerEtag: $json.providerEtag, connectionId: $json.connectionId };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+        "jsCode": "const { createHmac, randomUUID } = require('crypto');\nconst path = '/internal/calendar/outbox/acknowledge';\nconst claimed = $('Claim Calendar Outbox Batch').item.json;\nconst body = { eventId: claimed.eventId, leaseId: claimed.leaseId, delivered: true, providerEventId: $json.providerEventId, providerEtag: $json.providerEtag, connectionId: $json.connectionId };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst requestId = randomUUID();\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\n${requestId}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedRequestId: requestId, signedSignature } }];"
       }
     },
     {
@@ -257,6 +262,7 @@
         "sendHeaders": true,
         "headerParameters": { "parameters": [
           { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Request-Id", "value": "={{ $json.signedRequestId }}" },
           { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
         ] },
         "sendBody": true,

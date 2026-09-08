@@ -20,7 +20,12 @@ import {
   resolveLifecycleTransition,
 } from '../application/taskRepository';
 import { Task, TaskModel } from '../models/task';
-import { CalendarBindingModel, CalendarDomainAuditModel, CalendarOutboxModel } from '../models/calendar';
+import {
+  CalendarBindingModel,
+  CalendarConnectionModel,
+  CalendarDomainAuditModel,
+  CalendarOutboxModel,
+} from '../models/calendar';
 
 type PersistedTask = Omit<Task, 'lifecycleState'> & {
   _id: unknown;
@@ -252,12 +257,19 @@ export class MongooseTaskRepository implements TaskRepository {
         if (!task) return;
         stored = toStoredTask(task.toObject() as PersistedTask);
         const binding = await CalendarBindingModel.exists({ ...scope, taskId: id }).session(session);
-        await enqueueCalendarTaskEvent(
-          session,
-          scope,
-          stored,
-          schedule ? (binding ? 'event_update' : 'event_create') : 'event_delete',
-        );
+        const connection = binding
+          ? null
+          : await CalendarConnectionModel.exists({ ...scope, status: 'active' }).session(session);
+        const eventType = schedule
+          ? binding
+            ? 'event_update'
+            : connection
+              ? 'event_create'
+              : null
+          : binding
+            ? 'event_delete'
+            : null;
+        if (eventType) await enqueueCalendarTaskEvent(session, scope, stored, eventType);
         await CalendarDomainAuditModel.create([{
           eventId: `task:${id}:schedule:${stored.revision}`,
           ...scope,

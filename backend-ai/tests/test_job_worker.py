@@ -78,12 +78,25 @@ def test_expired_worker_lease_can_be_reclaimed(tmp_path):
   assert reclaimed.attempts == 2
 
 
-def test_long_handler_renews_lease_so_second_worker_cannot_duplicate_it(tmp_path):
+def test_long_handler_renews_lease_so_second_worker_cannot_duplicate_it(tmp_path, monkeypatch):
   queue = SqliteJobQueue(tmp_path / "jobs.sqlite3")
   queued = queue.enqueue("event-long", "rag.upsert", {})
   entered = Event()
   release = Event()
+  heartbeat_renewed = Event()
   calls = []
+
+  record_worker_heartbeat = queue.record_worker_heartbeat
+  heartbeat_count = 0
+
+  def observe_worker_heartbeat(worker_id, *, now=None):
+    nonlocal heartbeat_count
+    record_worker_heartbeat(worker_id, now=now)
+    heartbeat_count += 1
+    if heartbeat_count >= 2:
+      heartbeat_renewed.set()
+
+  monkeypatch.setattr(queue, "record_worker_heartbeat", observe_worker_heartbeat)
 
   def slow_handler(_payload):
     calls.append("worker-a")
@@ -99,12 +112,11 @@ def test_long_handler_renews_lease_so_second_worker_cannot_duplicate_it(tmp_path
   thread = Thread(target=lambda: worker.run_once(worker_id="worker-a"), daemon=True)
   thread.start()
   assert entered.wait(1)
+  assert heartbeat_renewed.wait(1)
   sleep(1.2)
 
   assert queue.claim_next("worker-b", lease_seconds=1) is None
-  heartbeat_age = queue.latest_worker_heartbeat_age_seconds()
-  assert heartbeat_age is not None
-  assert heartbeat_age < 0.5
+  assert queue.latest_worker_heartbeat_age_seconds() is not None
   release.set()
   thread.join(timeout=2)
 

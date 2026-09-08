@@ -9,6 +9,10 @@ const CALENDAR_API_PATHS = Object.freeze({
   status: '/calendar/status',
   syncRequests: '/calendar/sync-requests',
   conflicts: '/calendar/conflicts',
+  deletedBindings: '/calendar/deleted-bindings',
+  events: '/calendar/events',
+  bindings: '/calendar/bindings',
+  imports: '/calendar/imports',
   oauthStart: '/calendar/oauth/start',
   oauthDisconnect: '/calendar/oauth/disconnect',
 });
@@ -56,6 +60,172 @@ const AI_API_PATHS = Object.freeze({
 // The server path is retained for backwards compatibility. It is a local task
 // analysis endpoint, not proof that LangChain or generative RAG handled a request.
 const ANALYZE_TASK_PATH = AI_API_PATHS.analyzeTask;
+
+function concatenateBytes(chunks) {
+  const totalLength = chunks.reduce((total, chunk) => total + chunk.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
+}
+
+function stripJpegMetadata(bytes) {
+  if (!(bytes instanceof Uint8Array) || bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) {
+    throw new TypeError('Expected JPEG bytes');
+  }
+
+  const chunks = [bytes.subarray(0, 2)];
+  let offset = 2;
+  let inScan = false;
+  while (offset < bytes.length) {
+    if (inScan) {
+      const scanStart = offset;
+      let markerStart = -1;
+      while (offset < bytes.length) {
+        if (bytes[offset] !== 0xff) {
+          offset += 1;
+          continue;
+        }
+
+        const candidateStart = offset;
+        while (offset < bytes.length && bytes[offset] === 0xff) {
+          offset += 1;
+        }
+        if (offset >= bytes.length) {
+          throw new TypeError('Malformed JPEG without EOI');
+        }
+
+        const candidate = bytes[offset];
+        if (candidate === 0x00 || candidate === 0x01 || (candidate >= 0xd0 && candidate <= 0xd7)) {
+          offset += 1;
+          continue;
+        }
+        markerStart = candidateStart;
+        break;
+      }
+
+      if (markerStart < 0) {
+        throw new TypeError('Malformed JPEG without EOI');
+      }
+      chunks.push(bytes.subarray(scanStart, markerStart));
+      offset = markerStart;
+      inScan = false;
+    }
+
+    const markerStart = offset;
+    if (bytes[offset] !== 0xff) {
+      throw new TypeError('Malformed JPEG marker');
+    }
+    while (offset < bytes.length && bytes[offset] === 0xff) {
+      offset += 1;
+    }
+    if (offset >= bytes.length) {
+      throw new TypeError('Malformed JPEG marker');
+    }
+
+    const marker = bytes[offset];
+    offset += 1;
+    if (marker === 0xda) {
+      if (offset + 2 > bytes.length) {
+        throw new TypeError('Malformed JPEG segment');
+      }
+      const length = (bytes[offset] << 8) | bytes[offset + 1];
+      if (length < 2 || offset + length > bytes.length) {
+        throw new TypeError('Malformed JPEG segment');
+      }
+      chunks.push(bytes.subarray(markerStart, offset + length));
+      offset += length;
+      inScan = true;
+      continue;
+    }
+    if (marker === 0xd9) {
+      if (offset !== bytes.length) {
+        throw new TypeError('Malformed JPEG trailing data');
+      }
+      chunks.push(bytes.subarray(markerStart, offset));
+      return concatenateBytes(chunks);
+    }
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      chunks.push(bytes.subarray(markerStart, offset));
+      continue;
+    }
+    if (offset + 2 > bytes.length) {
+      throw new TypeError('Malformed JPEG segment');
+    }
+
+    const length = (bytes[offset] << 8) | bytes[offset + 1];
+    const segmentEnd = offset + length;
+    if (length < 2 || segmentEnd > bytes.length) {
+      throw new TypeError('Malformed JPEG segment');
+    }
+    if (![0xe1, 0xed, 0xfe].includes(marker)) {
+      chunks.push(bytes.subarray(markerStart, segmentEnd));
+    }
+    offset = segmentEnd;
+  }
+
+  throw new TypeError('Malformed JPEG without image data');
+}
+
+function isPng(bytes) {
+  const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  return bytes.length >= signature.length && signature.every((byte, index) => bytes[index] === byte);
+}
+
+function stripPngMetadata(bytes) {
+  const chunks = [bytes.subarray(0, 8)];
+  const privateChunkTypes = new Set(['eXIf', 'tEXt', 'zTXt', 'iTXt']);
+  let offset = 8;
+
+  while (offset < bytes.length) {
+    if (offset + 12 > bytes.length) {
+      throw new TypeError('Malformed PNG chunk');
+    }
+    const length =
+      bytes[offset] * 0x1000000 +
+      bytes[offset + 1] * 0x10000 +
+      bytes[offset + 2] * 0x100 +
+      bytes[offset + 3];
+    const chunkEnd = offset + 12 + length;
+    if (!Number.isSafeInteger(chunkEnd) || chunkEnd > bytes.length) {
+      throw new TypeError('Malformed PNG chunk');
+    }
+    const type = String.fromCharCode(
+      bytes[offset + 4],
+      bytes[offset + 5],
+      bytes[offset + 6],
+      bytes[offset + 7]
+    );
+    if (!privateChunkTypes.has(type)) {
+      chunks.push(bytes.subarray(offset, chunkEnd));
+    }
+    offset = chunkEnd;
+    if (type === 'IEND') {
+      if (length !== 0 || offset !== bytes.length) {
+        throw new TypeError('Malformed PNG chunk');
+      }
+      return concatenateBytes(chunks);
+    }
+  }
+
+  throw new TypeError('Malformed PNG without IEND');
+}
+
+function stripImageMetadata(bytes) {
+  if (!(bytes instanceof Uint8Array)) {
+    throw new TypeError('Expected image bytes');
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+    return stripJpegMetadata(bytes);
+  }
+  if (isPng(bytes)) {
+    return stripPngMetadata(bytes);
+  }
+  throw new TypeError('Unsupported image format');
+}
 
 function getProviderPath(provider) {
   return `/providers/${encodeURIComponent(provider)}`;
@@ -536,6 +706,78 @@ function createTaskApi(baseUrl, optionsOrFetch) {
         invalidResponse: 'Calendar API returned an invalid response',
       });
     },
+    async listCalendarDeletedBindings() {
+      const response = await request(buildUrl(baseUrl, CALENDAR_API_PATHS.deletedBindings));
+      return readJson(response, {
+        defaultError: 'Calendar request failed',
+        errorCode: 'calendar_request_failed',
+        validate: (value) => Array.isArray(value) && value.every(isCalendarDeletedBindingDto),
+        invalidResponse: 'Calendar API returned an invalid response',
+      });
+    },
+    async resolveCalendarDeletedBinding(id, strategy, taskRevision, idempotencyKey) {
+      const response = await request(
+        buildUrl(baseUrl, `${CALENDAR_API_PATHS.deletedBindings}/${encodeURIComponent(id)}/resolve`),
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'If-Match': `"${taskRevision}"`,
+            'Idempotency-Key': idempotencyKey,
+          },
+          body: JSON.stringify({ strategy }),
+        }
+      );
+      return readJson(response, {
+        defaultError: 'Calendar request failed',
+        errorCode: 'calendar_request_failed',
+        validate: isCalendarDeletionResolutionDto,
+        invalidResponse: 'Calendar API returned an invalid response',
+      });
+    },
+    async listCalendarEvents(timeMin, timeMax) {
+      const query = new URLSearchParams({ timeMin, timeMax });
+      const response = await request(buildUrl(baseUrl, `${CALENDAR_API_PATHS.events}?${query}`));
+      return readJson(response, {
+        defaultError: 'Calendar request failed', errorCode: 'calendar_request_failed',
+        validate: (value) => isRecord(value) && Array.isArray(value.events) && value.events.every(isCalendarEventCandidateDto) && isOptional(value.nextPageToken, (item) => typeof item === 'string'),
+        invalidResponse: 'Calendar API returned an invalid response',
+      });
+    },
+    async previewCalendarLink(taskId, providerEventId) {
+      const response = await request(buildUrl(baseUrl, `${CALENDAR_API_PATHS.bindings}/preview`), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId, providerEventId }),
+      });
+      return readJson(response, {
+        defaultError: 'Calendar request failed', errorCode: 'calendar_request_failed',
+        validate: isCalendarLinkPreviewDto,
+        invalidResponse: 'Calendar API returned an invalid response',
+      });
+    },
+    async createCalendarLink(input) {
+      const response = await request(buildUrl(baseUrl, CALENDAR_API_PATHS.bindings), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'If-Match': `"${input.taskRevision}"`, 'Idempotency-Key': input.idempotencyKey },
+        body: JSON.stringify({ taskId: input.taskId, providerEventId: input.providerEventId, providerEtag: input.providerEtag, direction: input.direction }),
+      });
+      return readJson(response, {
+        defaultError: 'Calendar request failed', errorCode: 'calendar_request_failed',
+        validate: (value) => isRecord(value) && value.outcome === 'linked' && typeof value.taskId === 'string' && Number.isInteger(value.taskRevision),
+        invalidResponse: 'Calendar API returned an invalid response',
+      });
+    },
+    async importCalendarEvents(providerEventIds, idempotencyKey) {
+      const response = await request(buildUrl(baseUrl, CALENDAR_API_PATHS.imports), {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+        body: JSON.stringify({ providerEventIds }),
+      });
+      return readJson(response, {
+        defaultError: 'Calendar request failed', errorCode: 'calendar_request_failed',
+        validate: isCalendarImportResultDto,
+        invalidResponse: 'Calendar API returned an invalid response',
+      });
+    },
     async getHealth() {
       const response = await request(buildUrl(baseUrl, TASK_API_PATHS.health));
       return readJson(response, {
@@ -912,6 +1154,59 @@ function isTaskDto(value) {
   );
 }
 
+function isCalendarDeletedBindingDto(value) {
+  return Boolean(
+    isRecord(value) &&
+      typeof value._id === 'string' &&
+      typeof value.taskId === 'string' &&
+      typeof value.taskTitle === 'string' &&
+      Number.isInteger(value.taskRevision) &&
+      typeof value.providerEventId === 'string' &&
+      typeof value.providerDeletedAt === 'string' &&
+      !Number.isNaN(Date.parse(value.providerDeletedAt))
+  );
+}
+
+function isCalendarEventCandidateDto(value) {
+  return Boolean(
+    isRecord(value) &&
+      ['id', 'etag', 'title', 'start', 'end', 'timeZone'].every((field) => typeof value[field] === 'string') &&
+      !Number.isNaN(Date.parse(value.start)) &&
+      !Number.isNaN(Date.parse(value.end))
+  );
+}
+
+function isCalendarLinkPreviewDto(value) {
+  return Boolean(
+    isRecord(value) && isRecord(value.task) && typeof value.task.id === 'string' &&
+      typeof value.task.title === 'string' && Number.isInteger(value.task.revision) &&
+      (value.task.schedule === null || isTaskScheduleDto(value.task.schedule)) &&
+      isCalendarEventCandidateDto(value.event) && isRecord(value.googleToEisenhower) &&
+      typeof value.googleToEisenhower.title === 'string' && isTaskScheduleDto(value.googleToEisenhower.schedule) &&
+      isRecord(value.eisenhowerToGoogle) && typeof value.eisenhowerToGoogle.title === 'string' &&
+      (value.eisenhowerToGoogle.schedule === null || isTaskScheduleDto(value.eisenhowerToGoogle.schedule))
+  );
+}
+
+function isCalendarImportResultDto(value) {
+  return Boolean(
+    isRecord(value) && Array.isArray(value.results) && value.results.every((item) =>
+      isRecord(item) && typeof item.providerEventId === 'string' &&
+      ['imported', 'duplicate', 'failed'].includes(item.status) &&
+      isOptional(item.taskId, (taskId) => typeof taskId === 'string') &&
+      isOptional(item.error, (error) => typeof error === 'string'))
+  );
+}
+
+function isCalendarDeletionResolutionDto(value) {
+  return Boolean(
+    isRecord(value) &&
+      ['clear_date', 'recreate', 'detach'].includes(value.outcome) &&
+      typeof value.taskId === 'string' &&
+      Number.isInteger(value.taskRevision)
+  );
+}
+
 function isCalendarStatusDto(value) {
   if (!isRecord(value) || !['disconnected', 'connected', 'pending'].includes(value.status)) {
     return false;
@@ -973,12 +1268,16 @@ function isIanaTimezone(value) {
 }
 
 function isTaskScheduleDto(value) {
-  const scheduleFields = new Set(['dueAt', 'timeZone', 'remindAt']);
+  const scheduleFields = new Set(['dueAt', 'timeZone', 'remindAt', 'durationMinutes']);
   return Boolean(
     isRecord(value) &&
     Object.keys(value).every((field) => scheduleFields.has(field)) &&
     isUtcIsoInstant(value.dueAt) &&
     isIanaTimezone(value.timeZone) &&
+    isOptional(
+      value.durationMinutes,
+      (item) => Number.isInteger(item) && item >= 5 && item <= 1440
+    ) &&
     isOptional(
       value.remindAt,
       (item) => isUtcIsoInstant(item) && Date.parse(item) <= Date.parse(value.dueAt)
@@ -1527,6 +1826,8 @@ module.exports = {
   isTaskDto,
   readJson,
   resolveTaskQuadrant,
+  stripImageMetadata,
+  stripJpegMetadata,
   toAcceptedOcrLearningPayload,
   toTaskInputDto,
   toTaskPatchDto,

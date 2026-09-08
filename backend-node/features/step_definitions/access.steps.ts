@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { Given, Then, When } from '@cucumber/cucumber';
-import request from 'supertest';
+import request from '../../tests/helpers/http-test-client';
 import { createApp } from '../../src/app';
 import { TaskModel } from '../../src/models/task';
 import { EisenhowerWorld } from '../support/world';

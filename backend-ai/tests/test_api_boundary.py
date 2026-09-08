@@ -89,6 +89,69 @@ def test_boundary_routes_memory_to_classifier_and_forwards_idempotency_key(tmp_p
   assert "idempotency-key" in preflight.headers["access-control-allow-headers"].lower()
 
 
+def test_boundary_aggregates_classifier_and_knowledge_capabilities_fail_closed(tmp_path):
+  observed = []
+
+  def handler(request: httpx.Request):
+    observed.append(request)
+    if request.url.host == "classifier-service":
+      return httpx.Response(200, json={
+        "classification": True,
+        "reasoned_local_analysis": True,
+        "knowledge_retrieval": False,
+        "retrieval_augmented_generation": False,
+        "local_similar_examples": True,
+        "ocr": True,
+        "batch_analysis": True,
+        "memory_write": False,
+        "memory_retrieval": False,
+        "memory_response": False,
+      })
+    return httpx.Response(200, json={
+      "classification": False,
+      "reasoned_local_analysis": False,
+      "knowledge_retrieval": True,
+      "retrieval_augmented_generation": True,
+      "local_similar_examples": False,
+      "ocr": False,
+      "batch_analysis": False,
+      "memory_write": False,
+      "memory_retrieval": False,
+      "memory_response": False,
+    })
+
+  app = create_boundary_app(
+    settings=settings(tmp_path),
+    classifier_url="http://classifier-service:8000",
+    knowledge_url="http://knowledge-service:8000",
+    allowed_upstream_hosts=("classifier-service", "knowledge-service"),
+    client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+  )
+  headers = {"Authorization": "Bearer user-token", "Origin": "https://app.example"}
+
+  response = TestClient(app).get("/capabilities", headers=headers)
+
+  assert response.status_code == 200
+  assert response.json() == {
+    "classification": True,
+    "reasoned_local_analysis": True,
+    "knowledge_retrieval": True,
+    "retrieval_augmented_generation": True,
+    "local_similar_examples": True,
+    "ocr": True,
+    "batch_analysis": True,
+    "memory_write": False,
+    "memory_retrieval": False,
+    "memory_response": False,
+  }
+  assert [request.url.host for request in observed] == [
+    "classifier-service",
+    "knowledge-service",
+  ]
+  assert all(request.headers["authorization"] == "Bearer user-token" for request in observed)
+  assert all(request.headers["origin"] == "https://app.example" for request in observed)
+
+
 def test_boundary_metrics_expose_the_exact_release_sha_without_probing_optional_ai(tmp_path):
   release_sha = "a" * 40
   calls = []

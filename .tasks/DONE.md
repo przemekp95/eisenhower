@@ -1,5 +1,141 @@
 # Done
 
+## TASK-067: Promote and deploy the NestJS/Fastify migration
+**Priority:** P1 | **Tags:** release, deployment, nestjs, fastify, fastapi
+
+Promote the completed TASK-066 migration through the protected feature-to-dev and dev-to-master flow, publish only scanned immutable final-SHA artifacts, and deploy the manifest-bound release to the supported private runtime with readiness, smoke and rollback evidence.
+
+### Plan
+
+- Repair and test the fail-closed release/deploy manifest contract so all eight published images are required consistently.
+- Push the detached candidate as a feature branch, create a PR to `dev`, resolve review/CI, and verify the exact merged remote SHA.
+- Promote only the green `dev` head through a `dev`-to-`master` PR, require exact post-merge CI, then restore verified `origin/dev == origin/master` through the governed sync flow.
+- Dispatch the release for the exact green master SHA, require scanned images, SBOMs, signed Android output and immutable manifest evidence before publication is accepted.
+- Dispatch the manifest-bound private deployment, require readiness, exact revision labels, smoke and rollback-safe state, then record evidence and close the task.
+
+### Evidence boundaries
+
+Authorization covers push, PRs, governed `dev`/`master` promotion, immutable artifact/image publication and deployment to the existing supported private runtime. It does not authorize public exposure, unrelated TASK-065 changes, capability activation beyond an already valid receipt, destructive data migration, fabricated production traffic or physical acceptance.
+
+### Outcome
+
+Promoted the completed migration through green PRs #312 and #313 and synchronized `origin/dev == origin/master == 6a00f3efe40c357083f20547e94d1bf1bea43442`. Release run `32771588708` published the eight manifest-bound images after vulnerability scans and SBOM generation, produced the signed Android artifact, and passed its final release gate; the retained release manifest SHA-256 is `9f4d2cacef2095539518853e0077b4b56def1e917c3e4d4a539aec27c9bea154`.
+
+Private deployment run `32781354224` then passed for that exact release. The supported stack is bound only to `127.0.0.1:8791`; every required first-party container is healthy and carries the final source revision. HTTP readiness passed, unauthenticated API/AI requests failed closed with 401, an untrusted Origin failed with 403, and generation, response, memory, inference and reranker capabilities remain disabled. The empty legacy Qdrant projection was migrated to the approved 1024-dimensional LlamaIndex candidate through an audited atomic alias cutover after a zero-document backfill; the old collection and checksum-bound snapshot remain, and the rollback preflight passed without changing the active alias. The checksum-matching approved classifier generation was restored from the isolated migration worktree, after which both classifier and FastAPI boundary readiness passed.
+
+The previous loopback runtime remains available on port 8790 as blue/green recovery evidence, but its AI dependency is degraded and it is not claimed as a fully healthy automated rollback. No public exposure, authenticated end-user acceptance, live Google provider acceptance, physical-device proof, real traffic, generated-response activation or TASK-065 completion is claimed.
+
+---
+
+## TASK-066: Migrate Express to NestJS/Fastify and modularize the FastAPI boundary
+**Priority:** P1 | **Tags:** architecture, backend-node, backend-ai, nestjs, fastify, fastapi
+
+Replace the `backend-node` Express transport with a single NestJS application on the Fastify adapter, preserve every existing client and integration contract, and split the oversized FastAPI composition root without changing FastAPI ownership of synchronous AI/RAG.
+
+### Plan
+
+- Freeze the exact Express baseline and prove transport-independent parity before removing Express.
+- Deliver one modular NestJS/Fastify runtime and a focused import-safe FastAPI composition while preserving security, durable async and client contracts.
+- Verify contracts, focused and full suites, comparative performance, rollback and explicit evidence boundaries before local completion.
+
+### Evidence boundaries
+
+TASK-066 may change and commit only local source, tests and documentation in this isolated worktree. It does not complete or alter TASK-065 and does not authorize push, PR creation or merge, `dev`/`master` promotion, artifact or image publication, deployment, runtime activation, public or production claims, physical acceptance or real-traffic proof.
+
+### Outcome
+
+Replaced the sole `backend-node` Express transport with NestJS 11 on Fastify 5 across all 41 mapped HTTP contracts, removed Express-only packages and duplicate runtime paths, and retained one shared application/domain/persistence implementation. FastAPI remains the synchronous AI/RAG owner; its former 1108-line composition root is now a 36-line compatibility facade over focused import-safe routers, dependencies and composition modules. Security, ETag/idempotency/pagination, OIDC/Origin/CORS, audit, internal HMAC, OAuth, Calendar outbox/webhook/reconciliation and n8n async-only contracts remain covered.
+
+Fresh local verification passed: root `make verify`; Node build/typecheck, 27 suites / 389 tests at 100% measured coverage and 21 BDD scenarios / 149 steps; AI 893 passed / 13 skipped at 87.58% and Pylint 10.00/10; API client 34, MCP 50, n8n 13 Python + 7 Node, web 254 + 2 integration, and mobile 202. Seven evidence contracts, framework-boundary verification, exact-baseline rollback rehearsal and TASK-065 byte identity passed. The owner accepted the measured synthetic Nest cost on 2026-08-24: throughput/p95 remain at parity, live heap is about 7.3–7.8 MiB above Express, and liveness cold start is about 376–428 ms. No push, PR, promotion, publication, deployment, runtime activation or production claim occurred.
+
+---
+
+## TASK-006: Revisit the React Native 0.84 migration when Expo supports it
+**Priority:** P3 | **Tags:** mobile, dependencies, deferred
+
+Keep the supported Expo 55 dependency baseline. Reassess React Native 0.84 or newer only after a stable Expo release supports it and the full mobile and native Android gates can run.
+
+### Plan
+
+- Check the stable Expo compatibility matrix when a newer supported line exists.
+- Upgrade as one deliberate platform migration and run the complete mobile/native Android verification.
+
+### Outcome
+
+Migrated the supported mobile baseline to Expo 57.0.14, React Native 0.86.2 and React 19.2.3. Expo 57.0.9+ was selected over SDK 56 because the current official release notes and Expo Doctor identify the SDK 56 Hermes V1 memory regression as fixed by React Native 0.86.2. Aligned Expo modules and Jest tooling, moved the legacy splash configuration to `expo-splash-screen`, and removed the obsolete Metro symlink override.
+
+Fresh verification passed: 199 Jest tests, 5 security tests, zero production-audit vulnerabilities, Expo dependency compatibility, Expo Doctor 21/21, and a clean Expo prebuild plus Android release build (`352` tasks, `BUILD SUCCESSFUL`). The local CI-candidate APK verifies with Android signature scheme v2 and SHA-256 `c41deb5e437d23a7a2157546235c3e041af3587ba15118b2eee88fb3b4ee86f0`. It is debug-signed and was not installed on physical hardware, published, store-submitted or deployed.
+
+---
+
+## TASK-064: Bootstrap fresh worktree dependencies automatically
+**Priority:** P1 | **Tags:** developer-experience, worktree, dependencies, verification
+
+Make `make verify` prepare missing or stale lockfile-bound Node and backend-AI dependencies automatically so isolated worktrees do not fail with misleading missing-module or missing-venv errors.
+
+### Plan
+
+- Freeze failing contracts for a fresh checkout, an unchanged prepared checkout, a changed lockfile and a failed installation.
+- Add a portable hash-bound dependency bootstrap used by `make verify` while retaining an explicit force-install `make setup` path.
+- Document the behavior and verify focused contracts, a disposable fresh-worktree rehearsal and the full repository suite.
+
+### Outcome
+
+Added a dependency-free, hash-bound worktree preparer for all four Node lockfiles and the recursively referenced backend-AI development requirements. `make verify` now prepares only missing or stale components, `make setup` retains an explicit force refresh, successful installs receive atomic ignored stamps, failures cannot mark a component current, and partial Python environments fall back safely to `venv/bin/python -m pip` when the pip launcher is absent.
+
+Strict red-green tests covered the absent preparer, Make integration, selected-interpreter changes and the real partial-venv failure. All 6 focused contracts pass. A disposable detached worktree proved all five dependency surfaces absent, installed them on the first `make prepare-verify`, reported every component current on the second run and was removed. Fresh final `make verify` passed: backend AI 832 passed/13 skipped at 87.67%; Node 263 tests at 100% plus build/typecheck; 21 BDD scenarios/149 steps; web 217 tests at 100%, 2 integration tests and production build; mobile 199 tests; MCP 50; n8n 13 Python plus 5 Node; API client 28 plus typecheck; dependency audits; and Pylint 10.00/10. Prettier, actionlint 1.7.11, workflow YAML parsing and `git diff --check` also passed. No package publication, image release or deployment occurred.
+
+---
+
+## TASK-062: Consolidate host-neutral deployment and release
+**Priority:** P0 | **Tags:** deployment, release, compose, security, calendar, ocr
+
+Replace deployment drift with one host-neutral application topology and an auditable release boundary while preserving the existing exact-green-master-SHA gate, private service boundaries, provider-independent inference and rollback safety.
+
+### Plan
+
+- Freeze failing contracts for the Compose graph, environment/auth validation, Calendar HMAC replay protection, OCR image preflight and release/deploy responsibility boundaries.
+- Consolidate dev and production onto one canonical Compose graph with one ingress, optional n8n, private state/application services and one inference contract; isolate AMD/NVIDIA provider stacks.
+- Make Calendar replay prevention durable and atomic, reject unsafe OCR images before full decode/OCR, and validate `APP_ENV`/`AUTH_MODE` fail-closed without weakening domain/outbox or ports-and-adapters boundaries.
+- Preserve the existing full-green-master-SHA release preflight, publish only scanned immutable artifacts/digests, and separate generic deployment from provider-specific execution or unverifiable AWS force-redeploy behavior.
+- Migrate scripts and documentation, then remove obsolete manifests only after focused and broad verification including safe Compose renders, Node/MCP/FastAPI/BDD/workflow and proportional backup/restore/rollback tests.
+- Restore the repository formatting gate on the canonical release-image contract and rerun the full verification suite before publication.
+- Restore the complete stable CI context list in production acceptance documentation and rerun the fail-closed workflow contracts.
+
+### Outcome
+
+The optional-n8n topology described below is historical TASK-062 state and was superseded by TASK-063, which makes n8n, Prometheus and Grafana unconditional and removes profile-aware rollback state.
+
+Replaced the root/local/Mikrus topology drift with one `compose.yaml`: only the gateway publishes a host port, n8n is an optional private profile, application inference uses exactly three provider-neutral variables, and standalone AMD/NVIDIA stacks attach to the same private network. Production now fails closed on invalid `APP_ENV` or non-OIDC `AUTH_MODE`. Removed the unverifiable AWS force-redeploy and provider-named deployment jobs; release keeps the existing exact-green-master preflight, builds/scans/SBOMs seven first-party images, publishes immutable digests and produces one checksum-bound final gate, while generic deployment consumes only a selected release manifest and rolls back both digests and the prior n8n profile.
+
+Calendar internal HMAC now binds a durable unique request ID, method, path and raw body; `/outbox/claim` atomically records its response with the lease so retries cannot claim twice. OCR rejects invalid, oversized-dimension and over-pixel images before the OCR decode path. Obsolete manifests, provider-specific deployment scripts and stale documentation were removed only after their replacement contracts passed. The still-unapproved retrieval candidate and all-PENDING review template were mechanically re-hashed because the production-acceptance corpus document changed; no human outcome was invented.
+
+Strict red-green evidence covered four missing Compose properties, three release-boundary failures, APP_ENV/static-production failures, Calendar replay (including concurrent claim), OCR bomb limits, MCP mutable base and rollback profile drift. The promotion preflight restored the repository Prettier gate on the changed release-image contract, then fresh `make verify` passed: backend AI 832 passed/13 skipped at 87.67% coverage; Node 263 tests at 100% plus build/typecheck; 21 BDD scenarios/149 steps; web 217 tests at 100%, 2 integration tests and production build; mobile 199 tests above coverage gates; MCP 50; n8n 13 Python plus 5 Node contracts; API client 28 plus typecheck; production dependency audits; and Pylint 10.00/10. The first PR run exposed that the rewritten production-acceptance document no longer enumerated the stable CI context names; the documentation now restores the exact fail-closed set, and all 21 workflow/planner/preflight contracts pass. Because that document belongs to the frozen RAG corpus, the candidate content hashes and candidate SHA were mechanically regenerated; all 42 human review outcomes, reviewer identity and approval fields remain `PENDING`, and the hash-binding tests plus the full backend AI suite pass. Separate `actionlint` 1.7.11, workflow YAML parsing and `git diff --check` also passed. The earlier MCP image build and all-severity Trivy scan remain source-bound evidence; real registry digests, live n8n activation/execution, target backup restore, provider hardware, public HTTPS, physical Android and human acceptance remain external gates.
+
+---
+
+## TASK-063: Make automation and observability mandatory and admin-only
+**Priority:** P0 | **Tags:** deployment, n8n, prometheus, grafana, oidc, monitoring
+
+Make n8n, Prometheus and Grafana mandatory members of the canonical dev/prod topology and expose their administrative interfaces only through the single gateway to Keycloak users holding the `eisenhower-admin` role.
+
+### Plan
+
+- Freeze failing Compose, gateway, identity, deployment and backup contracts for mandatory n8n/Prometheus/Grafana and admin-only access.
+- Add a private OIDC authorization proxy, mandatory health-gated services, persistent provisioning and the explicit public Calendar webhook exception.
+- Remove the optional n8n input/profile and profile-aware rollback state while preserving one ingress, private service ports and identical dev/prod graphs.
+- Render both environments, exercise access decisions and service configuration, run proportional Node/FastAPI/n8n/monitoring/lifecycle/workflow regression, then document exact local and external gates.
+
+### Outcome
+
+n8n, Prometheus and Grafana are unconditional, private and health-gated in the one canonical Compose graph. Only the gateway publishes a host port. Their consoles use `/admin/n8n/`, `/admin/prometheus/` and `/admin/grafana/`; a private OAuth2 Proxy accepts only the dedicated Keycloak `eisenhower-admin` realm role. Admin Origin admission is limited to `/admin/*` and `/oauth2/*`, sessions refresh every minute and expire after 15 minutes, refreshed split cookies are propagated, and the exact Calendar webhook is the only public n8n route with bearer, cookie and proxy identity headers cleared.
+
+Fresh and existing realms converge through a mandatory idempotent bootstrap. A real Keycloak 26.7 rehearsal imported the realm, ran the bootstrap twice, and verified the role, confidential client, scope and three claim mappers. OAuth2 Proxy uses the public issuer for validation/login and explicit internal token, userinfo and JWKS endpoints to avoid a gateway startup cycle. Grafana runtime plugin installation and update checks are disabled; Prometheus self-scrapes its configured subpath. Backup quiesces SQLite/PostgreSQL writers and identity storage; restore keeps identity storage stopped during replacement.
+
+Strict TDD recorded failing then green contracts for the mandatory graph, deployment lifecycle, admin boundary, identity migration, cookies, origin, public webhook and runtime drift. Fresh verification: 25 deployment/monitoring/release contracts; real Nginx, OAuth2 Proxy, Grafana and Keycloak checks; Node 263/263 at 100% coverage plus 21 BDD scenarios/149 steps; FastAPI 832 passed/13 skipped at 87.67%; MCP 50; n8n 13 Python plus 5 Node; API client 28; shellcheck/bash syntax and workflow YAML parsing. `actionlint` was unavailable. No merge, push, image publication, deployment, cutover or production mutation occurred; live named-user login/revocation, imported active n8n workflows, real metrics/alerts, target-volume restore/rollback, public TLS and production acceptance remain external gates.
+
+---
+
 ## TASK-061: Harden and optimize CI/CD orchestration
 **Priority:** P1 | **Tags:** ci, security, release, performance
 

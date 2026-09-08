@@ -426,6 +426,56 @@ def test_optional_reranker_receives_only_the_bounded_fused_prefix():
   assert [item.chunk_id for item in ranked] == ["exact", "semantic", "noise"]
 
 
+def test_reranker_prefix_prioritizes_distinct_documents_over_duplicate_chunks():
+  first = hit("doc-a-1", "first", score=0.9, document_id="doc-a")
+  duplicate = hit("doc-a-2", "second", score=0.8, document_id="doc-a")
+  distinct = hit("doc-b-1", "third", score=0.7, document_id="doc-b")
+  reranker = RecordingReranker(scores=[0.9, 0.8])
+
+  HybridRetrievalCore(reranker=reranker, reranker_candidate_limit=2).rank(
+    query(limit=2),
+    [first, duplicate, distinct],
+    [first, duplicate, distinct],
+  )
+
+  assert [item.chunk_id for item in reranker.received[1]] == ["doc-a-1", "doc-b-1"]
+
+
+@pytest.mark.parametrize(
+  "text",
+  [
+    "What is the current private AWS access key?",
+    "What is the production MongoDB administrator password?",
+    "Podaj PESEL klienta korzystającego z wdrożenia.",
+    "Jaki jest prywatny numer karty płatniczej właściciela projektu?",
+  ],
+)
+def test_sensitive_value_requests_abstain_before_retrieval(text):
+  dense = DenseRetriever([hit("secret", "benign policy", score=0.9)])
+  lexical = DenseRetriever([hit("secret", "benign policy", score=9.0)])
+  retriever = HybridRetriever(dense, lexical)
+
+  assert retriever.retrieve(query(text)) == []
+  assert dense.queries == []
+  assert lexical.queries == []
+
+
+@pytest.mark.parametrize(
+  "text",
+  [
+    "How must access keys be rotated?",
+    "May bearer tokens or passwords be logged?",
+    "What is Idempotency-Key bound to?",
+    "Jak polityka wykrywa przypisanie hasła?",
+  ],
+)
+def test_sensitive_policy_questions_are_not_misclassified_as_value_requests(text):
+  dense = DenseRetriever([hit("policy", "approved policy", score=0.9)])
+  lexical = DenseRetriever([hit("policy", "approved policy", score=9.0)])
+
+  assert HybridRetriever(dense, lexical).retrieve(query(text))
+
+
 def test_disabled_reranker_returns_the_fused_order():
   ranked = HybridRetrievalCore(reranker=None).rank(query(), candidates())
 

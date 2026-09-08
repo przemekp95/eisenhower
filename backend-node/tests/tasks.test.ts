@@ -1,12 +1,14 @@
 import mongoose from 'mongoose';
-import express from 'express';
-import request from 'supertest';
+import request from './helpers/http-test-client';
 import { createApp } from '../src/app';
 import { resolveLifecycleTransition } from '../src/application/taskRepository';
 import { TaskModel } from '../src/models/task';
 import { MongooseTaskRepository } from '../src/repositories/mongooseTaskRepository';
-import { createTasksRouter } from '../src/routes/tasks';
-import { CalendarBindingModel, CalendarOutboxModel } from '../src/models/calendar';
+import {
+  CalendarBindingModel,
+  CalendarConnectionModel,
+  CalendarOutboxModel,
+} from '../src/models/calendar';
 import { clearMongo, startMongo, stopMongo } from './helpers/mongo';
 
 describe('task routes', () => {
@@ -95,20 +97,22 @@ describe('task routes', () => {
       urgent: true,
       important: true,
     });
-    const oidcApp = express();
-    oidcApp.use(express.json());
-    oidcApp.use((req, _res, next) => {
-      req.auth = { tenantId: 'tenant-a', userId: 'user-a', roles: ['user'], projectIds: [] };
-      next();
+    const oidcApp = createApp({
+      auditSink: { record: () => undefined },
+      oidcTokenVerifier: async () => ({
+        tenantId: 'tenant-a', userId: 'user-a', roles: ['user'], projectIds: [],
+        scopes: ['tasks:read', 'tasks:write'],
+      }),
     });
-    oidcApp.use('/tasks', createTasksRouter(new MongooseTaskRepository()));
 
-    const listed = await request(oidcApp).get('/tasks');
+    const listed = await request(oidcApp).get('/tasks').set('Authorization', 'Bearer user-a');
     const updated = await request(oidcApp)
       .put(`/tasks/${foreign.id}`)
+      .set('Authorization', 'Bearer user-a')
       .set('If-Match', '"0"')
       .send({ urgent: false });
-    const deleted = await request(oidcApp).delete(`/tasks/${foreign.id}`).set('If-Match', '"0"');
+    const deleted = await request(oidcApp).delete(`/tasks/${foreign.id}`)
+      .set('Authorization', 'Bearer user-a').set('If-Match', '"0"');
 
     expect(listed.body).toEqual([]);
     expect(updated.status).toBe(404);
@@ -201,6 +205,10 @@ describe('task routes', () => {
       .put(`/tasks/${task.id}/schedule`)
       .set('If-Match', '"0"')
       .send({ schedule: { ...validSchedule, recurrence: 'daily' } });
+    const invalidDurations = await Promise.all([4, 1441, 5.5].map((durationMinutes) => api
+      .put(`/tasks/${task.id}/schedule`)
+      .set('If-Match', '"0"')
+      .send({ schedule: { ...validSchedule, durationMinutes } })));
     const stale = await api
       .put(`/tasks/${task.id}/schedule`)
       .set('If-Match', '"7"')
@@ -216,6 +224,7 @@ describe('task routes', () => {
     expect(invalidTimezone.status).toBe(400);
     expect(lateReminder.status).toBe(400);
     expect(recurrence.status).toBe(400);
+    expect(invalidDurations.map((response) => response.status)).toEqual([400, 400, 400]);
     expect(stale.status).toBe(412);
     expect(stale.body.code).toBe('task_revision_conflict');
     expect(foreignResult.status).toBe(404);
@@ -449,6 +458,59 @@ describe('task routes', () => {
     expect(types).toEqual(['event_update', 'event_update', 'event_delete', 'event_update']);
   });
 
+  it('only enqueues schedule creates for connected owners and deletes for bound tasks', async () => {
+    const repository = new MongooseTaskRepository();
+    const scope = { tenantId: 'local', ownerId: 'local-user' };
+    const disconnectedTask = await TaskModel.create({ title: 'Before connection' });
+
+    await repository.updateSchedule(scope, disconnectedTask.id, 0, {
+      dueAt: new Date('2026-08-20T12:00:00.000Z'),
+      timeZone: 'Europe/Warsaw',
+      durationMinutes: 30,
+    });
+    await repository.updateSchedule(scope, disconnectedTask.id, 1, null);
+    expect(await CalendarOutboxModel.countDocuments()).toBe(0);
+
+    const connection = await CalendarConnectionModel.create({
+      ...scope,
+      provider: 'google',
+      calendarId: 'work',
+      credentialRef: `oauth-grant:${new mongoose.Types.ObjectId()}`,
+      status: 'active',
+    });
+    const connectedTask = await TaskModel.create({ title: 'After connection' });
+    await repository.updateSchedule(scope, connectedTask.id, 0, {
+      dueAt: new Date('2026-08-21T12:00:00.000Z'),
+      timeZone: 'Europe/Warsaw',
+      durationMinutes: 45,
+    });
+    await repository.updateSchedule(scope, connectedTask.id, 1, null);
+    expect((await CalendarOutboxModel.find().lean()).map((event) => event.type)).toEqual([
+      'event_create',
+    ]);
+
+    await CalendarBindingModel.create({
+      ...scope,
+      connectionId: connection._id,
+      taskId: connectedTask.id,
+      providerEventId: 'event-connected',
+      providerEtag: 'etag-connected',
+      lastTaskRevision: 2,
+      lastProviderRevision: 'etag-connected',
+    });
+    await repository.updateSchedule(scope, connectedTask.id, 2, {
+      dueAt: new Date('2026-08-22T12:00:00.000Z'),
+      timeZone: 'Europe/Warsaw',
+      durationMinutes: 45,
+    });
+    await repository.updateSchedule(scope, connectedTask.id, 3, null);
+    expect((await CalendarOutboxModel.find().sort({ createdAt: 1 }).lean()).map((event) => event.type)).toEqual([
+      'event_create',
+      'event_update',
+      'event_delete',
+    ]);
+  });
+
   it('maps lifecycle repository failures through the HTTP error boundary', async () => {
     const task = await TaskModel.create({ title: 'Lifecycle failure' });
     jest.spyOn(TaskModel, 'findOne').mockReturnValue({
@@ -617,24 +679,21 @@ describe('task routes', () => {
   });
 
   it('scopes an idempotency key by both tenant and owner', async () => {
-    const scopedApp = express();
-    scopedApp.use(express.json());
-    scopedApp.use((req, _res, next) => {
-      req.auth = {
-        tenantId: String(req.get('x-test-tenant')),
-        userId: String(req.get('x-test-owner')),
-        roles: ['user'],
-        projectIds: [],
-      };
-      next();
+    const scopedApp = createApp({
+      auditSink: { record: () => undefined },
+      oidcTokenVerifier: async (token) => {
+        const [tenantId, userId] = token.split(':');
+        return {
+          tenantId, userId, roles: ['user'], projectIds: [],
+          scopes: ['tasks:read', 'tasks:write'],
+        };
+      },
     });
-    scopedApp.use('/tasks', createTasksRouter(new MongooseTaskRepository()));
 
     const createFor = (tenantId: string, ownerId: string) =>
       request(scopedApp)
         .post('/tasks')
-        .set('X-Test-Tenant', tenantId)
-        .set('X-Test-Owner', ownerId)
+        .set('Authorization', `Bearer ${tenantId}:${ownerId}`)
         .set('Idempotency-Key', 'shared-operation-key')
         .send({ title: `${tenantId}/${ownerId}` });
     const [tenantAOwnerA, tenantAOwnerB, tenantBOwnerA] = await Promise.all([

@@ -1,0 +1,704 @@
+[
+  {
+    "method": "DELETE",
+    "path": "/tasks/:id",
+    "currentRouter": "tasks",
+    "finalModule": "TasksModule",
+    "auth": "bearer-or-oidc",
+    "scope": "tasks:write",
+    "trustedOrigin": "unsafe-methods",
+    "body": "none",
+    "sideEffects": [
+      "deletes-trashed-task",
+      "updates-idempotency-receipt"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web",
+      "mobile"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/calendar/conflicts",
+    "currentRouter": "calendar",
+    "finalModule": "CalendarModule",
+    "auth": "bearer-or-oidc",
+    "scope": "calendar:read",
+    "trustedOrigin": "unsafe-methods",
+    "body": "none",
+    "sideEffects": [
+      "reads-conflicts"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/calendar/deleted-bindings",
+    "currentRouter": "calendar",
+    "finalModule": "CalendarModule",
+    "auth": "bearer-or-oidc",
+    "scope": "calendar:read",
+    "trustedOrigin": "unsafe-methods",
+    "body": "none",
+    "sideEffects": [
+      "reads-deleted-bindings"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/calendar/events",
+    "currentRouter": "calendar",
+    "finalModule": "CalendarModule",
+    "auth": "bearer-or-oidc",
+    "scope": "calendar:read",
+    "trustedOrigin": "unsafe-methods",
+    "body": "none",
+    "sideEffects": [
+      "reads-provider-events"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/calendar/oauth/callback",
+    "currentRouter": "googleOAuth",
+    "finalModule": "GoogleIntegrationModule",
+    "auth": "public",
+    "scope": null,
+    "trustedOrigin": "not-applicable",
+    "body": "none",
+    "sideEffects": [
+      "consumes-oauth-state",
+      "stores-grant",
+      "registers-watch"
+    ],
+    "consumers": [
+      "browser"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/calendar/status",
+    "currentRouter": "calendar",
+    "finalModule": "CalendarModule",
+    "auth": "bearer-or-oidc",
+    "scope": "calendar:read",
+    "trustedOrigin": "unsafe-methods",
+    "body": "none",
+    "sideEffects": [
+      "reads-calendar-state"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/health",
+    "currentRouter": "health",
+    "finalModule": "HealthModule",
+    "auth": "public",
+    "scope": null,
+    "trustedOrigin": "not-applicable",
+    "body": "none",
+    "sideEffects": [],
+    "consumers": [
+      "runtime-probes"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/health/ready",
+    "currentRouter": "health",
+    "finalModule": "HealthModule",
+    "auth": "public",
+    "scope": null,
+    "trustedOrigin": "not-applicable",
+    "body": "none",
+    "sideEffects": [
+      "checks-database",
+      "checks-ai"
+    ],
+    "consumers": [
+      "runtime-probes"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/tasks",
+    "currentRouter": "tasks",
+    "finalModule": "TasksModule",
+    "auth": "bearer-or-oidc",
+    "scope": "tasks:read",
+    "trustedOrigin": "unsafe-methods",
+    "body": "none",
+    "sideEffects": [
+      "reads-tasks",
+      "emits-pagination"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web",
+      "mobile"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/tasks/:id",
+    "currentRouter": "tasks",
+    "finalModule": "TasksModule",
+    "auth": "bearer-or-oidc",
+    "scope": "tasks:read",
+    "trustedOrigin": "unsafe-methods",
+    "body": "none",
+    "sideEffects": [
+      "reads-task"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web",
+      "mobile"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/tasks/delegated",
+    "currentRouter": "tasks",
+    "finalModule": "TasksModule",
+    "auth": "bearer-or-oidc",
+    "scope": "tasks:read",
+    "trustedOrigin": "unsafe-methods",
+    "body": "none",
+    "sideEffects": [
+      "reads-tasks"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web",
+      "mobile"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/calendar/bindings",
+    "currentRouter": "calendar",
+    "finalModule": "CalendarModule",
+    "auth": "bearer-or-oidc",
+    "scope": "calendar:write",
+    "trustedOrigin": "unsafe-methods",
+    "body": "json-32kb",
+    "sideEffects": [
+      "writes-binding",
+      "updates-task",
+      "writes-outbox"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/calendar/bindings/preview",
+    "currentRouter": "calendar",
+    "finalModule": "CalendarModule",
+    "auth": "bearer-or-oidc",
+    "scope": "calendar:read",
+    "trustedOrigin": "unsafe-methods",
+    "body": "json-32kb",
+    "sideEffects": [
+      "reads-task-and-provider-event"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/calendar/conflicts/:id/resolve",
+    "currentRouter": "calendar",
+    "finalModule": "CalendarModule",
+    "auth": "bearer-or-oidc",
+    "scope": "calendar:write",
+    "trustedOrigin": "unsafe-methods",
+    "body": "json-32kb",
+    "sideEffects": [
+      "resolves-conflict",
+      "updates-task",
+      "writes-outbox"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/calendar/deleted-bindings/:id/resolve",
+    "currentRouter": "calendar",
+    "finalModule": "CalendarModule",
+    "auth": "bearer-or-oidc",
+    "scope": "calendar:write",
+    "trustedOrigin": "unsafe-methods",
+    "body": "json-32kb",
+    "sideEffects": [
+      "resolves-provider-deletion",
+      "writes-outbox"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/calendar/imports",
+    "currentRouter": "calendar",
+    "finalModule": "CalendarModule",
+    "auth": "bearer-or-oidc",
+    "scope": "calendar:write",
+    "trustedOrigin": "unsafe-methods",
+    "body": "json-32kb",
+    "sideEffects": [
+      "imports-provider-events",
+      "writes-idempotency-receipts"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/calendar/oauth/disconnect",
+    "currentRouter": "googleOAuth",
+    "finalModule": "GoogleIntegrationModule",
+    "auth": "bearer-or-oidc",
+    "scope": "calendar:write",
+    "trustedOrigin": "unsafe-methods",
+    "body": "json-32kb",
+    "sideEffects": [
+      "revokes-grant",
+      "disconnects-calendar"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/calendar/oauth/start",
+    "currentRouter": "googleOAuth",
+    "finalModule": "GoogleIntegrationModule",
+    "auth": "bearer-or-oidc",
+    "scope": "calendar:write",
+    "trustedOrigin": "unsafe-methods",
+    "body": "json-32kb",
+    "sideEffects": [
+      "creates-oauth-state"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/calendar/sync-requests",
+    "currentRouter": "calendar",
+    "finalModule": "CalendarModule",
+    "auth": "bearer-or-oidc",
+    "scope": "calendar:write",
+    "trustedOrigin": "unsafe-methods",
+    "body": "json-32kb",
+    "sideEffects": [
+      "writes-sync-request"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/internal/calendar/inbound",
+    "currentRouter": "calendarInternal",
+    "finalModule": "CalendarInternalModule",
+    "auth": "internal-hmac",
+    "scope": null,
+    "trustedOrigin": "not-applicable",
+    "body": "raw-json-32kb",
+    "sideEffects": [
+      "applies-inbound-command"
+    ],
+    "consumers": [
+      "n8n"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/internal/calendar/notifications/validate",
+    "currentRouter": "calendarInternal",
+    "finalModule": "CalendarInternalModule",
+    "auth": "internal-hmac",
+    "scope": null,
+    "trustedOrigin": "not-applicable",
+    "body": "raw-json-32kb",
+    "sideEffects": [
+      "validates-webhook",
+      "writes-sync-state"
+    ],
+    "consumers": [
+      "n8n"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/internal/calendar/outbound/claim",
+    "currentRouter": "calendarInternal",
+    "finalModule": "CalendarInternalModule",
+    "auth": "internal-hmac",
+    "scope": null,
+    "trustedOrigin": "not-applicable",
+    "body": "raw-json-32kb",
+    "sideEffects": [
+      "leases-outbox"
+    ],
+    "consumers": [
+      "n8n"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/internal/calendar/outbound/result",
+    "currentRouter": "calendarInternal",
+    "finalModule": "CalendarInternalModule",
+    "auth": "internal-hmac",
+    "scope": null,
+    "trustedOrigin": "not-applicable",
+    "body": "raw-json-32kb",
+    "sideEffects": [
+      "acknowledges-outbox"
+    ],
+    "consumers": [
+      "n8n"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/internal/calendar/outbox/acknowledge",
+    "currentRouter": "calendarInternal",
+    "finalModule": "CalendarInternalModule",
+    "auth": "internal-hmac",
+    "scope": null,
+    "trustedOrigin": "not-applicable",
+    "body": "raw-json-32kb",
+    "sideEffects": [
+      "acknowledges-outbox"
+    ],
+    "consumers": [
+      "n8n"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/internal/calendar/outbox/claim",
+    "currentRouter": "calendarInternal",
+    "finalModule": "CalendarInternalModule",
+    "auth": "internal-hmac",
+    "scope": null,
+    "trustedOrigin": "not-applicable",
+    "body": "raw-json-32kb",
+    "sideEffects": [
+      "leases-outbox"
+    ],
+    "consumers": [
+      "n8n"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/internal/calendar/provider/changes",
+    "currentRouter": "googleCalendarProvider",
+    "finalModule": "GoogleIntegrationModule",
+    "auth": "internal-hmac",
+    "scope": null,
+    "trustedOrigin": "not-applicable",
+    "body": "raw-json-32kb",
+    "sideEffects": [
+      "reads-provider-changes"
+    ],
+    "consumers": [
+      "n8n"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/internal/calendar/provider/outbound",
+    "currentRouter": "googleCalendarProvider",
+    "finalModule": "GoogleIntegrationModule",
+    "auth": "internal-hmac",
+    "scope": null,
+    "trustedOrigin": "not-applicable",
+    "body": "raw-json-32kb",
+    "sideEffects": [
+      "writes-provider-event"
+    ],
+    "consumers": [
+      "n8n"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/internal/calendar/provider/watch",
+    "currentRouter": "googleCalendarProvider",
+    "finalModule": "GoogleIntegrationModule",
+    "auth": "internal-hmac",
+    "scope": null,
+    "trustedOrigin": "not-applicable",
+    "body": "raw-json-32kb",
+    "sideEffects": [
+      "registers-provider-watch"
+    ],
+    "consumers": [
+      "n8n"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/internal/calendar/reconciliation/claim",
+    "currentRouter": "calendarInternal",
+    "finalModule": "CalendarInternalModule",
+    "auth": "internal-hmac",
+    "scope": null,
+    "trustedOrigin": "not-applicable",
+    "body": "raw-json-32kb",
+    "sideEffects": [
+      "leases-reconciliation"
+    ],
+    "consumers": [
+      "n8n"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/internal/calendar/request",
+    "currentRouter": "calendarInternal",
+    "finalModule": "CalendarInternalModule",
+    "auth": "internal-hmac",
+    "scope": null,
+    "trustedOrigin": "not-applicable",
+    "body": "raw-json-32kb",
+    "sideEffects": [
+      "writes-sync-request"
+    ],
+    "consumers": [
+      "n8n"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/internal/calendar/status",
+    "currentRouter": "calendarInternal",
+    "finalModule": "CalendarInternalModule",
+    "auth": "internal-hmac",
+    "scope": null,
+    "trustedOrigin": "not-applicable",
+    "body": "raw-json-32kb",
+    "sideEffects": [
+      "reads-internal-status"
+    ],
+    "consumers": [
+      "n8n"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/internal/calendar/sync/apply",
+    "currentRouter": "calendarInternal",
+    "finalModule": "CalendarInternalModule",
+    "auth": "internal-hmac",
+    "scope": null,
+    "trustedOrigin": "not-applicable",
+    "body": "raw-json-32kb",
+    "sideEffects": [
+      "applies-inbound-command"
+    ],
+    "consumers": [
+      "n8n"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/internal/calendar/sync/apply-batch",
+    "currentRouter": "calendarInternal",
+    "finalModule": "CalendarInternalModule",
+    "auth": "internal-hmac",
+    "scope": null,
+    "trustedOrigin": "not-applicable",
+    "body": "raw-json-32kb",
+    "sideEffects": [
+      "applies-inbound-batch"
+    ],
+    "consumers": [
+      "n8n"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/internal/calendar/sync/reset",
+    "currentRouter": "calendarInternal",
+    "finalModule": "CalendarInternalModule",
+    "auth": "internal-hmac",
+    "scope": null,
+    "trustedOrigin": "not-applicable",
+    "body": "raw-json-32kb",
+    "sideEffects": [
+      "marks-full-resync"
+    ],
+    "consumers": [
+      "n8n"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/internal/calendar/watch/renew",
+    "currentRouter": "calendarInternal",
+    "finalModule": "CalendarInternalModule",
+    "auth": "internal-hmac",
+    "scope": null,
+    "trustedOrigin": "not-applicable",
+    "body": "raw-json-32kb",
+    "sideEffects": [
+      "renews-watch-state"
+    ],
+    "consumers": [
+      "n8n"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/tasks",
+    "currentRouter": "tasks",
+    "finalModule": "TasksModule",
+    "auth": "bearer-or-oidc",
+    "scope": "tasks:write",
+    "trustedOrigin": "unsafe-methods",
+    "body": "json-32kb",
+    "sideEffects": [
+      "creates-task",
+      "writes-idempotency-receipt"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web",
+      "mobile"
+    ]
+  },
+  {
+    "method": "PUT",
+    "path": "/tasks/:id",
+    "currentRouter": "tasks",
+    "finalModule": "TasksModule",
+    "auth": "bearer-or-oidc",
+    "scope": "tasks:write",
+    "trustedOrigin": "unsafe-methods",
+    "body": "json-32kb",
+    "sideEffects": [
+      "updates-task"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web",
+      "mobile"
+    ]
+  },
+  {
+    "method": "PUT",
+    "path": "/tasks/:id/delegation",
+    "currentRouter": "tasks",
+    "finalModule": "TasksModule",
+    "auth": "bearer-or-oidc",
+    "scope": "tasks:write",
+    "trustedOrigin": "unsafe-methods",
+    "body": "json-32kb",
+    "sideEffects": [
+      "updates-delegation"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web",
+      "mobile"
+    ]
+  },
+  {
+    "method": "PUT",
+    "path": "/tasks/:id/delegation/status",
+    "currentRouter": "tasks",
+    "finalModule": "TasksModule",
+    "auth": "bearer-or-oidc",
+    "scope": "tasks:write",
+    "trustedOrigin": "unsafe-methods",
+    "body": "json-32kb",
+    "sideEffects": [
+      "transitions-delegation"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web",
+      "mobile"
+    ]
+  },
+  {
+    "method": "PUT",
+    "path": "/tasks/:id/lifecycle",
+    "currentRouter": "tasks",
+    "finalModule": "TasksModule",
+    "auth": "bearer-or-oidc",
+    "scope": "tasks:write",
+    "trustedOrigin": "unsafe-methods",
+    "body": "json-32kb",
+    "sideEffects": [
+      "transitions-lifecycle",
+      "writes-calendar-outbox"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web",
+      "mobile"
+    ]
+  },
+  {
+    "method": "PUT",
+    "path": "/tasks/:id/schedule",
+    "currentRouter": "tasks",
+    "finalModule": "TasksModule",
+    "auth": "bearer-or-oidc",
+    "scope": "tasks:write",
+    "trustedOrigin": "unsafe-methods",
+    "body": "json-32kb",
+    "sideEffects": [
+      "updates-schedule",
+      "writes-calendar-outbox"
+    ],
+    "consumers": [
+      "packages/api-client",
+      "web",
+      "mobile"
+    ]
+  }
+]

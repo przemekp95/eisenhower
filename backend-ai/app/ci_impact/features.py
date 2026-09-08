@@ -13,7 +13,7 @@ from app.ci_impact.process import run_bounded
 
 
 MANIFEST_NAMES = {
-  "package.json", "requirements.txt", "pyproject.toml", "dockerfile", "docker-compose.yml",
+  "package.json", "requirements.txt", "pyproject.toml", "dockerfile", "compose.yaml", "docker-compose.yml",
   "docker-compose.yaml", "app.json", "app.config.js", "metro.config.js", "vite.config.js",
   "tsconfig.json",
 }

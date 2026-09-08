@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -20,22 +21,10 @@ from app.ops.candidates import register_ragops_candidate
 from scripts.run_retrieval_candidate import run as run_retrieval
 
 
-def main() -> int:
-  parser = argparse.ArgumentParser(description="Run a live-dependency, candidate-only RAGOps pipeline.")
-  parser.add_argument("--registry", type=Path, required=True)
-  parser.add_argument("--candidate-id", required=True)
-  parser.add_argument("--git-sha", required=True)
-  parser.add_argument("--git-dirty", action="store_true")
-  parser.add_argument("--output", type=Path, required=True)
-  parser.add_argument(
-    "--golden", type=Path,
-    default=PROJECT_ROOT / "evaluation" / "retrieval-v1" / "review-candidate-v1.jsonl",
-  )
-  args = parser.parse_args()
-  snapshot_path = args.output.parent / "qdrant-candidate.snapshot"
-  retrieval = run_retrieval(args.golden, snapshot_output=snapshot_path)
+def build_ragops_report(retrieval: dict) -> dict:
   recovery = retrieval["snapshot_restore"]
-  report = {
+  evaluation = retrieval["evaluation"]
+  return {
     "canonical_before_vector": True,
     "ingestion": {
       "documents": retrieval["ingestion"]["accepted"],
@@ -46,7 +35,10 @@ def main() -> int:
       "stale": retrieval["reconciliation"]["drifted"],
       "orphan": retrieval["reconciliation"]["projected"],
     },
-    "evaluation": retrieval["evaluation"],
+    "evaluation": {
+      **evaluation,
+      "dataset": evaluation["dataset_version"],
+    },
     "snapshot_restore": {
       "verified": recovery["matches_source"],
       "checksum_match": (
@@ -67,9 +59,51 @@ def main() -> int:
       "mongo_version": retrieval["runtime"]["pymongo_version"],
     },
     "alias_promoted": False,
+    "idempotency": retrieval["idempotency"],
     "cleanup": {"retrieval": retrieval["cleanup"]},
     "representative_human_gate": {"passed": False, "reason": "TASK-013 pending"},
   }
+
+
+def main() -> int:
+  parser = argparse.ArgumentParser(description="Run a live-dependency, candidate-only RAGOps pipeline.")
+  parser.add_argument("--registry", type=Path, required=True)
+  parser.add_argument("--candidate-id", required=True)
+  parser.add_argument("--git-sha", required=True)
+  parser.add_argument("--git-dirty", action="store_true")
+  parser.add_argument("--output", type=Path, required=True)
+  parser.add_argument(
+    "--mongo-uri",
+    required=True,
+    help="Explicit isolated candidate MongoDB URI.",
+  )
+  parser.add_argument(
+    "--qdrant-url",
+    required=True,
+    help="Explicit isolated candidate Qdrant base URL.",
+  )
+  parser.add_argument(
+    "--reranker-url",
+    help=(
+      "Optional pinned private reranker base URL; credentials are read only from "
+      "EISENHOWER_RERANKER_API_KEY."
+    ),
+  )
+  parser.add_argument(
+    "--golden", type=Path,
+    default=PROJECT_ROOT / "evaluation" / "retrieval-v1" / "review-candidate-v1.jsonl",
+  )
+  args = parser.parse_args()
+  snapshot_path = args.output.parent / "qdrant-candidate.snapshot"
+  retrieval = run_retrieval(
+    args.golden,
+    snapshot_output=snapshot_path,
+    mongo_uri=args.mongo_uri,
+    qdrant_url=args.qdrant_url,
+    reranker_url=args.reranker_url,
+    reranker_api_key=os.environ.get("EISENHOWER_RERANKER_API_KEY"),
+  )
+  report = build_ragops_report(retrieval)
   manifest = register_ragops_candidate(
     registry=ImmutableArtifactRegistry(args.registry),
     candidate_id=args.candidate_id,

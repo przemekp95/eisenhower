@@ -1,5 +1,5 @@
 # Build stage
-FROM cgr.dev/chainguard/wolfi-base@sha256:0a8fd427de5882aed77471b0a432c3675eda6b6a0ae952b5d640b46da628cdbe AS build
+FROM cgr.dev/chainguard/wolfi-base@sha256:a31344ab2cb8618db84f535eec56f76f6178b142cb92cb2e48676cc2dcebea72 AS build
 
 USER root
 RUN apk add --no-cache \
@@ -20,7 +20,7 @@ COPY packages/api-client ../packages/api-client
 RUN npm run build && npm prune --omit=dev
 
 # Production stage
-FROM cgr.dev/chainguard/wolfi-base@sha256:0a8fd427de5882aed77471b0a432c3675eda6b6a0ae952b5d640b46da628cdbe AS production
+FROM cgr.dev/chainguard/wolfi-base@sha256:a31344ab2cb8618db84f535eec56f76f6178b142cb92cb2e48676cc2dcebea72 AS production
 
 ARG RELEASE_SHA
 LABEL org.opencontainers.image.revision=$RELEASE_SHA

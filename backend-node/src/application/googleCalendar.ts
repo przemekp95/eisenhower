@@ -1,14 +1,28 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import {
-  CalendarBindingModel, CalendarConnectionModel, CalendarOutboxModel,
-  CalendarSyncStateModel, GoogleOAuthGrantModel,
+  CalendarBindingModel,
+  CalendarConnectionModel,
+  CalendarDomainAuditModel,
+  CalendarMutationReceiptModel,
+  CalendarOutboxModel,
+  CalendarSyncStateModel,
+  GoogleOAuthGrantModel,
 } from '../models/calendar';
+import { TaskModel } from '../models/task';
 import {
   decryptGoogleSecret, encryptGoogleSecret, GoogleOAuthConfig, GoogleTokenSet,
 } from './googleOAuth';
 
 export interface GoogleProviderResult { providerEventId: string; providerEtag: string }
 export interface GoogleChangesResult { events: unknown[]; nextPageToken?: string; nextSyncToken?: string; resetRequired?: boolean }
+export interface GoogleEventCandidate {
+  id: string;
+  etag: string;
+  title: string;
+  start: string;
+  end: string;
+  timeZone: string;
+}
 export interface GoogleCalendarPort {
   refresh(tokens: GoogleTokenSet, config: GoogleOAuthConfig): Promise<GoogleTokenSet>;
   createEvent(input: Record<string, unknown>): Promise<GoogleProviderResult>;
@@ -16,6 +30,8 @@ export interface GoogleCalendarPort {
   deleteEvent(input: Record<string, unknown>): Promise<GoogleProviderResult>;
   listChanges(input: Record<string, unknown>): Promise<GoogleChangesResult>;
   watch(input: Record<string, unknown>): Promise<{ channelId: string; resourceId: string; expiresAt: Date }>;
+  listEvents(input: Record<string, unknown>): Promise<{ events: GoogleEventCandidate[]; nextPageToken?: string }>;
+  getEvent(input: Record<string, unknown>): Promise<GoogleEventCandidate>;
 }
 export interface GoogleCalendarConfig { watchCallbackUrls: string[] }
 const MAX_CHANGE_PAGES = 20;
@@ -60,11 +76,36 @@ export class GoogleCalendarHttpAdapter implements GoogleCalendarPort {
   }
 
   private eventBody(input: Record<string, unknown>) {
-    const payload = input.payload as { title?: string; schedule?: { dueAt?: string; timeZone?: string } };
+    const payload = input.payload as {
+      title?: string;
+      schedule?: {
+        dueAt?: string;
+        timeZone?: string;
+        remindAt?: string;
+        durationMinutes?: number;
+      };
+    };
+    const dueAt = payload.schedule?.dueAt;
+    const startMillis = dueAt ? Date.parse(dueAt) : Number.NaN;
+    const durationMinutes = payload.schedule?.durationMinutes ?? 30;
+    const end = Number.isFinite(startMillis)
+      ? new Date(startMillis + durationMinutes * 60_000).toISOString()
+      : dueAt;
+    const remindMillis = payload.schedule?.remindAt
+      ? Date.parse(payload.schedule.remindAt)
+      : Number.NaN;
+    const reminderMinutes =
+      Number.isFinite(startMillis) && Number.isFinite(remindMillis)
+        ? Math.max(0, Math.round((startMillis - remindMillis) / 60_000))
+        : null;
     return {
       summary: payload.title ?? 'Eisenhower task',
-      start: { dateTime: payload.schedule?.dueAt, timeZone: payload.schedule?.timeZone },
-      end: { dateTime: payload.schedule?.dueAt, timeZone: payload.schedule?.timeZone },
+      start: { dateTime: dueAt, timeZone: payload.schedule?.timeZone },
+      end: { dateTime: end, timeZone: payload.schedule?.timeZone },
+      reminders:
+        reminderMinutes === null
+          ? { useDefault: true }
+          : { useDefault: false, overrides: [{ method: 'popup', minutes: reminderMinutes }] },
     };
   }
 
@@ -116,6 +157,61 @@ export class GoogleCalendarHttpAdapter implements GoogleCalendarPort {
     return { channelId: body.id, resourceId: body.resourceId, expiresAt: new Date(Number(body.expiration)) };
   }
 
+  private eventCandidate(value: unknown): GoogleEventCandidate {
+    const event = value as {
+      id?: string;
+      etag?: string;
+      summary?: string;
+      start?: { dateTime?: string; timeZone?: string };
+      end?: { dateTime?: string; timeZone?: string };
+    };
+    if (!event.id || !event.etag || !event.start?.dateTime || !event.end?.dateTime) {
+      throw new Error('google_calendar_event_unsupported');
+    }
+    return {
+      id: event.id,
+      etag: event.etag,
+      title: event.summary?.trim() || 'Google Calendar event',
+      start: event.start.dateTime,
+      end: event.end.dateTime,
+      timeZone: event.start.timeZone || event.end.timeZone || 'UTC',
+    };
+  }
+
+  async listEvents(input: Record<string, unknown>) {
+    const url = new URL(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(String(input.calendarId))}/events`,
+    );
+    url.searchParams.set('singleEvents', 'true');
+    url.searchParams.set('orderBy', 'startTime');
+    url.searchParams.set('maxResults', '50');
+    if (input.timeMin) url.searchParams.set('timeMin', String(input.timeMin));
+    if (input.timeMax) url.searchParams.set('timeMax', String(input.timeMax));
+    if (input.pageToken) url.searchParams.set('pageToken', String(input.pageToken));
+    const response = await this.request(url.toString(), {
+      headers: { Authorization: `Bearer ${input.accessToken}` },
+    });
+    if (!response.ok) throw new Error('google_calendar_events_failed');
+    const body = (await response.json()) as { items?: unknown[]; nextPageToken?: string };
+    const events = (body.items ?? []).flatMap((event) => {
+      try {
+        return [this.eventCandidate(event)];
+      } catch {
+        return [];
+      }
+    });
+    return { events, ...(body.nextPageToken ? { nextPageToken: body.nextPageToken } : {}) };
+  }
+
+  async getEvent(input: Record<string, unknown>) {
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(String(input.calendarId))}/events/${encodeURIComponent(String(input.providerEventId))}`;
+    const response = await this.request(url, {
+      headers: { Authorization: `Bearer ${input.accessToken}` },
+    });
+    if (!response.ok) throw new Error('google_calendar_event_failed');
+    return this.eventCandidate(await response.json());
+  }
+
   private async providerResult(response: Response) {
     if (!response.ok) throw new Error('google_calendar_write_failed');
     const body = await response.json() as { id?: string; etag?: string };
@@ -161,6 +257,193 @@ export class GoogleCalendarService {
       await grant.save();
     }
     return { connection, tokens };
+  }
+
+  private scheduleFromEvent(event: GoogleEventCandidate) {
+    const start = Date.parse(event.start);
+    const end = Date.parse(event.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+      throw new Error('google_calendar_event_interval_invalid');
+    }
+    return {
+      dueAt: new Date(start),
+      timeZone: event.timeZone,
+      durationMinutes: Math.min(1440, Math.max(5, Math.round((end - start) / 60_000))),
+    };
+  }
+
+  async candidateEvents(connectionId: string, window: { timeMin: string; timeMax: string; pageToken?: string }) {
+    const resolved = await this.resolveConnection(connectionId);
+    return this.port.listEvents({
+      accessToken: resolved.tokens.accessToken,
+      calendarId: resolved.connection.calendarId,
+      ...window,
+    });
+  }
+
+  async previewLink(scope: { tenantId: string; ownerId: string }, taskId: string, providerEventId: string) {
+    const connection = await CalendarConnectionModel.findOne({ ...scope, status: 'active' });
+    const task = await TaskModel.findOne({ _id: taskId, ...scope }).lean();
+    if (!connection || !task) throw new Error('calendar_link_target_unavailable');
+    if (await CalendarBindingModel.exists({ ...scope, $or: [{ taskId }, { connectionId: connection._id, providerEventId }] })) {
+      throw new Error('calendar_link_not_unique');
+    }
+    const resolved = await this.resolveConnection(connection.id);
+    const event = await this.port.getEvent({
+      accessToken: resolved.tokens.accessToken,
+      calendarId: connection.calendarId,
+      providerEventId,
+    });
+    const schedule = this.scheduleFromEvent(event);
+    return {
+      task: { id: taskId, title: task.title, revision: task.revision ?? 0, schedule: task.schedule ?? null },
+      event,
+      googleToEisenhower: { title: event.title, schedule },
+      eisenhowerToGoogle: { title: task.title, schedule: task.schedule ?? null },
+    };
+  }
+
+  async linkExisting(command: {
+    tenantId: string;
+    ownerId: string;
+    actorId: string;
+    operationId: string;
+    taskId: string;
+    expectedTaskRevision: number;
+    providerEventId: string;
+    providerEtag: string;
+    direction: 'google_to_eisenhower' | 'eisenhower_to_google';
+  }) {
+    const scope = { tenantId: command.tenantId, ownerId: command.ownerId };
+    const digest = createHash('sha256').update(JSON.stringify(command)).digest('hex');
+    const receipt = await CalendarMutationReceiptModel.findOne({ ...scope, operationId: command.operationId }).lean();
+    if (receipt) {
+      if (receipt.fingerprint !== digest) throw new Error('calendar_operation_reused');
+      return receipt.result;
+    }
+    const connection = await CalendarConnectionModel.findOne({ ...scope, status: 'active' });
+    if (!connection) throw new Error('calendar_link_target_unavailable');
+    const resolved = await this.resolveConnection(connection.id);
+    const event = await this.port.getEvent({
+      accessToken: resolved.tokens.accessToken,
+      calendarId: connection.calendarId,
+      providerEventId: command.providerEventId,
+    });
+    if (event.etag !== command.providerEtag) throw new Error('calendar_provider_revision_mismatch');
+
+    const session = await CalendarConnectionModel.startSession();
+    let result: Record<string, unknown> | undefined;
+    try {
+      await session.withTransaction(async () => {
+        const task = await TaskModel.findOne({ _id: command.taskId, ...scope }).session(session);
+        if (!task) throw new Error('calendar_link_target_unavailable');
+        if ((task.revision ?? 0) !== command.expectedTaskRevision) throw new Error('calendar_task_revision_mismatch');
+        if (await CalendarBindingModel.exists({
+          ...scope,
+          $or: [{ taskId: task._id }, { connectionId: connection._id, providerEventId: event.id }],
+        }).session(session)) throw new Error('calendar_link_not_unique');
+
+        if (command.direction === 'google_to_eisenhower') {
+          task.title = event.title;
+          task.schedule = this.scheduleFromEvent(event);
+          task.revision = (task.revision ?? 0) + 1;
+          await task.save({ session });
+        }
+        await CalendarBindingModel.create([{
+          ...scope,
+          connectionId: connection._id,
+          taskId: task._id,
+          providerEventId: event.id,
+          providerEtag: event.etag,
+          lastTaskRevision: task.revision ?? 0,
+          lastProviderRevision: event.etag,
+        }], { session });
+        if (command.direction === 'eisenhower_to_google') {
+          if (!task.schedule) throw new Error('calendar_link_schedule_missing');
+          await CalendarOutboxModel.create([{
+            eventId: `manual-link:${command.operationId}`,
+            ...scope,
+            aggregateId: task.id,
+            aggregateRevision: task.revision ?? 0,
+            type: 'event_update',
+            payload: { taskId: task.id, title: task.title, schedule: task.schedule },
+            status: 'pending',
+          }], { session });
+        }
+        result = { outcome: 'linked', taskId: task.id, taskRevision: task.revision ?? 0 };
+        await CalendarMutationReceiptModel.create([{
+          ...scope, operationId: command.operationId, fingerprint: digest, outcome: 'linked', result,
+        }], { session });
+        await CalendarDomainAuditModel.create([{
+          eventId: `manual-link:${command.operationId}`,
+          ...scope, actorId: command.actorId, action: 'calendar.binding.create', outcome: command.direction,
+          resourceId: task.id, beforeRevision: command.expectedTaskRevision, afterRevision: task.revision ?? 0,
+        }], { session });
+      });
+      if (!result) throw new Error('calendar_link_incomplete');
+      return result;
+    } finally {
+      await session.endSession();
+    }
+  }
+
+  async importSelected(command: {
+    tenantId: string;
+    ownerId: string;
+    actorId: string;
+    operationId: string;
+    providerEventIds: string[];
+  }) {
+    const scope = { tenantId: command.tenantId, ownerId: command.ownerId };
+    const connection = await CalendarConnectionModel.findOne({ ...scope, status: 'active' });
+    if (!connection) throw new Error('calendar_connection_unavailable');
+    const resolved = await this.resolveConnection(connection.id);
+    const results = [];
+    for (const providerEventId of command.providerEventIds) {
+      const itemOperationId = `${command.operationId}:${createHash('sha256').update(providerEventId).digest('hex').slice(0, 16)}`;
+      try {
+        const existing = await CalendarMutationReceiptModel.findOne({ ...scope, operationId: itemOperationId }).lean();
+        if (existing) {
+          results.push(existing.result);
+          continue;
+        }
+        const event = await this.port.getEvent({
+          accessToken: resolved.tokens.accessToken,
+          calendarId: connection.calendarId,
+          providerEventId,
+        });
+        if (await CalendarBindingModel.exists({ ...scope, connectionId: connection._id, providerEventId: event.id })) {
+          results.push({ providerEventId, status: 'duplicate' });
+          continue;
+        }
+        const session = await CalendarConnectionModel.startSession();
+        try {
+          await session.withTransaction(async () => {
+            const [task] = await TaskModel.create([{
+              ...scope, title: event.title, description: '', urgent: false, important: false,
+              schedule: this.scheduleFromEvent(event),
+            }], { session });
+            await CalendarBindingModel.create([{
+              ...scope, connectionId: connection._id, taskId: task._id,
+              providerEventId: event.id, providerEtag: event.etag,
+              lastTaskRevision: task.revision ?? 0, lastProviderRevision: event.etag,
+            }], { session });
+            const result = { providerEventId, status: 'imported', taskId: task.id };
+            await CalendarMutationReceiptModel.create([{
+              ...scope, operationId: itemOperationId,
+              fingerprint: createHash('sha256').update(JSON.stringify({ ...command, providerEventId })).digest('hex'),
+              outcome: 'imported', result,
+            }], { session });
+            results.push(result);
+          });
+        } finally {
+          await session.endSession();
+        }
+      } catch (error) {
+        results.push({ providerEventId, status: 'failed', error: error instanceof Error ? error.message : 'unknown' });
+      }
+    }
+    return { results };
   }
 
   async outbound(eventId: string) {
@@ -226,5 +509,17 @@ export class GoogleCalendarService {
       expiresAt: result.expiresAt.toISOString(),
       verificationHash: createHash('sha256').update(channelToken).digest('hex'),
     };
+  }
+
+  async registerWatch(connectionId: string, address = this.config.watchCallbackUrls[0]) {
+    const watch = await this.watch(connectionId, address);
+    const connection = await CalendarConnectionModel.findById(connectionId).lean();
+    if (!connection) throw new Error('calendar_connection_unavailable');
+    await CalendarSyncStateModel.findOneAndUpdate(
+      { tenantId: connection.tenantId, ownerId: connection.ownerId, connectionId },
+      { $set: { watch } },
+      { upsert: true, setDefaultsOnInsert: true },
+    );
+    return watch;
   }
 }

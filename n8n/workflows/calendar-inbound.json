@@ -27,7 +27,7 @@
       "typeVersion": 2,
       "position": [-880, 40],
       "parameters": {
-        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/notifications/validate';\nconst headers = $json.headers || {};\nconst body = { channelId: headers['x-goog-channel-id'], resourceId: headers['x-goog-resource-id'], channelToken: headers['x-goog-channel-token'], messageNumber: headers['x-goog-message-number'] };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+        "jsCode": "const { createHmac, randomUUID } = require('crypto');\nconst path = '/internal/calendar/notifications/validate';\nconst headers = $json.headers || {};\nconst body = { channelId: headers['x-goog-channel-id'], resourceId: headers['x-goog-resource-id'], channelToken: headers['x-goog-channel-token'], messageNumber: headers['x-goog-message-number'] };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst requestId = randomUUID();\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\n${requestId}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedRequestId: requestId, signedSignature } }];"
       }
     },
     {
@@ -45,6 +45,7 @@
         "sendHeaders": true,
         "headerParameters": { "parameters": [
           { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Request-Id", "value": "={{ $json.signedRequestId }}" },
           { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
         ] },
         "sendBody": true,
@@ -61,7 +62,7 @@
       "typeVersion": 2,
       "position": [-430, 40],
       "parameters": {
-        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/provider/changes';\nconst checkpoint = $json.pageToken || $json.syncToken || 'full-resync';\nconst body = { connectionId: $json.connectionId, checkpoint };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+        "jsCode": "const { createHmac, randomUUID } = require('crypto');\nconst path = '/internal/calendar/provider/changes';\nconst checkpoint = $json.pageToken || $json.syncToken || 'full-resync';\nconst body = { connectionId: $json.connectionId, checkpoint };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst requestId = randomUUID();\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\n${requestId}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedRequestId: requestId, signedSignature } }];"
       }
     },
     {
@@ -79,6 +80,7 @@
         "sendHeaders": true,
         "headerParameters": { "parameters": [
           { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Request-Id", "value": "={{ $json.signedRequestId }}" },
           { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
         ] },
         "sendBody": true,
@@ -103,7 +105,7 @@
       "typeVersion": 2,
       "position": [40, -100],
       "parameters": {
-        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/sync/reset';\nconst signal = $('Validate Channel And Claim Signal').item.json;\nconst body = { operationId: `${signal.signalId}:reset`, tenantId: signal.tenantId, ownerId: signal.ownerId, connectionId: signal.connectionId };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+        "jsCode": "const { createHmac, randomUUID } = require('crypto');\nconst path = '/internal/calendar/sync/reset';\nconst signal = $('Validate Channel And Claim Signal').item.json;\nconst body = { operationId: `${signal.signalId}:reset`, tenantId: signal.tenantId, ownerId: signal.ownerId, connectionId: signal.connectionId };\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst requestId = randomUUID();\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\n${requestId}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedRequestId: requestId, signedSignature } }];"
       }
     },
     {
@@ -118,6 +120,7 @@
         "sendHeaders": true,
         "headerParameters": { "parameters": [
           { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Request-Id", "value": "={{ $json.signedRequestId }}" },
           { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
         ] },
         "sendBody": true,
@@ -144,7 +147,7 @@
       "typeVersion": 2,
       "position": [280, 160],
       "parameters": {
-        "jsCode": "const { createHmac } = require('crypto');\nconst path = '/internal/calendar/sync/apply';\nconst body = $json.command;\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedSignature } }];"
+        "jsCode": "const { createHmac, randomUUID } = require('crypto');\nconst path = '/internal/calendar/sync/apply';\nconst body = $json.command;\nconst rawBody = JSON.stringify(body);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst requestId = randomUUID();\nconst signedSignature = createHmac('sha256', $env.CALENDAR_INTERNAL_HMAC_KEY).update(`v1\\n${timestamp}\\n${requestId}\\nPOST\\n${path}\\n${rawBody}`).digest('hex');\nreturn [{ json: { signedBody: rawBody, signedTimestamp: timestamp, signedRequestId: requestId, signedSignature } }];"
       }
     },
     {
@@ -162,6 +165,7 @@
         "sendHeaders": true,
         "headerParameters": { "parameters": [
           { "name": "X-Eisenhower-Timestamp", "value": "={{ $json.signedTimestamp }}" },
+          { "name": "X-Eisenhower-Request-Id", "value": "={{ $json.signedRequestId }}" },
           { "name": "X-Eisenhower-Signature", "value": "={{ $json.signedSignature }}" }
         ] },
         "sendBody": true,

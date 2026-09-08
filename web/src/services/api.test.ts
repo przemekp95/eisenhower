@@ -11,6 +11,8 @@ import {
   extractTasksFromImage,
   getCapabilities,
   getCalendarConflicts,
+  getCalendarDeletedBindings,
+  getCalendarEvents,
   getCalendarStatus,
   getDelegatedTasks,
   getTasks,
@@ -18,8 +20,13 @@ import {
   confirmMemory,
   exportMemory,
   requestCalendarSync,
+  sanitizeOcrFile,
   disconnectCalendar,
   resolveCalendarConflict,
+  resolveCalendarDeletedBinding,
+  previewCalendarLink,
+  createCalendarLink,
+  importCalendarEvents,
   transitionTaskLifecycle,
   transitionTaskDelegation,
   updateTaskDelegation,
@@ -29,6 +36,199 @@ import {
   setApiToken,
   startCalendarConnection,
 } from './api';
+
+const jpegWithPrivateMetadata = Uint8Array.from([
+  0xff, 0xd8, 0xff, 0xe1, 0x00, 0x08, 0x45, 0x78, 0x69, 0x66, 0x00, 0x00, 0xff, 0xda, 0x00, 0x04,
+  0x01, 0x02, 0x10, 0x20, 0xff, 0xd9,
+]);
+
+const jpegWithoutPrivateMetadata = Uint8Array.from([
+  0xff, 0xd8, 0xff, 0xda, 0x00, 0x04, 0x01, 0x02, 0x10, 0x20, 0xff, 0xd9,
+]);
+
+const pngWithPrivateMetadata = Uint8Array.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x01, 0x49, 0x48, 0x44, 0x52,
+  0x01, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x02, 0x65, 0x58, 0x49, 0x66, 0x10, 0x11, 0xbb,
+  0xbb, 0xbb, 0xbb, 0x00, 0x00, 0x00, 0x02, 0x49, 0x44, 0x41, 0x54, 0x30, 0x31, 0xdd, 0xdd, 0xdd,
+  0xdd, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xee, 0xee, 0xee, 0xee,
+]);
+
+const pngWithoutPrivateMetadata = Uint8Array.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x01, 0x49, 0x48, 0x44, 0x52,
+  0x01, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x02, 0x49, 0x44, 0x41, 0x54, 0x30, 0x31, 0xdd,
+  0xdd, 0xdd, 0xdd, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xee, 0xee, 0xee, 0xee,
+]);
+
+function readFileBytes(file: File): Promise<number[]> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => resolve(Array.from(new Uint8Array(reader.result as ArrayBuffer)));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+const asciiBytes = (value: string) => Array.from(value, (character) => character.charCodeAt(0));
+
+describe('OCR file privacy', () => {
+  it('removes private JPEG metadata before the browser upload boundary', async () => {
+    const original = new File([jpegWithPrivateMetadata], 'camera.jpg', {
+      type: 'image/jpeg',
+      lastModified: 123,
+    });
+
+    const sanitized = await sanitizeOcrFile(original);
+
+    expect(sanitized).not.toBe(original);
+    expect(sanitized.name).toBe('camera-sanitized.jpg');
+    expect(sanitized.type).toBe('image/jpeg');
+    await expect(readFileBytes(sanitized)).resolves.toEqual(Array.from(jpegWithoutPrivateMetadata));
+  });
+
+  it('passes non-image text through and rejects unsupported image formats', async () => {
+    const text = new File(['Task'], 'tasks.txt', { type: 'text/plain' });
+    await expect(sanitizeOcrFile(text)).resolves.toBe(text);
+    await expect(
+      sanitizeOcrFile(new File(['RIFF'], 'camera.webp', { type: 'image/webp' }))
+    ).rejects.toThrow('Unsupported image format');
+  });
+
+  it('derives the sanitized content type from bytes instead of trusting picker metadata', async () => {
+    const mislabeled = new File([jpegWithPrivateMetadata], 'camera.png', { type: 'image/png' });
+
+    const sanitized = await sanitizeOcrFile(mislabeled);
+
+    expect(sanitized.name).toBe('camera-sanitized.jpg');
+    expect(sanitized.type).toBe('image/jpeg');
+  });
+
+  it('sanitizes JPEG bytes when the browser provides no MIME type', async () => {
+    const original = new File([jpegWithPrivateMetadata], 'camera.jpg');
+
+    const sanitized = await sanitizeOcrFile(original);
+
+    expect(sanitized).not.toBe(original);
+    expect(sanitized.type).toBe('image/jpeg');
+    await expect(readFileBytes(sanitized)).resolves.toEqual(Array.from(jpegWithoutPrivateMetadata));
+  });
+
+  it('sanitizes PNG metadata and supplies a safe basename when none remains', async () => {
+    const original = new File([pngWithPrivateMetadata], '.png', { type: 'image/png' });
+
+    const sanitized = await sanitizeOcrFile(original);
+
+    expect(sanitized.name).toBe('scan-sanitized.png');
+    expect(sanitized.type).toBe('image/png');
+    await expect(readFileBytes(sanitized)).resolves.toEqual(Array.from(pngWithoutPrivateMetadata));
+  });
+
+  it('rejects malformed image bytes even when the file claims to be text', async () => {
+    const malformedJpeg = new File(
+      [Uint8Array.from([0xff, 0xd8, 0xff, 0xe1, 0x00, 0x10, 0x45])],
+      'scan.txt',
+      { type: 'text/plain' }
+    );
+    const disguisedWebp = new File(
+      [Uint8Array.from([0x52, 0x49, 0x46, 0x46, 0x04, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50])],
+      'tasks.txt',
+      { type: 'text/plain' }
+    );
+
+    await expect(sanitizeOcrFile(malformedJpeg)).rejects.toThrow('Malformed JPEG segment');
+    await expect(sanitizeOcrFile(disguisedWebp)).rejects.toThrow('Unsupported image format');
+  });
+
+  it('passes valid text containing an ftyp token through unchanged', async () => {
+    const text = new File(['1234ftyp task'], 'tasks.txt', { type: 'text/plain' });
+
+    await expect(sanitizeOcrFile(text)).resolves.toBe(text);
+  });
+
+  it.each([
+    ['PNG', [0x89, 0x50, 0x4e, 0x47]],
+    ['GIF87a', asciiBytes('GIF87a')],
+    ['GIF89a', asciiBytes('GIF89a')],
+    ['BMP', asciiBytes('BM')],
+    ['WebP', asciiBytes('RIFFxxxxWEBP')],
+    ['AVIF', [0x00, 0x00, 0x00, 0x0c, ...asciiBytes('ftypmsf1')]],
+  ])('rejects a malformed %s signature even when it is labeled as text', async (_name, bytes) => {
+    const disguisedImage = new File([Uint8Array.from(bytes)], 'tasks.txt', {
+      type: 'text/plain',
+    });
+
+    await expect(sanitizeOcrFile(disguisedImage)).rejects.toThrow('Unsupported image format');
+  });
+
+  it.each([
+    [Uint8Array.from([0x00, 0x00, 0x00, 0x08, ...asciiBytes('ftyp')])],
+    [Uint8Array.from([0x00, 0x00, 0x00, 0x0c, ...asciiBytes('nopeavif')])],
+    [Uint8Array.from([0x00, 0x00, 0x00, 0x0c, ...asciiBytes('ftypnope')])],
+  ])('does not treat an invalid ISO-BMFF header as an image signature', async (bytes) => {
+    const text = new File([bytes], 'tasks.txt', { type: 'text/plain' });
+
+    await expect(sanitizeOcrFile(text)).rejects.toThrow('Unsupported image format');
+  });
+
+  it.each([new DOMException('read failed'), null])(
+    'rejects when the browser cannot read image bytes (error: %s)',
+    async (readerError) => {
+      const readSpy = jest
+        .spyOn(FileReader.prototype, 'readAsArrayBuffer')
+        .mockImplementation(function () {
+          Object.defineProperty(this, 'error', { configurable: true, value: readerError });
+          this.onerror?.(new ProgressEvent('error'));
+        });
+
+      await expect(
+        sanitizeOcrFile(new File(['Task'], 'tasks.txt', { type: 'text/plain' }))
+      ).rejects.toThrow(readerError ?? 'Unable to read image bytes');
+      readSpy.mockRestore();
+    }
+  );
+
+  it('rejects when the browser returns a non-binary image result', async () => {
+    const readSpy = jest
+      .spyOn(FileReader.prototype, 'readAsArrayBuffer')
+      .mockImplementation(function () {
+        Object.defineProperty(this, 'result', { configurable: true, value: 'not binary' });
+        this.onload?.(new ProgressEvent('load'));
+      });
+
+    await expect(
+      sanitizeOcrFile(new File(['Task'], 'tasks.txt', { type: 'text/plain' }))
+    ).rejects.toThrow('Unable to read image bytes');
+    readSpy.mockRestore();
+  });
+
+  it.each([new DOMException('text read failed'), null])(
+    'fails closed when browser text fallback cannot be read (error: %s)',
+    async (readerError) => {
+      const textReadSpy = jest
+        .spyOn(FileReader.prototype, 'readAsText')
+        .mockImplementation(function () {
+          Object.defineProperty(this, 'error', { configurable: true, value: readerError });
+          this.onerror?.(new ProgressEvent('error'));
+        });
+      const text = new File(['Task'], 'tasks.txt', { type: 'text/plain' });
+
+      await expect(sanitizeOcrFile(text)).rejects.toThrow('Unsupported image format');
+      textReadSpy.mockRestore();
+    }
+  );
+
+  it('fails closed when the browser returns a non-string text result', async () => {
+    const textReadSpy = jest
+      .spyOn(FileReader.prototype, 'readAsText')
+      .mockImplementation(function () {
+        Object.defineProperty(this, 'result', { configurable: true, value: new ArrayBuffer(0) });
+        this.onload?.(new ProgressEvent('load'));
+      });
+    const text = new File(['Task'], 'tasks.txt', { type: 'text/plain' });
+
+    await expect(sanitizeOcrFile(text)).rejects.toThrow('Unsupported image format');
+    textReadSpy.mockRestore();
+  });
+});
 
 const taskResponse = {
   _id: '1',
@@ -291,6 +491,123 @@ describe('api service', () => {
           'If-Match': '"2"',
         }),
         body: JSON.stringify({ strategy: 'google' }),
+      })
+    );
+  });
+
+  it('uses bounded calendar deletion, candidate, manual-link and selected-import endpoints', async () => {
+    const event = {
+      id: 'event-1',
+      etag: 'etag-1',
+      title: 'Provider event',
+      start: '2026-08-20T12:00:00.000Z',
+      end: '2026-08-20T12:30:00.000Z',
+      timeZone: 'UTC',
+    };
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => [
+          {
+            _id: 'binding-1',
+            taskId: 'task-1',
+            taskTitle: 'Task',
+            taskRevision: 2,
+            providerEventId: 'event-1',
+            providerDeletedAt: '2026-08-20T12:00:00.000Z',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({
+          outcome: 'detach',
+          taskId: 'task-1',
+          taskRevision: 2,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({ events: [event] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({
+          task: { id: 'task-1', title: 'Task', revision: 2, schedule: null },
+          event,
+          googleToEisenhower: {
+            title: event.title,
+            schedule: { dueAt: event.start, timeZone: 'UTC', durationMinutes: 30 },
+          },
+          eisenhowerToGoogle: { title: 'Task', schedule: null },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        headers: new Headers(),
+        json: async () => ({
+          outcome: 'linked',
+          taskId: 'task-1',
+          taskRevision: 3,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({
+          results: [{ providerEventId: 'event-2', status: 'imported', taskId: 'task-2' }],
+        }),
+      });
+
+    await getCalendarDeletedBindings();
+    await resolveCalendarDeletedBinding('binding/1', 'detach', 2, 'delete-key');
+    await getCalendarEvents('2026-08-01T00:00:00.000Z', '2026-09-01T00:00:00.000Z');
+    await previewCalendarLink('task/1', 'event/1');
+    await createCalendarLink({
+      taskId: 'task/1',
+      providerEventId: 'event/1',
+      providerEtag: 'etag-1',
+      direction: 'google_to_eisenhower',
+      taskRevision: 2,
+      idempotencyKey: 'link-key',
+    });
+    await importCalendarEvents(['event/2'], 'import-key');
+
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      `${runtimeConfig.apiUrl}/calendar/deleted-bindings/binding%2F1/resolve`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'If-Match': '"2"', 'Idempotency-Key': 'delete-key' }),
+      })
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining('/calendar/events?timeMin='),
+      expect.any(Object)
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      5,
+      `${runtimeConfig.apiUrl}/calendar/bindings`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Idempotency-Key': 'link-key' }),
+      })
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      6,
+      `${runtimeConfig.apiUrl}/calendar/imports`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Idempotency-Key': 'import-key' }),
       })
     );
   });

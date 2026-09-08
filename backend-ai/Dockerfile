@@ -1,6 +1,6 @@
 # Role-specific CPU images. GPU inference remains a private external adapter.
 # Wolfi packages keep the complete runtime inventory visible to Trivy and SBOM tooling.
-FROM cgr.dev/chainguard/wolfi-base@sha256:0a8fd427de5882aed77471b0a432c3675eda6b6a0ae952b5d640b46da628cdbe AS python-builder
+FROM cgr.dev/chainguard/wolfi-base@sha256:a31344ab2cb8618db84f535eec56f76f6178b142cb92cb2e48676cc2dcebea72 AS python-builder
 
 ENV PIP_NO_CACHE_DIR=on \
     PIP_DISABLE_PIP_VERSION_CHECK=on \
@@ -30,7 +30,7 @@ RUN python3.11 -m pip install --target /opt/python --upgrade --requirement requi
 FROM dependencies-knowledge AS dependencies-ingest
 RUN python3.11 -m pip install --target /opt/python --upgrade --requirement requirements-ingest.txt
 
-FROM cgr.dev/chainguard/wolfi-base@sha256:0a8fd427de5882aed77471b0a432c3675eda6b6a0ae952b5d640b46da628cdbe AS runtime-base
+FROM cgr.dev/chainguard/wolfi-base@sha256:a31344ab2cb8618db84f535eec56f76f6178b142cb92cb2e48676cc2dcebea72 AS runtime-base
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

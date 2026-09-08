@@ -12,7 +12,6 @@ config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),
   path.resolve(workspaceRoot, 'node_modules'),
 ];
-config.resolver.unstable_enableSymlinks = true;
 config.resolver.extraNodeModules = {
   '@eisenhower/api-client': path.resolve(sharedPackagesRoot, 'api-client'),
 };

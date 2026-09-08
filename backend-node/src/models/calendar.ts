@@ -94,6 +94,15 @@ const receiptSchema = new Schema({
 }, { timestamps: true });
 receiptSchema.index({ tenantId: 1, ownerId: 1, operationId: 1 }, { unique: true });
 
+const internalRequestReceiptSchema = new Schema({
+  requestId: { type: String, required: true, unique: true },
+  fingerprint: { type: String, required: true },
+  status: { type: String, required: true, enum: ['pending', 'completed'] },
+  statusCode: { type: Number },
+  responseBody: { type: Schema.Types.Mixed },
+  expiresAt: { type: Date, required: true, index: { expires: 0 } },
+}, { timestamps: true });
+
 const auditSchema = new Schema({
   eventId: { type: String, required: true, unique: true },
   ...scope,
@@ -137,6 +146,8 @@ export const CalendarConflictModel = models.CalendarConflict ?? model('CalendarC
 export const CalendarSyncStateModel = models.CalendarSyncState ?? model('CalendarSyncState', syncStateSchema);
 export const CalendarOutboxModel = models.CalendarOutbox ?? model('CalendarOutbox', outboxSchema);
 export const CalendarMutationReceiptModel = models.CalendarMutationReceipt ?? model('CalendarMutationReceipt', receiptSchema);
+export const CalendarInternalRequestReceiptModel = models.CalendarInternalRequestReceipt
+  ?? model('CalendarInternalRequestReceipt', internalRequestReceiptSchema);
 export const CalendarDomainAuditModel = models.CalendarDomainAudit ?? model('CalendarDomainAudit', auditSchema);
 export const GoogleOAuthAttemptModel = models.GoogleOAuthAttempt ?? model('GoogleOAuthAttempt', oauthAttemptSchema);
 export const GoogleOAuthGrantModel = models.GoogleOAuthGrant ?? model('GoogleOAuthGrant', oauthGrantSchema);

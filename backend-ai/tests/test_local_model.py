@@ -185,6 +185,7 @@ def test_production_startup_never_trains_when_artifact_is_missing(tmp_path: Path
     training_data_path=tmp_path / "training.json",
     model_cache_dir=tmp_path / "runtime",
     app_env="production",
+    auth_mode="oidc",
     local_model_approved_artifact_sha256="a" * 64,
   )
   model = LocalMiniLMClassifier(settings=settings, encoder=FakeEncoder())
@@ -210,6 +211,7 @@ def test_production_startup_verifies_the_approved_pointer_digest(tmp_path: Path)
     training_data_path=training_settings.training_data_path,
     model_cache_dir=training_settings.model_cache_dir,
     app_env="production",
+    auth_mode="oidc",
     local_model_approved_artifact_sha256=pointer_digest,
   )
   loader = LocalMiniLMClassifier(settings=approved_settings, encoder=FakeEncoder())
@@ -220,6 +222,7 @@ def test_production_startup_verifies_the_approved_pointer_digest(tmp_path: Path)
     training_data_path=training_settings.training_data_path,
     model_cache_dir=training_settings.model_cache_dir,
     app_env="production",
+    auth_mode="oidc",
     local_model_approved_artifact_sha256="0" * 64,
   )
   rejected = LocalMiniLMClassifier(settings=rejected_settings, encoder=FakeEncoder())

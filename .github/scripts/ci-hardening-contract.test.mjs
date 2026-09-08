@@ -29,7 +29,7 @@ test("every job has a bounded timeout and every external action is immutable", (
   }
 });
 
-test("AWS delivery uses environment-scoped OIDC and immutable green SHAs without static keys", () => {
+test("AWS staging delivery uses environment-scoped OIDC and immutable green SHAs without static keys", () => {
   const aws = readWorkflow("aws-deploy.yml");
   const release = readWorkflow("release.yml");
 
@@ -42,16 +42,14 @@ test("AWS delivery uses environment-scoped OIDC and immutable green SHAs without
   assert.match(aws, /role-to-assume: \$\{\{ steps\.registries\.outputs\.image_publishing_role_arn \}\}/);
   assert.match(aws, /Eisenhower-staging-Platform/);
   assert.match(aws, /role-to-assume: \$\{\{ steps\.platform-stopped\.outputs\.migration_ops_role_arn \}\}/);
+  assert.match(aws, /load_balancer_dns_name=\$load_balancer_dns_name/);
+  assert.match(aws, /::notice title=Cloudflare DNS target::/);
+  assert.match(aws, /--retry 60 --retry-all-errors --retry-delay 15/);
   assert.match(aws, /Restore AWS OIDC deployment identity after migration/);
 
-  assert.match(release, /environment: production/);
-  assert.match(release, /id-token: write/);
-  assert.match(release, /role-to-assume: \$\{\{ vars\.AWS_PRODUCTION_DEPLOY_ROLE_ARN \}\}/);
-  assert.match(release, /role-to-assume: \$\{\{ steps\.registries\.outputs\.image_publishing_role_arn \}\}/);
-  assert.match(release, /role-to-assume: \$\{\{ steps\.platform-stopped\.outputs\.migration_ops_role_arn \}\}/);
-  assert.match(release, /Restore production AWS OIDC identity after migration/);
-  assert.doesNotMatch(`${aws}\n${release}`, /AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY/);
-  assert.doesNotMatch(`${aws}\n${release}`, /--force-new-deployment/);
+  assert.doesNotMatch(release, /AWS_/);
+  assert.doesNotMatch(aws, /AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY/);
+  assert.doesNotMatch(aws, /--force-new-deployment/);
   assert.match(readWorkflow("ci.yml"), /\.codex\/verify --scope aws/);
 });
 
@@ -88,4 +86,14 @@ test("backend CI runs PostgreSQL and Redis integration coverage", () => {
   assert.match(backendJob, /npx prisma migrate deploy/);
   assert.match(backendJob, /POSTGRES_TEST_URL: postgresql:\/\/eisenhower:eisenhower_test@127\.0\.0\.1:33196\/eisenhower/);
   assert.match(backendJob, /REDIS_TEST_URL: redis:\/\/127\.0\.0\.1:33197/);
+});
+
+test("release image analysis allows large ROCm layers to exceed Trivy's five-minute default", () => {
+  const release = readWorkflow("release.yml");
+  const invocations = release.match(/"\$TRIVY_IMAGE" image \\\n(?:\s+.*\\\n)+?\s+"\$image_ref"/g) ?? [];
+
+  assert.equal(invocations.length, 2, "release must scan vulnerabilities and generate an SBOM");
+  for (const invocation of invocations) {
+    assert.match(invocation, /\s+--timeout 15m \\\n/);
+  }
 });

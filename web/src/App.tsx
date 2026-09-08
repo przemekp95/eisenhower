@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useRef, useState, useSyncExternalStore } from 're
 import LanguageSwitcher from './components/LanguageSwitcher';
 import Matrix from './components/Matrix';
 import CalendarSyncPanel from './components/CalendarSyncPanel';
+import AccountSecurityPanel from './components/AccountSecurityPanel';
 import {
   clearTokens,
   getAccessRejection,
@@ -13,7 +14,12 @@ import { LanguageProvider, useLanguage } from './i18n/LanguageContext';
 import type { TranslationKey } from './i18n/translations';
 import { replaceTaskById } from './lib/uiState';
 import { runtimeConfig } from './config';
-import { beginOidcLogin, completeOidcLogin, type OidcRuntimeConfig } from './oidcSession';
+import {
+  beginOidcLogin,
+  completeOidcLogin,
+  resetOidcLoginAttempt,
+  type OidcRuntimeConfig,
+} from './oidcSession';
 import {
   createTask,
   deleteTask,
@@ -37,6 +43,7 @@ import type {
 } from './types';
 
 type LoadState = 'loading' | 'ready' | 'offline' | 'error';
+type AppSection = 'tasks' | 'integrations' | 'account';
 type RequestError = Error & { status?: number; code?: string };
 
 function safeMessage(
@@ -72,16 +79,18 @@ function oidcConfig(): OidcRuntimeConfig | null {
   };
 }
 
-function CredentialGate({ oidcFailed }: { oidcFailed: boolean }) {
+type CredentialGateProps =
+  { mode: 'manual'; onOidcRetry?: never } | { mode: 'oidc-retry'; onOidcRetry: () => void };
+
+function CredentialGate({ mode, onOidcRetry }: CredentialGateProps) {
   const { t } = useLanguage();
   const [code, setCode] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const rejected = getAccessRejection() === 'rejected';
-  const oidc = oidcConfig();
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+    if (mode === 'manual') inputRef.current?.focus();
+  }, [mode]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -96,51 +105,68 @@ function CredentialGate({ oidcFailed }: { oidcFailed: boolean }) {
         <div className="mb-5 flex justify-end">
           <LanguageSwitcher />
         </div>
-        <form
-          onSubmit={submit}
-          aria-describedby="access-code-help"
-          className="rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl sm:p-8"
-        >
-          <p className="text-sm font-semibold text-emerald-300">{t('auth.welcome')}</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">{t('app.title')}</h1>
-          <p id="access-code-help" className="mt-3 text-sm leading-6 text-slate-300">
-            {t('auth.help')}
-          </p>
-          {rejected || oidcFailed ? (
+        {mode === 'oidc-retry' ? (
+          <section className="rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl sm:p-8">
+            <p className="text-sm font-semibold text-emerald-300">{t('auth.welcome')}</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+              {t('auth.oidcRetryTitle')}
+            </h1>
             <p
               role="alert"
-              className="mt-4 rounded-xl border border-red-300/30 bg-red-950/50 p-3 text-sm text-red-100"
+              className="mt-4 rounded-xl border border-red-300/30 bg-red-950/50 p-3 text-sm leading-6 text-red-100"
             >
-              {t('auth.rejected')}
+              {t('auth.oidcRetryHelp')}
             </p>
-          ) : null}
-          {!oidc ? (
-            <>
-              <label htmlFor="access-code" className="mt-6 block text-sm font-medium">
-                {t('auth.code')}
-              </label>
-              <input
-                ref={inputRef}
-                id="access-code"
-                type="password"
-                autoComplete="off"
-                value={code}
-                required
-                onChange={(event) => setCode(event.target.value)}
-                className="mt-2 min-h-12 w-full rounded-xl border border-white/20 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-300/30"
-              />
-            </>
-          ) : null}
-          <button
-            type="submit"
-            disabled={!oidc && !code.trim()}
-            onClick={oidc ? () => void beginOidcLogin(oidc) : undefined}
-            className="mt-5 min-h-12 w-full rounded-xl bg-cyan-300 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-40"
+            <button
+              type="button"
+              onClick={onOidcRetry}
+              className="mt-5 min-h-12 w-full rounded-xl bg-cyan-300 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-200"
+            >
+              {t('auth.oidcRetryAction')}
+            </button>
+          </section>
+        ) : (
+          <form
+            onSubmit={submit}
+            aria-describedby="access-code-help"
+            className="rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl sm:p-8"
           >
-            {t('auth.enter')}
-          </button>
-          <p className="mt-4 text-xs leading-5 text-slate-400">{t('auth.memoryOnly')}</p>
-        </form>
+            <p className="text-sm font-semibold text-emerald-300">{t('auth.welcome')}</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight">{t('app.title')}</h1>
+            <p id="access-code-help" className="mt-3 text-sm leading-6 text-slate-300">
+              {t('auth.help')}
+            </p>
+            {rejected ? (
+              <p
+                role="alert"
+                className="mt-4 rounded-xl border border-red-300/30 bg-red-950/50 p-3 text-sm text-red-100"
+              >
+                {t('auth.rejected')}
+              </p>
+            ) : null}
+            <label htmlFor="access-code" className="mt-6 block text-sm font-medium">
+              {t('auth.code')}
+            </label>
+            <input
+              ref={inputRef}
+              id="access-code"
+              type="password"
+              autoComplete="off"
+              value={code}
+              required
+              onChange={(event) => setCode(event.target.value)}
+              className="mt-2 min-h-12 w-full rounded-xl border border-white/20 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-300/30"
+            />
+            <button
+              type="submit"
+              disabled={!code.trim()}
+              className="mt-5 min-h-12 w-full rounded-xl bg-cyan-300 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {t('auth.enter')}
+            </button>
+            <p className="mt-4 text-xs leading-5 text-slate-400">{t('auth.memoryOnly')}</p>
+          </form>
+        )}
       </div>
     </main>
   );
@@ -154,6 +180,7 @@ function AppContent() {
   const [lastSyncedAt, setLastSyncedAt] = useState(() => new Date());
   const [lifecycleFilter, setLifecycleFilter] = useState<TaskLifecycleFilter>('active');
   const [taskView, setTaskView] = useState<TaskView>('owned');
+  const [activeSection, setActiveSection] = useState<AppSection>('tasks');
 
   const loadTasks = async (
     filter: TaskLifecycleFilter = lifecycleFilter,
@@ -290,16 +317,6 @@ function AppContent() {
               </h1>
               <p className="mt-1 max-w-2xl text-sm text-slate-300">{t('app.instruction')}</p>
             </div>
-            <nav aria-label={t('nav.account')} className="flex flex-wrap items-center gap-2">
-              <LanguageSwitcher />
-              <button
-                type="button"
-                onClick={() => clearTokens()}
-                className="min-h-11 rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/10"
-              >
-                {t('auth.logout')}
-              </button>
-            </nav>
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
@@ -348,42 +365,69 @@ function AppContent() {
           </div>
         </header>
 
-        <nav
-          aria-label={t('taskView.label')}
-          className="mb-3 flex w-fit gap-1 rounded-full border border-white/10 bg-white/5 p-1"
-        >
-          {(['owned', 'delegated'] as TaskView[]).map((view) => (
+        <nav aria-label={t('nav.sections')} className="mb-4 flex flex-wrap gap-2">
+          {(['tasks', 'integrations', 'account'] as AppSection[]).map((section) => (
             <button
-              key={view}
+              key={section}
               type="button"
-              aria-pressed={taskView === view}
-              onClick={() => setTaskView(view)}
-              className={`min-h-11 rounded-full px-4 py-2 text-sm ${
-                taskView === view ? 'bg-white text-slate-950' : 'text-white/70 hover:text-white'
+              aria-pressed={activeSection === section}
+              onClick={() => setActiveSection(section)}
+              className={`min-h-11 rounded-full px-4 py-2 text-sm font-semibold ${
+                activeSection === section
+                  ? 'bg-cyan-200 text-slate-950'
+                  : 'border border-white/10 bg-white/5 text-white/75 hover:bg-white/10'
               }`}
             >
-              {t(`taskView.${view}`)}
+              {t(`nav.${section}`)}
             </button>
           ))}
         </nav>
 
-        <Matrix
-          tasks={tasks}
-          loading={loadState === 'loading'}
-          onAddTask={handleAddTask}
-          onUpdateTask={handleUpdateTask}
-          onDeleteTask={handleDeleteTask}
-          lifecycleFilter={lifecycleFilter}
-          onLifecycleFilterChange={setLifecycleFilter}
-          onLifecycleTask={handleLifecycleTask}
-          onUpdateSchedule={handleUpdateSchedule}
-          taskView={taskView}
-          onUpdateDelegation={handleUpdateDelegation}
-          onDelegationStatus={handleDelegationStatus}
-        />
-        <div className="mt-4">
-          <CalendarSyncPanel />
-        </div>
+        {activeSection === 'tasks' ? (
+          <nav
+            aria-label={t('taskView.label')}
+            className="mb-3 flex w-fit gap-1 rounded-full border border-white/10 bg-white/5 p-1"
+          >
+            {(['owned', 'delegated'] as TaskView[]).map((view) => (
+              <button
+                key={view}
+                type="button"
+                aria-pressed={taskView === view}
+                onClick={() => setTaskView(view)}
+                className={`min-h-11 rounded-full px-4 py-2 text-sm ${
+                  taskView === view ? 'bg-white text-slate-950' : 'text-white/70 hover:text-white'
+                }`}
+              >
+                {t(`taskView.${view}`)}
+              </button>
+            ))}
+          </nav>
+        ) : null}
+
+        {activeSection === 'tasks' ? (
+          <Matrix
+            tasks={tasks}
+            loading={loadState === 'loading'}
+            onAddTask={handleAddTask}
+            onUpdateTask={handleUpdateTask}
+            onDeleteTask={handleDeleteTask}
+            lifecycleFilter={lifecycleFilter}
+            onLifecycleFilterChange={setLifecycleFilter}
+            onLifecycleTask={handleLifecycleTask}
+            onUpdateSchedule={handleUpdateSchedule}
+            taskView={taskView}
+            onUpdateDelegation={handleUpdateDelegation}
+            onDelegationStatus={handleDelegationStatus}
+          />
+        ) : null}
+        {activeSection === 'integrations' ? (
+          <div className="mt-4">
+            <CalendarSyncPanel />
+          </div>
+        ) : null}
+        {activeSection === 'account' ? (
+          <AccountSecurityPanel issuer={runtimeConfig.oidcIssuer} onLogout={() => clearTokens()} />
+        ) : null}
       </div>
     </main>
   );
@@ -391,21 +435,60 @@ function AppContent() {
 
 function AppRouter() {
   const apiToken = useSyncExternalStore(subscribeToApiToken, getApiToken, getApiToken);
-  const [callbackState, setCallbackState] = useState<'checking' | 'ready' | 'failed'>('checking');
+  const [authState, setAuthState] = useState<'checking' | 'redirecting' | 'ready' | 'oidc-error'>(
+    'checking'
+  );
+  const callbackStarted = useRef(false);
+  const authorizationStarted = useRef(false);
+  const oidc = oidcConfig();
+
+  const startOidc = (config: OidcRuntimeConfig, reset: boolean) => {
+    if (authorizationStarted.current) return;
+    authorizationStarted.current = true;
+    if (reset) resetOidcLoginAttempt();
+    setAuthState('redirecting');
+    void beginOidcLogin(config)
+      .then((result) => {
+        if (result === 'already-started') setAuthState('oidc-error');
+      })
+      .catch(() => setAuthState('oidc-error'));
+  };
 
   useEffect(() => {
-    const oidc = oidcConfig();
-    if (!oidc || !window.location.search.includes('code=')) {
-      setCallbackState('ready');
+    if (apiToken || !oidc) {
+      setAuthState('ready');
       return;
     }
-    void completeOidcLogin(new URL(window.location.href), oidc)
-      .then(() => setCallbackState('ready'))
-      .catch(() => setCallbackState('failed'));
-  }, []);
+    const callback = new URL(window.location.href);
+    if (callback.searchParams.has('error')) {
+      setAuthState('oidc-error');
+      return;
+    }
+    if (callback.searchParams.has('code')) {
+      if (callbackStarted.current) return;
+      callbackStarted.current = true;
+      void completeOidcLogin(callback, oidc)
+        .then((completed) => setAuthState(completed ? 'ready' : 'oidc-error'))
+        .catch(() => setAuthState('oidc-error'));
+      return;
+    }
+    startOidc(oidc, false);
+  }, [apiToken]);
 
-  if (callbackState === 'checking') return <main aria-busy="true" />;
-  return apiToken ? <AppContent /> : <CredentialGate oidcFailed={callbackState === 'failed'} />;
+  if (apiToken) return <AppContent />;
+  if (!oidc && authState === 'ready') return <CredentialGate mode="manual" />;
+  if (oidc && authState === 'oidc-error') {
+    return (
+      <CredentialGate
+        mode="oidc-retry"
+        onOidcRetry={() => {
+          authorizationStarted.current = false;
+          startOidc(oidc, true);
+        }}
+      />
+    );
+  }
+  return <main aria-busy="true" />;
 }
 
 export default function App() {

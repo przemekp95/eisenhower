@@ -16,6 +16,7 @@ from app.rag.golden import GoldenCase
 
 
 DATASET_V3 = "retrieval-review-candidate-v3-unapproved"
+DATASET_V4 = "retrieval-review-candidate-v4-unapproved"
 
 
 CASES = [
@@ -124,7 +125,7 @@ def main() -> None:
     (root / "docs" / "ai-rebuild" / "corpus-manifest-v1.json").read_text(encoding="utf-8")
   )
   cases = CASES
-  if args.dataset_version == DATASET_V3:
+  if args.dataset_version in {DATASET_V3, DATASET_V4}:
     cases = CASES[:12] + V3_TRAIN_DEV_CASES + CASES[12:]
   records = [
     _build_record(root, manifest, case, args.dataset_version).model_dump_json()

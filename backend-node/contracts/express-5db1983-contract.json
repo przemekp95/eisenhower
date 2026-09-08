@@ -1,0 +1,2030 @@
+{
+  "baselineSha": "5db1983da7f4e583a133f42d6b4a95ac8b3ab9c9",
+  "nodeVersion": "v24.18.0",
+  "cases": [
+    {
+      "id": "get-health",
+      "routeKey": "GET /health",
+      "request": {
+        "id": "get-health",
+        "method": "GET",
+        "path": "/health",
+        "headers": {}
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "15",
+          "etag": "W/\"f-VaSQ4oDUiZblZNAEkkN+sX+q3Sg\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"status\":\"ok\"}",
+        "jsonBody": {
+          "status": "ok"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "get-health-ready",
+      "routeKey": "GET /health/ready",
+      "request": {
+        "id": "get-health-ready",
+        "method": "GET",
+        "path": "/health/ready",
+        "headers": {}
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "90",
+          "etag": "W/\"5a-S42SWkrZekJp3oq/o8L/40V+zPU\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"status\":\"ready\",\"degraded\":false,\"dependencies\":{\"database\":\"connected\",\"ai\":\"healthy\"}}",
+        "jsonBody": {
+          "status": "ready",
+          "degraded": false,
+          "dependencies": {
+            "database": "connected",
+            "ai": "healthy"
+          }
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "get-tasks-delegated",
+      "routeKey": "GET /tasks/delegated",
+      "request": {
+        "id": "get-tasks-delegated",
+        "method": "GET",
+        "path": "/tasks/delegated",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "2",
+          "etag": "W/\"2-l9Fw4VUO7kr8CvBlt4zaMCqXZ0w\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "[]",
+        "jsonBody": [],
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "get-tasks-id",
+      "routeKey": "GET /tasks/:id",
+      "request": {
+        "id": "get-tasks-id",
+        "method": "GET",
+        "path": "/tasks/not-a-mongo-id",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "57",
+          "etag": "W/\"39-HHWwHpNbvAaNYGmMvg89wDdl7dI\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Validation failed\",\"details\":[\"Invalid value\"]}",
+        "jsonBody": {
+          "error": "Validation failed",
+          "details": [
+            "Invalid value"
+          ]
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "get-tasks",
+      "routeKey": "GET /tasks",
+      "request": {
+        "id": "get-tasks",
+        "method": "GET",
+        "path": "/tasks",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "2",
+          "etag": "W/\"2-l9Fw4VUO7kr8CvBlt4zaMCqXZ0w\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "[]",
+        "jsonBody": [],
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-tasks",
+      "routeKey": "POST /tasks",
+      "request": {
+        "id": "post-tasks",
+        "method": "POST",
+        "path": "/tasks",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "73",
+          "etag": "W/\"49-tkEEaf4fsN2r4zp5LrWw0Vn+gtI\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Validation failed\",\"details\":[\"Invalid value\",\"Invalid value\"]}",
+        "jsonBody": {
+          "error": "Validation failed",
+          "details": [
+            "Invalid value",
+            "Invalid value"
+          ]
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "put-tasks-id",
+      "routeKey": "PUT /tasks/:id",
+      "request": {
+        "id": "put-tasks-id",
+        "method": "PUT",
+        "path": "/tasks/not-a-mongo-id",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "57",
+          "etag": "W/\"39-HHWwHpNbvAaNYGmMvg89wDdl7dI\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Validation failed\",\"details\":[\"Invalid value\"]}",
+        "jsonBody": {
+          "error": "Validation failed",
+          "details": [
+            "Invalid value"
+          ]
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "put-tasks-id-lifecycle",
+      "routeKey": "PUT /tasks/:id/lifecycle",
+      "request": {
+        "id": "put-tasks-id-lifecycle",
+        "method": "PUT",
+        "path": "/tasks/not-a-mongo-id/lifecycle",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "73",
+          "etag": "W/\"49-tkEEaf4fsN2r4zp5LrWw0Vn+gtI\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Validation failed\",\"details\":[\"Invalid value\",\"Invalid value\"]}",
+        "jsonBody": {
+          "error": "Validation failed",
+          "details": [
+            "Invalid value",
+            "Invalid value"
+          ]
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "put-tasks-id-schedule",
+      "routeKey": "PUT /tasks/:id/schedule",
+      "request": {
+        "id": "put-tasks-id-schedule",
+        "method": "PUT",
+        "path": "/tasks/not-a-mongo-id/schedule",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "80",
+          "etag": "W/\"50-2v+hWyPzm2fqm6cXHOUtvC0irQ4\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Validation failed\",\"details\":[\"Invalid value\",\"schedule is required\"]}",
+        "jsonBody": {
+          "error": "Validation failed",
+          "details": [
+            "Invalid value",
+            "schedule is required"
+          ]
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "put-tasks-id-delegation",
+      "routeKey": "PUT /tasks/:id/delegation",
+      "request": {
+        "id": "put-tasks-id-delegation",
+        "method": "PUT",
+        "path": "/tasks/not-a-mongo-id/delegation",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "82",
+          "etag": "W/\"52-IlFdiwpuq8J8oy5vrx8o65jC3+Y\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Validation failed\",\"details\":[\"Invalid value\",\"delegation is required\"]}",
+        "jsonBody": {
+          "error": "Validation failed",
+          "details": [
+            "Invalid value",
+            "delegation is required"
+          ]
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "put-tasks-id-delegation-status",
+      "routeKey": "PUT /tasks/:id/delegation/status",
+      "request": {
+        "id": "put-tasks-id-delegation-status",
+        "method": "PUT",
+        "path": "/tasks/not-a-mongo-id/delegation/status",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "73",
+          "etag": "W/\"49-tkEEaf4fsN2r4zp5LrWw0Vn+gtI\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Validation failed\",\"details\":[\"Invalid value\",\"Invalid value\"]}",
+        "jsonBody": {
+          "error": "Validation failed",
+          "details": [
+            "Invalid value",
+            "Invalid value"
+          ]
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "delete-tasks-id",
+      "routeKey": "DELETE /tasks/:id",
+      "request": {
+        "id": "delete-tasks-id",
+        "method": "DELETE",
+        "path": "/tasks/not-a-mongo-id",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "57",
+          "etag": "W/\"39-HHWwHpNbvAaNYGmMvg89wDdl7dI\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Validation failed\",\"details\":[\"Invalid value\"]}",
+        "jsonBody": {
+          "error": "Validation failed",
+          "details": [
+            "Invalid value"
+          ]
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "get-calendar-status",
+      "routeKey": "GET /calendar/status",
+      "request": {
+        "id": "get-calendar-status",
+        "method": "GET",
+        "path": "/calendar/status",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "61",
+          "etag": "W/\"3d-5imt8PlcEJhmXnggugPdY8Yb7pE\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"status\":\"disconnected\",\"connection\":null,\"canConnect\":true}",
+        "jsonBody": {
+          "status": "disconnected",
+          "connection": null,
+          "canConnect": true
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-calendar-sync-requests",
+      "routeKey": "POST /calendar/sync-requests",
+      "request": {
+        "id": "post-calendar-sync-requests",
+        "method": "POST",
+        "path": "/calendar/sync-requests",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 428,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "39",
+          "etag": "W/\"27-7aJ3BxtuEBU+MI+wQDvU3m8mAQk\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Idempotency-Key is required\"}",
+        "jsonBody": {
+          "error": "Idempotency-Key is required"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "get-calendar-events",
+      "routeKey": "GET /calendar/events",
+      "request": {
+        "id": "get-calendar-events",
+        "method": "GET",
+        "path": "/calendar/events",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "64",
+          "etag": "W/\"40-gKy7+2qQXFg+8rFDrCpTeh2Jk7k\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"A valid event window of at most 180 days is required\"}",
+        "jsonBody": {
+          "error": "A valid event window of at most 180 days is required"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-calendar-bindings-preview",
+      "routeKey": "POST /calendar/bindings/preview",
+      "request": {
+        "id": "post-calendar-bindings-preview",
+        "method": "POST",
+        "path": "/calendar/bindings/preview",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "51",
+          "etag": "W/\"33-a5ZnfTGphezVVidscKFEVWZy+5Q\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"taskId and providerEventId are required\"}",
+        "jsonBody": {
+          "error": "taskId and providerEventId are required"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-calendar-bindings",
+      "routeKey": "POST /calendar/bindings",
+      "request": {
+        "id": "post-calendar-bindings",
+        "method": "POST",
+        "path": "/calendar/bindings",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 428,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "53",
+          "etag": "W/\"35-kc3qTo7JGrARpe09yKIOtlZ4rho\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"If-Match and Idempotency-Key are required\"}",
+        "jsonBody": {
+          "error": "If-Match and Idempotency-Key are required"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-calendar-imports",
+      "routeKey": "POST /calendar/imports",
+      "request": {
+        "id": "post-calendar-imports",
+        "method": "POST",
+        "path": "/calendar/imports",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 428,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "39",
+          "etag": "W/\"27-7aJ3BxtuEBU+MI+wQDvU3m8mAQk\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Idempotency-Key is required\"}",
+        "jsonBody": {
+          "error": "Idempotency-Key is required"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "get-calendar-conflicts",
+      "routeKey": "GET /calendar/conflicts",
+      "request": {
+        "id": "get-calendar-conflicts",
+        "method": "GET",
+        "path": "/calendar/conflicts",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "2",
+          "etag": "W/\"2-l9Fw4VUO7kr8CvBlt4zaMCqXZ0w\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "[]",
+        "jsonBody": [],
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "get-calendar-deleted-bindings",
+      "routeKey": "GET /calendar/deleted-bindings",
+      "request": {
+        "id": "get-calendar-deleted-bindings",
+        "method": "GET",
+        "path": "/calendar/deleted-bindings",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "2",
+          "etag": "W/\"2-l9Fw4VUO7kr8CvBlt4zaMCqXZ0w\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "[]",
+        "jsonBody": [],
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-calendar-deleted-bindings-id-resolve",
+      "routeKey": "POST /calendar/deleted-bindings/:id/resolve",
+      "request": {
+        "id": "post-calendar-deleted-bindings-id-resolve",
+        "method": "POST",
+        "path": "/calendar/deleted-bindings/not-a-mongo-id/resolve",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 428,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "32",
+          "etag": "W/\"20-HWZ6E9TtLnjGMnYGUV/hQ2ag+PQ\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"If-Match is required\"}",
+        "jsonBody": {
+          "error": "If-Match is required"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-calendar-conflicts-id-resolve",
+      "routeKey": "POST /calendar/conflicts/:id/resolve",
+      "request": {
+        "id": "post-calendar-conflicts-id-resolve",
+        "method": "POST",
+        "path": "/calendar/conflicts/not-a-mongo-id/resolve",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 428,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "32",
+          "etag": "W/\"20-HWZ6E9TtLnjGMnYGUV/hQ2ag+PQ\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"If-Match is required\"}",
+        "jsonBody": {
+          "error": "If-Match is required"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "get-calendar-oauth-callback",
+      "routeKey": "GET /calendar/oauth/callback",
+      "request": {
+        "id": "get-calendar-oauth-callback",
+        "method": "GET",
+        "path": "/calendar/oauth/callback",
+        "headers": {}
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "45",
+          "etag": "W/\"2d-0bp5lIrpN1vjHtk8l0Lh36la+DI\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"OAuth state and code are required\"}",
+        "jsonBody": {
+          "error": "OAuth state and code are required"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-calendar-oauth-start",
+      "routeKey": "POST /calendar/oauth/start",
+      "request": {
+        "id": "post-calendar-oauth-start",
+        "method": "POST",
+        "path": "/calendar/oauth/start",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "34",
+          "etag": "W/\"22-ywWtM21F5XJincuHHdopyuyYifg\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"returnPath is required\"}",
+        "jsonBody": {
+          "error": "returnPath is required"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-calendar-oauth-disconnect",
+      "routeKey": "POST /calendar/oauth/disconnect",
+      "request": {
+        "id": "post-calendar-oauth-disconnect",
+        "method": "POST",
+        "path": "/calendar/oauth/disconnect",
+        "headers": {
+          "authorization": "Bearer test-api-token"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 204,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "",
+        "jsonBody": null,
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-internal-calendar-inbound",
+      "routeKey": "POST /internal/calendar/inbound",
+      "request": {
+        "id": "post-internal-calendar-inbound",
+        "method": "POST",
+        "path": "/internal/calendar/inbound",
+        "headers": {},
+        "body": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "47",
+          "etag": "W/\"2f-hcnReVbhsxir8Dy7/NTJn5fPatU\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Invalid calendar dispatch timestamp\"}",
+        "jsonBody": {
+          "error": "Invalid calendar dispatch timestamp"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-internal-calendar-sync-apply",
+      "routeKey": "POST /internal/calendar/sync/apply",
+      "request": {
+        "id": "post-internal-calendar-sync-apply",
+        "method": "POST",
+        "path": "/internal/calendar/sync/apply",
+        "headers": {},
+        "body": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "47",
+          "etag": "W/\"2f-hcnReVbhsxir8Dy7/NTJn5fPatU\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Invalid calendar dispatch timestamp\"}",
+        "jsonBody": {
+          "error": "Invalid calendar dispatch timestamp"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-internal-calendar-sync-apply-batch",
+      "routeKey": "POST /internal/calendar/sync/apply-batch",
+      "request": {
+        "id": "post-internal-calendar-sync-apply-batch",
+        "method": "POST",
+        "path": "/internal/calendar/sync/apply-batch",
+        "headers": {},
+        "body": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "47",
+          "etag": "W/\"2f-hcnReVbhsxir8Dy7/NTJn5fPatU\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Invalid calendar dispatch timestamp\"}",
+        "jsonBody": {
+          "error": "Invalid calendar dispatch timestamp"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-internal-calendar-sync-reset",
+      "routeKey": "POST /internal/calendar/sync/reset",
+      "request": {
+        "id": "post-internal-calendar-sync-reset",
+        "method": "POST",
+        "path": "/internal/calendar/sync/reset",
+        "headers": {},
+        "body": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "47",
+          "etag": "W/\"2f-hcnReVbhsxir8Dy7/NTJn5fPatU\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Invalid calendar dispatch timestamp\"}",
+        "jsonBody": {
+          "error": "Invalid calendar dispatch timestamp"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-internal-calendar-request",
+      "routeKey": "POST /internal/calendar/request",
+      "request": {
+        "id": "post-internal-calendar-request",
+        "method": "POST",
+        "path": "/internal/calendar/request",
+        "headers": {},
+        "body": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "47",
+          "etag": "W/\"2f-hcnReVbhsxir8Dy7/NTJn5fPatU\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Invalid calendar dispatch timestamp\"}",
+        "jsonBody": {
+          "error": "Invalid calendar dispatch timestamp"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-internal-calendar-outbound-claim",
+      "routeKey": "POST /internal/calendar/outbound/claim",
+      "request": {
+        "id": "post-internal-calendar-outbound-claim",
+        "method": "POST",
+        "path": "/internal/calendar/outbound/claim",
+        "headers": {},
+        "body": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "47",
+          "etag": "W/\"2f-hcnReVbhsxir8Dy7/NTJn5fPatU\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Invalid calendar dispatch timestamp\"}",
+        "jsonBody": {
+          "error": "Invalid calendar dispatch timestamp"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-internal-calendar-outbox-claim",
+      "routeKey": "POST /internal/calendar/outbox/claim",
+      "request": {
+        "id": "post-internal-calendar-outbox-claim",
+        "method": "POST",
+        "path": "/internal/calendar/outbox/claim",
+        "headers": {},
+        "body": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "47",
+          "etag": "W/\"2f-hcnReVbhsxir8Dy7/NTJn5fPatU\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Invalid calendar dispatch timestamp\"}",
+        "jsonBody": {
+          "error": "Invalid calendar dispatch timestamp"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-internal-calendar-outbound-result",
+      "routeKey": "POST /internal/calendar/outbound/result",
+      "request": {
+        "id": "post-internal-calendar-outbound-result",
+        "method": "POST",
+        "path": "/internal/calendar/outbound/result",
+        "headers": {},
+        "body": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "47",
+          "etag": "W/\"2f-hcnReVbhsxir8Dy7/NTJn5fPatU\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Invalid calendar dispatch timestamp\"}",
+        "jsonBody": {
+          "error": "Invalid calendar dispatch timestamp"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-internal-calendar-outbox-acknowledge",
+      "routeKey": "POST /internal/calendar/outbox/acknowledge",
+      "request": {
+        "id": "post-internal-calendar-outbox-acknowledge",
+        "method": "POST",
+        "path": "/internal/calendar/outbox/acknowledge",
+        "headers": {},
+        "body": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "47",
+          "etag": "W/\"2f-hcnReVbhsxir8Dy7/NTJn5fPatU\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Invalid calendar dispatch timestamp\"}",
+        "jsonBody": {
+          "error": "Invalid calendar dispatch timestamp"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-internal-calendar-notifications-validate",
+      "routeKey": "POST /internal/calendar/notifications/validate",
+      "request": {
+        "id": "post-internal-calendar-notifications-validate",
+        "method": "POST",
+        "path": "/internal/calendar/notifications/validate",
+        "headers": {},
+        "body": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "47",
+          "etag": "W/\"2f-hcnReVbhsxir8Dy7/NTJn5fPatU\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Invalid calendar dispatch timestamp\"}",
+        "jsonBody": {
+          "error": "Invalid calendar dispatch timestamp"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-internal-calendar-watch-renew",
+      "routeKey": "POST /internal/calendar/watch/renew",
+      "request": {
+        "id": "post-internal-calendar-watch-renew",
+        "method": "POST",
+        "path": "/internal/calendar/watch/renew",
+        "headers": {},
+        "body": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "47",
+          "etag": "W/\"2f-hcnReVbhsxir8Dy7/NTJn5fPatU\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Invalid calendar dispatch timestamp\"}",
+        "jsonBody": {
+          "error": "Invalid calendar dispatch timestamp"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-internal-calendar-reconciliation-claim",
+      "routeKey": "POST /internal/calendar/reconciliation/claim",
+      "request": {
+        "id": "post-internal-calendar-reconciliation-claim",
+        "method": "POST",
+        "path": "/internal/calendar/reconciliation/claim",
+        "headers": {},
+        "body": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "47",
+          "etag": "W/\"2f-hcnReVbhsxir8Dy7/NTJn5fPatU\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Invalid calendar dispatch timestamp\"}",
+        "jsonBody": {
+          "error": "Invalid calendar dispatch timestamp"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-internal-calendar-status",
+      "routeKey": "POST /internal/calendar/status",
+      "request": {
+        "id": "post-internal-calendar-status",
+        "method": "POST",
+        "path": "/internal/calendar/status",
+        "headers": {},
+        "body": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "47",
+          "etag": "W/\"2f-hcnReVbhsxir8Dy7/NTJn5fPatU\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Invalid calendar dispatch timestamp\"}",
+        "jsonBody": {
+          "error": "Invalid calendar dispatch timestamp"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-internal-calendar-provider-outbound",
+      "routeKey": "POST /internal/calendar/provider/outbound",
+      "request": {
+        "id": "post-internal-calendar-provider-outbound",
+        "method": "POST",
+        "path": "/internal/calendar/provider/outbound",
+        "headers": {},
+        "body": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "47",
+          "etag": "W/\"2f-hcnReVbhsxir8Dy7/NTJn5fPatU\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Invalid calendar dispatch timestamp\"}",
+        "jsonBody": {
+          "error": "Invalid calendar dispatch timestamp"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-internal-calendar-provider-changes",
+      "routeKey": "POST /internal/calendar/provider/changes",
+      "request": {
+        "id": "post-internal-calendar-provider-changes",
+        "method": "POST",
+        "path": "/internal/calendar/provider/changes",
+        "headers": {},
+        "body": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "47",
+          "etag": "W/\"2f-hcnReVbhsxir8Dy7/NTJn5fPatU\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Invalid calendar dispatch timestamp\"}",
+        "jsonBody": {
+          "error": "Invalid calendar dispatch timestamp"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    },
+    {
+      "id": "post-internal-calendar-provider-watch",
+      "routeKey": "POST /internal/calendar/provider/watch",
+      "request": {
+        "id": "post-internal-calendar-provider-watch",
+        "method": "POST",
+        "path": "/internal/calendar/provider/watch",
+        "headers": {},
+        "body": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "x-request-id": "<x-request-id>",
+          "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "referrer-policy": "no-referrer",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "x-content-type-options": "nosniff",
+          "x-dns-prefetch-control": "off",
+          "x-download-options": "noopen",
+          "x-frame-options": "SAMEORIGIN",
+          "x-permitted-cross-domain-policies": "none",
+          "x-xss-protection": "0",
+          "ratelimit-policy": "120;w=60",
+          "ratelimit-limit": "120",
+          "ratelimit-remaining": "119",
+          "ratelimit-reset": "60",
+          "vary": "Origin",
+          "access-control-expose-headers": "ETag,X-Next-Cursor,Link,X-Request-ID",
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "47",
+          "etag": "W/\"2f-hcnReVbhsxir8Dy7/NTJn5fPatU\"",
+          "date": "<date>",
+          "connection": "close"
+        },
+        "rawBody": "{\"error\":\"Invalid calendar dispatch timestamp\"}",
+        "jsonBody": {
+          "error": "Invalid calendar dispatch timestamp"
+        },
+        "state": {
+          "collectionCounts": {},
+          "auditEvents": []
+        }
+      }
+    }
+  ]
+}

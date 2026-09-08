@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { When } from '@cucumber/cucumber';
 import { QUADRANT_DEFINITIONS } from '@eisenhower/api-client';
-import request from 'supertest';
+import request from '../../tests/helpers/http-test-client';
 import { EisenhowerWorld } from '../support/world';
 
 const quadrantFlags = Object.fromEntries(

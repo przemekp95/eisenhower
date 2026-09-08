@@ -1,9 +1,8 @@
-import { createClient } from 'redis';
-import { RedisStore } from 'rate-limit-redis';
-import type { Store } from 'express-rate-limit';
+import Redis from 'ioredis';
 
 export interface RedisRateLimitRuntime {
-  readonly store: Store;
+  readonly client: Redis;
+  readonly nameSpace: string;
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   status(): 'connected' | 'disconnected';
@@ -13,23 +12,19 @@ export function createRedisRateLimitRuntime(
   url: string,
   prefix = 'eisenhower:api:rate-limit:',
 ): RedisRateLimitRuntime {
-  const client = createClient({
-    url,
-    socket: {
-      connectTimeout: 5_000,
-      reconnectStrategy: (retries) => retries < 5 ? Math.min(100 * 2 ** retries, 2_000) : false,
-    },
-  });
-  const store = new RedisStore({
-    prefix,
-    sendCommand: async (...args: string[]) => client.sendCommand(args) as Promise<string | number | boolean | (string | number | boolean)[]>,
+  const client = new Redis(url, {
+    lazyConnect: true,
+    connectTimeout: 5_000,
+    maxRetriesPerRequest: 1,
+    retryStrategy: (retries) => retries < 5 ? Math.min(100 * 2 ** retries, 2_000) : null,
   });
   return {
-    store,
+    client,
+    nameSpace: prefix,
     connect: async () => { await client.connect(); },
     disconnect: async () => {
-      if (client.isOpen) await client.quit();
+      if (client.status !== 'end') await client.quit();
     },
-    status: () => client.isReady ? 'connected' : 'disconnected',
+    status: () => client.status === 'ready' ? 'connected' : 'disconnected',
   };
 }

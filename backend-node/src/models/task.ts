@@ -93,6 +93,7 @@ const taskSchema = new Schema<Task>(
           dueAt: { type: Date, required: true },
           timeZone: { type: String, required: true },
           remindAt: { type: Date },
+          durationMinutes: { type: Number, required: true, min: 5, max: 1440, default: 30 },
         },
         { _id: false }
       ),

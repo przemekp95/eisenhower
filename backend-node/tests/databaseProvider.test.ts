@@ -1,13 +1,16 @@
-import request from 'supertest';
+import request from './helpers/http-test-client';
 import { loadConfig } from '../src/config';
 import { createApp } from '../src/app';
 import { buildPostgresUrl, createDatabaseRuntime } from '../src/databaseRuntime';
 import { PrismaTaskRepository } from '../src/repositories/prismaTaskRepository';
+import * as dbModule from '../src/db';
 
 const productionBase = {
   NODE_ENV: 'production',
-  AUTH_MODE: 'static',
-  EISENHOWER_API_TOKEN: 'a'.repeat(32),
+  AUTH_MODE: 'oidc',
+  OIDC_ISSUER: 'https://identity.example.com',
+  OIDC_AUDIENCE: 'eisenhower-api',
+  OIDC_JWKS_URL: 'https://identity.example.com/jwks',
   AI_SERVICE_URL: 'https://ai.example.com',
   CORS_ALLOW_ORIGINS: 'https://app.example.com',
   AUDIT_LOG_PATH: '/tmp/audit.ndjson',
@@ -46,6 +49,23 @@ describe('database provider configuration', () => {
     });
     expect(runtime.taskRepository).toBeInstanceOf(PrismaTaskRepository);
     expect(runtime.status()).toBe('disconnected');
+  });
+
+  it('delegates the MongoDB runtime lifecycle and status to the established database adapter', async () => {
+    const connect = jest.spyOn(dbModule, 'connectToDatabase').mockResolvedValue({} as never);
+    const disconnect = jest.spyOn(dbModule, 'disconnectFromDatabase').mockResolvedValue(undefined);
+    const status = jest.spyOn(dbModule, 'getDatabaseStatus').mockReturnValue('connected');
+    const runtime = createDatabaseRuntime({
+      provider: 'mongodb',
+      mongodbUri: 'mongodb://mongo.internal/eisenhower',
+    });
+
+    await runtime.connect();
+    expect(connect).toHaveBeenCalledWith('mongodb://mongo.internal/eisenhower');
+    expect(runtime.status()).toBe('connected');
+    expect(status).toHaveBeenCalledTimes(1);
+    await runtime.disconnect();
+    expect(disconnect).toHaveBeenCalledTimes(1);
   });
 
   it('keeps Mongo-dependent Calendar routes unavailable in PostgreSQL mode', async () => {

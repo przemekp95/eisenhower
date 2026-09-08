@@ -1,14 +1,14 @@
-import { createHash, createHmac } from 'node:crypto';
-import request from 'supertest';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
+import request from './helpers/http-test-client';
 import mongoose from 'mongoose';
 import { createApp } from '../src/app';
 import { CalendarApplicationService } from '../src/application/calendar';
-import { createCalendarRouter } from '../src/routes/calendar';
-import { isCalendarInboundCommand } from '../src/routes/calendarInternal';
+import { isCalendarInboundCommand } from '../src/application/calendarInternal';
 import {
   CalendarBindingModel,
   CalendarConflictModel,
   CalendarConnectionModel,
+  CalendarInternalRequestReceiptModel,
   CalendarMutationReceiptModel,
   CalendarOutboxModel,
   CalendarSyncStateModel,
@@ -20,11 +20,21 @@ const internalKey = 'calendar-internal-test-key-at-least-32-bytes';
 
 function signed(requestPath: string, body: unknown, method = 'POST') {
   const timestamp = String(Math.floor(Date.now() / 1000));
+  const requestId = randomUUID();
   const rawBody = JSON.stringify(body) ?? '';
   const signature = createHmac('sha256', internalKey)
-    .update(`v1\n${timestamp}\n${method}\n${requestPath}\n${rawBody}`)
+    .update(`v1\n${timestamp}\n${requestId}\n${method}\n${requestPath}\n${rawBody}`)
     .digest('hex');
-  return { timestamp, signature };
+  return { timestamp, requestId, signature };
+}
+
+function signedWithRequestId(requestPath: string, body: unknown, requestId: string, method = 'POST') {
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const rawBody = JSON.stringify(body) ?? '';
+  const signature = createHmac('sha256', internalKey)
+    .update(`v1\n${timestamp}\n${requestId}\n${method}\n${requestPath}\n${rawBody}`)
+    .digest('hex');
+  return { timestamp, requestId, signature };
 }
 
 describe('calendar integration boundary', () => {
@@ -62,7 +72,6 @@ describe('calendar integration boundary', () => {
   afterAll(stopMongo);
 
   it('gets one owner-scoped task with its strong revision ETag', async () => {
-    expect(createCalendarRouter()).toBeDefined();
     expect(isCalendarInboundCommand('not-an-object')).toBe(false);
     const task = await TaskModel.create({ title: 'Calendar seed' });
     const response = await api(`/tasks/${task.id}`);
@@ -116,6 +125,7 @@ describe('calendar integration boundary', () => {
     const response = await request(app).post(path)
       .set('Content-Type', 'application/json')
       .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Request-Id', auth.requestId)
       .set('X-Eisenhower-Signature', auth.signature)
       .send(body);
 
@@ -148,6 +158,7 @@ describe('calendar integration boundary', () => {
     const response = await request(app).post(path)
       .set('Content-Type', 'application/json')
       .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Request-Id', auth.requestId)
       .set('X-Eisenhower-Signature', auth.signature)
       .send(body);
 
@@ -158,6 +169,10 @@ describe('calendar integration boundary', () => {
   });
 
   it('writes a schedule mutation and its outbound event atomically', async () => {
+    await CalendarConnectionModel.create({
+      tenantId: 'local', ownerId: 'local-user', provider: 'google', calendarId: 'primary',
+      credentialRef: 'n8n:credential:calendar-local', status: 'active',
+    });
     const task = await TaskModel.create({ title: 'Schedule me' });
     const response = await request(app).put(`/tasks/${task.id}/schedule`)
       .set('Authorization', 'Bearer test-api-token')
@@ -183,6 +198,7 @@ describe('calendar integration boundary', () => {
     const firstAuth = signed(path, first);
     const firstResponse = await request(app).post(path)
       .set('X-Eisenhower-Timestamp', firstAuth.timestamp)
+      .set('X-Eisenhower-Request-Id', firstAuth.requestId)
       .set('X-Eisenhower-Signature', firstAuth.signature).send(first);
     const final = {
       operationId: 'sync-page-2', tenantId: 'local', ownerId: 'local-user',
@@ -191,6 +207,7 @@ describe('calendar integration boundary', () => {
     const finalAuth = signed(path, final);
     const finalResponse = await request(app).post(path)
       .set('X-Eisenhower-Timestamp', finalAuth.timestamp)
+      .set('X-Eisenhower-Request-Id', finalAuth.requestId)
       .set('X-Eisenhower-Signature', finalAuth.signature).send(final);
 
     expect(firstResponse.status).toBe(202);
@@ -259,6 +276,7 @@ describe('calendar integration boundary', () => {
     const auth = signed(path, body);
     const response = await request(app).post(path)
       .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Request-Id', auth.requestId)
       .set('X-Eisenhower-Signature', auth.signature).send(body);
 
     expect(response.status).toBe(200);
@@ -267,6 +285,84 @@ describe('calendar integration boundary', () => {
       provider: { connectionId: connection.id, calendarId: 'primary', providerEventId: 'event-bound', providerEtag: 'etag-bound' },
     });
     expect(JSON.stringify(response.body)).not.toContain('credentialRef');
+  });
+
+  it('binds a durable request id to HMAC and returns the identical outbox claim on replay', async () => {
+    const connection = await CalendarConnectionModel.create({
+      tenantId: 'local', ownerId: 'local-user', provider: 'google', calendarId: 'primary',
+      credentialRef: 'n8n:credential:google-replay', status: 'active',
+    });
+    for (const eventId of ['dispatch-replay-1', 'dispatch-replay-2']) {
+      await CalendarOutboxModel.create({
+        eventId, tenantId: 'local', ownerId: 'local-user', aggregateId: connection.id,
+        aggregateRevision: 0, type: 'calendar.sync.requested', payload: { connectionId: connection.id },
+        status: 'pending',
+      });
+    }
+    const path = '/internal/calendar/outbox/claim';
+    const body = {};
+    const auth = signedWithRequestId(path, body, 'claim-retry-after-lost-response');
+    const send = () => request(app).post(path)
+      .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Request-Id', auth.requestId)
+      .set('X-Eisenhower-Signature', auth.signature)
+      .send(body);
+
+    const first = await send();
+    const replay = await send();
+
+    expect(first.status).toBe(200);
+    expect(replay.status).toBe(200);
+    expect(replay.body).toEqual(first.body);
+    expect(await CalendarOutboxModel.countDocuments({ status: 'leased' })).toBe(1);
+    expect(await CalendarOutboxModel.findOne({ eventId: 'dispatch-replay-2' })).toMatchObject({
+      status: 'pending', attempts: 0,
+    });
+  });
+
+  it('leases only one event for concurrent replays of the same signed claim', async () => {
+    const connection = await CalendarConnectionModel.create({
+      tenantId: 'local', ownerId: 'local-user', provider: 'google', calendarId: 'primary',
+      credentialRef: 'n8n:credential:google-concurrent-replay', status: 'active',
+    });
+    for (const eventId of ['dispatch-concurrent-1', 'dispatch-concurrent-2']) {
+      await CalendarOutboxModel.create({
+        eventId, tenantId: 'local', ownerId: 'local-user', aggregateId: connection.id,
+        aggregateRevision: 0, type: 'calendar.sync.requested', payload: { connectionId: connection.id },
+        status: 'pending',
+      });
+    }
+    const path = '/internal/calendar/outbox/claim';
+    const body = {};
+    const auth = signedWithRequestId(path, body, 'claim-concurrent-replay');
+    const send = () => request(app).post(path)
+      .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Request-Id', auth.requestId)
+      .set('X-Eisenhower-Signature', auth.signature)
+      .send(body);
+
+    const [first, replay] = await Promise.all([send(), send()]);
+
+    expect(first.status).toBe(200);
+    expect(replay.status).toBe(200);
+    expect(replay.body).toEqual(first.body);
+    expect(await CalendarOutboxModel.countDocuments({ status: 'leased' })).toBe(1);
+    expect(await CalendarOutboxModel.countDocuments({ status: 'pending', attempts: 0 })).toBe(1);
+  });
+
+  it('rejects a missing request id even when the legacy HMAC is otherwise valid', async () => {
+    const path = '/internal/calendar/status';
+    const body = {};
+    const auth = signed(path, body);
+    const response = await request(app).post(path)
+      .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Signature', auth.signature)
+      .send(body);
+
+    expect(response).toMatchObject({
+      status: 401,
+      body: { error: 'Invalid calendar dispatch request id' },
+    });
   });
 
   it('lists active reconciliation jobs with persisted cursors through the HMAC boundary', async () => {
@@ -283,6 +379,7 @@ describe('calendar integration boundary', () => {
     const auth = signed(path, body);
     const response = await request(app).post(path)
       .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Request-Id', auth.requestId)
       .set('X-Eisenhower-Signature', auth.signature).send(body);
 
     expect(response.status).toBe(200);
@@ -308,6 +405,7 @@ describe('calendar integration boundary', () => {
     const auth = signed(path, body);
     const response = await request(app).post(path)
       .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Request-Id', auth.requestId)
       .set('X-Eisenhower-Signature', auth.signature).send(body);
 
     expect(response.status).toBe(200);
@@ -392,6 +490,7 @@ describe('calendar integration boundary', () => {
     const auth = signed(path, body);
     return request(app).post(path)
       .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Request-Id', auth.requestId)
       .set('X-Eisenhower-Signature', auth.signature)
       .send(body);
   }
@@ -412,9 +511,11 @@ describe('calendar integration boundary', () => {
       .set('X-Eisenhower-Signature', staleSignature).send(body);
     const malformedSignature = await request(app).post(path)
       .set('X-Eisenhower-Timestamp', stale.timestamp)
+      .set('X-Eisenhower-Request-Id', stale.requestId)
       .set('X-Eisenhower-Signature', 'nope').send(body);
     const wrongSignature = await request(app).post(path)
       .set('X-Eisenhower-Timestamp', stale.timestamp)
+      .set('X-Eisenhower-Request-Id', stale.requestId)
       .set('X-Eisenhower-Signature', '0'.repeat(64)).send(body);
     const invalidBody = await internalPost(path, body);
 
@@ -423,6 +524,73 @@ describe('calendar integration boundary', () => {
     expect(malformedSignature.status).toBe(401);
     expect(wrongSignature.status).toBe(401);
     expect(invalidBody.status).toBe(400);
+  });
+
+  it('fails closed for reused, pending, and unavailable internal request receipts', async () => {
+    const path = '/internal/calendar/status';
+    const firstBody = {};
+    const requestId = 'receipt-reuse-different-body';
+    const firstAuth = signedWithRequestId(path, firstBody, requestId);
+    const first = await request(app).post(path)
+      .set('X-Eisenhower-Timestamp', firstAuth.timestamp)
+      .set('X-Eisenhower-Request-Id', requestId)
+      .set('X-Eisenhower-Signature', firstAuth.signature).send(firstBody);
+    const secondBody = { changed: true };
+    const secondAuth = signedWithRequestId(path, secondBody, requestId);
+    const reused = await request(app).post(path)
+      .set('X-Eisenhower-Timestamp', secondAuth.timestamp)
+      .set('X-Eisenhower-Request-Id', requestId)
+      .set('X-Eisenhower-Signature', secondAuth.signature).send(secondBody);
+
+    const pendingBody = {};
+    const pendingId = 'receipt-still-processing';
+    const pendingFingerprint = createHash('sha256')
+      .update(`POST\n${path}\n${JSON.stringify(pendingBody)}`)
+      .digest('hex');
+    await CalendarInternalRequestReceiptModel.create({
+      requestId: pendingId,
+      fingerprint: pendingFingerprint,
+      status: 'pending',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    const pendingAuth = signedWithRequestId(path, pendingBody, pendingId);
+    const pending = await request(app).post(path)
+      .set('X-Eisenhower-Timestamp', pendingAuth.timestamp)
+      .set('X-Eisenhower-Request-Id', pendingId)
+      .set('X-Eisenhower-Signature', pendingAuth.signature).send(pendingBody);
+
+    jest.spyOn(CalendarInternalRequestReceiptModel, 'create').mockRejectedValueOnce(
+      new Error('receipt storage unavailable') as never,
+    );
+    const unavailable = await internalPost(path, {});
+
+    expect(first.status).toBe(404);
+    expect(reused).toMatchObject({ status: 409, body: { error: 'calendar_request_id_reused' } });
+    expect(pending).toMatchObject({ status: 409, body: { error: 'calendar_request_in_progress' } });
+    expect(unavailable).toMatchObject({ status: 500, body: { error: 'receipt storage unavailable' } });
+  });
+
+  it('replays an empty completed claim and tolerates receipt completion logging failure', async () => {
+    const path = '/internal/calendar/outbox/claim';
+    const body = {};
+    const requestId = 'empty-claim-completed-replay';
+    const auth = signedWithRequestId(path, body, requestId);
+    const send = () => request(app).post(path)
+      .set('X-Eisenhower-Timestamp', auth.timestamp)
+      .set('X-Eisenhower-Request-Id', requestId)
+      .set('X-Eisenhower-Signature', auth.signature).send(body);
+
+    const first = await send();
+    const replay = await send();
+    jest.spyOn(CalendarInternalRequestReceiptModel, 'updateOne').mockRejectedValueOnce(
+      new Error('completion logging unavailable') as never,
+    );
+    const loggingFailureResponse = await internalPost('/internal/calendar/status', {});
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(first.status).toBe(204);
+    expect(replay.status).toBe(204);
+    expect(loggingFailureResponse.status).toBe(404);
   });
 
   it('rejects idempotency key reuse with a different inbound or sync request', async () => {
@@ -501,6 +669,184 @@ describe('calendar integration boundary', () => {
     await expect(new CalendarApplicationService().applyInbound({
       ...base, operationId: 'direct-checkpoint-missing', kind: 'sync_checkpoint',
     })).resolves.toMatchObject({ outcome: 'rejected', reason: 'checkpoint_token_missing' });
+  });
+
+  it('requires an explicit idempotent decision after Google deletes a bound event', async () => {
+    const connection = await CalendarConnectionModel.create({
+      tenantId: 'local', ownerId: 'local-user', provider: 'google', calendarId: 'primary',
+      credentialRef: 'reference', status: 'active',
+    });
+    const createDeletedBinding = async (title: string) => {
+      const task = await TaskModel.create({
+        title,
+        schedule: {
+          dueAt: new Date('2026-08-20T12:00:00.000Z'),
+          timeZone: 'Europe/Warsaw',
+          durationMinutes: 30,
+        },
+      });
+      const binding = await CalendarBindingModel.create({
+        tenantId: 'local', ownerId: 'local-user', connectionId: connection._id,
+        taskId: task._id, providerEventId: `event-${title}`, providerEtag: 'etag-deleted',
+        lastTaskRevision: 0, lastProviderRevision: 'etag-deleted', providerDeletedAt: new Date(),
+      });
+      return { task, binding };
+    };
+    const clear = await createDeletedBinding('clear');
+    const recreate = await createDeletedBinding('recreate');
+    const detach = await createDeletedBinding('detach');
+
+    const listed = await request(app).get('/calendar/deleted-bindings')
+      .set('Authorization', 'Bearer test-api-token');
+    expect(listed.status).toBe(200);
+    expect(listed.body).toHaveLength(3);
+
+    const decide = (id: string, strategy: string, key: string) => request(app)
+      .post(`/calendar/deleted-bindings/${id}/resolve`)
+      .set('Authorization', 'Bearer test-api-token')
+      .set('If-Match', '"0"')
+      .set('Idempotency-Key', key)
+      .send({ strategy });
+    expect((await decide(clear.binding.id, 'clear_date', 'deletion-clear')).body.outcome).toBe('clear_date');
+    expect((await decide(recreate.binding.id, 'recreate', 'deletion-recreate')).body.outcome).toBe('recreate');
+    expect((await decide(detach.binding.id, 'detach', 'deletion-detach')).body.outcome).toBe('detach');
+    expect((await decide(detach.binding.id, 'detach', 'deletion-detach')).body.outcome).toBe('detach');
+
+    expect((await TaskModel.findById(clear.task.id))?.schedule).toBeUndefined();
+    expect(await CalendarBindingModel.findById(clear.binding.id)).toBeNull();
+    expect(await CalendarBindingModel.findById(detach.binding.id)).toBeNull();
+    expect((await TaskModel.findById(detach.task.id))?.schedule).toBeDefined();
+    expect(await CalendarOutboxModel.findOne({ aggregateId: recreate.task.id })).toMatchObject({
+      type: 'event_create', status: 'pending',
+    });
+  });
+
+  it('fails closed for unavailable provider routes and every deletion-decision precondition', async () => {
+    const auth = { Authorization: 'Bearer test-api-token' };
+    expect((await request(app).get('/calendar/events')
+      .query({ timeMin: '2026-08-01T00:00:00.000Z', timeMax: '2026-09-01T00:00:00.000Z' })
+      .set(auth)).status).toBe(404);
+    expect((await request(app).post('/calendar/bindings/preview').set(auth)
+      .send({ taskId: new TaskModel().id, providerEventId: 'event' })).status).toBe(404);
+    expect((await request(app).post('/calendar/bindings').set(auth)
+      .set('If-Match', '"0"').set('Idempotency-Key', 'unavailable-link')
+      .send({ taskId: new TaskModel().id, providerEventId: 'event', providerEtag: 'etag', direction: 'google_to_eisenhower' })).status).toBe(404);
+    expect((await request(app).post('/calendar/imports').set(auth)
+      .set('Idempotency-Key', 'unavailable-import').send({ providerEventIds: ['event'] })).status).toBe(404);
+
+    const connection = await CalendarConnectionModel.create({
+      tenantId: 'local', ownerId: 'local-user', provider: 'google', calendarId: 'primary',
+      credentialRef: 'reference', status: 'active',
+    });
+    const task = await TaskModel.create({ title: 'Deleted decision edge' });
+    const binding = await CalendarBindingModel.create({
+      tenantId: 'local', ownerId: 'local-user', connectionId: connection._id,
+      taskId: task._id, providerEventId: 'deleted-edge', providerEtag: 'etag',
+      lastTaskRevision: 0, lastProviderRevision: 'etag', providerDeletedAt: new Date(),
+    });
+    const url = `/calendar/deleted-bindings/${binding.id}/resolve`;
+    expect((await request(app).post(url).set(auth).send({ strategy: 'detach' })).status).toBe(428);
+    expect((await request(app).post(url).set(auth).set('If-Match', '"0"').send({ strategy: 'detach' })).status).toBe(428);
+    expect((await request(app).post(url).set(auth).set('If-Match', '"0"')
+      .set('Idempotency-Key', 'invalid-strategy').send({ strategy: 'erase' })).status).toBe(400);
+    expect((await request(app).post(`/calendar/deleted-bindings/${new CalendarBindingModel().id}/resolve`)
+      .set(auth).set('If-Match', '"0"').set('Idempotency-Key', 'missing-binding')
+      .send({ strategy: 'detach' })).status).toBe(404);
+    expect((await request(app).post(url).set(auth).set('If-Match', '"1"')
+      .set('Idempotency-Key', 'stale-task').send({ strategy: 'detach' })).status).toBe(412);
+
+    const missingTaskBinding = await CalendarBindingModel.create({
+      tenantId: 'local', ownerId: 'local-user', connectionId: connection._id,
+      taskId: new TaskModel().id, providerEventId: 'missing-task', providerEtag: 'etag',
+      lastTaskRevision: 0, lastProviderRevision: 'etag', providerDeletedAt: new Date(),
+    });
+    expect((await request(app).post(`/calendar/deleted-bindings/${missingTaskBinding.id}/resolve`)
+      .set(auth).set('If-Match', '"0"').set('Idempotency-Key', 'missing-task')
+      .send({ strategy: 'detach' })).status).toBe(409);
+    const legacyClearTask = await TaskModel.create({ title: 'Legacy clear' });
+    await TaskModel.collection.updateOne({ _id: legacyClearTask._id }, { $unset: { revision: '' } });
+    const legacyClearBinding = await CalendarBindingModel.create({
+      tenantId: 'local', ownerId: 'local-user', connectionId: connection._id,
+      taskId: legacyClearTask._id, providerEventId: 'legacy-clear', providerEtag: 'etag',
+      lastTaskRevision: 0, lastProviderRevision: 'etag', providerDeletedAt: new Date(),
+    });
+    expect((await request(app).get('/calendar/deleted-bindings').set(auth)).body)
+      .toContainEqual(expect.objectContaining({ taskId: legacyClearTask.id, taskRevision: 0 }));
+    expect((await request(app).post(`/calendar/deleted-bindings/${legacyClearBinding.id}/resolve`)
+      .set(auth).set('If-Match', '"0"').set('Idempotency-Key', 'legacy-clear')
+      .send({ strategy: 'clear_date' })).body).toMatchObject({ outcome: 'clear_date', taskRevision: 1 });
+
+    const legacyRecreateTask = await TaskModel.create({
+      title: 'Legacy recreate',
+      schedule: { dueAt: new Date('2026-08-20T12:00:00.000Z'), timeZone: 'UTC', durationMinutes: 30 },
+    });
+    await TaskModel.collection.updateOne({ _id: legacyRecreateTask._id }, { $unset: { revision: '' } });
+    const legacyRecreateBinding = await CalendarBindingModel.create({
+      tenantId: 'local', ownerId: 'local-user', connectionId: connection._id,
+      taskId: legacyRecreateTask._id, providerEventId: 'legacy-recreate', providerEtag: 'etag',
+      lastTaskRevision: 0, lastProviderRevision: 'etag', providerDeletedAt: new Date(),
+    });
+    expect((await request(app).post(`/calendar/deleted-bindings/${legacyRecreateBinding.id}/resolve`)
+      .set(auth).set('If-Match', '"0"').set('Idempotency-Key', 'legacy-recreate')
+      .send({ strategy: 'recreate' })).body).toMatchObject({ outcome: 'recreate', taskRevision: 0 });
+    expect((await request(app).post(url).set(auth).set('If-Match', '"0"')
+      .set('Idempotency-Key', 'no-schedule').send({ strategy: 'recreate' })).status).toBe(409);
+
+    const detached = await request(app).post(url).set(auth).set('If-Match', '"0"')
+      .set('Idempotency-Key', 'reuse-decision').send({ strategy: 'detach' });
+    expect(detached.status).toBe(200);
+    expect((await request(app).post(url).set(auth).set('If-Match', '"0"')
+      .set('Idempotency-Key', 'reuse-decision').send({ strategy: 'clear_date' })).status).toBe(409);
+
+    jest.spyOn(CalendarBindingModel, 'find').mockImplementationOnce(() => { throw new Error('list failed'); });
+    expect((await request(app).get('/calendar/deleted-bindings').set(auth)).status).toBe(500);
+  });
+
+  it('fails closed when a provider-deletion transaction produces no result', async () => {
+    const session = {
+      withTransaction: jest.fn(async () => undefined),
+      endSession: jest.fn(async () => undefined),
+    };
+    jest.spyOn(mongoose, 'startSession').mockResolvedValueOnce(session as never);
+
+    const response = await request(app)
+      .post(`/calendar/deleted-bindings/${new CalendarBindingModel().id}/resolve`)
+      .set('Authorization', 'Bearer test-api-token')
+      .set('If-Match', '"0"')
+      .set('Idempotency-Key', 'incomplete-deletion-resolution')
+      .send({ strategy: 'detach' });
+    expect(response).toMatchObject({
+      status: 500,
+      body: { error: 'calendar_provider_deletion_resolution_incomplete' },
+    });
+    expect(session.endSession).toHaveBeenCalled();
+  });
+
+  it('passes non-Error provider and deletion failures to the shared error boundary', async () => {
+    const service = {
+      resolveProviderDeletion: async () => { throw 'deletion rejection'; },
+    } as unknown as CalendarApplicationService;
+    const provider = {
+      linkExisting: async () => { throw 'provider rejection'; },
+    } as never;
+    const routerApp = createApp({
+      auditSink: { record: () => undefined },
+      calendarApplicationService: service,
+      googleCalendarService: provider,
+      calendarCanConnect: true,
+    });
+
+    const linked = await request(routerApp).post('/calendar/bindings')
+      .set('Authorization', 'Bearer test-api-token')
+      .set('If-Match', '"0"').set('Idempotency-Key', 'non-error-link')
+      .send({ taskId: 'task', providerEventId: 'event', providerEtag: 'etag', direction: 'google_to_eisenhower' });
+    const deleted = await request(routerApp).post('/calendar/deleted-bindings/binding/resolve')
+      .set('Authorization', 'Bearer test-api-token')
+      .set('If-Match', '"0"').set('Idempotency-Key', 'non-error-delete')
+      .send({ strategy: 'detach' });
+
+    expect(linked).toMatchObject({ status: 500, body: { error: 'Internal server error' } });
+    expect(deleted).toMatchObject({ status: 500, body: { error: 'Internal server error' } });
   });
 
   it('validates public sync preconditions and reports pending calendar status', async () => {

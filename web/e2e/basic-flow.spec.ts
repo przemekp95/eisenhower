@@ -117,6 +117,8 @@ test('keeps technical administration out and starts the business calendar connec
   await expect(page.getByLabel('Tytuł zadania')).toHaveValue('');
   await expect(page.getByRole('button', { name: 'Administracja' })).toHaveCount(0);
   await expect(page.getByText(/provider|model|retrain|training data|n8n|outbox/i)).toHaveCount(0);
+  await page.getByRole('button', { name: 'Integracje' }).click();
+  await expect(page.getByRole('heading', { name: 'Synchronizacja kalendarza' })).toBeVisible();
   await page.getByRole('button', { name: 'Połącz Google Calendar' }).click();
   await expect.poll(() => returnPath).toBe('/');
   expect(returnPath).toBe('/');
@@ -176,9 +178,7 @@ test('creates, edits, classifies and permanently deletes a task with keyboard co
   await trashedCard
     .getByRole('button', { name: `Usuń trwale ${editedTitle}`, exact: true })
     .press('Enter');
-  await trashedCard
-    .getByRole('button', { name: 'Potwierdź trwałe usunięcie' })
-    .press('Enter');
+  await trashedCard.getByRole('button', { name: 'Potwierdź trwałe usunięcie' }).press('Enter');
   await expect(page.getByRole('heading', { name: editedTitle, exact: true })).toHaveCount(0);
   await expectAccessible(page);
 });

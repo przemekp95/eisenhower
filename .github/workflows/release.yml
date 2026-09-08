@@ -7,11 +7,6 @@ on:
         description: Exact green master commit to release
         required: true
         type: string
-      deploy:
-        description: Deploy the released images after publishing them
-        required: true
-        default: false
-        type: boolean
 
 concurrency:
   group: release-production
@@ -49,8 +44,8 @@ jobs:
           RELEASE_SHA_INPUT: ${{ inputs.release_sha }}
         run: node .github/scripts/release-preflight.mjs --release-sha "$RELEASE_SHA_INPUT"
 
-  docker-release:
-    name: docker-release
+  docker-build-scan:
+    name: docker-build-scan
     runs-on: ubuntu-latest
     timeout-minutes: 120
     needs: release-preflight
@@ -91,10 +86,24 @@ jobs:
             target: ingest
             require_torch: true
             require_torchvision: true
+          - name: backend-ai-response-rocm
+            context: ./backend-ai
+            dockerfile: ./backend-ai/Dockerfile.response-rocm
+            tag: eisenhower-ai-response-rocm
+            target: response
+            require_torch: false
+            require_torchvision: false
           - name: backend-node
             context: .
             dockerfile: ./backend-node/Dockerfile
             tag: eisenhower-api
+            target: production
+            require_torch: false
+            require_torchvision: false
+          - name: mcp
+            context: .
+            dockerfile: ./mcp/eisenhower_adapter/Dockerfile
+            tag: eisenhower-mcp
             target: production
             require_torch: false
             require_torchvision: false
@@ -158,6 +167,7 @@ jobs:
             -v "$RUNNER_TEMP/trivy-cache:/root/.cache/" \
             -v "$PWD/release-security:/evidence" \
             "$TRIVY_IMAGE" image \
+            --timeout 15m \
             --scanners vuln \
             --severity LOW,MEDIUM,HIGH,CRITICAL \
             --exit-code 1 \
@@ -177,6 +187,7 @@ jobs:
             -v "$RUNNER_TEMP/trivy-cache:/root/.cache/" \
             -v "$PWD/release-security:/evidence" \
             "$TRIVY_IMAGE" image \
+            --timeout 15m \
             --format cyclonedx \
             --output "/evidence/${{ matrix.name }}-${RELEASE_SHA}.cdx.json" \
             "$image_ref"
@@ -210,21 +221,103 @@ jobs:
           test -s "release-security/${{ matrix.name }}-${RELEASE_SHA}.trivy.json"
           test -s "release-security/${{ matrix.name }}-${RELEASE_SHA}.cdx.json"
 
-      - name: Preserve image security evidence
-        if: ${{ always() && steps.build.outcome == 'success' }}
+      - name: Save verified immutable image candidate
+        if: ${{ success() }}
+        shell: bash
+        run: |
+          image_ref="${DOCKER_HUB_USERNAME}/${{ matrix.tag }}:${RELEASE_SHA}"
+          docker save "$image_ref" -o "release-security/${{ matrix.name }}-${RELEASE_SHA}.image.tar"
+          sha256sum "release-security/${{ matrix.name }}-${RELEASE_SHA}.image.tar" \
+            > "release-security/${{ matrix.name }}-${RELEASE_SHA}.image.tar.sha256"
+
+      - name: Preserve image candidate and security evidence
+        if: ${{ success() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-image-security-${{ matrix.name }}-${{ env.RELEASE_SHA }}
           path: |
             release-security/${{ matrix.name }}-${{ env.RELEASE_SHA }}.trivy.json
             release-security/${{ matrix.name }}-${{ env.RELEASE_SHA }}.cdx.json
+            release-security/${{ matrix.name }}-${{ env.RELEASE_SHA }}.image.tar
+            release-security/${{ matrix.name }}-${{ env.RELEASE_SHA }}.image.tar.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-release:
+    name: publish-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    needs:
+      - docker-build-scan
+      - release-preflight
+    env:
+      RELEASE_SHA: ${{ needs.release-preflight.outputs.release_sha }}
+      DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+      DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
+    steps:
+      - name: Download every scanned image candidate
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: release-image-security-*-${{ env.RELEASE_SHA }}
+          path: release-security
+          merge-multiple: true
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ env.DOCKER_HUB_USERNAME }}
+          password: ${{ env.DOCKER_HUB_TOKEN }}
+
+      - name: Publish scanned images and bind registry digests
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest="release-security/release-manifest.json"
+          jq -n --arg release_sha "$RELEASE_SHA" \
+            '{schema_version:"eisenhower-release/v1",release_sha:$release_sha,images:[]}' > "$manifest"
+          while IFS='|' read -r name repository; do
+            archive="release-security/${name}-${RELEASE_SHA}.image.tar"
+            trivy="release-security/${name}-${RELEASE_SHA}.trivy.json"
+            sbom="release-security/${name}-${RELEASE_SHA}.cdx.json"
+            sha256sum -c "${archive}.sha256"
+            test -s "$trivy"
+            test -s "$sbom"
+            docker load --input "$archive"
+            tag="${DOCKER_HUB_USERNAME}/${repository}:${RELEASE_SHA}"
+            docker push "$tag"
+            digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$tag")"
+            test -n "$digest"
+            trivy_sha="$(sha256sum "$trivy" | cut -d' ' -f1)"
+            sbom_sha="$(sha256sum "$sbom" | cut -d' ' -f1)"
+            jq --arg name "$name" --arg digest "$digest" \
+              --arg trivy_sha256 "$trivy_sha" --arg sbom_sha256 "$sbom_sha" \
+              '.images += [{name:$name,digest:$digest,trivy_sha256:$trivy_sha256,sbom_sha256:$sbom_sha256}]' \
+              "$manifest" > "${manifest}.tmp"
+            mv "${manifest}.tmp" "$manifest"
+          done <<'IMAGES'
+          backend-ai-boundary|eisenhower-ai-boundary
+          backend-ai-classifier|eisenhower-ai-classifier
+          backend-ai-knowledge|eisenhower-ai-knowledge
+          backend-ai-ingest|eisenhower-ai-ingest
+          backend-ai-response-rocm|eisenhower-ai-response-rocm
+          backend-node|eisenhower-api
+          mcp|eisenhower-mcp
+          web|eisenhower-web
+          IMAGES
+          test "$(jq '.images | length' "$manifest")" -eq 8
+          (cd release-security && sha256sum release-manifest.json > release-manifest.json.sha256)
+
+      - name: Upload immutable release manifest and security evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: eisenhower-release-${{ env.RELEASE_SHA }}
+          path: |
+            release-security/release-manifest.json
+            release-security/release-manifest.json.sha256
+            release-security/*.trivy.json
+            release-security/*.cdx.json
           if-no-files-found: error
           retention-days: 90
-
-      - name: Publish verified image
-        if: ${{ success() }}
-        shell: bash
-        run: docker push "${DOCKER_HUB_USERNAME}/${{ matrix.tag }}:${RELEASE_SHA}"
 
   android-release:
     name: android-release
@@ -397,250 +490,55 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-  deploy-mikrus:
-    name: deploy-mikrus
-    if: ${{ github.event.inputs.deploy == 'true' }}
-    runs-on:
-      - self-hosted
-      - mikrus
-    timeout-minutes: 30
-    concurrency:
-      group: production-mikrus
-      cancel-in-progress: false
-    # Public web/API availability is independent from the separately signed
-    # Android artifact. A missing owner keystore must not suppress deployment
-    # of otherwise green exact-SHA service images.
-    needs:
-      - release-preflight
-      - docker-release
-    env:
-      MIKRUS_HOST: ${{ secrets.MIKRUS_HOST }}
-      MIKRUS_USER: ${{ secrets.MIKRUS_USER }}
-      MIKRUS_SSH_KEY: ${{ secrets.MIKRUS_SSH_KEY }}
-      MIKRUS_ENV_FILE: ${{ secrets.MIKRUS_ENV_FILE }}
-      MIKRUS_APP_DIR: ${{ secrets.MIKRUS_APP_DIR }}
-      MIKRUS_PUBLIC_URL: ${{ vars.MIKRUS_PUBLIC_URL }}
-      IMAGE_TAG: ${{ needs.release-preflight.outputs.release_sha }}
-      DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
-      DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.release-preflight.outputs.release_sha }}
-
-      - name: Check Mikrus configuration
-        shell: bash
-        run: |
-          missing=0
-
-          for key in MIKRUS_HOST MIKRUS_USER MIKRUS_SSH_KEY MIKRUS_ENV_FILE MIKRUS_APP_DIR MIKRUS_PUBLIC_URL DOCKER_HUB_USERNAME DOCKER_HUB_TOKEN; do
-            if [ -z "${!key}" ]; then
-              echo "$key is missing."
-              missing=1
-            fi
-          done
-
-          if [ "$missing" -ne 0 ]; then
-            echo "::error::Mikrus production deployment configuration is incomplete."
-            exit 1
-          fi
-
-      - name: Deploy to Mikrus
-        shell: bash
-        run: .github/scripts/deploy-mikrus.sh
-
-  deploy:
-    name: deploy-production-aws
-    if: ${{ github.event.inputs.deploy == 'true' }}
+  final-release-gate:
+    name: final-release-gate
     runs-on: ubuntu-latest
-    timeout-minutes: 120
-    environment: production
-    concurrency:
-      group: production-aws
-      cancel-in-progress: false
+    timeout-minutes: 10
     needs:
+      - publish-release
+      - android-release
       - release-preflight
-      - docker-release
-    permissions:
-      contents: read
-      id-token: write
     env:
-      AWS_REGION: eu-central-1
-      AWS_ACCOUNT_ID: ${{ vars.AWS_PRODUCTION_ACCOUNT_ID }}
       RELEASE_SHA: ${{ needs.release-preflight.outputs.release_sha }}
-      CERTIFICATE_ARN: ${{ vars.AWS_PRODUCTION_CERTIFICATE_ARN }}
-      PUBLIC_ORIGIN: ${{ vars.AWS_PRODUCTION_PUBLIC_ORIGIN }}
-      OIDC_ISSUER: ${{ vars.APP_OIDC_ISSUER }}
-      OIDC_AUDIENCE: ${{ vars.APP_OIDC_AUDIENCE }}
-      OIDC_JWKS_URL: ${{ vars.APP_OIDC_JWKS_URL }}
-      AI_SERVICE_URL: ${{ vars.AWS_PRODUCTION_AI_SERVICE_URL }}
     steps:
-      - name: Checkout immutable production SHA
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download container release manifest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          ref: ${{ needs.release-preflight.outputs.release_sha }}
+          name: eisenhower-release-${{ env.RELEASE_SHA }}
+          path: release
 
-      - name: Validate production deployment inputs
+      - name: Download signed Android release
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: eisenhower-matrix-android-release-${{ env.RELEASE_SHA }}
+          path: android
+
+      - name: Bind every released artifact to one final gate
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
-          [[ "$AWS_ACCOUNT_ID" =~ ^[0-9]{12}$ ]]
-          for value in "$CERTIFICATE_ARN" "$PUBLIC_ORIGIN" "$OIDC_ISSUER" "$OIDC_AUDIENCE" "$OIDC_JWKS_URL" "$AI_SERVICE_URL"; do
-            test -n "$value"
-          done
+          (cd release && sha256sum -c release-manifest.json.sha256)
+          apk="$(find android -maxdepth 1 -name 'eisenhower-matrix-android-release-*.apk' -type f -print -quit)"
+          apk_metadata="${apk}.json"
+          apk_checksum="${apk}.sha256"
+          test -s "$apk" && test -s "$apk_metadata" && test -s "$apk_checksum"
+          test "$(sha256sum "$apk" | cut -d' ' -f1)" = "$(cut -d' ' -f1 "$apk_checksum")"
+          test "$(jq -r .commit "$apk_metadata")" = "$RELEASE_SHA"
+          jq -n \
+            --arg release_sha "$RELEASE_SHA" \
+            --arg container_manifest_sha256 "$(sha256sum release/release-manifest.json | cut -d' ' -f1)" \
+            --arg android_apk_sha256 "$(sha256sum "$apk" | cut -d' ' -f1)" \
+            --arg android_certificate_sha256 "$(jq -r .certificate_sha256 "$apk_metadata")" \
+            '{schema_version:"eisenhower-final-release/v1",release_sha:$release_sha,container_manifest_sha256:$container_manifest_sha256,android_apk_sha256:$android_apk_sha256,android_certificate_sha256:$android_certificate_sha256}' \
+            > final-release.json
+          sha256sum final-release.json > final-release.json.sha256
 
-      - name: Configure production AWS OIDC identity
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
-        with:
-          role-to-assume: ${{ vars.AWS_PRODUCTION_DEPLOY_ROLE_ARN }}
-          aws-region: eu-central-1
-
-      - name: Install pinned CDK toolchain
-        working-directory: infra/aws
-        run: npm ci && npm run build
-
-      - name: Deploy production ECR registries first
-        id: registries
-        working-directory: infra/aws
-        run: |
-          npm exec -- cdk deploy Eisenhower-production-Registries --context environment=production --exclusively --require-approval never --outputs-file cdk-registries.json
-          role_arn="$(node -e 'const o=require("./cdk-registries.json")["Eisenhower-production-Registries"]; console.log(o.ImagePublishingRoleArn)')"
-          echo "image_publishing_role_arn=$role_arn" >> "$GITHUB_OUTPUT"
-
-      - name: Assume scoped production application image publishing role
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
-        with:
-          role-to-assume: ${{ steps.registries.outputs.image_publishing_role_arn }}
-          aws-region: eu-central-1
-          role-chaining: true
-
-      - name: Login to production ECR
-        shell: bash
-        run: aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
-
-      - name: Enable ARM64 production builds
-        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
-
-      - name: Configure Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
-
-      - name: Publish exact-SHA production API and web images
-        shell: bash
-        run: |
-          set -euo pipefail
-          registry="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
-          docker buildx build --platform linux/arm64 --push --target production --build-arg "RELEASE_SHA=$RELEASE_SHA" --tag "$registry/eisenhower-production-api:$RELEASE_SHA" --file backend-node/Dockerfile .
-          docker buildx build --platform linux/arm64 --push --target production --build-arg "RELEASE_SHA=$RELEASE_SHA" --tag "$registry/eisenhower-production-web:$RELEASE_SHA" --file web/Dockerfile .
-
-      - name: Restore production AWS OIDC identity
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
-        with:
-          role-to-assume: ${{ vars.AWS_PRODUCTION_DEPLOY_ROLE_ARN }}
-          aws-region: eu-central-1
-
-      - name: Create production platform with services stopped
-        id: platform-stopped
-        working-directory: infra/aws
-        run: |
-          npm exec -- cdk deploy Eisenhower-production-Platform \
-            --context environment=production --exclusively --require-approval never \
-            --parameters "ReleaseSha=$RELEASE_SHA" --parameters "CertificateArn=$CERTIFICATE_ARN" \
-            --parameters "PublicOrigin=$PUBLIC_ORIGIN" --parameters "OidcIssuer=$OIDC_ISSUER" \
-            --parameters "OidcAudience=$OIDC_AUDIENCE" --parameters "OidcJwksUrl=$OIDC_JWKS_URL" \
-            --parameters "AiServiceUrl=$AI_SERVICE_URL" --parameters "ServiceDesiredCount=0" \
-            --parameters "ServiceMinimumCapacity=0" \
-            --outputs-file cdk-platform.json
-          role_arn="$(node -e 'const o=require("./cdk-platform.json")["Eisenhower-production-Platform"]; console.log(o.MigrationOpsRoleArn)')"
-          echo "migration_ops_role_arn=$role_arn" >> "$GITHUB_OUTPUT"
-
-      - name: Assume the production migration operator role
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
-        with:
-          role-to-assume: ${{ steps.platform-stopped.outputs.migration_ops_role_arn }}
-          aws-region: eu-central-1
-          role-chaining: true
-
-      - name: Apply production schema with the one-shot migration task
-        working-directory: infra/aws
-        shell: bash
-        run: |
-          set -euo pipefail
-          cluster="$(node -e "const o=require('./cdk-platform.json')['Eisenhower-production-Platform']; console.log(o.ClusterName)")"
-          task_definition="$(node -e "const o=require('./cdk-platform.json')['Eisenhower-production-Platform']; console.log(o.MigrationTaskDefinitionArn)")"
-          subnets="$(node -e "const o=require('./cdk-platform.json')['Eisenhower-production-Platform']; console.log(o.MigrationSubnetIds)")"
-          security_group="$(node -e "const o=require('./cdk-platform.json')['Eisenhower-production-Platform']; console.log(o.MigrationSecurityGroupId)")"
-          task_arn="$(aws ecs run-task --cluster "$cluster" --task-definition "$task_definition" --launch-type FARGATE \
-            --network-configuration "awsvpcConfiguration={subnets=[$subnets],securityGroups=[$security_group],assignPublicIp=DISABLED}" \
-            --query 'tasks[0].taskArn' --output text)"
-          test -n "$task_arn"
-          test "$task_arn" != "None"
-          aws ecs wait tasks-stopped --cluster "$cluster" --tasks "$task_arn"
-          test "$(aws ecs describe-tasks --cluster "$cluster" --tasks "$task_arn" --query 'tasks[0].containers[0].exitCode' --output text)" = "0"
-
-      - name: Restore production AWS OIDC identity after migration
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
-        with:
-          role-to-assume: ${{ vars.AWS_PRODUCTION_DEPLOY_ROLE_ARN }}
-          aws-region: eu-central-1
-
-      - name: Activate production services after migration
-        working-directory: infra/aws
-        run: |
-          npm exec -- cdk deploy Eisenhower-production-Platform \
-            --context environment=production --exclusively --require-approval never \
-            --parameters "ReleaseSha=$RELEASE_SHA" --parameters "CertificateArn=$CERTIFICATE_ARN" \
-            --parameters "PublicOrigin=$PUBLIC_ORIGIN" --parameters "OidcIssuer=$OIDC_ISSUER" \
-            --parameters "OidcAudience=$OIDC_AUDIENCE" --parameters "OidcJwksUrl=$OIDC_JWKS_URL" \
-            --parameters "AiServiceUrl=$AI_SERVICE_URL" --parameters "ServiceDesiredCount=2" \
-            --parameters "ServiceMinimumCapacity=2" \
-            --outputs-file cdk-platform.json
-
-      - name: Verify production HTTPS readiness
-        working-directory: infra/aws
-        run: |
-          curl --fail --show-error --silent --retry 12 --retry-all-errors --retry-delay 10 "$PUBLIC_ORIGIN/health/ready" > readiness.json
-          jq -e '.status == "ready" and .dependencies.database == "connected" and .dependencies.redis == "connected"' readiness.json
-
-      - name: Preserve production AWS deployment evidence
+      - name: Upload auditable final release gate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: aws-production-${{ needs.release-preflight.outputs.release_sha }}
+          name: eisenhower-final-release-${{ env.RELEASE_SHA }}
           path: |
-            infra/aws/cdk-registries.json
-            infra/aws/cdk-platform.json
-            infra/aws/readiness.json
+            final-release.json
+            final-release.json.sha256
           if-no-files-found: error
           retention-days: 90
-
-  performance-test:
-    name: performance-test
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs:
-      - release-preflight
-      - deploy
-    if: ${{ needs.deploy.result == 'success' }}
-    continue-on-error: true
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.release-preflight.outputs.release_sha }}
-
-      - name: Check k6 script
-        id: k6-script
-        shell: bash
-        run: |
-          if [ -f tests/performance/k6-script.js ]; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "tests/performance/k6-script.js is missing. Skipping performance test."
-          fi
-
-      - name: Run k6
-        if: ${{ steps.k6-script.outputs.exists == 'true' }}
-        working-directory: tests/performance
-        run: docker run --rm -v "$(pwd):/scripts" -i grafana/k6 run --out json=results.json /scripts/k6-script.js

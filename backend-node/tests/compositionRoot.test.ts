@@ -1,4 +1,4 @@
-import request from 'supertest';
+import request from './helpers/http-test-client';
 import { createApp } from '../src/app';
 import { TaskRepository } from '../src/application/taskRepository';
 
@@ -71,11 +71,12 @@ describe('application composition root', () => {
       logSink,
     });
 
-    await request(app)
+    const response = await request(app)
       .get('/api/tasks?lifecycle=active')
       .set('Authorization', 'Bearer test-api-token')
-      .set('X-Request-ID', 'request-123')
-      .expect(200);
+      .set('X-Request-ID', 'request-123');
+
+    expect(response.status).toBe(200);
 
     expect(logSink).toHaveBeenCalledTimes(1);
     expect(logSink).toHaveBeenCalledWith('info', expect.objectContaining({

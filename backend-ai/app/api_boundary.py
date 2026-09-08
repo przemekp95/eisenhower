@@ -34,6 +34,30 @@ FORWARDED_RESPONSE_HEADERS = {
   "x-request-id",
 }
 MAX_PROXY_BODY_BYTES = 10 * 1024 * 1024
+USER_CAPABILITY_FIELDS = (
+  "classification",
+  "reasoned_local_analysis",
+  "knowledge_retrieval",
+  "retrieval_augmented_generation",
+  "local_similar_examples",
+  "ocr",
+  "batch_analysis",
+  "memory_write",
+  "memory_retrieval",
+  "memory_response",
+)
+CLASSIFIER_CAPABILITY_FIELDS = (
+  "classification",
+  "reasoned_local_analysis",
+  "local_similar_examples",
+  "ocr",
+  "batch_analysis",
+)
+MEMORY_CAPABILITY_FIELDS = (
+  "memory_write",
+  "memory_retrieval",
+  "memory_response",
+)
 
 
 def _private_upstream(url: str, allowed_hosts: tuple[str, ...]) -> bool:
@@ -184,30 +208,16 @@ def create_boundary_app(
     )
     return Response(content=body, media_type="text/plain; version=0.0.4")
 
-  @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
-  async def proxy(path: str, request: Request):
-    body = await request.body()
-    if len(body) > MAX_PROXY_BODY_BYTES:
-      return JSONResponse(status_code=413, content={"error": "Request body is too large"})
-    upstream = knowledge_url if path.startswith("v2/knowledge/") else classifier_url
+  def forwarded_headers(request: Request) -> dict[str, str]:
     headers = {
       name: value
       for name, value in request.headers.items()
       if name.lower() in FORWARDED_REQUEST_HEADERS
     }
     headers["X-Request-ID"] = request.state.request_id
-    try:
-      response = await proxy_client.request(
-        request.method,
-        f"{upstream}/{path}",
-        params=request.query_params,
-        content=body,
-        headers=headers,
-      )
-    except httpx.TimeoutException:
-      return JSONResponse(status_code=504, content={"error": "Private AI runtime timed out"})
-    except httpx.RequestError:
-      return JSONResponse(status_code=503, content={"error": "Private AI runtime is unavailable"})
+    return headers
+
+  def upstream_response(response: httpx.Response, path: str) -> Response:
     if 300 <= response.status_code < 400:
       LOGGER.warning("Refusing private AI runtime redirect for %s", path)
       return JSONResponse(status_code=502, content={"error": "Private AI runtime redirect rejected"})
@@ -222,6 +232,80 @@ def create_boundary_app(
       headers=response_headers,
       media_type=None,
     )
+
+  @app.get("/capabilities")
+  async def capabilities(request: Request):
+    if knowledge_url == classifier_url:
+      try:
+        response = await proxy_client.get(
+          f"{classifier_url}/capabilities",
+          headers=forwarded_headers(request),
+        )
+      except httpx.TimeoutException:
+        return JSONResponse(status_code=504, content={"error": "Private AI runtime timed out"})
+      except httpx.RequestError:
+        return JSONResponse(status_code=503, content={"error": "Private AI runtime is unavailable"})
+      return upstream_response(response, "capabilities")
+
+    try:
+      responses = [
+        await proxy_client.get(
+          f"{upstream}/capabilities",
+          headers=forwarded_headers(request),
+        )
+        for upstream in (classifier_url, knowledge_url)
+      ]
+    except httpx.TimeoutException:
+      return JSONResponse(status_code=504, content={"error": "Private AI runtime timed out"})
+    except httpx.RequestError:
+      return JSONResponse(status_code=503, content={"error": "Private AI runtime is unavailable"})
+    for response in responses:
+      if response.status_code != 200:
+        return upstream_response(response, "capabilities")
+    try:
+      classifier, knowledge = (response.json() for response in responses)
+      if any(
+        not isinstance(payload, dict)
+        or any(not isinstance(payload.get(field), bool) for field in USER_CAPABILITY_FIELDS)
+        for payload in (classifier, knowledge)
+      ):
+        raise ValueError("invalid capability payload")
+    except (TypeError, ValueError):
+      return JSONResponse(status_code=502, content={"error": "Private AI capability response is invalid"})
+    combined = {
+      field: classifier[field]
+      for field in CLASSIFIER_CAPABILITY_FIELDS
+    }
+    combined.update({
+      "knowledge_retrieval": knowledge["knowledge_retrieval"],
+      "retrieval_augmented_generation": knowledge["retrieval_augmented_generation"],
+    })
+    combined.update({
+      field: classifier[field] or knowledge[field]
+      for field in MEMORY_CAPABILITY_FIELDS
+    })
+    return combined
+
+  @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+  async def proxy(path: str, request: Request):
+    body = await request.body()
+    if len(body) > MAX_PROXY_BODY_BYTES:
+      return JSONResponse(status_code=413, content={"error": "Request body is too large"})
+    upstream = knowledge_url if path.startswith("v2/knowledge/") else classifier_url
+    headers = forwarded_headers(request)
+    try:
+      response = await proxy_client.request(
+        request.method,
+        f"{upstream}/{path}",
+        params=request.query_params,
+        content=body,
+        headers=headers,
+      )
+    except httpx.TimeoutException:
+      return JSONResponse(status_code=504, content={"error": "Private AI runtime timed out"})
+    except httpx.RequestError:
+      return JSONResponse(status_code=503, content={"error": "Private AI runtime is unavailable"})
+    return upstream_response(response, path)
 
   return app
 

@@ -147,7 +147,10 @@ jobs:
             --parameters "ServiceMinimumCapacity=0" \
             --outputs-file cdk-platform.json
           role_arn="$(node -e 'const o=require("./cdk-platform.json")["Eisenhower-staging-Platform"]; console.log(o.MigrationOpsRoleArn)')"
+          load_balancer_dns_name="$(node -e 'const o=require("./cdk-platform.json")["Eisenhower-staging-Platform"]; console.log(o.LoadBalancerDnsName)')"
           echo "migration_ops_role_arn=$role_arn" >> "$GITHUB_OUTPUT"
+          echo "load_balancer_dns_name=$load_balancer_dns_name" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Cloudflare DNS target::$load_balancer_dns_name"
 
       - name: Assume the staging migration operator role
         uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
@@ -215,7 +218,7 @@ jobs:
           PUBLIC_ORIGIN: ${{ vars.AWS_STAGING_PUBLIC_ORIGIN }}
         run: |
           set -euo pipefail
-          curl --fail --show-error --silent --retry 12 --retry-all-errors --retry-delay 10 "$PUBLIC_ORIGIN/health/ready" > readiness.json
+          curl --fail --show-error --silent --retry 60 --retry-all-errors --retry-delay 15 "$PUBLIC_ORIGIN/health/ready" > readiness.json
           jq -e '.status == "ready" and .dependencies.database == "connected" and .dependencies.redis == "connected"' readiness.json
 
       - name: Preserve staging deployment evidence

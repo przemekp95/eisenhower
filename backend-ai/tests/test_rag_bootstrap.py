@@ -12,7 +12,7 @@ from app.rag.bootstrap import (
   is_private_mongodb_uri,
 )
 from app.rag.adapters import SentenceTransformerEmbeddingProvider
-from app.rag.hybrid import HybridRetriever
+from app.rag.hybrid import HybridRetriever, RetrievalConfidencePolicy
 from app.rag.llamaindex_engine import LlamaIndexChunkingEngine
 from app.rag.qdrant_llamaindex import LlamaIndexQdrantProjection
 from qdrant_client import QdrantClient
@@ -289,6 +289,7 @@ def test_rag_bootstrap_defaults_to_the_selected_hybrid_reranker(tmp_path):
   assert service.retriever.core.lexical_rrf_weight == 2.0
   assert service.retriever.core.reranker_candidate_limit == 20
   assert service.retriever.core.reranker_weight == 1.0
+  assert service.retriever.confidence_policy == RetrievalConfidencePolicy()
 
 
 def test_rag_bootstrap_does_not_silently_fall_back_to_dense_without_reranker_secret(tmp_path):

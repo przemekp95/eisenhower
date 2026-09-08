@@ -1,8 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { JWTVerifyGetKey, JWTPayload } from 'jose' with { 'resolution-mode': 'import' };
-import { NextFunction, Request, Response } from 'express';
-
-const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 export interface AuthPrincipal {
   tenantId: string;
@@ -12,83 +9,48 @@ export interface AuthPrincipal {
   scopes?: string[];
 }
 
-export type SecurityRejectionHandler = (
-  request: Request,
-  action: 'auth_rejection' | 'acl_rejection',
-) => void;
-
-declare global {
-  namespace Express {
-    interface Request {
-      auth?: AuthPrincipal;
-      requestId: string;
-      rawBody?: Buffer;
-    }
-  }
-}
-
-function tokensMatch(actual: string, expected: string) {
+export function tokensMatch(actual: string, expected: string) {
   const actualDigest = createHash('sha256').update(actual).digest();
   const expectedDigest = createHash('sha256').update(expected).digest();
   return timingSafeEqual(actualDigest, expectedDigest);
 }
 
-function auditOrFail(
-  request: Request,
-  response: Response,
-  action: 'auth_rejection' | 'acl_rejection',
-  onReject?: SecurityRejectionHandler,
-): boolean {
-  try {
-    onReject?.(request, action);
-    return true;
-  } catch {
-    console.error('backend-node required security audit write failed');
-    response.status(503).json({ error: 'Security audit is unavailable' });
-    return false;
+export type BearerAuthenticationFailure = 'missing' | 'invalid';
+
+export class BearerAuthenticationError extends Error {
+  constructor(readonly failure: BearerAuthenticationFailure) {
+    super(failure === 'missing' ? 'Authentication required' : 'Invalid bearer token');
   }
 }
 
-function readBearer(
-  request: Request,
-  response: Response,
-  onReject?: SecurityRejectionHandler,
-): string | null {
-  const authorization = request.get('authorization');
+export function readBearerAuthorization(authorization: string | undefined): string {
   const match = authorization ? /^Bearer[ \t]+(.+)$/i.exec(authorization) : null;
-  if (!match) {
-    if (!auditOrFail(request, response, 'auth_rejection', onReject)) return null;
-    response.set('WWW-Authenticate', 'Bearer');
-    response.status(401).json({ error: 'Authentication required' });
-    return null;
-  }
+  if (!match) throw new BearerAuthenticationError('missing');
   return match[1];
 }
 
-function rejectInvalidBearer(
-  request: Request,
-  response: Response,
-  onReject?: SecurityRejectionHandler,
-) {
-  if (!auditOrFail(request, response, 'auth_rejection', onReject)) return;
-  response.set('WWW-Authenticate', 'Bearer error="invalid_token"');
-  response.status(401).json({ error: 'Invalid bearer token' });
+export function authenticateStaticBearer(
+  authorization: string | undefined,
+  expectedToken: string,
+): AuthPrincipal {
+  const token = readBearerAuthorization(authorization);
+  if (!tokensMatch(token, expectedToken)) throw new BearerAuthenticationError('invalid');
+  return {
+    tenantId: 'local', userId: 'local-user', roles: ['user'], projectIds: [],
+    scopes: ['tasks:read', 'tasks:write', 'calendar:read', 'calendar:write'],
+  };
 }
 
-export function requireBearerToken(expectedToken: string, onReject?: SecurityRejectionHandler) {
-  return (request: Request, response: Response, next: NextFunction) => {
-    const token = readBearer(request, response, onReject);
-    if (token === null) return;
-    if (!tokensMatch(token, expectedToken)) {
-      rejectInvalidBearer(request, response, onReject);
-      return;
-    }
-    request.auth = {
-      tenantId: 'local', userId: 'local-user', roles: ['user'], projectIds: [],
-      scopes: ['tasks:read', 'tasks:write', 'calendar:read', 'calendar:write'],
-    };
-    next();
-  };
+export async function authenticateOidcBearer(
+  authorization: string | undefined,
+  verifier: OidcTokenVerifier,
+): Promise<AuthPrincipal> {
+  const token = readBearerAuthorization(authorization);
+  try {
+    return await verifier(token);
+  } catch {
+    throw new BearerAuthenticationError('invalid');
+  }
 }
 
 export interface OidcVerifierConfig {
@@ -146,62 +108,5 @@ function principalFromClaims(payload: JWTPayload): AuthPrincipal {
     roles: stringArray(payload.roles),
     projectIds: stringArray(payload.project_ids),
     ...(scopes.length ? { scopes } : {}),
-  };
-}
-
-export function requireScope(scope: string, onReject?: SecurityRejectionHandler) {
-  return (request: Request, response: Response, next: NextFunction) => {
-    if (request.auth?.scopes?.includes(scope)) return next();
-    if (auditOrFail(request, response, 'acl_rejection', onReject)) {
-      response.status(403).json({ error: 'Required scope is missing', code: 'insufficient_scope' });
-    }
-  };
-}
-
-export function requireTaskScope(onReject?: SecurityRejectionHandler) {
-  const requireReadScope = requireScope('tasks:read', onReject);
-  const requireWriteScope = requireScope('tasks:write', onReject);
-  return (request: Request, response: Response, next: NextFunction) => {
-    if (request.method === 'OPTIONS') {
-      next();
-      return;
-    }
-    const authorize = request.method === 'GET' || request.method === 'HEAD'
-      ? requireReadScope
-      : requireWriteScope;
-    authorize(request, response, next);
-  };
-}
-
-export function requireOidcToken(
-  verifier: OidcTokenVerifier,
-  onReject?: SecurityRejectionHandler,
-) {
-  return async (request: Request, response: Response, next: NextFunction) => {
-    const token = readBearer(request, response, onReject);
-    if (token === null) return;
-    try {
-      request.auth = await verifier(token);
-      next();
-    } catch {
-      rejectInvalidBearer(request, response, onReject);
-    }
-  };
-}
-
-export function requireTrustedBrowserOrigin(
-  allowedOrigins: string[],
-  onReject?: SecurityRejectionHandler,
-) {
-  const allowed = new Set(allowedOrigins);
-  return (request: Request, response: Response, next: NextFunction) => {
-    const origin = request.get('origin');
-    if (!origin || SAFE_METHODS.has(request.method) || allowed.has(origin)) {
-      next();
-      return;
-    }
-    if (auditOrFail(request, response, 'acl_rejection', onReject)) {
-      response.status(403).json({ error: 'Untrusted browser origin' });
-    }
   };
 }

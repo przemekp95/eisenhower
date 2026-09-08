@@ -1,4 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
+import { File } from 'expo-file-system';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as Network from 'expo-network';
 import { mobileConfig } from '../config';
 import {
@@ -19,7 +21,30 @@ jest.mock('expo-network', () => ({
   getNetworkStateAsync: jest.fn(),
 }), { virtual: true });
 
+jest.mock('expo-file-system', () => ({
+  File: jest.fn(),
+}), { virtual: true });
+
+jest.mock('expo-image-manipulator', () => ({
+  ImageManipulator: { manipulate: jest.fn() },
+  SaveFormat: { JPEG: 'jpeg' },
+}), { virtual: true });
+
 const quadrantNames = { 0: 'Do Now', 1: 'Delegate', 2: 'Schedule', 3: 'Delete' };
+const NativeFormData = global.FormData;
+
+const jpegWithExif = Uint8Array.from([
+  0xff, 0xd8,
+  0xff, 0xe1, 0x00, 0x08, 0x45, 0x78, 0x69, 0x66, 0x00, 0x00,
+  0xff, 0xda, 0x00, 0x04, 0x01, 0x02,
+  0x10, 0x20, 0xff, 0xd9,
+]);
+
+const jpegWithoutExif = Uint8Array.from([
+  0xff, 0xd8,
+  0xff, 0xda, 0x00, 0x04, 0x01, 0x02,
+  0x10, 0x20, 0xff, 0xd9,
+]);
 
 const ocrFixture = (filename, tasks) => {
   const counts = { 0: 0, 1: 0, 2: 0, 3: 0 };
@@ -61,11 +86,116 @@ const ocrFixture = (filename, tasks) => {
 describe('media service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    global.FormData = NativeFormData;
     global.fetch = jest.fn();
+    ImageManipulator.manipulate.mockReturnValue({
+      renderAsync: jest.fn().mockResolvedValue({
+        saveAsync: jest.fn().mockResolvedValue({ uri: 'file:///cache/default-sanitized.jpg' }),
+      }),
+    });
+    File.mockReturnValue({
+      bytes: jest.fn().mockResolvedValue(jpegWithoutExif),
+      write: jest.fn(),
+      delete: jest.fn(),
+    });
     Network.getNetworkStateAsync.mockResolvedValue({
       isConnected: true,
       isInternetReachable: true,
     });
+  });
+
+  it('uploads only a re-encoded metadata-free JPEG and deletes the cache file', async () => {
+    const appended = [];
+    global.FormData = class {
+      append(...args) {
+        appended.push(args);
+      }
+    };
+    const saveAsync = jest.fn().mockResolvedValue({ uri: 'file:///cache/sanitized.jpg' });
+    ImageManipulator.manipulate.mockReturnValue({
+      renderAsync: jest.fn().mockResolvedValue({ saveAsync }),
+    });
+    const temporaryFile = {
+      bytes: jest.fn().mockResolvedValue(jpegWithExif),
+      write: jest.fn(),
+      delete: jest.fn(),
+    };
+    File.mockReturnValue(temporaryFile);
+    global.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ocrFixture('camera.jpg', []),
+    });
+
+    await extractTasksFromSelectedImage({
+      uri: 'file:///private/original.heic',
+      name: 'original.heic',
+      type: 'image/heic',
+      source: 'camera',
+    });
+
+    expect(ImageManipulator.manipulate).toHaveBeenCalledWith('file:///private/original.heic');
+    expect(saveAsync).toHaveBeenCalledWith({ compress: 1, format: SaveFormat.JPEG });
+    expect(temporaryFile.write).toHaveBeenCalledWith(jpegWithoutExif);
+    expect(appended).toContainEqual([
+      'file',
+      {
+        uri: 'file:///cache/sanitized.jpg',
+        name: 'original-sanitized.jpg',
+        type: 'image/jpeg',
+      },
+    ]);
+    expect(temporaryFile.delete).toHaveBeenCalledTimes(1);
+  });
+
+  it('deletes the sanitized cache file when OCR upload fails', async () => {
+    ImageManipulator.manipulate.mockReturnValue({
+      renderAsync: jest.fn().mockResolvedValue({
+        saveAsync: jest.fn().mockResolvedValue({ uri: 'file:///cache/failed-upload.jpg' }),
+      }),
+    });
+    const temporaryFile = {
+      bytes: jest.fn().mockResolvedValue(jpegWithoutExif),
+      write: jest.fn(),
+      delete: jest.fn(),
+    };
+    File.mockReturnValue(temporaryFile);
+    global.fetch.mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: 'OCR exploded' }),
+    });
+
+    await expect(extractTasksFromSelectedImage({
+      uri: 'file:///private/original.jpg',
+      name: 'original.jpg',
+      type: 'image/jpeg',
+      source: 'camera',
+    })).rejects.toThrow('OCR exploded');
+
+    expect(temporaryFile.delete).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed before upload when the re-encoded file is not a valid JPEG', async () => {
+    ImageManipulator.manipulate.mockReturnValue({
+      renderAsync: jest.fn().mockResolvedValue({
+        saveAsync: jest.fn().mockResolvedValue({ uri: 'file:///cache/invalid.jpg' }),
+      }),
+    });
+    const temporaryFile = {
+      bytes: jest.fn().mockResolvedValue(Uint8Array.from([0x00, 0x01])),
+      write: jest.fn(),
+      delete: jest.fn(),
+    };
+    File.mockReturnValue(temporaryFile);
+
+    await expect(extractTasksFromSelectedImage({
+      uri: 'file:///private/original.jpg',
+      name: 'original.jpg',
+      type: 'image/jpeg',
+      source: 'camera',
+    })).rejects.toThrow('Expected JPEG bytes');
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(temporaryFile.delete).toHaveBeenCalledTimes(1);
   });
 
   it('maps OCR responses to local task records', () => {

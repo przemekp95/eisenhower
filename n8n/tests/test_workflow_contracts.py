@@ -111,7 +111,8 @@ class CalendarWorkflowContractTest(unittest.TestCase):
                 code = signer["parameters"]["jsCode"]
                 self.assertIn("require('crypto')", code)
                 self.assertIn("JSON.stringify(body)", code)
-                self.assertIn("v1\\n${timestamp}\\nPOST\\n${path}\\n${rawBody}", code)
+                self.assertIn("randomUUID", code)
+                self.assertIn("v1\\n${timestamp}\\n${requestId}\\nPOST\\n${path}\\n${rawBody}", code)
 
             internal_requests = []
             for node in workflow["nodes"]:
@@ -138,6 +139,7 @@ class CalendarWorkflowContractTest(unittest.TestCase):
                     for header in parameters["headerParameters"]["parameters"]
                 }
                 self.assertEqual(headers["X-Eisenhower-Timestamp"], "={{ $json.signedTimestamp }}")
+                self.assertEqual(headers["X-Eisenhower-Request-Id"], "={{ $json.signedRequestId }}")
                 self.assertEqual(headers["X-Eisenhower-Signature"], "={{ $json.signedSignature }}")
 
             self.assertEqual(len(signing_nodes), len(internal_requests), workflow_name)

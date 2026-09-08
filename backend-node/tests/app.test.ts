@@ -1,4 +1,4 @@
-import request from 'supertest';
+import request from './helpers/http-test-client';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createApp } from '../src/app';
@@ -166,8 +166,10 @@ describe('app middleware', () => {
 
   it('rejects incomplete production audit identity configuration', () => {
     process.env.NODE_ENV = 'production';
-    process.env.AUTH_MODE = 'static';
-    process.env.EISENHOWER_API_TOKEN = 'production-api-token-at-least-32-characters';
+    process.env.AUTH_MODE = 'oidc';
+    process.env.OIDC_ISSUER = 'https://identity.example.com';
+    process.env.OIDC_AUDIENCE = 'eisenhower-api';
+    process.env.OIDC_JWKS_URL = 'https://identity.example.com/.well-known/jwks.json';
     process.env.CORS_ALLOW_ORIGINS = 'https://tasks.example.com';
     process.env.MONGODB_URI = 'mongodb://mongodb:27017/eisenhower';
     process.env.AI_SERVICE_URL = 'http://ai-service:8000';
@@ -182,10 +184,12 @@ describe('app middleware', () => {
     expect(() => createApp()).toThrow('exact RELEASE_SHA');
   });
 
-  it('accepts the CloudWatch stdout audit mode without an ephemeral file path', () => {
+  it('accepts the CloudWatch stdout audit mode without an ephemeral file path', async () => {
     process.env.NODE_ENV = 'production';
-    process.env.AUTH_MODE = 'static';
-    process.env.EISENHOWER_API_TOKEN = 'production-api-token-at-least-32-characters';
+    process.env.AUTH_MODE = 'oidc';
+    process.env.OIDC_ISSUER = 'https://identity.example.com';
+    process.env.OIDC_AUDIENCE = 'eisenhower-api';
+    process.env.OIDC_JWKS_URL = 'https://identity.example.com/.well-known/jwks.json';
     process.env.CORS_ALLOW_ORIGINS = 'https://tasks.example.com';
     process.env.MONGODB_URI = 'mongodb://mongodb:27017/eisenhower';
     process.env.AI_SERVICE_URL = 'http://ai-service:8000';
@@ -193,7 +197,8 @@ describe('app middleware', () => {
     process.env.AUDIT_HMAC_KEY = 'production-node-audit-key-at-least-32-bytes';
     process.env.RELEASE_SHA = 'a'.repeat(40);
 
-    expect(() => createApp()).not.toThrow();
+    const app = await createApp();
+    await app.close();
   });
 
   it('rejects a weak internal calendar HMAC key', () => {
@@ -201,7 +206,7 @@ describe('app middleware', () => {
       .toThrow('CALENDAR_INTERNAL_HMAC_KEY must contain at least 32 bytes');
   });
 
-  it('constructs default Google OAuth and Calendar HTTP adapters from configuration', () => {
+  it('constructs default Google OAuth and Calendar HTTP adapters from configuration', async () => {
     process.env.CALENDAR_INTERNAL_HMAC_KEY = 'configured-internal-calendar-key-at-least-32-bytes';
     process.env.GOOGLE_CALENDAR_OAUTH_CLIENT_ID = 'client';
     process.env.GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET = 'secret';
@@ -209,7 +214,8 @@ describe('app middleware', () => {
     process.env.GOOGLE_CALENDAR_OAUTH_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
     process.env.GOOGLE_CALENDAR_WATCH_CALLBACK_URLS = 'https://hooks.example.com/google-calendar';
 
-    expect(() => createApp()).not.toThrow();
+    const app = await createApp();
+    await app.close();
   });
 
   it('authenticates before returning an authorization denial for browser origin', async () => {
@@ -360,8 +366,10 @@ describe('app middleware', () => {
 
   it('does not expose exception details in production', async () => {
     process.env.NODE_ENV = 'production';
-    process.env.AUTH_MODE = 'static';
-    process.env.EISENHOWER_API_TOKEN = 'production-api-token-at-least-32-characters';
+    process.env.AUTH_MODE = 'oidc';
+    process.env.OIDC_ISSUER = 'https://identity.example.com';
+    process.env.OIDC_AUDIENCE = 'eisenhower-api';
+    process.env.OIDC_JWKS_URL = 'https://identity.example.com/.well-known/jwks.json';
     process.env.CORS_ALLOW_ORIGINS = 'https://tasks.example.com';
     process.env.MONGODB_URI = 'mongodb://mongodb:27017/eisenhower';
     process.env.AI_SERVICE_URL = 'http://ai-service:8000';
@@ -378,6 +386,9 @@ describe('app middleware', () => {
     const app = createApp({
       aiHealthChecker: async () => 'healthy',
       databaseStatusResolver: () => 'connected',
+      oidcTokenVerifier: async () => ({
+        tenantId: 'tenant-a', userId: 'user-a', roles: [], projectIds: [], scopes: ['tasks:read'],
+      }),
     });
 
     const response = await request(app)
@@ -388,7 +399,7 @@ describe('app middleware', () => {
     expect(response.body).toEqual({ error: 'Internal server error' });
   });
 
-  it('constructs the OIDC middleware for a valid production configuration', () => {
+  it('constructs the OIDC guard for a valid production configuration', async () => {
     process.env.NODE_ENV = 'production';
     process.env.AUTH_MODE = 'oidc';
     process.env.OIDC_ISSUER = 'https://identity.example.com';
@@ -401,13 +412,20 @@ describe('app middleware', () => {
     process.env.AUDIT_HMAC_KEY = 'production-node-audit-key-at-least-32-bytes';
     process.env.RELEASE_SHA = 'a'.repeat(40);
 
-    expect(() => createApp()).not.toThrow();
+    const app = await createApp({
+      oidcTokenVerifier: async () => ({
+        tenantId: 'tenant-a', userId: 'user-a', roles: [], projectIds: [], scopes: [],
+      }),
+    });
+    await app.close();
   });
 
   it('uses one trusted nginx hop for rate limiting and ignores a spoofed leftmost address', async () => {
     process.env.NODE_ENV = 'production';
-    process.env.AUTH_MODE = 'static';
-    process.env.EISENHOWER_API_TOKEN = 'production-api-token-at-least-32-characters';
+    process.env.AUTH_MODE = 'oidc';
+    process.env.OIDC_ISSUER = 'https://identity.example.com';
+    process.env.OIDC_AUDIENCE = 'eisenhower-api';
+    process.env.OIDC_JWKS_URL = 'https://identity.example.com/.well-known/jwks.json';
     process.env.CORS_ALLOW_ORIGINS = 'https://tasks.example.com';
     process.env.MONGODB_URI = 'mongodb://mongodb:27017/eisenhower';
     process.env.AI_SERVICE_URL = 'http://ai-service:8000';
