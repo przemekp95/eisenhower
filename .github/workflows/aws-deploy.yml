@@ -8,6 +8,12 @@ on:
       - dev
     types:
       - completed
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Exact green dev commit to deploy to staging
+        required: true
+        type: string
 
 concurrency:
   group: aws-staging
@@ -22,21 +28,43 @@ env:
 jobs:
   deploy-staging:
     name: deploy-staging
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'dev' && vars.AWS_STAGING_DEPLOY_ENABLED == 'true' }}
+    if: >-
+      ${{
+        vars.AWS_STAGING_DEPLOY_ENABLED == 'true' &&
+        (
+          github.event_name == 'workflow_dispatch' ||
+          (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'dev')
+        )
+      }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: staging
     permissions:
+      actions: read
       contents: read
       id-token: write
     env:
-      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+      RELEASE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.release_sha }}
       AWS_ACCOUNT_ID: ${{ vars.AWS_STAGING_ACCOUNT_ID }}
     steps:
+      - name: Verify a manually selected exact green dev SHA
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          dev_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/dev" --jq '.object.sha')"
+          test "$RELEASE_SHA" = "$dev_sha"
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=dev&event=push&status=success&per_page=100" \
+            | jq -e --arg sha "$RELEASE_SHA" \
+              '[.workflow_runs[] | select(.head_sha == $sha and .conclusion == "success")] | length > 0'
+
       - name: Checkout exact green dev SHA
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ env.RELEASE_SHA }}
 
       - name: Validate immutable deployment inputs
         shell: bash
@@ -101,8 +129,8 @@ jobs:
           target: production
           platforms: linux/arm64
           push: true
-          tags: ${{ format('{0}.dkr.ecr.{1}.amazonaws.com/eisenhower-staging-api:{2}', vars.AWS_STAGING_ACCOUNT_ID, env.AWS_REGION, github.event.workflow_run.head_sha) }}
-          build-args: RELEASE_SHA=${{ github.event.workflow_run.head_sha }}
+          tags: ${{ format('{0}.dkr.ecr.{1}.amazonaws.com/eisenhower-staging-api:{2}', vars.AWS_STAGING_ACCOUNT_ID, env.AWS_REGION, env.RELEASE_SHA) }}
+          build-args: RELEASE_SHA=${{ env.RELEASE_SHA }}
 
       - name: Build and publish exact-SHA web image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -112,8 +140,8 @@ jobs:
           target: production
           platforms: linux/arm64
           push: true
-          tags: ${{ format('{0}.dkr.ecr.{1}.amazonaws.com/eisenhower-staging-web:{2}', vars.AWS_STAGING_ACCOUNT_ID, env.AWS_REGION, github.event.workflow_run.head_sha) }}
-          build-args: RELEASE_SHA=${{ github.event.workflow_run.head_sha }}
+          tags: ${{ format('{0}.dkr.ecr.{1}.amazonaws.com/eisenhower-staging-web:{2}', vars.AWS_STAGING_ACCOUNT_ID, env.AWS_REGION, env.RELEASE_SHA) }}
+          build-args: RELEASE_SHA=${{ env.RELEASE_SHA }}
 
       - name: Restore AWS OIDC deployment identity
         uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
@@ -224,7 +252,7 @@ jobs:
       - name: Preserve staging deployment evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0 # v7.0.1
         with:
-          name: aws-staging-${{ github.event.workflow_run.head_sha }}
+          name: aws-staging-${{ env.RELEASE_SHA }}
           path: |
             infra/aws/cdk-registries.json
             infra/aws/cdk-platform.json

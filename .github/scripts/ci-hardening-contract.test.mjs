@@ -34,10 +34,14 @@ test("AWS staging delivery uses environment-scoped OIDC and immutable green SHAs
   const release = readWorkflow("release.yml");
 
   assert.match(aws, /workflow_run:[\s\S]*branches:\n      - dev/);
+  assert.match(aws, /workflow_dispatch:[\s\S]*release_sha:/);
   assert.match(aws, /environment: staging/);
+  assert.match(aws, /actions: read/);
   assert.match(aws, /id-token: write/);
   assert.match(aws, /role-to-assume: \$\{\{ vars\.AWS_STAGING_DEPLOY_ROLE_ARN \}\}/);
   assert.match(aws, /github\.event\.workflow_run\.head_sha/);
+  assert.match(aws, /git\/ref\/heads\/dev/);
+  assert.match(aws, /actions\/workflows\/ci\.yml\/runs\?branch=dev&event=push&status=success/);
   assert.match(aws, /Eisenhower-staging-Registries/);
   assert.match(aws, /role-to-assume: \$\{\{ steps\.registries\.outputs\.image_publishing_role_arn \}\}/);
   assert.match(aws, /Eisenhower-staging-Platform/);
