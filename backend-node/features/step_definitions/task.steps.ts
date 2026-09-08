@@ -4,6 +4,7 @@ import { QUADRANT_DEFINITIONS } from '@eisenhower/api-client';
 import express from 'express';
 import request, { Test } from 'supertest';
 import { TaskModel } from '../../src/models/task';
+import { MongooseTaskRepository } from '../../src/repositories/mongooseTaskRepository';
 import { createTasksRouter } from '../../src/routes/tasks';
 import { EisenhowerWorld } from '../support/world';
 
@@ -50,7 +51,7 @@ function useInjectedPrincipalRouter(world: EisenhowerWorld) {
     };
     next();
   });
-  app.use('/tasks', createTasksRouter());
+  app.use('/tasks', createTasksRouter(new MongooseTaskRepository()));
   world.app = app;
 }
 

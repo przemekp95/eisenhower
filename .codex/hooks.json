@@ -1,0 +1,17 @@
+{
+  "description": "Run the repository policy gate before Codex ends a turn.",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/policy_gate.py\"",
+            "timeout": 600,
+            "statusMessage": "Running repository policy gate"
+          }
+        ]
+      }
+    ]
+  }
+}

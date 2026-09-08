@@ -1,5 +1,15 @@
 # Completion log
 
+2026-09-08 — TASK-062 staging endpoint milestone: Issued the correct first-level ACM certificate, removed the unused nested-name certificate, exposed the existing Poland-hosted OIDC and AI services through Cloudflare Tunnel, preserved local and staging Keycloak callbacks, configured disabled GitHub staging inputs, added the missing web runtime contract under RED-GREEN, and kept deployment blocked on DNS convergence, a fresh exact SHA and commit/push authorization.
+
+2026-09-08 — TASK-062 identity milestone: Replaced CDK's helper-Lambda OIDC provider with a tested native provider, deployed and read back the shared identity stack and bounded staging/production roles, created the disabled GitHub staging environment, and recorded the owner's decision that pending tax read-back no longer blocks staging while the technical-input, EU-only, USD 38, production and card boundaries remain intact.
+
+2026-09-08 — TASK-062 CDK bootstrap milestone: With the owner's explicit pending-tax exception, created the isolated identity/staging/production bootstrap stacks only in `eu-central-1`; detected that CDK's boundary flag covers only its execution role, added a tested pinned-template hardener, updated identity, and read back 15/15 correctly bounded roles, three version-32 stacks, KMS-encrypted/public-blocked S3 buckets and encrypted ECR repositories without application deployment, card access, commit or push.
+
+2026-09-08 — TASK-062 bootstrap hardening milestone: Replaced the unsafe bare CDK bootstrap path with a fail-closed three-environment plan, attached boundaries to every synthesized role, passed 34 AWS assertions plus both offline syntheses, and used the existing MFA-protected root console session to create and read back six validated, unattached `v1` IAM policies; no CDK bootstrap or paid/application resource was created.
+
+2026-09-08 — TASK-062 milestone: Bound the capped staging exercise to the owner's single shared AWS account, refactored identity to one GitHub OIDC provider with separate subjects, roles and bootstrap qualifiers for identity/staging/production, and preserved the EU-only plus card-selection boundaries; AWS tax display acceptance and paid runtime evidence remain open.
+
 2026-08-17 — TASK-061: Added exact-green-master release preflight, least-privilege tokens, immutable Actions/images, bounded/serialized workflows, selective security audits and exact-SHA master-to-dev CI reuse; 21 Node contracts, 10 Python contracts, actionlint, live preflight and independent review passed without source promotion, release or deployment.
 
 2026-08-17 — TASK-047/TASK-014/TASK-019/TASK-023/TASK-020 governance follow-up: Added one mandatory cross-capability activation decision gate with separate enable/hold/reject records for classifier, retrieval, responses and each MAG stage, exact-SHA evidence, cohort, expiry, monitoring, stop and rollback fields, plus an independent publication decision so green automation cannot silently activate or publish a capability.
@@ -157,6 +167,8 @@
 2026-08-10 — TASK-007: Recorded reranking, hybrid search, knowledge graph, and agentic or multi-step RAG as deferred decisions with evidence-based revisit and ADR gates; `git diff --check` passed.
 
 Add newest entries at the top using `YYYY-MM-DD — TASK-ID: outcome and verification`.
+2026-09-08 — TASK-062 milestone: Recorded owner approval for one non-renewing seven-day staging exercise capped at USD 38 before VAT; provisioning remains blocked because both available local profiles resolve to the explicitly excluded `pp-solutions-render-storage` identity and the NLTK dependency gate is still unresolved.
+2026-09-07 — TASK-062 milestone: Implemented and locally verified the governed AWS production core with dedicated image, migration and artifact roles, stopped-first exact-SHA releases, real PostgreSQL/Redis integration, immutable S3 artifacts, offline CDK synthesis and explicit cost/runtime gates; no AWS resource was provisioned, while ARM64 runtime acceptance and an unrelated newly failing Python dependency audit remain open.
 2026-08-13 — TASK-047 milestone: Kept Keycloak profile deployment authenticated in the master realm by addressing the Eisenhower user-profile Admin REST endpoint with its full URL; Keycloak 26 rejected the equivalent cross-realm `kcadm -r eisenhower` write despite valid master-admin credentials.
 
 2026-08-13 — TASK-047 milestone: Forwarded the current owner-only Keycloak admin credentials into the idempotent profile step so a long-lived identity container cannot retain stale bootstrap credentials after local secret rotation.

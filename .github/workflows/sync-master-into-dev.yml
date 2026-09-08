@@ -107,6 +107,7 @@ jobs:
             test-backend-ai
             test-mobile
             test-mobile-native-android
+            test-aws-infrastructure
           )
 
           for _ in $(seq 1 120); do

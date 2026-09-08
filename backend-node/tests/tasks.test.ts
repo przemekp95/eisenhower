@@ -101,7 +101,7 @@ describe('task routes', () => {
       req.auth = { tenantId: 'tenant-a', userId: 'user-a', roles: ['user'], projectIds: [] };
       next();
     });
-    oidcApp.use('/tasks', createTasksRouter());
+    oidcApp.use('/tasks', createTasksRouter(new MongooseTaskRepository()));
 
     const listed = await request(oidcApp).get('/tasks');
     const updated = await request(oidcApp)
@@ -628,7 +628,7 @@ describe('task routes', () => {
       };
       next();
     });
-    scopedApp.use('/tasks', createTasksRouter());
+    scopedApp.use('/tasks', createTasksRouter(new MongooseTaskRepository()));
 
     const createFor = (tenantId: string, ownerId: string) =>
       request(scopedApp)

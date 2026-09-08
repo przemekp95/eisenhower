@@ -1,0 +1,7 @@
+{
+  "app": "node --enable-source-maps dist/bin/eisenhower-aws.js",
+  "context": {
+    "@aws-cdk/aws-ecs:removeDefaultDeploymentAlarm": true,
+    "@aws-cdk/aws-iam:minimizePolicies": true
+  }
+}

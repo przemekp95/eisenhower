@@ -36,6 +36,8 @@ web/output/playwright/
 # Backend Node
 backend-node/dist/
 backend-node/coverage/
+backend-node/src/generated/prisma/
+infra/aws/cdk.out/
 
 # Backend AI
 backend-ai/.pytest_cache/

@@ -9,6 +9,11 @@ const repositoryRoot = path.resolve(__dirname, '../..');
 const execFileAsync = promisify(execFile);
 
 describe('production deployment boundaries', () => {
+  it('packages the immutable PostgreSQL migrations for the one-shot ECS task', () => {
+    const dockerfile = fs.readFileSync(path.join(repositoryRoot, 'backend-node/Dockerfile'), 'utf8');
+    expect(dockerfile).toContain('/app/backend-node/prisma ./prisma');
+  });
+
   it('renders a bootable static single-tenant API environment for Mikrus', async () => {
     const composeFile = path.join(repositoryRoot, 'deploy/mikrus/docker-compose.yml');
     const environment = {
@@ -179,7 +184,11 @@ describe('production deployment boundaries', () => {
     expect(release).toContain("github.event.inputs.deploy == 'true'");
     expect(release).toContain('IMAGE_TAG: ${{ needs.release-preflight.outputs.release_sha }}');
     expect(release).toContain("format('{0}/{1}:{2}', env.DOCKER_HUB_USERNAME, matrix.tag, env.RELEASE_SHA)");
-    expect(release).toMatch(/deploy-mikrus:[\s\S]*?needs:\s*docker-release/);
+    const mikrusJob = release.slice(
+      release.indexOf('  deploy-mikrus:'),
+      release.indexOf('  deploy:', release.indexOf('  deploy-mikrus:')),
+    );
+    expect(mikrusJob).toMatch(/needs:\s*\n\s*- release-preflight\s*\n\s*- docker-release/);
     expect(release).not.toMatch(/deploy-mikrus:[\s\S]*?needs:\s*\[docker-release, android-release\]/);
     expect(deployScript).toContain('MIKRUS_PUBLIC_URL');
     expect(deployScript).toContain('rollback_deployment');

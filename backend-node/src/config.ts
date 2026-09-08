@@ -1,6 +1,9 @@
 export interface AppConfig {
   port: number;
+  databaseProvider: 'mongodb' | 'postgresql';
   mongodbUri: string;
+  postgresql: PostgresConnectionSettings | null;
+  redisUrl: string | null;
   aiServiceUrl: string;
   nodeEnv: string;
   authMode: 'static' | 'oidc';
@@ -9,6 +12,15 @@ export interface AppConfig {
   oidcAudience: string | null;
   oidcJwksUrl: string | null;
   corsAllowOrigins: string[];
+}
+
+export interface PostgresConnectionSettings {
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  password: string;
+  ssl: boolean;
 }
 
 const DEFAULT_MONGO_URI = 'mongodb://localhost:27017/eisenhower';
@@ -25,6 +37,46 @@ function requiredProductionValue(
     throw new Error(`${name} is required in production.`);
   }
   return value;
+}
+
+function loadPostgresSettings(env: NodeJS.ProcessEnv): PostgresConnectionSettings {
+  const names = [
+    'DATABASE_HOST', 'DATABASE_PORT', 'DATABASE_NAME', 'DATABASE_USERNAME', 'DATABASE_PASSWORD',
+  ] as const;
+  const values = Object.fromEntries(names.map((name) => [name, env[name]?.trim() ?? ''])) as Record<(typeof names)[number], string>;
+  if (names.some((name) => !values[name])) {
+    throw new Error('DATABASE_HOST, DATABASE_PORT, DATABASE_NAME, DATABASE_USERNAME and DATABASE_PASSWORD are required for PostgreSQL.');
+  }
+  if (!/^[A-Za-z0-9.-]+$/.test(values.DATABASE_HOST)) {
+    throw new Error('DATABASE_HOST must be a DNS name or IP address without URL syntax.');
+  }
+  if (!/^[A-Za-z0-9_-]+$/.test(values.DATABASE_NAME)) {
+    throw new Error('DATABASE_NAME contains unsupported characters.');
+  }
+  return {
+    host: values.DATABASE_HOST,
+    port: parsePort(values.DATABASE_PORT),
+    database: values.DATABASE_NAME,
+    username: values.DATABASE_USERNAME,
+    password: values.DATABASE_PASSWORD,
+    ssl: env.DATABASE_SSL?.trim() !== 'false',
+  };
+}
+
+function loadRedisUrl(env: NodeJS.ProcessEnv, production: boolean) {
+  if (env.REDIS_ENABLED?.trim() !== 'true') return null;
+  const host = env.REDIS_HOST?.trim() ?? '';
+  const port = env.REDIS_PORT?.trim() ?? '';
+  const token = env.REDIS_AUTH_TOKEN?.trim() ?? '';
+  if (!host || !port || !token) {
+    throw new Error('REDIS_HOST, REDIS_PORT and REDIS_AUTH_TOKEN are required when Redis is enabled.');
+  }
+  if (!/^[A-Za-z0-9.-]+$/.test(host)) {
+    throw new Error('REDIS_HOST must be a DNS name or IP address without URL syntax.');
+  }
+  const tls = env.REDIS_TLS?.trim() !== 'false';
+  if (production && !tls) throw new Error('Production Redis must use TLS.');
+  return `${tls ? 'rediss' : 'redis'}://:${encodeURIComponent(token)}@${host}:${parsePort(port)}`;
 }
 
 function parsePort(value: string | undefined) {
@@ -92,6 +144,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new Error('NODE_ENV must be development, test, or production.');
   }
   const production = nodeEnv === 'production';
+  const databaseProvider = (env.DATABASE_PROVIDER?.trim() || 'mongodb') as 'mongodb' | 'postgresql';
+  if (!['mongodb', 'postgresql'].includes(databaseProvider)) {
+    throw new Error('DATABASE_PROVIDER must be mongodb or postgresql.');
+  }
   const authMode = (env.AUTH_MODE?.trim() ?? (production ? 'oidc' : 'static')) as 'static' | 'oidc';
   const apiToken = (env.EISENHOWER_API_TOKEN ?? (production ? '' : 'test-api-token')).trim();
   const oidcIssuer = env.OIDC_ISSUER?.trim() || null;
@@ -106,9 +162,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   if (authMode === 'static' && production && apiToken.length < 32) {
     throw new Error('EISENHOWER_API_TOKEN must be at least 32 characters in production.');
   }
-  const mongodbUri = production
+  const mongodbUri = production && databaseProvider === 'mongodb'
     ? requiredProductionValue(env, 'MONGODB_URI')
     : (env.MONGODB_URI?.trim() || DEFAULT_MONGO_URI);
+  const postgresql = databaseProvider === 'postgresql' ? loadPostgresSettings(env) : null;
+  const redisUrl = loadRedisUrl(env, production);
   const aiServiceUrl = production
     ? requiredProductionValue(env, 'AI_SERVICE_URL')
     : (env.AI_SERVICE_URL?.trim() || DEFAULT_AI_URL);
@@ -127,7 +185,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
   return {
     port: parsePort(env.PORT),
+    databaseProvider,
     mongodbUri: validateMongoUri(mongodbUri),
+    postgresql,
+    redisUrl,
     aiServiceUrl: validateHttpUrl(aiServiceUrl, 'AI_SERVICE_URL'),
     nodeEnv,
     authMode,

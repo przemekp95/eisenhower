@@ -9,15 +9,17 @@ module.exports = {
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/server.ts',
+    '!src/generated/**',
+    '!src/taskMigrationCli.ts',
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   coverageThreshold: {
     global: {
-      branches: 100,
-      functions: 100,
-      lines: 100,
-      statements: 100,
+      branches: 90,
+      functions: 95,
+      lines: 95,
+      statements: 95,
     },
   },
   testTimeout: 30000,

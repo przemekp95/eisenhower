@@ -18,7 +18,7 @@ function principalApp() {
     };
     next();
   });
-  app.use('/tasks', createTasksRouter());
+  app.use('/tasks', createTasksRouter(new MongooseTaskRepository()));
   return app;
 }
 

@@ -18,7 +18,6 @@ import {
   TaskRepository,
   TaskSchedule,
 } from '../application/taskRepository';
-import { MongooseTaskRepository } from '../repositories/mongooseTaskRepository';
 
 const DEFAULT_PAGE_LIMIT = 100;
 const MAX_PAGE_LIMIT = 200;
@@ -269,7 +268,7 @@ function decodeCursor(value: unknown): TaskCursor | null {
   }
 }
 
-export function createTasksRouter(repository: TaskRepository = new MongooseTaskRepository()) {
+export function createTasksRouter(repository: TaskRepository) {
   const router = Router();
 
   router.get('/delegated', async (req, res, next) => {

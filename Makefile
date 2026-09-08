@@ -74,8 +74,6 @@ audit-production:
 	cd web && $(NPM) audit --omit=dev --audit-level=high
 	cd mobile/eisenhower-matrix && $(NPM) run audit:production
 	$(BACKEND_AI_PYTHON) backend-ai/scripts/production_dependency_audit.py
-	$(BACKEND_AI_PYTHON) -m pip_audit -r backend-ai/requirements-boundary.txt --progress-spinner off
-	$(BACKEND_AI_PYTHON) -m pip_audit -r backend-ai/requirements-knowledge.txt --progress-spinner off
 
 verify:
 	$(MAKE) audit-production

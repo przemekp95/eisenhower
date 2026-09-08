@@ -1,15 +1,17 @@
 import cors from 'cors';
 import express, { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { Store } from 'express-rate-limit';
 import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { AuditSink, DurableFileAuditSink } from './audit';
+import { AuditSink, DurableFileAuditSink, StructuredStdoutAuditSink } from './audit';
 import { loadConfig } from './config';
 import { getDatabaseStatus } from './db';
 import { createHealthRouter } from './routes/health';
 import { createTasksRouter } from './routes/tasks';
+import { TaskRepository } from './application/taskRepository';
+import { MongooseTaskRepository } from './repositories/mongooseTaskRepository';
 import { createCalendarInternalRouter } from './routes/calendarInternal';
 import { createCalendarRouter } from './routes/calendar';
 import { CalendarApplicationService } from './application/calendar';
@@ -35,7 +37,9 @@ import {
 export interface CreateAppOptions {
   aiHealthChecker?: () => Promise<HealthState>;
   databaseStatusResolver?: () => 'connected' | 'disconnected';
+  redisStatusResolver?: () => 'connected' | 'disconnected';
   rateLimitLimit?: number;
+  rateLimitStore?: Store;
   auditSink?: AuditSink;
   calendarInternalHmacKey?: string;
   googleOAuthConfig?: GoogleOAuthConfig;
@@ -43,6 +47,9 @@ export interface CreateAppOptions {
   googleCalendarPort?: GoogleCalendarPort;
   googleCalendarConfig?: GoogleCalendarConfig;
   oidcTokenVerifier?: OidcTokenVerifier;
+  taskRepository?: TaskRepository;
+  calendarEnabled?: boolean;
+  logSink?: (level: 'info' | 'error', event: Record<string, unknown>) => void;
 }
 
 const DEFAULT_AI_READINESS_TIMEOUT_MS = 3_000;
@@ -69,20 +76,30 @@ export async function defaultAiHealthChecker(
 export function createApp(options: CreateAppOptions = {}) {
   const config = loadConfig();
   const app = express();
+  const auditSinkMode = process.env.AUDIT_SINK ?? 'file';
   if (config.nodeEnv === 'production' && (
-    !process.env.AUDIT_LOG_PATH
+    !['file', 'stdout'].includes(auditSinkMode)
+    || (auditSinkMode === 'file' && !process.env.AUDIT_LOG_PATH)
     || !process.env.AUDIT_HMAC_KEY
     || Buffer.byteLength(process.env.AUDIT_HMAC_KEY) < 32
     || !process.env.RELEASE_SHA
     || !/^[a-f0-9]{40}$/.test(process.env.RELEASE_SHA)
   )) {
-    throw new Error('AUDIT_LOG_PATH, a strong AUDIT_HMAC_KEY, and exact RELEASE_SHA are required in production.');
+    throw new Error('A durable AUDIT_SINK (and AUDIT_LOG_PATH for file mode), strong AUDIT_HMAC_KEY, and exact RELEASE_SHA are required in production.');
   }
-  const auditSink = options.auditSink ?? new DurableFileAuditSink(
-    process.env.AUDIT_LOG_PATH ?? path.join(os.tmpdir(), `eisenhower-node-audit-${process.pid}.ndjson`),
-    process.env.AUDIT_HMAC_KEY ?? 'development-node-audit-key-change-me-now',
-  );
+  const auditKey = process.env.AUDIT_HMAC_KEY ?? 'development-node-audit-key-change-me-now';
+  const auditSink = options.auditSink ?? (auditSinkMode === 'stdout'
+    ? new StructuredStdoutAuditSink(auditKey)
+    : new DurableFileAuditSink(
+      process.env.AUDIT_LOG_PATH ?? path.join(os.tmpdir(), `eisenhower-node-audit-${process.pid}.ndjson`),
+      auditKey,
+    ));
   const releaseSha = process.env.RELEASE_SHA ?? '0'.repeat(40);
+  const logSink = options.logSink ?? ((level: 'info' | 'error', event: Record<string, unknown>) => {
+    const line = JSON.stringify(event);
+    if (level === 'error') console.error(line);
+    else console.info(line);
+  });
   const auditRejection = (request: Request, action: 'auth_rejection' | 'acl_rejection') => {
     auditSink.record({
       service: 'backend-node',
@@ -110,7 +127,7 @@ export function createApp(options: CreateAppOptions = {}) {
   app.set('trust proxy', config.nodeEnv === 'production' ? 1 : false);
 
   app.use((req, res, next) => {
-    if (process.env.NODE_ENV === 'test') {
+    if (process.env.NODE_ENV === 'test' && !options.logSink) {
       next();
       return;
     }
@@ -125,14 +142,17 @@ export function createApp(options: CreateAppOptions = {}) {
 
     res.on('finish', () => {
       const durationMs = Date.now() - startedAt;
-      const message = `backend-node ${req.method} ${path} ${res.statusCode} ${durationMs}ms`;
-
-      if (res.statusCode >= 500) {
-        console.error(message);
-        return;
-      }
-
-      console.info(message);
+      logSink(res.statusCode >= 500 ? 'error' : 'info', {
+        timestamp: new Date().toISOString(),
+        event: 'http_request_completed',
+        service: 'backend-node',
+        releaseSha,
+        requestId: req.requestId,
+        method: req.method,
+        path,
+        statusCode: res.statusCode,
+        durationMs,
+      });
     });
 
     next();
@@ -144,6 +164,7 @@ export function createApp(options: CreateAppOptions = {}) {
       limit: options.rateLimitLimit ?? 120,
       standardHeaders: true,
       legacyHeaders: false,
+      ...(options.rateLimitStore ? { store: options.rateLimitStore } : {}),
     })
   );
   app.use(
@@ -167,11 +188,14 @@ export function createApp(options: CreateAppOptions = {}) {
     createHealthRouter({
       aiHealthChecker: options.aiHealthChecker ?? (() => defaultAiHealthChecker(config.aiServiceUrl)),
       databaseStatusResolver: options.databaseStatusResolver ?? getDatabaseStatus,
+      redisStatusResolver: options.redisStatusResolver,
     })
   );
 
-  const calendarInternalHmacKey = options.calendarInternalHmacKey
-    ?? process.env.CALENDAR_INTERNAL_HMAC_KEY;
+  const calendarEnabled = options.calendarEnabled ?? true;
+  const calendarInternalHmacKey = calendarEnabled
+    ? (options.calendarInternalHmacKey ?? process.env.CALENDAR_INTERNAL_HMAC_KEY)
+    : undefined;
   if (calendarInternalHmacKey) {
     if (Buffer.byteLength(calendarInternalHmacKey) < 32) {
       throw new Error('CALENDAR_INTERNAL_HMAC_KEY must contain at least 32 bytes.');
@@ -179,15 +203,18 @@ export function createApp(options: CreateAppOptions = {}) {
     app.use('/internal/calendar', createCalendarInternalRouter(calendarInternalHmacKey));
   }
 
-  const googleOAuthConfig = options.googleOAuthConfig
-    ?? loadGoogleOAuthConfig(process.env, config.nodeEnv);
+  const googleOAuthConfig = calendarEnabled
+    ? (options.googleOAuthConfig ?? loadGoogleOAuthConfig(process.env, config.nodeEnv))
+    : null;
   const googleOAuthService = googleOAuthConfig
     ? new GoogleOAuthService(googleOAuthConfig, options.googleOAuthPort ?? new GoogleOAuthHttpClient())
     : null;
   if (googleOAuthService) {
     app.use('/calendar/oauth', createGoogleOAuthCallbackRouter(googleOAuthService));
   }
-  const googleCalendarConfig = options.googleCalendarConfig ?? loadGoogleCalendarConfig(process.env);
+  const googleCalendarConfig = calendarEnabled
+    ? (options.googleCalendarConfig ?? loadGoogleCalendarConfig(process.env))
+    : null;
   if (calendarInternalHmacKey && googleOAuthConfig && googleCalendarConfig) {
     app.use('/internal/calendar/provider', createGoogleCalendarProviderRouter(
       calendarInternalHmacKey,
@@ -207,14 +234,20 @@ export function createApp(options: CreateAppOptions = {}) {
   }
 
   app.use(requireTrustedBrowserOrigin(config.corsAllowOrigins, auditRejection));
-  app.use('/tasks', requireTaskScope(auditRejection), createTasksRouter());
-  app.use('/calendar', createCalendarRouter(
-    auditRejection,
-    new CalendarApplicationService(),
-    Boolean(googleOAuthService),
-  ));
-  if (googleOAuthService) {
-    app.use('/calendar/oauth', createGoogleOAuthUserRouter(googleOAuthService, auditRejection));
+  const taskRepository = options.taskRepository ?? new MongooseTaskRepository();
+  app.use('/tasks', requireTaskScope(auditRejection), createTasksRouter(taskRepository));
+  // The ALB routes /api/* without rewriting the path. Keep the historical
+  // direct /tasks contract while exposing the identical repository-backed API.
+  app.use('/api/tasks', requireTaskScope(auditRejection), createTasksRouter(taskRepository));
+  if (calendarEnabled) {
+    app.use('/calendar', createCalendarRouter(
+      auditRejection,
+      new CalendarApplicationService(),
+      Boolean(googleOAuthService),
+    ));
+    if (googleOAuthService) {
+      app.use('/calendar/oauth', createGoogleOAuthUserRouter(googleOAuthService, auditRejection));
+    }
   }
 
   app.use((_req, res) => {

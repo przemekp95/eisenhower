@@ -26,6 +26,13 @@ def test_standard_dev_dependencies_do_not_install_experimental_frameworks():
   assert "haystack" not in requirements
 
 
+def test_ingest_uses_the_patched_pypdf_release():
+  requirements = ROOT.joinpath("requirements-ingest.txt").read_text(encoding="utf-8")
+
+  assert "pypdf==6.16.1" in requirements
+  assert "pypdf==6.16.0" not in requirements
+
+
 def test_experimental_langchain_core_is_pinned_outside_known_vulnerable_ranges():
   requirements = ROOT.joinpath("requirements-experimental.txt").read_text(encoding="utf-8").splitlines()
   core_pin = next(line for line in requirements if line.startswith("langchain-core=="))

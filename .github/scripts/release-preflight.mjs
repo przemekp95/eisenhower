@@ -17,6 +17,7 @@ export const REQUIRED_CI_JOBS = Object.freeze([
   "test-backend-ai",
   "test-mobile",
   "test-mobile-native-android",
+  "test-aws-infrastructure",
 ]);
 
 export function validateReleaseSha(value) {

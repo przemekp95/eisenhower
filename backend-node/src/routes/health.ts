@@ -4,18 +4,20 @@ import { DatabaseState, HealthState } from '../types';
 export interface HealthDependencies {
   aiHealthChecker: () => Promise<HealthState>;
   databaseStatusResolver: () => DatabaseState;
+  redisStatusResolver?: () => DatabaseState;
 }
 
-function resolveReadiness(database: DatabaseState, ai: HealthState) {
+function resolveReadiness(database: DatabaseState, ai: HealthState, redis?: DatabaseState) {
   return {
-    ready: database === 'connected',
-    degraded: database !== 'connected' || ai !== 'healthy',
+    ready: database === 'connected' && (redis === undefined || redis === 'connected'),
+    degraded: database !== 'connected' || ai !== 'healthy' || redis === 'disconnected',
   };
 }
 
 export function createHealthRouter({
   aiHealthChecker,
   databaseStatusResolver,
+  redisStatusResolver,
 }: HealthDependencies) {
   const router = Router();
 
@@ -26,18 +28,19 @@ export function createHealthRouter({
   router.get('/ready', async (_req, res, next) => {
     try {
       const database = databaseStatusResolver();
+      const redis = redisStatusResolver?.();
       let ai: HealthState;
       try {
         ai = await aiHealthChecker();
       } catch {
         ai = 'unreachable';
       }
-      const { ready, degraded } = resolveReadiness(database, ai);
+      const { ready, degraded } = resolveReadiness(database, ai, redis);
 
       res.status(ready ? 200 : 503).json({
         status: ready ? 'ready' : 'not_ready',
         degraded,
-        dependencies: { database, ai },
+        dependencies: { database, ai, ...(redis === undefined ? {} : { redis }) },
       });
     } catch (error) {
       next(error);

@@ -451,45 +451,168 @@ jobs:
         run: .github/scripts/deploy-mikrus.sh
 
   deploy:
-    name: deploy
+    name: deploy-production-aws
     if: ${{ github.event.inputs.deploy == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 120
+    environment: production
     concurrency:
       group: production-aws
       cancel-in-progress: false
-    needs: docker-release
+    needs:
+      - release-preflight
+      - docker-release
+    permissions:
+      contents: read
+      id-token: write
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-      ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
-      ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
-    outputs:
-      enabled: ${{ steps.aws-config.outputs.enabled }}
+      AWS_REGION: eu-central-1
+      AWS_ACCOUNT_ID: ${{ vars.AWS_PRODUCTION_ACCOUNT_ID }}
+      RELEASE_SHA: ${{ needs.release-preflight.outputs.release_sha }}
+      CERTIFICATE_ARN: ${{ vars.AWS_PRODUCTION_CERTIFICATE_ARN }}
+      PUBLIC_ORIGIN: ${{ vars.AWS_PRODUCTION_PUBLIC_ORIGIN }}
+      OIDC_ISSUER: ${{ vars.APP_OIDC_ISSUER }}
+      OIDC_AUDIENCE: ${{ vars.APP_OIDC_AUDIENCE }}
+      OIDC_JWKS_URL: ${{ vars.APP_OIDC_JWKS_URL }}
+      AI_SERVICE_URL: ${{ vars.AWS_PRODUCTION_AI_SERVICE_URL }}
     steps:
-      - name: Check deployment configuration
-        id: aws-config
+      - name: Checkout immutable production SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release-preflight.outputs.release_sha }}
+
+      - name: Validate production deployment inputs
         shell: bash
         run: |
-          if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ] && [ -n "$AWS_REGION" ] && [ -n "$ECS_CLUSTER" ] && [ -n "$ECS_SERVICE" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "AWS deployment secrets are not configured. Skipping deployment."
-          fi
+          set -euo pipefail
+          [[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$AWS_ACCOUNT_ID" =~ ^[0-9]{12}$ ]]
+          for value in "$CERTIFICATE_ARN" "$PUBLIC_ORIGIN" "$OIDC_ISSUER" "$OIDC_AUDIENCE" "$OIDC_JWKS_URL" "$AI_SERVICE_URL"; do
+            test -n "$value"
+          done
 
-      - name: Configure AWS credentials
-        if: ${{ steps.aws-config.outputs.enabled == 'true' }}
+      - name: Configure production AWS OIDC identity
         uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_PRODUCTION_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
 
-      - name: Force ECS deployment
-        if: ${{ steps.aws-config.outputs.enabled == 'true' }}
-        run: aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" --force-new-deployment
+      - name: Install pinned CDK toolchain
+        working-directory: infra/aws
+        run: npm ci && npm run build
+
+      - name: Deploy production ECR registries first
+        id: registries
+        working-directory: infra/aws
+        run: |
+          npm exec -- cdk deploy Eisenhower-production-Registries --context environment=production --exclusively --require-approval never --outputs-file cdk-registries.json
+          role_arn="$(node -e 'const o=require("./cdk-registries.json")["Eisenhower-production-Registries"]; console.log(o.ImagePublishingRoleArn)')"
+          echo "image_publishing_role_arn=$role_arn" >> "$GITHUB_OUTPUT"
+
+      - name: Assume scoped production application image publishing role
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ steps.registries.outputs.image_publishing_role_arn }}
+          aws-region: eu-central-1
+          role-chaining: true
+
+      - name: Login to production ECR
+        shell: bash
+        run: aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+
+      - name: Enable ARM64 production builds
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+
+      - name: Configure Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Publish exact-SHA production API and web images
+        shell: bash
+        run: |
+          set -euo pipefail
+          registry="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+          docker buildx build --platform linux/arm64 --push --target production --build-arg "RELEASE_SHA=$RELEASE_SHA" --tag "$registry/eisenhower-production-api:$RELEASE_SHA" --file backend-node/Dockerfile .
+          docker buildx build --platform linux/arm64 --push --target production --build-arg "RELEASE_SHA=$RELEASE_SHA" --tag "$registry/eisenhower-production-web:$RELEASE_SHA" --file web/Dockerfile .
+
+      - name: Restore production AWS OIDC identity
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_PRODUCTION_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Create production platform with services stopped
+        id: platform-stopped
+        working-directory: infra/aws
+        run: |
+          npm exec -- cdk deploy Eisenhower-production-Platform \
+            --context environment=production --exclusively --require-approval never \
+            --parameters "ReleaseSha=$RELEASE_SHA" --parameters "CertificateArn=$CERTIFICATE_ARN" \
+            --parameters "PublicOrigin=$PUBLIC_ORIGIN" --parameters "OidcIssuer=$OIDC_ISSUER" \
+            --parameters "OidcAudience=$OIDC_AUDIENCE" --parameters "OidcJwksUrl=$OIDC_JWKS_URL" \
+            --parameters "AiServiceUrl=$AI_SERVICE_URL" --parameters "ServiceDesiredCount=0" \
+            --parameters "ServiceMinimumCapacity=0" \
+            --outputs-file cdk-platform.json
+          role_arn="$(node -e 'const o=require("./cdk-platform.json")["Eisenhower-production-Platform"]; console.log(o.MigrationOpsRoleArn)')"
+          echo "migration_ops_role_arn=$role_arn" >> "$GITHUB_OUTPUT"
+
+      - name: Assume the production migration operator role
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ steps.platform-stopped.outputs.migration_ops_role_arn }}
+          aws-region: eu-central-1
+          role-chaining: true
+
+      - name: Apply production schema with the one-shot migration task
+        working-directory: infra/aws
+        shell: bash
+        run: |
+          set -euo pipefail
+          cluster="$(node -e "const o=require('./cdk-platform.json')['Eisenhower-production-Platform']; console.log(o.ClusterName)")"
+          task_definition="$(node -e "const o=require('./cdk-platform.json')['Eisenhower-production-Platform']; console.log(o.MigrationTaskDefinitionArn)")"
+          subnets="$(node -e "const o=require('./cdk-platform.json')['Eisenhower-production-Platform']; console.log(o.MigrationSubnetIds)")"
+          security_group="$(node -e "const o=require('./cdk-platform.json')['Eisenhower-production-Platform']; console.log(o.MigrationSecurityGroupId)")"
+          task_arn="$(aws ecs run-task --cluster "$cluster" --task-definition "$task_definition" --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$subnets],securityGroups=[$security_group],assignPublicIp=DISABLED}" \
+            --query 'tasks[0].taskArn' --output text)"
+          test -n "$task_arn"
+          test "$task_arn" != "None"
+          aws ecs wait tasks-stopped --cluster "$cluster" --tasks "$task_arn"
+          test "$(aws ecs describe-tasks --cluster "$cluster" --tasks "$task_arn" --query 'tasks[0].containers[0].exitCode' --output text)" = "0"
+
+      - name: Restore production AWS OIDC identity after migration
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_PRODUCTION_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Activate production services after migration
+        working-directory: infra/aws
+        run: |
+          npm exec -- cdk deploy Eisenhower-production-Platform \
+            --context environment=production --exclusively --require-approval never \
+            --parameters "ReleaseSha=$RELEASE_SHA" --parameters "CertificateArn=$CERTIFICATE_ARN" \
+            --parameters "PublicOrigin=$PUBLIC_ORIGIN" --parameters "OidcIssuer=$OIDC_ISSUER" \
+            --parameters "OidcAudience=$OIDC_AUDIENCE" --parameters "OidcJwksUrl=$OIDC_JWKS_URL" \
+            --parameters "AiServiceUrl=$AI_SERVICE_URL" --parameters "ServiceDesiredCount=2" \
+            --parameters "ServiceMinimumCapacity=2" \
+            --outputs-file cdk-platform.json
+
+      - name: Verify production HTTPS readiness
+        working-directory: infra/aws
+        run: |
+          curl --fail --show-error --silent --retry 12 --retry-all-errors --retry-delay 10 "$PUBLIC_ORIGIN/health/ready" > readiness.json
+          jq -e '.status == "ready" and .dependencies.database == "connected" and .dependencies.redis == "connected"' readiness.json
+
+      - name: Preserve production AWS deployment evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aws-production-${{ needs.release-preflight.outputs.release_sha }}
+          path: |
+            infra/aws/cdk-registries.json
+            infra/aws/cdk-platform.json
+            infra/aws/readiness.json
+          if-no-files-found: error
+          retention-days: 90
 
   performance-test:
     name: performance-test
@@ -498,7 +621,7 @@ jobs:
     needs:
       - release-preflight
       - deploy
-    if: ${{ needs.deploy.outputs.enabled == 'true' }}
+    if: ${{ needs.deploy.result == 'success' }}
     continue-on-error: true
     steps:
       - name: Checkout
