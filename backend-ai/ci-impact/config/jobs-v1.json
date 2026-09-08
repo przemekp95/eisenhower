@@ -10,10 +10,12 @@
     "test-frontend-e2e",
     "test-backend-ai",
     "test-mobile",
-    "test-mobile-native-android"
+    "test-mobile-native-android",
+    "test-aws-infrastructure"
   ],
   "deterministic_jobs": [
-    "security-lint"
+    "security-lint",
+    "test-aws-infrastructure"
   ],
   "known_path_prefixes": [
     ".github/",
@@ -21,6 +23,7 @@
     "backend-ai/",
     "backend-node/",
     "docs/",
+    "infra/",
     "mobile/",
     "mcp/",
     "n8n/",
@@ -37,6 +40,7 @@
     "test-frontend-integration": 0.9,
     "test-mobile": 0.9,
     "test-mobile-native-android": 0.9,
+    "test-aws-infrastructure": 0.95,
     "test-mcp-adapter": 0.9,
     "test-n8n-workflows": 0.9
   },
@@ -49,6 +53,9 @@
       "test-backend-node",
       "test-frontend-integration",
       "test-frontend-e2e"
+    ],
+    "infra/aws/": [
+      "test-aws-infrastructure"
     ],
     "mcp/": [
       "test-mcp-adapter"
@@ -87,7 +94,8 @@
     "test-backend-ai",
     "test-n8n-workflows",
     "test-mobile",
-    "test-mobile-native-android"
+    "test-mobile-native-android",
+    "test-aws-infrastructure"
   ],
   "schema_version": "ci-impact-jobs-v1"
 }

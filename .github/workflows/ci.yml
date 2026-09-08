@@ -261,18 +261,54 @@ jobs:
         if: ${{ needs.resolve-run-mode.outputs.backend_node == 'true' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Start MongoDB for backend tests
+      - name: Start backend data stores
         if: ${{ needs.resolve-run-mode.outputs.backend_node == 'true' }}
         run: |
           docker run --detach --name ci-backend-node-mongodb --publish 27017:27017 mongo:7@sha256:be3d6353f3ea3fd3d22e016d19da20fcd6937eda0739eb6d2aeed335baa60f90
+          docker run --detach --name ci-backend-node-postgres \
+            --env POSTGRES_USER=eisenhower \
+            --env POSTGRES_PASSWORD=eisenhower_test \
+            --env POSTGRES_DB=eisenhower \
+            --publish 33196:5432 \
+            postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
+          docker run --detach --name ci-backend-node-redis --publish 33197:6379 redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
+
+          mongo_ready=false
           for _ in $(seq 1 30); do
             if docker exec ci-backend-node-mongodb mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' | grep -qx 1; then
-              exit 0
+              mongo_ready=true
+              break
             fi
             sleep 1
           done
-          docker logs ci-backend-node-mongodb
-          exit 1
+          if [ "$mongo_ready" != true ]; then
+            docker logs ci-backend-node-mongodb
+            exit 1
+          fi
+
+          for _ in $(seq 1 30); do
+            if docker exec ci-backend-node-postgres pg_isready -U eisenhower -d eisenhower; then
+              postgres_ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "${postgres_ready:-false}" != true ]; then
+            docker logs ci-backend-node-postgres
+            exit 1
+          fi
+
+          for _ in $(seq 1 30); do
+            if docker exec ci-backend-node-redis redis-cli ping | grep -qx PONG; then
+              redis_ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "${redis_ready:-false}" != true ]; then
+            docker logs ci-backend-node-redis
+            exit 1
+          fi
 
       - name: Setup Node.js
         if: ${{ needs.resolve-run-mode.outputs.backend_node == 'true' }}
@@ -287,6 +323,13 @@ jobs:
         working-directory: backend-node
         run: npm ci
 
+      - name: Prepare PostgreSQL integration schema
+        if: ${{ needs.resolve-run-mode.outputs.backend_node == 'true' }}
+        working-directory: backend-node
+        env:
+          DATABASE_URL: postgresql://eisenhower:eisenhower_test@127.0.0.1:33196/eisenhower
+        run: npx prisma migrate deploy
+
       - name: Build
         if: ${{ needs.resolve-run-mode.outputs.backend_node == 'true' }}
         working-directory: backend-node
@@ -297,6 +340,8 @@ jobs:
         working-directory: backend-node
         env:
           MONGODB_URI: mongodb://localhost:27017/eisenhower-test
+          POSTGRES_TEST_URL: postgresql://eisenhower:eisenhower_test@127.0.0.1:33196/eisenhower
+          REDIS_TEST_URL: redis://127.0.0.1:33197
         run: npm run test:coverage
 
       - name: Run executable BDD scenarios
@@ -974,3 +1019,25 @@ jobs:
           path: mobile/eisenhower-matrix/output/*.apk
           if-no-files-found: error
           retention-days: 14
+
+  test-aws-infrastructure:
+    name: test-aws-infrastructure
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: infra/aws/package-lock.json
+
+      - name: Install pinned AWS infrastructure dependencies
+        working-directory: infra/aws
+        run: npm ci
+
+      - name: Run the repository AWS verification entry point offline
+        run: .codex/verify --scope aws

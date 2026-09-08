@@ -14,6 +14,7 @@ const REQUIRED_CONTEXTS = Object.freeze({
     'test-backend-ai',
     'test-mobile',
     'test-mobile-native-android',
+    'test-aws-infrastructure',
   ],
   'Branch Policy': ['branch-policy'],
 });

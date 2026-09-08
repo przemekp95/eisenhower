@@ -25,6 +25,7 @@ describe('app middleware', () => {
     delete process.env.AI_SERVICE_URL;
     delete process.env.AUDIT_LOG_PATH;
     delete process.env.AUDIT_HMAC_KEY;
+    delete process.env.AUDIT_SINK;
     delete process.env.RELEASE_SHA;
     delete process.env.CALENDAR_INTERNAL_HMAC_KEY;
     delete process.env.GOOGLE_CALENDAR_OAUTH_CLIENT_ID;
@@ -183,6 +184,23 @@ describe('app middleware', () => {
     expect(() => createApp()).toThrow('exact RELEASE_SHA');
   });
 
+  it('accepts the CloudWatch stdout audit mode without an ephemeral file path', async () => {
+    process.env.NODE_ENV = 'production';
+    process.env.AUTH_MODE = 'oidc';
+    process.env.OIDC_ISSUER = 'https://identity.example.com';
+    process.env.OIDC_AUDIENCE = 'eisenhower-api';
+    process.env.OIDC_JWKS_URL = 'https://identity.example.com/.well-known/jwks.json';
+    process.env.CORS_ALLOW_ORIGINS = 'https://tasks.example.com';
+    process.env.MONGODB_URI = 'mongodb://mongodb:27017/eisenhower';
+    process.env.AI_SERVICE_URL = 'http://ai-service:8000';
+    process.env.AUDIT_SINK = 'stdout';
+    process.env.AUDIT_HMAC_KEY = 'production-node-audit-key-at-least-32-bytes';
+    process.env.RELEASE_SHA = 'a'.repeat(40);
+
+    const app = await createApp();
+    await app.close();
+  });
+
   it('rejects a weak internal calendar HMAC key', () => {
     expect(() => createApp({ calendarInternalHmacKey: 'too-short' }))
       .toThrow('CALENDAR_INTERNAL_HMAC_KEY must contain at least 32 bytes');
@@ -311,7 +329,10 @@ describe('app middleware', () => {
       .set('Authorization', 'Bearer test-api-token');
 
     expect(response.status).toBe(404);
-    expect(infoSpy).toHaveBeenCalledWith(expect.stringMatching(/^backend-node GET \/missing 404 \d+ms$/));
+    expect(JSON.parse(infoSpy.mock.calls[0][0] as string)).toMatchObject({
+      event: 'http_request_completed', method: 'GET', path: '/missing', statusCode: 404,
+      durationMs: expect.any(Number),
+    });
     expect(errorSpy).not.toHaveBeenCalled();
   });
 
@@ -336,7 +357,10 @@ describe('app middleware', () => {
       .set('Authorization', 'Bearer test-api-token');
 
     expect(response.status).toBe(500);
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/^backend-node GET \/tasks 500 \d+ms$/));
+    expect(JSON.parse(errorSpy.mock.calls[0][0] as string)).toMatchObject({
+      event: 'http_request_completed', method: 'GET', path: '/tasks', statusCode: 500,
+      durationMs: expect.any(Number),
+    });
     expect(infoSpy).not.toHaveBeenCalled();
   });
 

@@ -2,7 +2,7 @@ import { DynamicModule, Module } from '@nestjs/common';
 import { CreateAppOptions } from '../../app-options';
 import type { AppConfig } from '../../config';
 import { getDatabaseStatus } from '../../db';
-import { AI_HEALTH_CHECKER, DATABASE_STATUS_RESOLVER } from '../../platform/tokens';
+import { AI_HEALTH_CHECKER, DATABASE_STATUS_RESOLVER, REDIS_STATUS_RESOLVER } from '../../platform/tokens';
 import { HealthController } from './health.controller';
 import { defaultAiHealthChecker, HealthService } from './health.service';
 
@@ -21,6 +21,10 @@ export class HealthModule {
         {
           provide: DATABASE_STATUS_RESOLVER,
           useValue: options.databaseStatusResolver ?? getDatabaseStatus,
+        },
+        {
+          provide: REDIS_STATUS_RESOLVER,
+          useValue: options.redisStatusResolver ?? null,
         },
       ],
     };

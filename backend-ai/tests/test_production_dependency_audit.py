@@ -9,6 +9,7 @@ from scripts.production_dependency_audit import (
   _clean_pip_environment,
   validate_audit_report,
   validate_dockerfile_policy,
+  validate_nltk_usage_boundary,
   validate_requirements_policy,
   validate_resolution_report,
   read_requirements_tree,
@@ -59,6 +60,7 @@ def audit_report() -> dict:
       },
       {"name": "PyJWT", "version": "2.13.0", "vulns": []},
       {"name": "starlette", "version": "1.6.0", "vulns": []},
+      {"name": "llama-index-core", "version": "0.14.23", "vulns": []},
     ],
     "fixes": [],
   }
@@ -101,9 +103,10 @@ def resolution_report() -> dict:
 def test_accepts_only_the_exact_public_pytorch_cpu_audit_blind_spots():
   direct_requirements = validate_requirements_policy(REQUIREMENTS)
 
-  skipped = validate_audit_report(audit_report(), direct_requirements)
+  skipped, exceptions = validate_audit_report(audit_report(), direct_requirements)
 
   assert skipped == {"torch": "2.13.0+cpu", "torchvision": "0.28.0+cpu"}
+  assert exceptions == {}
 
 
 def test_accepts_only_the_exact_hash_pinned_spacy_model_wheel():
@@ -122,7 +125,105 @@ def test_accepts_only_the_exact_hash_pinned_spacy_model_wheel():
       "Dependency not found on PyPI and could not be audited: en-core-web-sm (3.8.0)"
     ),
   })
-  assert validate_audit_report(report, requirements)["en-core-web-sm"] == "3.8.0"
+  skipped, exceptions = validate_audit_report(report, requirements)
+  assert skipped["en-core-web-sm"] == "3.8.0"
+  assert exceptions == {}
+
+
+def test_accepts_only_the_owner_approved_unfixed_transitive_nltk_advisory():
+  requirements = validate_requirements_policy(
+    f"{REQUIREMENTS}llama-index-core==0.14.23\n"
+  )
+  report = audit_report()
+  report["dependencies"].append({
+    "name": "nltk",
+    "version": "3.10.3",
+    "vulns": [{
+      "id": "PYSEC-2026-3740",
+      "fix_versions": [],
+      "aliases": ["CVE-2026-81726", "GHSA-8mgp-746c-j5xp"],
+      "description": "Path sandbox bypass in selected model persistence APIs.",
+    }],
+  })
+
+  skipped, exceptions = validate_audit_report(report, requirements)
+
+  assert skipped == {"torch": "2.13.0+cpu", "torchvision": "0.28.0+cpu"}
+  assert exceptions == {"nltk": "3.10.3/PYSEC-2026-3740"}
+
+
+@pytest.mark.parametrize(
+  ("mutation", "message"),
+  [
+    (lambda dependency: dependency.update(version="3.10.4"), "nltk==3.10.3"),
+    (
+      lambda dependency: dependency["vulns"][0].update(fix_versions=["3.10.4"]),
+      "expired",
+    ),
+    (
+      lambda dependency: dependency["vulns"].append({
+        "id": "PYSEC-new",
+        "fix_versions": [],
+        "aliases": [],
+        "description": "another issue",
+      }),
+      "vulnerabilities",
+    ),
+    (lambda dependency: dependency["vulns"][0].pop("fix_versions"), "malformed"),
+  ],
+)
+def test_rejects_any_nltk_exception_drift(mutation, message):
+  requirements = validate_requirements_policy(
+    f"{REQUIREMENTS}llama-index-core==0.14.23\n"
+  )
+  report = audit_report()
+  dependency = {
+    "name": "nltk",
+    "version": "3.10.3",
+    "vulns": [{
+      "id": "PYSEC-2026-3740",
+      "fix_versions": [],
+      "aliases": ["CVE-2026-81726"],
+      "description": "Path sandbox bypass.",
+    }],
+  }
+  mutation(dependency)
+  report["dependencies"].append(dependency)
+
+  with pytest.raises(AuditPolicyError, match=message):
+    validate_audit_report(report, requirements)
+
+
+def test_rejects_nltk_exception_without_the_exact_transitive_owner():
+  requirements = validate_requirements_policy(REQUIREMENTS)
+  report = audit_report()
+  report["dependencies"].append({
+    "name": "nltk",
+    "version": "3.10.3",
+    "vulns": [{
+      "id": "PYSEC-2026-3740",
+      "fix_versions": [],
+      "aliases": [],
+      "description": "Path sandbox bypass.",
+    }],
+  })
+
+  with pytest.raises(AuditPolicyError, match="llama-index-core"):
+    validate_audit_report(report, requirements)
+
+
+def test_forbids_project_owned_nltk_imports(tmp_path):
+  safe = tmp_path / "safe.py"
+  safe.write_text("from pathlib import Path\n", encoding="utf-8")
+  validate_nltk_usage_boundary([tmp_path])
+
+  unsafe = tmp_path / "unsafe.py"
+  unsafe.write_text(
+    "from nltk.parse.transitionparser import TransitionParser\n",
+    encoding="utf-8",
+  )
+  with pytest.raises(AuditPolicyError, match="direct NLTK usage"):
+    validate_nltk_usage_boundary([tmp_path])
 
 
 @pytest.mark.parametrize(

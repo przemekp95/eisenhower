@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { loadConfig } from '../../config';
-import { AI_HEALTH_CHECKER, DATABASE_STATUS_RESOLVER } from '../../platform/tokens';
+import { AI_HEALTH_CHECKER, DATABASE_STATUS_RESOLVER, REDIS_STATUS_RESOLVER } from '../../platform/tokens';
 import { DatabaseState, HealthState } from '../../types';
 
 const DEFAULT_AI_READINESS_TIMEOUT_MS = 3_000;
@@ -28,6 +28,8 @@ export class HealthService {
     private readonly aiHealthChecker: () => Promise<HealthState>,
     @Inject(DATABASE_STATUS_RESOLVER)
     private readonly databaseStatusResolver: () => DatabaseState,
+    @Inject(REDIS_STATUS_RESOLVER)
+    private readonly redisStatusResolver: (() => DatabaseState) | null,
   ) {}
 
   liveness() {
@@ -36,19 +38,20 @@ export class HealthService {
 
   async readiness() {
     const database = this.databaseStatusResolver();
+    const redis = this.redisStatusResolver?.();
     let ai: HealthState;
     try {
       ai = await this.aiHealthChecker();
     } catch {
       ai = 'unreachable';
     }
-    const ready = database === 'connected';
+    const ready = database === 'connected' && (redis === undefined || redis === 'connected');
     return {
       statusCode: ready ? 200 : 503,
       body: {
         status: ready ? 'ready' as const : 'not_ready' as const,
         degraded: !ready || ai !== 'healthy',
-        dependencies: { database, ai },
+        dependencies: { database, ai, ...(redis === undefined ? {} : { redis }) },
       },
     };
   }

@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eisenhower.local/schemas/aws-deployment-evidence-v1.json",
+  "title": "Eisenhower AWS deployment evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "environment",
+    "sourceSha",
+    "workflowRunUrl",
+    "imageDigests",
+    "migration",
+    "readiness",
+    "costApproval"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "aws-deployment-evidence-v1" },
+    "environment": { "enum": ["staging", "production"] },
+    "sourceSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "workflowRunUrl": { "type": "string", "format": "uri", "pattern": "^https://github\\.com/" },
+    "cloudFormationStackIds": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^arn:aws:cloudformation:" }
+    },
+    "imageDigests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["api", "web"],
+      "properties": {
+        "api": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "web": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      }
+    },
+    "migration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taskArn", "exitCode", "evidenceChecksum", "calendarBoundary"],
+      "properties": {
+        "taskArn": { "type": "string", "pattern": "^arn:aws:ecs:" },
+        "exitCode": { "const": 0 },
+        "evidenceChecksum": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "calendarBoundary": { "const": "not_migrated_fail_closed" }
+      }
+    },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["database", "redis", "httpStatus"],
+      "properties": {
+        "database": { "const": "connected" },
+        "redis": { "const": "connected" },
+        "httpStatus": { "const": 200 }
+      }
+    },
+    "rollbackDrill": {
+      "type": ["object", "null"]
+    },
+    "restoreDrill": {
+      "type": ["object", "null"]
+    },
+    "costApproval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approvedBy", "approvedAt", "expiresAt", "maximumUsd"],
+      "properties": {
+        "approvedBy": { "type": "string", "minLength": 1 },
+        "approvedAt": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "maximumUsd": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    }
+  }
+}

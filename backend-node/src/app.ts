@@ -14,15 +14,17 @@ function validateSynchronousStartup(
   options: CreateAppOptions,
   config: ReturnType<typeof loadConfig> = loadConfig(),
 ) {
+  const auditSinkMode = process.env.AUDIT_SINK ?? 'file';
   if (config.nodeEnv === 'production' && (
-    !process.env.AUDIT_LOG_PATH
+    !['file', 'stdout'].includes(auditSinkMode)
+    || (auditSinkMode === 'file' && !process.env.AUDIT_LOG_PATH)
     || !process.env.AUDIT_HMAC_KEY
     || Buffer.byteLength(process.env.AUDIT_HMAC_KEY) < 32
     || !process.env.RELEASE_SHA
     || !/^[a-f0-9]{40}$/.test(process.env.RELEASE_SHA)
   )) {
     throw new Error(
-      'AUDIT_LOG_PATH, a strong AUDIT_HMAC_KEY, and exact RELEASE_SHA are required in production.',
+      'A durable AUDIT_SINK (and AUDIT_LOG_PATH for file mode), strong AUDIT_HMAC_KEY, and exact RELEASE_SHA are required in production.',
     );
   }
   const hmacKey = options.calendarInternalHmacKey ?? process.env.CALENDAR_INTERNAL_HMAC_KEY;

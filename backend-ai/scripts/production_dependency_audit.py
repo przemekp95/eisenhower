@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
 import sys
+from collections.abc import Iterable
 from urllib.parse import unquote, urlsplit
 
 
@@ -27,6 +29,10 @@ ALLOWED_HASHED_WHEEL_REQUIREMENTS = {
   ): ("en_core_web_sm", "3.8.0"),
 }
 ALLOWED_HASHED_WHEEL_UNAUDITED = {"en-core-web-sm": "3.8.0"}
+NLTK_EXCEPTION_PACKAGE = "nltk"
+NLTK_EXCEPTION_VERSION = "3.10.3"
+NLTK_EXCEPTION_ADVISORY = "PYSEC-2026-3740"
+NLTK_EXCEPTION_OWNER = ("llama-index-core", "0.14.23")
 REQUIREMENT_PATTERN = re.compile(
   r"^(?P<name>[A-Za-z0-9_.-]+)(?:\[[A-Za-z0-9_,.-]+\])?==(?P<version>[^\s;]+)$"
 )
@@ -172,13 +178,14 @@ def read_requirements_tree(path: Path, *, _seen: set[Path] | None = None) -> str
 def validate_audit_report(
   report: dict,
   direct_requirements: dict[str, tuple[str, str]],
-) -> dict[str, str]:
+) -> tuple[dict[str, str], dict[str, str]]:
   dependencies = report.get("dependencies") if isinstance(report, dict) else None
   if not isinstance(dependencies, list):
     raise AuditPolicyError("pip-audit did not return a dependency list.")
 
   reported: dict[str, dict] = {}
   skipped: dict[str, str] = {}
+  accepted_exceptions: dict[str, str] = {}
   for dependency in dependencies:
     if not isinstance(dependency, dict) or not isinstance(dependency.get("name"), str):
       raise AuditPolicyError("pip-audit returned a malformed dependency record.")
@@ -211,7 +218,39 @@ def validate_audit_report(
     if not isinstance(version, str) or not isinstance(vulnerabilities, list):
       raise AuditPolicyError(f"pip-audit returned malformed evidence for {display_name}.")
     if vulnerabilities:
-      raise AuditPolicyError(f"pip-audit reported vulnerabilities for {display_name}.")
+      if name != NLTK_EXCEPTION_PACKAGE:
+        raise AuditPolicyError(f"pip-audit reported vulnerabilities for {display_name}.")
+      if version != NLTK_EXCEPTION_VERSION:
+        raise AuditPolicyError(
+          f"The approved exception requires nltk=={NLTK_EXCEPTION_VERSION}."
+        )
+      if direct_requirements.get(NLTK_EXCEPTION_PACKAGE) is not None:
+        raise AuditPolicyError("The NLTK exception is limited to a transitive dependency.")
+      owner_name, owner_version = NLTK_EXCEPTION_OWNER
+      owner = direct_requirements.get(owner_name)
+      if owner is None or owner[1] != owner_version:
+        raise AuditPolicyError(
+          f"The NLTK exception requires {owner_name}=={owner_version}."
+        )
+      if len(vulnerabilities) != 1:
+        raise AuditPolicyError(f"pip-audit reported vulnerabilities for {display_name}.")
+      vulnerability = vulnerabilities[0]
+      if not isinstance(vulnerability, dict):
+        raise AuditPolicyError("pip-audit returned malformed NLTK exception evidence.")
+      evidence_is_well_formed = all((
+        vulnerability.get("id") == NLTK_EXCEPTION_ADVISORY,
+        isinstance(vulnerability.get("aliases"), list),
+        isinstance(vulnerability.get("description"), str),
+        "fix_versions" in vulnerability,
+        isinstance(vulnerability.get("fix_versions"), list),
+      ))
+      if not evidence_is_well_formed:
+        raise AuditPolicyError("pip-audit returned malformed NLTK exception evidence.")
+      if vulnerability["fix_versions"]:
+        raise AuditPolicyError(
+          "The temporary NLTK exception expired because a fixed version is available."
+        )
+      accepted_exceptions[name] = f"{version}/{NLTK_EXCEPTION_ADVISORY}"
 
   missing = sorted(set(direct_requirements) - set(reported))
   if missing:
@@ -226,7 +265,47 @@ def validate_audit_report(
         f"not the pinned {expected_version}."
       )
 
-  return skipped
+  return skipped, accepted_exceptions
+
+
+def validate_nltk_usage_boundary(source_roots: Iterable[Path]) -> None:
+  """Forbid project-owned imports of NLTK while its advisory exception is active."""
+
+  for source_root in source_roots:
+    if not source_root.exists():
+      continue
+    for source_path in sorted(source_root.rglob("*.py")):
+      try:
+        tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
+      except (OSError, SyntaxError) as error:
+        raise AuditPolicyError(f"Could not inspect Python source {source_path}.") from error
+      for node in ast.walk(tree):
+        imports_nltk = (
+          isinstance(node, ast.Import)
+          and any(alias.name == "nltk" or alias.name.startswith("nltk.") for alias in node.names)
+        ) or (
+          isinstance(node, ast.ImportFrom)
+          and isinstance(node.module, str)
+          and (node.module == "nltk" or node.module.startswith("nltk."))
+        )
+        dynamically_imports_nltk = (
+          isinstance(node, ast.Call)
+          and node.args
+          and isinstance(node.args[0], ast.Constant)
+          and isinstance(node.args[0].value, str)
+          and (node.args[0].value == "nltk" or node.args[0].value.startswith("nltk."))
+          and (
+            isinstance(node.func, ast.Name)
+            and node.func.id == "__import__"
+            or isinstance(node.func, ast.Attribute)
+            and node.func.attr == "import_module"
+          )
+        )
+        if imports_nltk or dynamically_imports_nltk:
+          raise AuditPolicyError(
+            f"Project-owned direct NLTK usage is forbidden while the exception is active: "
+            f"{source_path}:{getattr(node, 'lineno', '?')}."
+          )
 
 
 def _sha256_from_download_info(download_info: dict) -> str | None:
@@ -335,11 +414,16 @@ def _run_json(command: list[str]) -> tuple[dict, int]:
   return report, result.returncode
 
 
-def run_audit(requirements_path: Path, dockerfile_path: Path) -> tuple[int, dict[str, str]]:
+def run_audit(
+  requirements_path: Path,
+  dockerfile_path: Path,
+) -> tuple[int, dict[str, str], dict[str, str]]:
   direct_requirements = validate_requirements_policy(
     read_requirements_tree(requirements_path)
   )
   validate_dockerfile_policy(dockerfile_path.read_text(encoding="utf-8"))
+  project_root = requirements_path.resolve().parent
+  validate_nltk_usage_boundary([project_root / "app", project_root / "scripts"])
 
   resolution_report, resolution_status = _run_json([
     sys.executable,
@@ -371,10 +455,11 @@ def run_audit(requirements_path: Path, dockerfile_path: Path) -> tuple[int, dict
     "--index-url",
     PYPI_INDEX,
   ])
-  skipped = validate_audit_report(audit_report, direct_requirements)
-  if audit_status != 0:
+  skipped, accepted_exceptions = validate_audit_report(audit_report, direct_requirements)
+  expected_audit_status = 1 if accepted_exceptions else 0
+  if audit_status != expected_audit_status:
     raise AuditPolicyError(f"pip-audit failed with status {audit_status}.")
-  return len(audit_report["dependencies"]), skipped
+  return len(audit_report["dependencies"]), skipped, accepted_exceptions
 
 
 def main() -> int:
@@ -387,7 +472,10 @@ def main() -> int:
   args = parser.parse_args()
 
   try:
-    dependency_count, skipped = run_audit(args.requirements, args.dockerfile)
+    dependency_count, skipped, accepted_exceptions = run_audit(
+      args.requirements,
+      args.dockerfile,
+    )
   except (AuditPolicyError, OSError) as error:
     print(f"production-dependency-audit-failed: {error}", file=sys.stderr)
     return 1
@@ -402,6 +490,16 @@ def main() -> int:
     )
   else:
     print(f"pip-audit checked all {dependency_count} resolved dependencies without skips.")
+  if accepted_exceptions:
+    exceptions = ", ".join(
+      f"{name}=={value.replace('/', ' / ')}"
+      for name, value in sorted(accepted_exceptions.items())
+    )
+    print(
+      f"Owner-approved temporary exception: {exceptions}. NLTK remains transitive-only, "
+      "project-owned NLTK imports are forbidden, and this gate fails closed when pip-audit "
+      "reports a fixed version, another advisory, or dependency drift."
+    )
   return 0
 
 

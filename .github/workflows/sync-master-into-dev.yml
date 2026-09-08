@@ -107,6 +107,7 @@ jobs:
             test-backend-ai
             test-mobile
             test-mobile-native-android
+            test-aws-infrastructure
           )
 
           # Required CI jobs have a 20-minute ceiling; allow 25 minutes for
