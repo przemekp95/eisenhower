@@ -72,7 +72,20 @@ test("release and master synchronization are serialized and exact-SHA gated", ()
 test("CI service and scanner images are immutable", () => {
   const ci = readWorkflow("ci.yml");
   assert.match(ci, /mongo:7@sha256:[a-f0-9]{64}/);
+  assert.match(ci, /postgres:16-alpine@sha256:[a-f0-9]{64}/);
+  assert.match(ci, /redis:7-alpine@sha256:[a-f0-9]{64}/);
   assert.match(ci, /qdrant\/qdrant:v1\.12\.0@sha256:[a-f0-9]{64}/);
   assert.match(ci, /aquasec\/trivy:0\.71\.1@sha256:[a-f0-9]{64}/);
   assert.doesNotMatch(ci, /aquasec\/trivy:0\.63\.0/);
+});
+
+test("backend CI runs PostgreSQL and Redis integration coverage", () => {
+  const ci = readWorkflow("ci.yml");
+  const backendJob = ci.split(/^  test-backend-node:\s*$/m)[1].split(/^  test-api-client:\s*$/m)[0];
+
+  assert.match(backendJob, /pg_isready -U eisenhower -d eisenhower/);
+  assert.match(backendJob, /redis-cli ping/);
+  assert.match(backendJob, /npx prisma migrate deploy/);
+  assert.match(backendJob, /POSTGRES_TEST_URL: postgresql:\/\/eisenhower:eisenhower_test@127\.0\.0\.1:33196\/eisenhower/);
+  assert.match(backendJob, /REDIS_TEST_URL: redis:\/\/127\.0\.0\.1:33197/);
 });
