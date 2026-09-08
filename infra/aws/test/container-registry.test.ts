@@ -18,6 +18,15 @@ test.each(['staging', 'production'] as const)('%s registries are immutable, scan
     });
   }
   template.hasOutput('ImagePublishingRoleArn', { Value: Match.anyValue() });
+  template.hasResourceProperties('AWS::IAM::Role', {
+    RoleName: `eisenhower-${environment}-image-publishing`,
+    AssumeRolePolicyDocument: {
+      Statement: Match.arrayWith([Match.objectLike({
+        Action: ['sts:AssumeRole', 'sts:TagSession'],
+        Effect: 'Allow',
+      })]),
+    },
+  });
   const policies = template.findResources('AWS::IAM::Policy');
   const publishingPolicy = Object.entries(policies).find(([logicalId]) =>
     logicalId.includes('ImagePublishingRole')

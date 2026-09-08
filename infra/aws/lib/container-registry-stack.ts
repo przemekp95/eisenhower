@@ -46,7 +46,7 @@ export class ContainerRegistryStack extends Stack {
       description: `Narrow CI role for Eisenhower ${props.deploymentEnvironment} container images`,
       assumedBy: new iam.ArnPrincipal(
         `arn:${this.partition}:iam::${this.account}:role/eisenhower-${props.deploymentEnvironment}-github-deploy`,
-      ),
+      ).withSessionTags(),
       maxSessionDuration: Duration.hours(1),
     });
     for (const repository of repositories) repository.grantPullPush(imagePublishingRole);

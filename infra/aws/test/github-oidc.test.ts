@@ -67,7 +67,7 @@ test.each(['staging', 'production'] as const)(
       Condition: { StringLike: { 'iam:ResourceTag/aws-cdk:bootstrap-role': '*' } },
     }),
     expect.objectContaining({
-      Action: 'sts:AssumeRole',
+      Action: ['sts:AssumeRole', 'sts:TagSession'],
       Effect: 'Allow',
       Condition: {
         StringEquals: {

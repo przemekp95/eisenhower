@@ -63,7 +63,7 @@ export class GitHubOidcStack extends Stack {
       ] as const) {
         role.addToPolicy(new iam.PolicyStatement({
           sid,
-          actions: ['sts:AssumeRole'],
+          actions: ['sts:AssumeRole', 'sts:TagSession'],
           resources: [
             `arn:${this.partition}:iam::${this.account}:role/eisenhower-${environment}-${roleSuffix}`,
           ],

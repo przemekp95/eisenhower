@@ -119,6 +119,21 @@ describe.each(['staging', 'production'] as const)('%s platform', (environment) =
     expect(migrationPolicyJson).toContain('iam:PassRole');
   });
 
+  it('accepts audited session tags on scoped operator role chaining', () => {
+    const { template } = synth(environment);
+    for (const suffix of ['artifact-ops', 'migration-ops']) {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: `eisenhower-${environment}-${suffix}`,
+        AssumeRolePolicyDocument: {
+          Statement: Match.arrayWith([Match.objectLike({
+            Action: ['sts:AssumeRole', 'sts:TagSession'],
+            Effect: 'Allow',
+          })]),
+        },
+      });
+    }
+  });
+
   it('uses encrypted private PostgreSQL with backups and safe production retention', () => {
     const { template } = synth(environment);
     template.hasResourceProperties('AWS::RDS::DBInstance', Match.objectLike({
