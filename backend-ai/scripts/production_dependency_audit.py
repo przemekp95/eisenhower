@@ -33,6 +33,26 @@ NLTK_EXCEPTION_PACKAGE = "nltk"
 NLTK_EXCEPTION_VERSION = "3.10.3"
 NLTK_EXCEPTION_ADVISORY = "PYSEC-2026-3740"
 NLTK_EXCEPTION_OWNER = ("llama-index-core", "0.14.23")
+ACCELERATE_EXCEPTION_PACKAGE = "accelerate"
+ACCELERATE_EXCEPTION_VERSION = "1.14.0"
+ACCELERATE_EXCEPTION_ADVISORY = "CVE-2026-69112"
+ACCELERATE_EXCEPTION_OWNER = ("unstructured-inference", "1.6.13")
+ACCELERATE_VULNERABLE_APIS = frozenset({
+  "load_checkpoint_in_model",
+  "load_checkpoint_and_dispatch",
+})
+TEMPORARY_VULNERABILITY_EXCEPTIONS = {
+  NLTK_EXCEPTION_PACKAGE: (
+    NLTK_EXCEPTION_VERSION,
+    NLTK_EXCEPTION_ADVISORY,
+    NLTK_EXCEPTION_OWNER,
+  ),
+  ACCELERATE_EXCEPTION_PACKAGE: (
+    ACCELERATE_EXCEPTION_VERSION,
+    ACCELERATE_EXCEPTION_ADVISORY,
+    ACCELERATE_EXCEPTION_OWNER,
+  ),
+}
 REQUIREMENT_PATTERN = re.compile(
   r"^(?P<name>[A-Za-z0-9_.-]+)(?:\[[A-Za-z0-9_,.-]+\])?==(?P<version>[^\s;]+)$"
 )
@@ -218,39 +238,46 @@ def validate_audit_report(
     if not isinstance(version, str) or not isinstance(vulnerabilities, list):
       raise AuditPolicyError(f"pip-audit returned malformed evidence for {display_name}.")
     if vulnerabilities:
-      if name != NLTK_EXCEPTION_PACKAGE:
+      exception = TEMPORARY_VULNERABILITY_EXCEPTIONS.get(name)
+      if exception is None:
         raise AuditPolicyError(f"pip-audit reported vulnerabilities for {display_name}.")
-      if version != NLTK_EXCEPTION_VERSION:
+      expected_version, expected_advisory, (owner_name, owner_version) = exception
+      if version != expected_version:
         raise AuditPolicyError(
-          f"The approved exception requires nltk=={NLTK_EXCEPTION_VERSION}."
+          f"The approved exception requires {name}=={expected_version}."
         )
-      if direct_requirements.get(NLTK_EXCEPTION_PACKAGE) is not None:
-        raise AuditPolicyError("The NLTK exception is limited to a transitive dependency.")
-      owner_name, owner_version = NLTK_EXCEPTION_OWNER
+      if direct_requirements.get(name) is not None:
+        raise AuditPolicyError(
+          f"The {display_name} exception is limited to a transitive dependency."
+        )
       owner = direct_requirements.get(owner_name)
       if owner is None or owner[1] != owner_version:
         raise AuditPolicyError(
-          f"The NLTK exception requires {owner_name}=={owner_version}."
+          f"The {display_name} exception requires {owner_name}=={owner_version}."
         )
       if len(vulnerabilities) != 1:
         raise AuditPolicyError(f"pip-audit reported vulnerabilities for {display_name}.")
       vulnerability = vulnerabilities[0]
       if not isinstance(vulnerability, dict):
-        raise AuditPolicyError("pip-audit returned malformed NLTK exception evidence.")
+        raise AuditPolicyError(
+          f"pip-audit returned malformed {display_name} exception evidence."
+        )
       evidence_is_well_formed = all((
-        vulnerability.get("id") == NLTK_EXCEPTION_ADVISORY,
+        vulnerability.get("id") == expected_advisory,
         isinstance(vulnerability.get("aliases"), list),
         isinstance(vulnerability.get("description"), str),
         "fix_versions" in vulnerability,
         isinstance(vulnerability.get("fix_versions"), list),
       ))
       if not evidence_is_well_formed:
-        raise AuditPolicyError("pip-audit returned malformed NLTK exception evidence.")
+        raise AuditPolicyError(
+          f"pip-audit returned malformed {display_name} exception evidence."
+        )
       if vulnerability["fix_versions"]:
         raise AuditPolicyError(
-          "The temporary NLTK exception expired because a fixed version is available."
+          f"The temporary {display_name} exception expired because a fixed version is available."
         )
-      accepted_exceptions[name] = f"{version}/{NLTK_EXCEPTION_ADVISORY}"
+      accepted_exceptions[name] = f"{version}/{expected_advisory}"
 
   missing = sorted(set(direct_requirements) - set(reported))
   if missing:
@@ -268,8 +295,8 @@ def validate_audit_report(
   return skipped, accepted_exceptions
 
 
-def validate_nltk_usage_boundary(source_roots: Iterable[Path]) -> None:
-  """Forbid project-owned imports of NLTK while its advisory exception is active."""
+def validate_exception_usage_boundaries(source_roots: Iterable[Path]) -> None:
+  """Forbid project-owned use of APIs covered by temporary exceptions."""
 
   for source_root in source_roots:
     if not source_root.exists():
@@ -305,6 +332,53 @@ def validate_nltk_usage_boundary(source_roots: Iterable[Path]) -> None:
           raise AuditPolicyError(
             f"Project-owned direct NLTK usage is forbidden while the exception is active: "
             f"{source_path}:{getattr(node, 'lineno', '?')}."
+          )
+        imports_accelerate = (
+          isinstance(node, ast.Import)
+          and any(
+            alias.name == ACCELERATE_EXCEPTION_PACKAGE
+            or alias.name.startswith(f"{ACCELERATE_EXCEPTION_PACKAGE}.")
+            for alias in node.names
+          )
+        ) or (
+          isinstance(node, ast.ImportFrom)
+          and isinstance(node.module, str)
+          and (
+            node.module == ACCELERATE_EXCEPTION_PACKAGE
+            or node.module.startswith(f"{ACCELERATE_EXCEPTION_PACKAGE}.")
+          )
+        )
+        dynamically_imports_accelerate = (
+          isinstance(node, ast.Call)
+          and node.args
+          and isinstance(node.args[0], ast.Constant)
+          and isinstance(node.args[0].value, str)
+          and (
+            node.args[0].value == ACCELERATE_EXCEPTION_PACKAGE
+            or node.args[0].value.startswith(f"{ACCELERATE_EXCEPTION_PACKAGE}.")
+          )
+          and (
+            isinstance(node.func, ast.Name)
+            and node.func.id == "__import__"
+            or isinstance(node.func, ast.Attribute)
+            and node.func.attr == "import_module"
+          )
+        )
+        references_vulnerable_accelerate_api = (
+          isinstance(node, ast.Name)
+          and node.id in ACCELERATE_VULNERABLE_APIS
+        ) or (
+          isinstance(node, ast.Attribute)
+          and node.attr in ACCELERATE_VULNERABLE_APIS
+        )
+        if (
+          imports_accelerate
+          or dynamically_imports_accelerate
+          or references_vulnerable_accelerate_api
+        ):
+          raise AuditPolicyError(
+            "Project-owned Accelerate checkpoint usage is forbidden while the exception "
+            f"is active: {source_path}:{getattr(node, 'lineno', '?')}."
           )
 
 
@@ -423,7 +497,7 @@ def run_audit(
   )
   validate_dockerfile_policy(dockerfile_path.read_text(encoding="utf-8"))
   project_root = requirements_path.resolve().parent
-  validate_nltk_usage_boundary([project_root / "app", project_root / "scripts"])
+  validate_exception_usage_boundaries([project_root / "app", project_root / "scripts"])
 
   resolution_report, resolution_status = _run_json([
     sys.executable,
@@ -496,9 +570,10 @@ def main() -> int:
       for name, value in sorted(accepted_exceptions.items())
     )
     print(
-      f"Owner-approved temporary exception: {exceptions}. NLTK remains transitive-only, "
-      "project-owned NLTK imports are forbidden, and this gate fails closed when pip-audit "
-      "reports a fixed version, another advisory, or dependency drift."
+      f"Owner-approved temporary exceptions: {exceptions}. Each package remains "
+      "transitive-only, project-owned use of the affected APIs is forbidden, and this "
+      "gate fails closed when pip-audit reports a fixed version, another advisory, or "
+      "dependency drift."
     )
   return 0
 
