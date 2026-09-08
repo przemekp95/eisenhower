@@ -9,7 +9,7 @@ from scripts.production_dependency_audit import (
   _clean_pip_environment,
   validate_audit_report,
   validate_dockerfile_policy,
-  validate_nltk_usage_boundary,
+  validate_exception_usage_boundaries,
   validate_requirements_policy,
   validate_resolution_report,
   read_requirements_tree,
@@ -152,6 +152,108 @@ def test_accepts_only_the_owner_approved_unfixed_transitive_nltk_advisory():
   assert exceptions == {"nltk": "3.10.3/PYSEC-2026-3740"}
 
 
+def test_accepts_only_the_owner_approved_unfixed_transitive_accelerate_advisory():
+  requirements = validate_requirements_policy(
+    f"{REQUIREMENTS}unstructured-inference==1.6.13\n"
+  )
+  report = audit_report()
+  report["dependencies"].extend([
+    {"name": "unstructured-inference", "version": "1.6.13", "vulns": []},
+    {
+      "name": "accelerate",
+      "version": "1.14.0",
+      "vulns": [{
+        "id": "CVE-2026-69112",
+        "fix_versions": [],
+        "aliases": ["GHSA-4j2p-28q2-5m79"],
+        "description": "Path traversal through untrusted sharded checkpoint indexes.",
+      }],
+    },
+  ])
+
+  skipped, exceptions = validate_audit_report(report, requirements)
+
+  assert skipped == {"torch": "2.13.0+cpu", "torchvision": "0.28.0+cpu"}
+  assert exceptions == {"accelerate": "1.14.0/CVE-2026-69112"}
+
+
+@pytest.mark.parametrize(
+  ("mutation", "message"),
+  [
+    (lambda dependency: dependency.update(version="1.14.1"), "accelerate==1.14.0"),
+    (
+      lambda dependency: dependency["vulns"][0].update(fix_versions=["1.14.1"]),
+      "expired",
+    ),
+    (
+      lambda dependency: dependency["vulns"].append({
+        "id": "CVE-new",
+        "fix_versions": [],
+        "aliases": [],
+        "description": "another issue",
+      }),
+      "vulnerabilities",
+    ),
+  ],
+)
+def test_rejects_any_accelerate_exception_drift(mutation, message):
+  requirements = validate_requirements_policy(
+    f"{REQUIREMENTS}unstructured-inference==1.6.13\n"
+  )
+  report = audit_report()
+  report["dependencies"].append({
+    "name": "unstructured-inference",
+    "version": "1.6.13",
+    "vulns": [],
+  })
+  dependency = {
+    "name": "accelerate",
+    "version": "1.14.0",
+    "vulns": [{
+      "id": "CVE-2026-69112",
+      "fix_versions": [],
+      "aliases": ["GHSA-4j2p-28q2-5m79"],
+      "description": "Path traversal through untrusted sharded checkpoint indexes.",
+    }],
+  }
+  mutation(dependency)
+  report["dependencies"].append(dependency)
+
+  with pytest.raises(AuditPolicyError, match=message):
+    validate_audit_report(report, requirements)
+
+
+def test_rejects_accelerate_exception_without_the_exact_transitive_owner():
+  report = audit_report()
+  report["dependencies"].append({
+    "name": "accelerate",
+    "version": "1.14.0",
+    "vulns": [{
+      "id": "CVE-2026-69112",
+      "fix_versions": [],
+      "aliases": ["GHSA-4j2p-28q2-5m79"],
+      "description": "Path traversal through untrusted sharded checkpoint indexes.",
+    }],
+  })
+
+  with pytest.raises(AuditPolicyError, match="unstructured-inference"):
+    validate_audit_report(report, validate_requirements_policy(REQUIREMENTS))
+
+
+def test_rejects_malformed_accelerate_exception_with_package_specific_evidence():
+  requirements = validate_requirements_policy(
+    f"{REQUIREMENTS}unstructured-inference==1.6.13\n"
+  )
+  report = audit_report()
+  report["dependencies"].extend([
+    {"name": "unstructured-inference", "version": "1.6.13", "vulns": []},
+    {"name": "accelerate", "version": "1.14.0", "vulns": [None]},
+  ])
+
+  with pytest.raises(AuditPolicyError, match="accelerate exception evidence"):
+    validate_audit_report(report, requirements)
+
+
 @pytest.mark.parametrize(
   ("mutation", "message"),
   [
@@ -215,7 +317,7 @@ def test_rejects_nltk_exception_without_the_exact_transitive_owner():
 def test_forbids_project_owned_nltk_imports(tmp_path):
   safe = tmp_path / "safe.py"
   safe.write_text("from pathlib import Path\n", encoding="utf-8")
-  validate_nltk_usage_boundary([tmp_path])
+  validate_exception_usage_boundaries([tmp_path])
 
   unsafe = tmp_path / "unsafe.py"
   unsafe.write_text(
@@ -223,7 +325,27 @@ def test_forbids_project_owned_nltk_imports(tmp_path):
     encoding="utf-8",
   )
   with pytest.raises(AuditPolicyError, match="direct NLTK usage"):
-    validate_nltk_usage_boundary([tmp_path])
+    validate_exception_usage_boundaries([tmp_path])
+
+
+@pytest.mark.parametrize(
+  "source",
+  [
+    "import accelerate\n",
+    "from accelerate import load_checkpoint_in_model\n",
+    '__import__("accelerate")\n',
+    "loader.load_checkpoint_and_dispatch(model, checkpoint)\n",
+  ],
+)
+def test_forbids_project_owned_accelerate_and_vulnerable_checkpoint_apis(
+  tmp_path,
+  source,
+):
+  unsafe = tmp_path / "unsafe.py"
+  unsafe.write_text(source, encoding="utf-8")
+
+  with pytest.raises(AuditPolicyError, match="Accelerate checkpoint usage"):
+    validate_exception_usage_boundaries([tmp_path])
 
 
 @pytest.mark.parametrize(
