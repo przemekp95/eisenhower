@@ -26,6 +26,12 @@ test("every job has a bounded timeout and every external action is immutable", (
     const timeoutCount = (jobsBlock.match(/^    timeout-minutes: \d+\s*$/gm) ?? []).length;
     assert.equal(timeoutCount, jobCount, `${name} must bound every job`);
     assert.doesNotMatch(workflow, /^\s+uses: [^\s]+@v\d+(?:\.\d+)*\s*$/m, `${name} has a movable action tag`);
+
+    for (const [, action, ref] of workflow.matchAll(/^\s+uses: ([^\s@]+)@([^\s#]+)/gm)) {
+      if (!action.startsWith("./")) {
+        assert.match(ref, /^[a-f0-9]{40}$/, `${name} must pin ${action} to a full commit SHA`);
+      }
+    }
   }
 });
 
