@@ -21,6 +21,10 @@ function operationId(prefix: string) {
   return `${prefix}:${crypto.randomUUID()}`;
 }
 
+function unavailableCalendarStatus(): CalendarStatusDto {
+  return { status: 'disconnected', connection: null, canConnect: false };
+}
+
 function safeGoogleAuthorizationUrl(value: string) {
   const url = new URL(value);
   if (
@@ -62,7 +66,13 @@ export default function CalendarSyncPanel({
   const pollAttempts = useRef(0);
 
   const refresh = useCallback(async () => {
-    const nextStatus = await getCalendarStatus();
+    let nextStatus: CalendarStatusDto;
+    try {
+      nextStatus = await getCalendarStatus();
+    } catch (issue) {
+      if ((issue as { status?: number })?.status !== 404) throw issue;
+      nextStatus = unavailableCalendarStatus();
+    }
     const [nextConflicts, nextDeletedBindings] =
       nextStatus.status === 'disconnected'
         ? [[], []]
@@ -129,7 +139,12 @@ export default function CalendarSyncPanel({
       navigate(safeGoogleAuthorizationUrl(result.authorizationUrl));
     } catch (issue) {
       const statusCode = (issue as { status?: number })?.status;
-      setMessage(statusCode === 404 ? t('calendar.unavailable') : t('calendar.error'));
+      if (statusCode === 404) {
+        setStatus(unavailableCalendarStatus());
+        setMessage('');
+      } else {
+        setMessage(t('calendar.error'));
+      }
       setBusyAction(null);
     }
   };
@@ -230,7 +245,9 @@ export default function CalendarSyncPanel({
             {!status
               ? t('calendar.loading')
               : status.status === 'disconnected'
-                ? t('calendar.disconnected')
+                ? status.canConnect
+                  ? t('calendar.disconnected')
+                  : t('calendar.unavailable')
                 : hasSyncProblem
                   ? t('calendar.syncProblem')
                   : inProgress
@@ -255,8 +272,6 @@ export default function CalendarSyncPanel({
           >
             {busyAction === 'connect' ? t('calendar.connecting') : t('calendar.connect')}
           </button>
-        ) : status?.status === 'disconnected' ? (
-          <p className="text-sm text-slate-400">{t('calendar.unavailable')}</p>
         ) : status?.connection ? (
           <div className="flex w-full flex-col gap-2 min-[360px]:flex-row sm:w-auto">
             <button

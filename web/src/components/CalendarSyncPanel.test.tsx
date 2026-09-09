@@ -177,6 +177,27 @@ describe('CalendarSyncPanel', () => {
     expect(screen.queryByText('private provider detail')).not.toBeInTheDocument();
   });
 
+  it('presents a deliberately unavailable Calendar integration instead of a generic outage', async () => {
+    localStorage.setItem('eisenhower-language', 'pl');
+    mockedApi.getCalendarStatus.mockRejectedValueOnce({ status: 404 });
+
+    render(
+      <LanguageProvider>
+        <CalendarSyncPanel />
+      </LanguageProvider>
+    );
+
+    expect(
+      await screen.findByText(
+        'Integracja Google Calendar jest tymczasowo wyłączona. Zadania działają normalnie.'
+      )
+    ).toBeVisible();
+    expect(screen.queryByText('Sprawdzam połączenie z Google Calendar...')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Nie udało się zaktualizować kalendarza. Spróbuj ponownie.')
+    ).not.toBeInTheDocument();
+  });
+
   it('supports the Google conflict strategy and reports a failed resolution', async () => {
     mockedApi.resolveCalendarConflict.mockRejectedValueOnce(new Error('resolution unavailable'));
 
@@ -236,11 +257,10 @@ describe('CalendarSyncPanel', () => {
         <CalendarSyncPanel />
       </LanguageProvider>
     );
+    expect(await screen.findByText(/temporarily disabled|tymczasowo wyłączona/i)).toBeVisible();
     expect(
-      await screen.findByText(
-        /connection is not available|połączenie kalendarza jest teraz niedostępne/i
-      )
-    ).toBeVisible();
+      screen.queryByText(/not connected yet|nie jest jeszcze połączony/i)
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /connect google|połącz google/i })
     ).not.toBeInTheDocument();
@@ -275,11 +295,10 @@ describe('CalendarSyncPanel', () => {
       </LanguageProvider>
     );
     fireEvent.click(await screen.findByRole('button', { name: /connect google|połącz google/i }));
+    expect(await screen.findByText(/temporarily disabled|tymczasowo wyłączona/i)).toBeVisible();
     expect(
-      await screen.findByText(
-        /connection is not available|połączenie kalendarza jest teraz niedostępne/i
-      )
-    ).toBeVisible();
+      screen.queryByRole('button', { name: /connect google|połącz google/i })
+    ).not.toBeInTheDocument();
   });
 
   it('rejects an authorization URL outside the approved Google endpoint', async () => {
