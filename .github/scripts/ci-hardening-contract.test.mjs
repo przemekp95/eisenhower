@@ -71,6 +71,18 @@ test("AWS staging delivery uses environment-scoped OIDC and immutable green SHAs
   assert.match(readWorkflow("ci.yml"), /\.codex\/verify --scope aws/);
 });
 
+test("AWS staging builds ARM64 images natively with isolated reusable caches", () => {
+  const aws = readWorkflow("aws-deploy.yml");
+  const deployJob = aws.split(/^  deploy-staging:\s*$/m)[1] ?? "";
+
+  assert.match(deployJob, /^    runs-on: ubuntu-24\.04-arm$/m);
+  assert.doesNotMatch(deployJob, /docker\/setup-qemu-action/);
+  assert.match(deployJob, /cache-from: type=gha,scope=aws-staging-api/);
+  assert.match(deployJob, /cache-to: type=gha,mode=max,scope=aws-staging-api/);
+  assert.match(deployJob, /cache-from: type=gha,scope=aws-staging-web/);
+  assert.match(deployJob, /cache-to: type=gha,mode=max,scope=aws-staging-web/);
+});
+
 test("release and master synchronization are serialized and exact-SHA gated", () => {
   const release = readWorkflow("release.yml");
   const sync = readWorkflow("sync-master-into-dev.yml");
