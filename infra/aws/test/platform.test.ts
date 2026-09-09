@@ -229,6 +229,15 @@ describe.each(['staging', 'production'] as const)('%s platform', (environment) =
     template.resourceCountIs('AWS::CloudWatch::Dashboard', 1);
     template.resourceCountIs('AWS::CloudWatch::Alarm', 6);
     template.resourceCountIs('AWS::SNS::Topic', 1);
+    template.hasResourceProperties('AWS::SNS::TopicPolicy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([Match.objectLike({
+          Effect: 'Allow',
+          Principal: { Service: 'cloudwatch.amazonaws.com' },
+          Action: 'sns:Publish',
+        })]),
+      },
+    });
     template.resourceCountIs('AWS::Events::Rule', 1);
     const alarmResources = template.findResources('AWS::CloudWatch::Alarm');
     for (const alarm of Object.values(alarmResources)) {
