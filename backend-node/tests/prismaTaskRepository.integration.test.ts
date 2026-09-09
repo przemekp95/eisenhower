@@ -49,6 +49,11 @@ describePostgres('PrismaTaskRepository on PostgreSQL', () => {
     const operation = { id: 'request-1', payloadDigest: 'a'.repeat(64) };
 
     const first = await repository.create(scope, payload, operation);
+    expect(first).toMatchObject({
+      replayed: false,
+      storedPayloadDigest: operation.payloadDigest,
+      operationDeleted: false,
+    });
     const replay = await repository.create(scope, payload, operation);
     expect(replay).toMatchObject({
       replayed: true,
