@@ -27,9 +27,12 @@ LABEL org.opencontainers.image.revision=$RELEASE_SHA
 
 USER root
 RUN apk add --no-cache nodejs-24-minimal=24.19.0-r0
+ADD --checksum=sha256:56a0cae044b6cc433971d964347401692a92ea0294e392753a3ebdaee54d8b84 https://truststore.pki.rds.amazonaws.com/eu-central-1/eu-central-1-bundle.pem /etc/ssl/certs/aws-rds-eu-central-1-bundle.pem
+RUN chmod 0444 /etc/ssl/certs/aws-rds-eu-central-1-bundle.pem
 
 ENV NODE_ENV=production
 ENV PORT=3001
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/aws-rds-eu-central-1-bundle.pem
 
 WORKDIR /app
 

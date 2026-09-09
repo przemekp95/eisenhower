@@ -72,6 +72,10 @@ describe('host-neutral deployment and release boundaries', () => {
     expect(node).toContain(`FROM ${wolfi} AS build`);
     expect(node).toContain(`FROM ${wolfi} AS production`);
     expect(node).not.toContain('node:20-alpine');
+    expect(node).toContain(
+      'ADD --checksum=sha256:56a0cae044b6cc433971d964347401692a92ea0294e392753a3ebdaee54d8b84 https://truststore.pki.rds.amazonaws.com/eu-central-1/eu-central-1-bundle.pem /etc/ssl/certs/aws-rds-eu-central-1-bundle.pem',
+    );
+    expect(node).toContain('ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/aws-rds-eu-central-1-bundle.pem');
     expect(mcp).toContain(`FROM ${wolfi} AS builder`);
     expect(mcp).toContain(`FROM ${wolfi} AS production`);
     expect(mcp).not.toContain('python:3.11-slim');
