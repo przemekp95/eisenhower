@@ -61,6 +61,7 @@ describe('host-neutral deployment and release boundaries', () => {
   it('builds production runtimes from digest-pinned scanner-visible packages', () => {
     const ai = fs.readFileSync(path.join(repositoryRoot, 'backend-ai/Dockerfile'), 'utf8');
     const node = fs.readFileSync(path.join(repositoryRoot, 'backend-node/Dockerfile'), 'utf8');
+    const prismaSchema = fs.readFileSync(path.join(repositoryRoot, 'backend-node/prisma/schema.prisma'), 'utf8');
     const mcp = fs.readFileSync(path.join(repositoryRoot, 'mcp/eisenhower_adapter/Dockerfile'), 'utf8');
     const wolfi = 'cgr.dev/chainguard/wolfi-base@sha256:a31344ab2cb8618db84f535eec56f76f6178b142cb92cb2e48676cc2dcebea72';
 
@@ -76,9 +77,19 @@ describe('host-neutral deployment and release boundaries', () => {
       'ADD --checksum=sha256:56a0cae044b6cc433971d964347401692a92ea0294e392753a3ebdaee54d8b84 https://truststore.pki.rds.amazonaws.com/eu-central-1/eu-central-1-bundle.pem /etc/ssl/certs/aws-rds-eu-central-1-bundle.pem',
     );
     expect(node).toContain('ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/aws-rds-eu-central-1-bundle.pem');
+    expect(prismaSchema).toMatch(/moduleFormat\s*=\s*"cjs"/);
+    expect(prismaSchema).toMatch(/importFileExtension\s*=\s*""/);
     expect(mcp).toContain(`FROM ${wolfi} AS builder`);
     expect(mcp).toContain(`FROM ${wolfi} AS production`);
     expect(mcp).not.toContain('python:3.11-slim');
+  });
+
+  it('keeps the web image independent of compose-only service discovery', () => {
+    const nginx = fs.readFileSync(path.join(repositoryRoot, 'web/nginx.conf'), 'utf8');
+
+    expect(nginx).not.toContain('api-service');
+    expect(nginx).not.toContain('ai-service');
+    expect(nginx).not.toMatch(/location \/(?:api|ai)\//);
   });
 
   it('accepts only the exact public HTTP status and rejects redirects', async () => {
