@@ -8,6 +8,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 GATEWAY_TEMPLATE = ROOT / "deploy" / "local" / "access-gateway.conf.template"
+COMPOSE = ROOT / "compose.yaml"
 REALM_IMPORT = ROOT / "deploy" / "local" / "identity" / "eisenhower-realm.json"
 IDENTITY_BOOTSTRAP = ROOT / "deploy" / "local" / "identity" / "ensure-admin-access.sh"
 ADMIN_SCOPE_IMPORT = ROOT / "deploy" / "local" / "identity" / "eisenhower-admin-claims.json"
@@ -44,6 +45,31 @@ def test_admin_routes_delegate_authorization_to_private_oauth2_proxy():
   oauth = _location_block(config, "/oauth2/")
   assert "X-Auth-Request-Redirect $request_uri" in oauth
   assert "X-Auth-Request-Redirect $scheme://$http_host$request_uri" not in oauth
+
+
+def test_keycloak_token_exchange_allows_only_the_configured_browser_origin():
+  config = GATEWAY_TEMPLATE.read_text(encoding="utf-8")
+
+  assert 'map $http_origin $oidc_browser_origin_match' in config
+  assert '"${OIDC_BROWSER_ALLOWED_ORIGIN}" 1;' in config
+  assert 'map "$uri|$oidc_browser_origin_match" $oidc_token_origin_allowed' in config
+  assert (
+    '~^/identity/realms/eisenhower/protocol/openid-connect/token\\|1$ 1;'
+    in config
+  )
+  assert (
+    'map "$standard_origin_allowed:$admin_origin_allowed:'
+    '$keycloak_form_origin_allowed:$oidc_token_origin_allowed" $origin_allowed'
+    in config
+  )
+  gateway_environment = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))["services"][
+    "gateway"
+  ]["environment"]
+  assert (
+    "OIDC_BROWSER_ALLOWED_ORIGIN=${OIDC_BROWSER_ALLOWED_ORIGIN:"
+    "?OIDC_BROWSER_ALLOWED_ORIGIN is required}"
+    in gateway_environment
+  )
 
 
 def test_calendar_webhook_is_the_only_public_n8n_route():

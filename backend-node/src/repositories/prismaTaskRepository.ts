@@ -125,7 +125,12 @@ export class PrismaTaskRepository implements TaskRepository {
             createOperationDigest: operation.payloadDigest,
           },
         });
-        return { task: toStoredTask(task), replayed: false };
+        return {
+          task: toStoredTask(task),
+          replayed: false,
+          storedPayloadDigest: operation.payloadDigest,
+          operationDeleted: false,
+        };
       } catch (error) {
         if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
         existing = await this.prisma.task.findUnique({ where: unique });
