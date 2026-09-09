@@ -451,7 +451,7 @@ export class PlatformStack extends Stack {
     });
     https.addTargets('ApiTargets', {
       priority: 10,
-      conditions: [elbv2.ListenerCondition.pathPatterns(['/api/*'])],
+      conditions: [elbv2.ListenerCondition.pathPatterns(['/api/*', '/health/ready'])],
       port: 3001,
       protocol: elbv2.ApplicationProtocol.HTTP,
       targets: [apiService],

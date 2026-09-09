@@ -64,6 +64,13 @@ describe.each(['staging', 'production'] as const)('%s platform', (environment) =
       HealthCheckPath: '/health/ready',
       Matcher: { HttpCode: '200' },
     });
+    template.hasResourceProperties('AWS::ElasticLoadBalancingV2::ListenerRule', {
+      Conditions: Match.arrayWith([Match.objectLike({
+        Field: 'path-pattern',
+        PathPatternConfig: { Values: ['/api/*', '/health/ready'] },
+      })]),
+      Priority: 10,
+    });
     template.resourceCountIs('AWS::ApplicationAutoScaling::ScalableTarget', 2);
     template.allResourcesProperties('AWS::ApplicationAutoScaling::ScalableTarget', Match.objectLike({
       MinCapacity: { Ref: 'ServiceMinimumCapacity' },
