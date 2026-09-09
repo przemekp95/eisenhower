@@ -84,6 +84,14 @@ describe('host-neutral deployment and release boundaries', () => {
     expect(mcp).not.toContain('python:3.11-slim');
   });
 
+  it('keeps the web image independent of compose-only service discovery', () => {
+    const nginx = fs.readFileSync(path.join(repositoryRoot, 'web/nginx.conf'), 'utf8');
+
+    expect(nginx).not.toContain('api-service');
+    expect(nginx).not.toContain('ai-service');
+    expect(nginx).not.toMatch(/location \/(?:api|ai)\//);
+  });
+
   it('accepts only the exact public HTTP status and rejects redirects', async () => {
     const server = http.createServer((request, response) => {
       if (request.url === '/redirect') {
