@@ -27,4 +27,4 @@ if [ "$#" -ne 0 ]; then
   exit 2
 fi
 
-exec make verify
+exec scripts/with-backend-test-stores.sh make verify
