@@ -1,4 +1,5 @@
 import {
+  ArnFormat,
   CfnOutput,
   CfnParameter,
   Duration,
@@ -471,6 +472,24 @@ export class PlatformStack extends Stack {
     const operationsTopic = new sns.Topic(this, 'OperationsTopic', {
       displayName: `Eisenhower ${config.environment} operations`,
     });
+    operationsTopic.addToResourcePolicy(new iam.PolicyStatement({
+      sid: 'AllowCloudWatchAlarmsPublish',
+      effect: iam.Effect.ALLOW,
+      principals: [new iam.ServicePrincipal('cloudwatch.amazonaws.com')],
+      actions: ['sns:Publish'],
+      resources: [operationsTopic.topicArn],
+      conditions: {
+        ArnLike: {
+          'aws:SourceArn': this.formatArn({
+            service: 'cloudwatch',
+            resource: 'alarm',
+            resourceName: '*',
+            arnFormat: ArnFormat.COLON_RESOURCE_NAME,
+          }),
+        },
+        StringEquals: { 'aws:SourceAccount': this.account },
+      },
+    }));
     const alarmAction = new cloudwatchActions.SnsAction(operationsTopic);
     const alarms = [
       new cloudwatch.Alarm(this, 'Alb5xxAlarm', {
