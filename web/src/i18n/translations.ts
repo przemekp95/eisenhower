@@ -136,7 +136,8 @@ export const translations = {
     'calendar.heading': 'Calendar synchronization',
     'calendar.loading': 'Checking Google Calendar connection...',
     'calendar.disconnected': 'Google Calendar is not connected yet.',
-    'calendar.unavailable': 'Calendar connection is not available right now.',
+    'calendar.unavailable':
+      'Google Calendar integration is temporarily disabled. Your tasks continue to work normally.',
     'calendar.connect': 'Connect Google Calendar',
     'calendar.connecting': 'Opening Google Calendar...',
     'calendar.disconnect': 'Disconnect calendar',
@@ -452,7 +453,8 @@ export const translations = {
     'calendar.heading': 'Synchronizacja kalendarza',
     'calendar.loading': 'Sprawdzam połączenie z Google Calendar...',
     'calendar.disconnected': 'Google Calendar nie jest jeszcze połączony.',
-    'calendar.unavailable': 'Połączenie kalendarza jest teraz niedostępne.',
+    'calendar.unavailable':
+      'Integracja Google Calendar jest tymczasowo wyłączona. Zadania działają normalnie.',
     'calendar.connect': 'Połącz Google Calendar',
     'calendar.connecting': 'Otwieram Google Calendar...',
     'calendar.disconnect': 'Odłącz kalendarz',
