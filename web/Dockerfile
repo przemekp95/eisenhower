@@ -23,11 +23,12 @@ RUN apk add --no-cache curl && \
     mkdir -p /var/cache/nginx /tmp/nginx && \
     chown -R nginx:nginx /var/cache/nginx /tmp/nginx /usr/share/nginx/html
 
-COPY web/nginx.conf /etc/nginx/nginx.conf
+COPY web/nginx.conf /etc/nginx/nginx.conf.template
 COPY web/docker-entrypoint.sh /docker-entrypoint.sh
+COPY web/runtime-security.sh /runtime-security.sh
 COPY --from=build /app/web/dist /usr/share/nginx/html
 
-RUN chown -R nginx:nginx /etc/nginx/nginx.conf /usr/share/nginx/html /docker-entrypoint.sh && \
+RUN chown -R nginx:nginx /usr/share/nginx/html /docker-entrypoint.sh /runtime-security.sh && \
     chmod 755 /docker-entrypoint.sh
 
 USER nginx
