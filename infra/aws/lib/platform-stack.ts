@@ -251,7 +251,7 @@ export class PlatformStack extends Stack {
       description: `Narrow CI role for immutable Eisenhower ${config.environment} model artifacts`,
       assumedBy: new iam.ArnPrincipal(
         `arn:${this.partition}:iam::${this.account}:role/eisenhower-${config.environment}-github-deploy`,
-      ),
+      ).withSessionTags(),
       maxSessionDuration: Duration.hours(1),
     });
     artifactOpsRole.addToPolicy(new iam.PolicyStatement({
@@ -349,7 +349,7 @@ export class PlatformStack extends Stack {
       description: `Narrow release role for the Eisenhower ${config.environment} one-shot migration task`,
       assumedBy: new iam.ArnPrincipal(
         `arn:${this.partition}:iam::${this.account}:role/eisenhower-${config.environment}-github-deploy`,
-      ),
+      ).withSessionTags(),
       maxSessionDuration: Duration.hours(1),
     });
     migrationOpsRole.addToPolicy(new iam.PolicyStatement({
