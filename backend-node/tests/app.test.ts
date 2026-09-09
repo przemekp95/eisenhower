@@ -451,7 +451,7 @@ describe('app middleware', () => {
 
   it('makes nginx overwrite rather than append untrusted forwarded addresses', () => {
     const nginxConfig = fs.readFileSync(
-      path.resolve(__dirname, '../../web/nginx.conf'),
+      path.resolve(__dirname, '../../deploy/local/access-gateway.conf.template'),
       'utf8',
     );
 
