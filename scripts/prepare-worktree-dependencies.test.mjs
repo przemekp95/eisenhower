@@ -234,6 +234,21 @@ test('Make exposes incremental and force preparation before verification', () =>
   );
 });
 
+test('the canonical local gate provisions mandatory PostgreSQL and Redis tests', () => {
+  const verification = readFileSync(join(REPOSITORY_ROOT, '.codex', 'verify'), 'utf8');
+  assert.match(verification, /scripts\/with-backend-test-stores\.sh make verify/);
+
+  const stores = readFileSync(
+    join(REPOSITORY_ROOT, 'scripts', 'with-backend-test-stores.sh'),
+    'utf8'
+  );
+  assert.match(stores, /POSTGRES_TEST_URL/);
+  assert.match(stores, /REDIS_TEST_URL/);
+  assert.match(stores, /postgres:16-alpine@sha256:57c72fd2/);
+  assert.match(stores, /redis:7-alpine@sha256:e7723ff7/);
+  assert.match(stores, /trap cleanup/);
+});
+
 test('uses venv Python when the pip launcher is absent from a partial environment', () => {
   const fixture = createFixture();
   try {

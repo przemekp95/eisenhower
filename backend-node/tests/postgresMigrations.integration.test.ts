@@ -3,6 +3,7 @@ import { Client } from 'pg';
 import { runPostgresMigrations } from '../src/postgresMigrations';
 
 const adminUrl = process.env.POSTGRES_TEST_URL;
+const parsedAdminUrl = adminUrl ? new URL(adminUrl) : undefined;
 const describeIfPostgres = adminUrl ? describe : describe.skip;
 
 describeIfPostgres('PostgreSQL deployment migrations', () => {
@@ -27,8 +28,11 @@ describeIfPostgres('PostgreSQL deployment migrations', () => {
 
   it('applies migrations idempotently and grants only application DML', async () => {
     const config = {
-      host: '127.0.0.1', port: 33196, database,
-      adminUsername: 'eisenhower', adminPassword: 'eisenhower_test',
+      host: parsedAdminUrl!.hostname,
+      port: Number(parsedAdminUrl!.port || '5432'),
+      database,
+      adminUsername: decodeURIComponent(parsedAdminUrl!.username),
+      adminPassword: decodeURIComponent(parsedAdminUrl!.password),
       appUsername: appRole, appPassword, ssl: false,
       migrationsDirectory: path.resolve('prisma/migrations'),
     };
