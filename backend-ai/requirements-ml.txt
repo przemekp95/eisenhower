@@ -1,6 +1,6 @@
 # Shared pinned CPU inference substrate; role files add only their own adapters.
 --extra-index-url https://download.pytorch.org/whl/cpu
 -r requirements-boundary.txt
-torch==2.13.0+cpu
+torch==2.14.0+rocm7.2
 sentence-transformers==5.7.0
-transformers==5.15.0
+transformers==5.16.1
