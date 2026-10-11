@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@eisenhower/api-client": "file:../packages/api-client",
-    "@fastify/cors": "11.3.0",
+    "@fastify/cors": "11.3.1",
     "@fastify/helmet": "13.1.1",
     "@fastify/rate-limit": "11.2.0",
     "@nestjs/common": "11.2.1",
@@ -31,11 +31,11 @@
     "@prisma/client": "7.10.0",
     "class-transformer": "0.5.1",
     "class-validator": "0.15.1",
-    "fastify": "5.12.3",
+    "fastify": "5.12.5",
     "ioredis": "5.8.2",
-    "jose": "^6.2.9",
-    "mongoose": "^9.9.2",
-    "pg": "8.23.0",
+    "jose": "^6.2.12",
+    "mongoose": "^9.11.1",
+    "pg": "8.23.1",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2"
   },
@@ -44,7 +44,7 @@
     "@nestjs/testing": "11.2.1",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.2.0",
-    "@types/pg": "8.18.0",
+    "@types/pg": "8.23.1",
     "jest": "^30.4.2",
     "mongodb-memory-server": "^11.2.0",
     "prisma": "7.10.0",
@@ -54,7 +54,7 @@
   },
   "overrides": {
     "deepmerge-ts": "8.0.2",
-    "fastify": "5.12.3",
+    "fastify": "5.12.5",
     "mysql2": "3.24.3",
     "qs": "6.16.0"
   }
